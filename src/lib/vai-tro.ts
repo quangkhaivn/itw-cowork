@@ -158,6 +158,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["crm", "sales", "quotation", "customer", "order", "task"], LAM_VIEC),
       maQuyen("quotation", "approve"),
       maQuyen("order", "approve"),
+      // 20/09: mở lại cơ hội đã đóng (BUSINESS_RULES CH-06). Vai trò đã có trên máy thật được
+      // cấp bù bằng migration phase2_crm, vì seed không cấp lại mã quyền cũ (QĐ-10).
+      maQuyen("sales", "approve"),
       ...tron(["dashboard", "kpi", "report", "alert", "project"], XEM_XUAT),
       maQuyen("ai", "view"),
     ],

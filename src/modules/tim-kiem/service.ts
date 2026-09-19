@@ -1,6 +1,10 @@
 import type { NguCanh } from "@/lib/api";
 import { coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
 import { DIEU_HUONG } from "@/components/khung/dieu-huong";
+import { locTheoPhamVi } from "@/modules/crm/chung";
+import { chuanHoaTen } from "@/modules/crm/chuan-hoa";
+import { NHAN_GIAI_DOAN } from "@/modules/crm/hang-so";
+import { dieuKienXemCoHoi } from "@/modules/co-hoi/service";
 
 /**
  * Tìm kiếm toàn cục (Ctrl/Cmd + K) — mục 29 master prompt.
@@ -99,6 +103,133 @@ const NGUON: NguonTimKiem[] = [
     },
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Phase 2 — CRM. Mỗi nguồn lọc theo phạm vi của đúng quyền xem phân hệ đó.
+// ---------------------------------------------------------------------------
+
+/** Chuỗi chữ số từ câu tìm ("0909 111 222", "0305.547.654") — để so với cột đã chuẩn hóa. */
+function chuSo(q: string): string {
+  return q.replace(/\D/g, "");
+}
+
+NGUON.push(
+  {
+    loai: "khach-hang",
+    nhanLoai: "Khách hàng",
+    async tim(nc, q, gioiHan) {
+      if (!coQuyen(nc.hoSo, "customer.view")) return [];
+      const pham = await locTheoPhamVi(nc, "customer.view");
+      const so = chuSo(q);
+      const ds = await nc.tx.customer.findMany({
+        where: {
+          ...pham,
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { nameNormalized: { contains: chuanHoaTen(q) } },
+            { code: { contains: q, mode: "insensitive" } },
+            { emailNormalized: { contains: q.toLowerCase() } },
+            ...(so.length >= 4 ? [{ taxCodeNormalized: { contains: so } }, { phoneNormalized: { contains: so } }] : []),
+          ],
+        },
+        select: { id: true, code: true, name: true, taxCode: true, phone: true },
+        take: gioiHan,
+        orderBy: { updatedAt: "desc" },
+      });
+      return ds.map((k) => ({
+        loai: "khach-hang",
+        nhanLoai: "Khách hàng",
+        tieuDe: k.name,
+        phu: [k.code, k.taxCode && `MST ${k.taxCode}`, k.phone].filter(Boolean).join(" · "),
+        href: `/crm/khach-hang/${k.id}`,
+      }));
+    },
+  },
+  {
+    loai: "lien-he",
+    nhanLoai: "Liên hệ",
+    async tim(nc, q, gioiHan) {
+      if (!coQuyen(nc.hoSo, "customer.view")) return [];
+      const pham = await locTheoPhamVi(nc, "customer.view");
+      const so = chuSo(q);
+      const ds = await nc.tx.contact.findMany({
+        where: {
+          customer: pham,
+          OR: [
+            { fullName: { contains: q, mode: "insensitive" } },
+            { emailNormalized: { contains: q.toLowerCase() } },
+            ...(so.length >= 4 ? [{ phoneNormalized: { contains: so } }] : []),
+          ],
+        },
+        select: { id: true, fullName: true, phone: true, email: true, customer: { select: { id: true, name: true } } },
+        take: gioiHan,
+      });
+      return ds.map((c) => ({
+        loai: "lien-he",
+        nhanLoai: "Liên hệ",
+        tieuDe: c.fullName,
+        phu: [c.customer.name, c.phone ?? c.email].filter(Boolean).join(" · "),
+        href: `/crm/khach-hang/${c.customer.id}?tab=lien-he`,
+      }));
+    },
+  },
+  {
+    loai: "lead",
+    nhanLoai: "Lead",
+    async tim(nc, q, gioiHan) {
+      if (!coQuyen(nc.hoSo, "crm.view")) return [];
+      const pham = await locTheoPhamVi(nc, "crm.view");
+      const so = chuSo(q);
+      const ds = await nc.tx.lead.findMany({
+        where: {
+          ...pham,
+          OR: [
+            { fullName: { contains: q, mode: "insensitive" } },
+            { companyName: { contains: q, mode: "insensitive" } },
+            { code: { contains: q, mode: "insensitive" } },
+            { emailNormalized: { contains: q.toLowerCase() } },
+            ...(so.length >= 4 ? [{ phoneNormalized: { contains: so } }, { taxCodeNormalized: { contains: so } }] : []),
+          ],
+        },
+        select: { id: true, code: true, fullName: true, companyName: true, stage: true },
+        take: gioiHan,
+        orderBy: { createdAt: "desc" },
+      });
+      return ds.map((l) => ({
+        loai: "lead",
+        nhanLoai: "Lead",
+        tieuDe: l.companyName ? `${l.fullName} — ${l.companyName}` : l.fullName,
+        phu: `${l.code} · ${NHAN_GIAI_DOAN[l.stage] ?? l.stage}`,
+        href: `/crm/lead/${l.id}`,
+      }));
+    },
+  },
+  {
+    loai: "co-hoi",
+    nhanLoai: "Cơ hội",
+    async tim(nc, q, gioiHan) {
+      if (!coQuyen(nc.hoSo, "sales.view")) return [];
+      const ds = await nc.tx.opportunity.findMany({
+        where: {
+          AND: [
+            await dieuKienXemCoHoi(nc),
+            { OR: [{ title: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }] },
+          ],
+        },
+        select: { id: true, code: true, title: true, stage: true, customer: { select: { name: true } } },
+        take: gioiHan,
+        orderBy: { updatedAt: "desc" },
+      });
+      return ds.map((c) => ({
+        loai: "co-hoi",
+        nhanLoai: "Cơ hội",
+        tieuDe: c.title,
+        phu: `${c.code} · ${c.customer.name} · ${NHAN_GIAI_DOAN[c.stage] ?? c.stage}`,
+        href: `/ban-hang/co-hoi/${c.id}`,
+      }));
+    },
+  },
+);
 
 export async function timKiemToanCuc(nc: NguCanh, q: string, gioiHanMoiNguon = 6): Promise<KetQuaTimKiem[]> {
   const cau = q.trim();

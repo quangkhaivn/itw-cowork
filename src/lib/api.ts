@@ -6,7 +6,7 @@ import { batBuocQuyen, ghiTuChoiQuyen, layHoSoQuyen, LoiThieuQuyen, type HoSoQuy
 import { ghiKiemToan, type ThamSoGhiKiemToan } from "./kiem-toan";
 import { ghiSuKien, type ThamSoGhiSuKien } from "./su-kien";
 import { layIpKhach } from "./yeu-cau";
-import { LoiKhongTimThay, LoiNghiepVu } from "./loi";
+import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "./loi";
 
 /**
  * Lớp bọc chung cho mọi API nghiệp vụ.
@@ -122,8 +122,16 @@ export function anhXaLoi(loi: unknown): NextResponse {
     const phang = z.flattenError(loi);
     return traLoi(400, "Dữ liệu nhập chưa hợp lệ.", { loiTruong: phang.fieldErrors, loiChung: phang.formErrors });
   }
+  if (loi instanceof LoiDinhDang) {
+    return traLoi(400, loi.message, { ma: loi.ma, loiTruong: { [loi.truong]: [loi.message] }, loiChung: [] });
+  }
   if (loi instanceof LoiKhongTimThay) return traLoi(404, loi.message);
-  if (loi instanceof LoiNghiepVu) return traLoi(loi.status, loi.message, loi.ma ? { ma: loi.ma } : {});
+  if (loi instanceof LoiNghiepVu) {
+    return traLoi(loi.status, loi.message, {
+      ...(loi.ma && { ma: loi.ma }),
+      ...(loi.chiTiet !== undefined && { chiTiet: loi.chiTiet }),
+    });
+  }
   // Lỗi trùng khóa duy nhất của PostgreSQL mà service chưa tự bắt.
   if (typeof loi === "object" && loi && "code" in loi && (loi as { code: unknown }).code === "P2002") {
     return traLoi(409, "Dữ liệu bị trùng với một bản ghi đã có.");

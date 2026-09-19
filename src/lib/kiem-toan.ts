@@ -24,7 +24,9 @@ export type HanhDong =
   | "dat-lai-mat-khau"
   | "doi-quyen"
   | "khoa-dang-nhap"
-  | "mo-khoa-dang-nhap";
+  | "mo-khoa-dang-nhap"
+  | "doi-giai-doan"
+  | "chuyen-doi";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

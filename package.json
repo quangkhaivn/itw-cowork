@@ -1,6 +1,6 @@
 {
   "name": "cowork-itw",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "TGTH Business Cowork — hệ điều hành vận hành doanh nghiệp của Công ty Cổ phần Thế Giới Tin Học.",
   "scripts": {
@@ -12,17 +12,18 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed/index.ts",
-    "db:seed:mau": "tsx prisma/seed/mau.ts",
+    "db:seed": "tsx --env-file-if-exists=.env prisma/seed/index.ts",
+    "db:seed:mau": "tsx --env-file-if-exists=.env prisma/seed/mau.ts",
     "thu:don-vi": "tsx --test thu/don-vi/*.test.ts",
-    "thu:cach-ly": "tsx thu/thu-cach-ly-tenant.ts",
-    "thu:phan-quyen": "tsx thu/thu-phan-quyen.ts",
-    "thu:su-kien": "tsx thu/thu-su-kien.ts",
-    "thu:quan-tri": "tsx thu/thu-quan-tri.ts",
-    "thu:http": "tsx thu/thu-http.ts",
-    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri",
+    "thu:cach-ly": "tsx --env-file-if-exists=.env thu/thu-cach-ly-tenant.ts",
+    "thu:phan-quyen": "tsx --env-file-if-exists=.env thu/thu-phan-quyen.ts",
+    "thu:su-kien": "tsx --env-file-if-exists=.env thu/thu-su-kien.ts",
+    "thu:quan-tri": "tsx --env-file-if-exists=.env thu/thu-quan-tri.ts",
+    "thu:http": "tsx --env-file-if-exists=.env thu/thu-http.ts",
+    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm",
     "thu:tat-ca": "npm run thu:don-vi && npm run thu:tich-hop",
-    "kiem-tra": "npm run typecheck && npm run lint && npm run thu:don-vi && npm run build"
+    "kiem-tra": "npm run typecheck && npm run lint && npm run thu:don-vi && npm run build",
+    "thu:crm": "tsx --env-file-if-exists=.env thu/thu-crm.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

@@ -38,6 +38,14 @@ model Tenant {
   events        BusinessEvent[]
   auditLogs     AuditLog[]
   masterData    MasterDataItem[]
+  // Phase 2 — CRM
+  sequences     DocumentSequence[]
+  customers     Customer[]
+  contacts      Contact[]
+  leads         Lead[]
+  interactions  Interaction[]
+  opportunities Opportunity[]
+  tasks         Task[]
 
   @@map("tenants")
 }
@@ -86,14 +94,14 @@ model Department {
 
 /// Tài khoản đăng nhập.
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  tenantId     String    @map("tenant_id") @db.Uuid
-  email        String    @db.VarChar(255)
-  passwordHash String    @map("password_hash") @db.VarChar(255)
-  fullName     String    @map("full_name") @db.VarChar(255)
-  phone        String?   @db.VarChar(30)
-  isSystem     Boolean   @default(false) @map("is_system") /// true = tác nhân máy (ví dụ trợ lý ITA)
-  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  email              String    @db.VarChar(255)
+  passwordHash       String    @map("password_hash") @db.VarChar(255)
+  fullName           String    @map("full_name") @db.VarChar(255)
+  phone              String?   @db.VarChar(30)
+  isSystem           Boolean   @default(false) @map("is_system") /// true = tác nhân máy (ví dụ trợ lý ITA)
+  lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz(6)
   /// Bắt đổi mật khẩu ở lần đăng nhập kế tiếp (tài khoản mới, hoặc quản trị vừa đặt lại).
   mustChangePassword Boolean   @default(false) @map("must_change_password")
   passwordChangedAt  DateTime? @map("password_changed_at") @db.Timestamptz(6)
@@ -101,17 +109,23 @@ model User {
   failedLoginCount   Int       @default(0) @map("failed_login_count")
   /// Khóa tạm tới thời điểm này sau quá nhiều lần sai.
   lockedUntil        DateTime? @map("locked_until") @db.Timestamptz(6)
-  status       String    @default("hoat-dong") @db.VarChar(30)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy    String?   @map("created_by") @db.Uuid
-  updatedBy    String?   @map("updated_by") @db.Uuid
+  status             String    @default("hoat-dong") @db.VarChar(30)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy          String?   @map("created_by") @db.Uuid
+  updatedBy          String?   @map("updated_by") @db.Uuid
 
-  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staffProfile StaffProfile?  @relation("HoSoCuaNguoiDung")
-  userRoles    UserRole[]
+  tenant             Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile       StaffProfile?  @relation("HoSoCuaNguoiDung")
+  userRoles          UserRole[]
   /// Những người nhận người này làm quản lý trực tiếp.
-  reports      StaffProfile[] @relation("QuanLyTrucTiep")
+  reports            StaffProfile[] @relation("QuanLyTrucTiep")
+  // Phase 2 — người phụ trách
+  ownedCustomers     Customer[]     @relation("KhachPhuTrach")
+  ownedLeads         Lead[]         @relation("LeadPhuTrach")
+  ownedInteractions  Interaction[]  @relation("TuongTacCua")
+  ownedOpportunities Opportunity[]  @relation("CoHoiPhuTrach")
+  ownedTasks         Task[]         @relation("ViecPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -299,4 +313,268 @@ model MasterDataItem {
   @@unique([tenantId, type, code])
   @@index([tenantId, type, status])
   @@map("master_data_items")
+}
+
+// ===========================================================================
+// Phase 2 — CRM (20/09/2026)
+//
+// Chuỗi: Lead → (chuyển đổi) → Customer + Contact → Opportunity → (Phase 4) Quotation.
+// Luật nghiệp vụ: BUSINESS_RULES.md mục 3. Ràng buộc CHECK viết tay trong migration.
+// ===========================================================================
+
+/// Bộ đếm số chứng từ (KH-000001, CH-2026-0001…). Cấp số bằng
+/// INSERT … ON CONFLICT DO UPDATE … RETURNING — nguyên tử, không trùng khi tạo đồng thời.
+model DocumentSequence {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  docType    String   @map("doc_type") @db.VarChar(30) /// customer | lead | opportunity | quotation…
+  period     String   @default("") @db.VarChar(10) /// "" = không đánh lại; "2026" = đánh lại theo năm
+  lastNumber Int      @default(0) @map("last_number")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, docType, period])
+  @@map("document_sequences")
+}
+
+/// Khách hàng (doanh nghiệp hoặc cá nhân). Một khách một mã.
+model Customer {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  code              String   @db.VarChar(30)
+  name              String   @db.VarChar(255)
+  /// Tên đã bỏ dấu, bỏ "công ty/TNHH/cổ phần…" — dùng dò trùng gần giống.
+  nameNormalized    String   @map("name_normalized") @db.VarChar(255)
+  taxCode           String?  @map("tax_code") @db.VarChar(30)
+  taxCodeNormalized String?  @map("tax_code_normalized") @db.VarChar(20)
+  customerType      String?  @map("customer_type") @db.VarChar(50) /// mã dữ liệu gốc loai_khach_hang
+  segment           String?  @db.VarChar(50) /// mã dữ liệu gốc phan_khuc_khach_hang
+  industry          String?  @db.VarChar(50) /// mã dữ liệu gốc nganh_nghe
+  source            String?  @db.VarChar(50) /// mã dữ liệu gốc nguon_lead
+  address           String?  @db.Text
+  province          String?  @db.VarChar(100)
+  website           String?  @db.VarChar(255)
+  phone             String?  @db.VarChar(30)
+  phoneNormalized   String?  @map("phone_normalized") @db.VarChar(20)
+  email             String?  @db.VarChar(255)
+  emailNormalized   String?  @map("email_normalized") @db.VarChar(255)
+  ownerId           String   @map("owner_id") @db.Uuid
+  note              String?  @db.Text
+  /// tiem-nang | dang-giao-dich | ngung-giao-dich (CHECK ở migration)
+  status            String   @default("tiem-nang") @db.VarChar(30)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?  @map("created_by") @db.Uuid
+  updatedBy         String?  @map("updated_by") @db.Uuid
+
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner          User          @relation("KhachPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  contacts       Contact[]
+  interactions   Interaction[]
+  opportunities  Opportunity[]
+  tasks          Task[]
+  convertedLeads Lead[]        @relation("LeadThanhKhach")
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, taxCodeNormalized])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, phoneNormalized])
+  @@index([tenantId, emailNormalized])
+  @@index([tenantId, status])
+  @@index([nameNormalized(ops: raw("gin_trgm_ops"))], type: Gin, map: "customers_name_normalized_trgm_idx")
+  @@map("customers")
+}
+
+/// Người liên hệ của khách hàng. Quyền và phạm vi đi theo khách.
+model Contact {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  customerId      String   @map("customer_id") @db.Uuid
+  fullName        String   @map("full_name") @db.VarChar(255)
+  title           String?  @db.VarChar(255) /// chức danh
+  department      String?  @db.VarChar(255)
+  phone           String?  @db.VarChar(30)
+  phoneNormalized String?  @map("phone_normalized") @db.VarChar(20)
+  email           String?  @db.VarChar(255)
+  emailNormalized String?  @map("email_normalized") @db.VarChar(255)
+  zalo            String?  @db.VarChar(50)
+  isPrimary       Boolean  @default(false) @map("is_primary")
+  note            String?  @db.Text
+  status          String   @default("hoat-dong") @db.VarChar(30)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?  @map("created_by") @db.Uuid
+  updatedBy       String?  @map("updated_by") @db.Uuid
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  interactions  Interaction[]
+  opportunities Opportunity[]
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, phoneNormalized])
+  @@index([tenantId, emailNormalized])
+  @@map("contacts")
+}
+
+/// Lead — người/doanh nghiệp có nhu cầu, chưa thành khách. Không bao giờ xóa.
+model Lead {
+  id                     String    @id @default(uuid()) @db.Uuid
+  tenantId               String    @map("tenant_id") @db.Uuid
+  code                   String    @db.VarChar(30)
+  fullName               String    @map("full_name") @db.VarChar(255)
+  companyName            String?   @map("company_name") @db.VarChar(255)
+  title                  String?   @db.VarChar(255)
+  phone                  String?   @db.VarChar(30)
+  phoneNormalized        String?   @map("phone_normalized") @db.VarChar(20)
+  email                  String?   @db.VarChar(255)
+  emailNormalized        String?   @map("email_normalized") @db.VarChar(255)
+  taxCode                String?   @map("tax_code") @db.VarChar(30)
+  taxCodeNormalized      String?   @map("tax_code_normalized") @db.VarChar(20)
+  source                 String?   @db.VarChar(50) /// mã dữ liệu gốc nguon_lead
+  need                   String?   @db.Text /// nhu cầu khách nói
+  estimatedValue         Decimal?  @map("estimated_value") @db.Decimal(18, 2)
+  /// NEW_LEAD | CONTACTED | QUALIFIED | DISQUALIFIED | CONVERTED
+  stage                  String    @default("NEW_LEAD") @db.VarChar(20)
+  ownerId                String    @map("owner_id") @db.Uuid
+  disqualifiedReason     String?   @map("disqualified_reason") @db.Text
+  convertedCustomerId    String?   @map("converted_customer_id") @db.Uuid
+  convertedOpportunityId String?   @map("converted_opportunity_id") @db.Uuid
+  convertedAt            DateTime? @map("converted_at") @db.Timestamptz(6)
+  /// Dữ liệu gốc từ website / Zalo / form — giữ nguyên để đối chiếu.
+  rawPayload             Json?     @map("raw_payload")
+  note                   String?   @db.Text
+  status                 String    @default("hoat-dong") @db.VarChar(30)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy              String?   @map("created_by") @db.Uuid
+  updatedBy              String?   @map("updated_by") @db.Uuid
+
+  tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner                User          @relation("LeadPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  convertedCustomer    Customer?     @relation("LeadThanhKhach", fields: [convertedCustomerId], references: [id], onDelete: SetNull)
+  convertedOpportunity Opportunity?  @relation("LeadThanhCoHoi", fields: [convertedOpportunityId], references: [id], onDelete: SetNull)
+  interactions         Interaction[]
+  tasks                Task[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, stage])
+  @@index([tenantId, phoneNormalized])
+  @@index([tenantId, emailNormalized])
+  @@index([tenantId, taxCodeNormalized])
+  @@map("leads")
+}
+
+/// Tương tác đã xảy ra: gọi, email, Zalo, gặp, thăm, ghi chú ("Interaction" trong prompt).
+model Interaction {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  /// call | email | zalo | meeting | visit | note
+  type          String   @db.VarChar(20)
+  customerId    String?  @map("customer_id") @db.Uuid
+  contactId     String?  @map("contact_id") @db.Uuid
+  leadId        String?  @map("lead_id") @db.Uuid
+  opportunityId String?  @map("opportunity_id") @db.Uuid
+  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  subject       String   @db.VarChar(255)
+  content       String?  @db.Text
+  outcome       String?  @db.VarChar(255)
+  ownerId       String   @map("owner_id") @db.Uuid
+  status        String   @default("hoat-dong") @db.VarChar(30)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?  @map("created_by") @db.Uuid
+  updatedBy     String?  @map("updated_by") @db.Uuid
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner       User         @relation("TuongTacCua", fields: [ownerId], references: [id], onDelete: Restrict)
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, customerId, occurredAt(sort: Desc)])
+  @@index([tenantId, leadId, occurredAt(sort: Desc)])
+  @@index([tenantId, opportunityId, occurredAt(sort: Desc)])
+  @@index([tenantId, ownerId, occurredAt(sort: Desc)])
+  @@map("interactions")
+}
+
+/// Cơ hội bán hàng. Luật Owner + Next Action + Next Action Date chốt bằng CHECK.
+model Opportunity {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  code              String    @db.VarChar(30)
+  customerId        String    @map("customer_id") @db.Uuid
+  contactId         String?   @map("contact_id") @db.Uuid
+  title             String    @db.VarChar(255)
+  description       String?   @db.Text
+  estimatedValue    Decimal   @default(0) @map("estimated_value") @db.Decimal(18, 2)
+  probability       Int       @default(10)
+  expectedCloseDate DateTime? @map("expected_close_date") @db.Date
+  ownerId           String    @map("owner_id") @db.Uuid
+  source            String?   @db.VarChar(50) /// mã dữ liệu gốc nguon_lead
+  /// OPPORTUNITY | QUOTATION | NEGOTIATION | WON | LOST
+  stage             String    @default("OPPORTUNITY") @db.VarChar(20)
+  nextAction        String?   @map("next_action") @db.VarChar(255)
+  nextActionDate    DateTime? @map("next_action_date") @db.Date
+  lostReason        String?   @map("lost_reason") @db.VarChar(50) /// mã dữ liệu gốc ly_do_thua
+  lostNote          String?   @map("lost_note") @db.Text
+  competitor        String?   @db.VarChar(255)
+  closedAt          DateTime? @map("closed_at") @db.Timestamptz(6)
+  status            String    @default("hoat-dong") @db.VarChar(30)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?   @map("created_by") @db.Uuid
+  updatedBy         String?   @map("updated_by") @db.Uuid
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner        User          @relation("CoHoiPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  interactions Interaction[]
+  tasks        Task[]
+  fromLeads    Lead[]        @relation("LeadThanhCoHoi")
+
+  @@unique([tenantId, code])
+  @@index([tenantId, ownerId, stage])
+  @@index([tenantId, customerId])
+  @@index([tenantId, stage, nextActionDate])
+  @@map("opportunities")
+}
+
+/// Công việc có hạn ("Activity" trong prompt; Task mục P1).
+model Task {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  title         String    @db.VarChar(255)
+  description   String?   @db.Text
+  ownerId       String    @map("owner_id") @db.Uuid
+  /// thap | trung-binh | cao | khan
+  priority      String    @default("trung-binh") @db.VarChar(20)
+  dueAt         DateTime? @map("due_at") @db.Timestamptz(6)
+  /// mo | dang-lam | xong | huy
+  status        String    @default("mo") @db.VarChar(20)
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz(6)
+  customerId    String?   @map("customer_id") @db.Uuid
+  leadId        String?   @map("lead_id") @db.Uuid
+  opportunityId String?   @map("opportunity_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner       User         @relation("ViecPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, ownerId, status, dueAt])
+  @@index([tenantId, customerId])
+  @@index([tenantId, opportunityId])
+  @@index([tenantId, leadId])
+  @@map("tasks")
 }

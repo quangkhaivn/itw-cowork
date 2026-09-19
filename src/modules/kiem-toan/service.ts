@@ -19,6 +19,8 @@ export const NHAN_HANH_DONG: Record<string, string> = {
   "doi-quyen": "Đổi quyền",
   "khoa-dang-nhap": "Khóa đăng nhập",
   "mo-khoa-dang-nhap": "Mở khóa đăng nhập",
+  "doi-giai-doan": "Đổi giai đoạn",
+  "chuyen-doi": "Chuyển đổi lead",
 };
 
 export const NHAN_DOI_TUONG: Record<string, string> = {
@@ -29,6 +31,12 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   setting: "Cấu hình",
   trang: "Trang",
   "he-thong": "Hệ thống",
+  customer: "Khách hàng",
+  contact: "Liên hệ",
+  lead: "Lead",
+  interaction: "Tương tác",
+  opportunity: "Cơ hội",
+  task: "Công việc",
 };
 
 export const LuocDoLocKiemToan = z.object({
