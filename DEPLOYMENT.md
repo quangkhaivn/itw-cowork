@@ -93,6 +93,9 @@ docker compose up -d
 - Chứng chỉ Let's Encrypt từng hết hạn vì `certbot-renew.timer` bật nhưng chưa được start. Kiểm `systemctl list-timers certbot*`.
 - `prisma migrate deploy` trong container phải gắn `-v "$(pwd)/prisma:/app/prisma"` (script đã làm).
 - Mạng từ Việt Nam ra npm hay đứt: Dockerfile đã nới thời gian chờ và thử lại 3 vòng.
+- **502 sau khi triển khai (19/09):** container `app` tạo lại đổi IP, `worker` lấy mất IP cũ, nginx vẫn gửi vào IP cũ. Đã sửa: nginx phân giải lại tên `app` qua DNS Docker mỗi 10 giây (`resolver 127.0.0.11` + biến trong `proxy_pass`); `trien-khai.sh` kiểm cú pháp, nạp lại nginx và chờ `/khoe` trả 200 mới báo xong.
+- **Gắn một tệp cấu hình vào container giữ inode cũ** — thay tệp bằng `tar`/`scp` thì container không thấy. `docker-compose.yml` nay gắn cả thư mục `nginx/`.
+- **Kiểm tệp sao lưu:** không dùng `pg_restore --list | grep -q` dưới `set -o pipefail` — grep thoát sớm làm pg_restore nhận SIGPIPE, báo hỏng ngẫu nhiên. Ghi mục lục ra tệp rồi mới tìm.
 
 ## Không có Docker (máy trạm Windows)
 

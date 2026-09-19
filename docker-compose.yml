@@ -75,7 +75,10 @@ services:
     ports:
       - "127.0.0.1:8080:80"
     volumes:
-      - ./nginx/cowork.conf:/etc/nginx/conf.d/default.conf:ro
+      # Gắn cả THƯ MỤC, không gắn một tệp: gắn một tệp thì container giữ inode cũ, nên khi
+      # tệp cấu hình được thay (git archive, scp, sed -i…) nginx không thấy bản mới — đã xảy
+      # ra 19/09. Thư mục nginx/ chỉ chứa cowork.conf; default.conf của ảnh gốc bị che đi.
+      - ./nginx:/etc/nginx/conf.d:ro
     depends_on:
       - app
     networks: [cowork]
