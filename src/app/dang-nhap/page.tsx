@@ -24,13 +24,13 @@ export default function TrangDangNhap() {
           matKhau: String(form.get("matKhau") ?? ""),
         }),
       });
-      const ketQua = await phanHoi.json();
+      const ketQua = await phanHoi.json().catch(() => ({}));
       if (!phanHoi.ok) {
         datLoi(ketQua.thongBao ?? "Đăng nhập không thành công.");
         datDangGui(false);
         return;
       }
-      router.push("/bang-dieu-khien");
+      router.push(ketQua.chuyenDen ?? "/bang-dieu-khien");
       router.refresh();
     } catch {
       datLoi("Không kết nối được máy chủ. Thử lại sau.");
@@ -40,24 +40,35 @@ export default function TrangDangNhap() {
 
   return (
     <main className="giua">
-      <form className="the" onSubmit={guiForm}>
-        <h1>Cowork Business OS</h1>
-        <p className="phu">Công ty Cổ phần Thế Giới Tin Học — ITW</p>
+      <form className="the the-don" onSubmit={guiForm}>
+        <h1>TGTH Business Cowork</h1>
+        <p className="phu">Công ty Cổ phần Thế Giới Tin Học</p>
 
-        <label htmlFor="maDoanhNghiep">Mã doanh nghiệp</label>
-        <input id="maDoanhNghiep" name="maDoanhNghiep" defaultValue="itw" required autoComplete="organization" />
+        {loi && (
+          <div className="hop-thong-bao loi" role="alert">
+            {loi}
+          </div>
+        )}
 
-        <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" required autoComplete="username" />
+        <div className="truong">
+          <label htmlFor="maDoanhNghiep">Mã doanh nghiệp</label>
+          <input id="maDoanhNghiep" name="maDoanhNghiep" type="text" defaultValue="itw" required autoComplete="organization" />
+        </div>
+        <div className="truong">
+          <label htmlFor="email">Email</label>
+          <input id="email" name="email" type="email" required autoComplete="username" autoFocus />
+        </div>
+        <div className="truong">
+          <label htmlFor="matKhau">Mật khẩu</label>
+          <input id="matKhau" name="matKhau" type="password" required autoComplete="current-password" />
+        </div>
 
-        <label htmlFor="matKhau">Mật khẩu</label>
-        <input id="matKhau" name="matKhau" type="password" required autoComplete="current-password" />
-
-        <button type="submit" disabled={dangGui}>
-          {dangGui ? "Đang kiểm tra..." : "Đăng nhập"}
+        <button className="nut chinh" type="submit" disabled={dangGui}>
+          {dangGui ? "Đang kiểm tra…" : "Đăng nhập"}
         </button>
-
-        {loi && <p className="loi">{loi}</p>}
+        <p className="phu nho" style={{ marginTop: 14, marginBottom: 0 }}>
+          Quên mật khẩu: liên hệ Quản trị hệ thống để được đặt lại.
+        </p>
       </form>
     </main>
   );

@@ -10,9 +10,8 @@ export async function GET() {
     await prisma.$queryRaw`SELECT 1`;
     return NextResponse.json({ ok: true, db: "ket-noi-duoc", luc: new Date().toISOString() });
   } catch (loi) {
-    return NextResponse.json(
-      { ok: false, db: "khong-ket-noi-duoc", chiTiet: String(loi) },
-      { status: 503 },
-    );
+    // Chi tiết lỗi chỉ vào log máy chủ. Trang này mở công khai, không được lộ cấu trúc bên trong.
+    console.error("[khoe] không kết nối được cơ sở dữ liệu:", loi);
+    return NextResponse.json({ ok: false, db: "khong-ket-noi-duoc" }, { status: 503 });
   }
 }

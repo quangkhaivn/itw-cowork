@@ -1,5 +1,5 @@
 import { prisma, voiTenant } from "../src/lib/db";
-import { batBuocQuyen, coQuyen, layHoSoQuyen } from "../src/lib/phan-quyen";
+import { batBuocQuyen, coQuyen, ghiTuChoiQuyen, layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
 import { kiemTraGioiHanAI, VAI_TRO } from "../src/lib/vai-tro";
 import { clientChuSoHuu, dat, datNemLoi, ketLuan } from "./thu-lib";
 
@@ -81,17 +81,27 @@ async function main() {
   await datNemLoi("batBuocQuyen ném lỗi khi thực tập sinh đòi duyệt tài chính", () =>
     voiTenant(tenant.id, async (tx) => {
       const hoSo = await layHoSoQuyen(tx, nguoiThu.id);
-      await batBuocQuyen(tx, hoSo!, "finance.approve", { objectType: "bai-thu" });
+      batBuocQuyen(hoSo!, "finance.approve", { objectType: "bai-thu" });
     }),
   );
 
   // --- 5. Mỗi lần từ chối quyền phải để lại vết ---
-  //     Giao dịch ở bước 4 đã bị cuộn ngược khi ném lỗi, nên ta ghi lại một lần
-  //     nữa trong giao dịch tự hoàn tất để kiểm chứng đường ghi vết.
+  //     Đi đúng đường của lớp bọc API (src/lib/api.ts): giao dịch chính cuộn ngược,
+  //     rồi ghi vết trong một giao dịch RIÊNG. Từ 19/09 batBuocQuyen không tự ghi vết
+  //     nữa, chính vì bản cũ ghi trong giao dịch bị cuộn ngược nên mất vết.
+  let loiBat: LoiThieuQuyen | null = null;
   await voiTenant(tenant.id, async (tx) => {
     const hoSo = await layHoSoQuyen(tx, nguoiThu.id);
-    await batBuocQuyen(tx, hoSo!, "finance.approve", { objectType: "bai-thu" }).catch(() => {});
+    batBuocQuyen(hoSo!, "finance.approve", { objectType: "bai-thu" });
+  }).catch((e) => {
+    loiBat = e instanceof LoiThieuQuyen ? e : null;
   });
+  dat("Lỗi ném ra đúng kiểu LoiThieuQuyen, mang mã quyền thiếu", loiBat !== null && (loiBat as LoiThieuQuyen).maQuyen === "finance.approve");
+  if (loiBat) {
+    await voiTenant(tenant.id, (tx) =>
+      ghiTuChoiQuyen(tx, { userId: nguoiThu.id, email: EMAIL_THU }, loiBat as unknown as LoiThieuQuyen),
+    );
+  }
   const soVetTuChoi = await chu.auditLog.count({
     where: { tenantId: tenant.id, action: "tu-choi-quyen", actorId: nguoiThu.id },
   });

@@ -4,7 +4,7 @@
 # Chạy trên máy chủ, trong thư mục dự án:
 #   ./trien-khai.sh
 #
-# Các bước: dựng ảnh → chờ database → tạo vai ứng dụng → migrate → bật RLS → seed → khởi động.
+# Các bước: dựng ảnh → chờ database → tạo vai ứng dụng → SAO LƯU → migrate → bật RLS → seed → khởi động.
 # Chạy lại nhiều lần được: mọi bước đều idempotent.
 
 set -euo pipefail
@@ -51,6 +51,16 @@ SQL
 docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
   -c "ALTER ROLE cowork_app WITH PASSWORD '$APP_DB_PASSWORD'"
 echo "vai cowork_app sẵn sàng"
+
+echo "--- sao lưu trước khi migrate (nếu đã có dữ liệu) ---"
+# Không bao giờ chạy migration lên dữ liệu thật mà không có bản sao lưu vừa đọc lại được.
+# Lần triển khai đầu (chưa có bảng) thì bỏ qua.
+if docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc \
+     "SELECT to_regclass('public.users') IS NOT NULL" | grep -q t; then
+  ./scripts/sao-luu.sh
+else
+  echo "chưa có bảng nào — bỏ qua sao lưu"
+fi
 
 echo "=== 4/7 Chạy migration (bằng vai chủ sở hữu) ==="
 # Dọn thư mục migration rỗng do lần chạy hỏng trước để lại. Nếu để nguyên,

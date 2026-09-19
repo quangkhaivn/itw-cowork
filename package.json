@@ -1,20 +1,28 @@
 {
   "name": "cowork-itw",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Cowork Business OS — Cong ty Co phan The Gioi Tin Hoc (ITW). Phase 1: Foundation.",
+  "description": "TGTH Business Cowork — hệ điều hành vận hành doanh nghiệp của Công ty Cổ phần Thế Giới Tin Học.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "worker": "tsx worker/index.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed/index.ts",
+    "db:seed:mau": "tsx prisma/seed/mau.ts",
+    "thu:don-vi": "tsx --test thu/don-vi/*.test.ts",
     "thu:cach-ly": "tsx thu/thu-cach-ly-tenant.ts",
     "thu:phan-quyen": "tsx thu/thu-phan-quyen.ts",
     "thu:su-kien": "tsx thu/thu-su-kien.ts",
-    "thu:tat-ca": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien"
+    "thu:quan-tri": "tsx thu/thu-quan-tri.ts",
+    "thu:http": "tsx thu/thu-http.ts",
+    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri",
+    "thu:tat-ca": "npm run thu:don-vi && npm run thu:tich-hop",
+    "kiem-tra": "npm run typecheck && npm run lint && npm run thu:don-vi && npm run build"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
@@ -34,6 +42,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^16.4.7",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.1",
     "prisma": "^7.9.1",
     "tsx": "^4.19.2",
     "typescript": "^5"

@@ -7,6 +7,8 @@
  * duyệt hợp đồng, chi tiền, sửa KPI, hay gửi khách khi chưa được cấp quyền.
  */
 
+import type { PhamVi } from "./pham-vi";
+
 /** Các phân hệ, đặt theo menu ở mục 22 đặc tả. */
 export const PHAN_HE = [
   "dashboard",
@@ -30,10 +32,16 @@ export const PHAN_HE = [
   "integration",
   "user",
   "role",
+  "department",
+  "master_data",
   "setting",
   "audit_log",
   "ai",
 ] as const;
+
+// Thêm phân hệ mới: thêm vào CUỐI mảng trên + MO_TA_PHAN_HE, rồi khai quyền cho
+// từng vai trò bên dưới. Seed chỉ cấp những mã quyền MỚI xuất hiện cho vai trò
+// dựng sẵn, không đè lên chỉnh sửa Giám đốc đã làm trên giao diện.
 
 export type PhanHe = (typeof PHAN_HE)[number];
 
@@ -61,7 +69,7 @@ export function toanBoQuyen(): { code: string; module: string; action: string; d
   return ds;
 }
 
-const MO_TA_PHAN_HE: Record<PhanHe, string> = {
+export const MO_TA_PHAN_HE: Record<PhanHe, string> = {
   dashboard: "Bảng điều hành",
   marketing: "Marketing",
   crm: "CRM",
@@ -83,12 +91,14 @@ const MO_TA_PHAN_HE: Record<PhanHe, string> = {
   integration: "Tích hợp",
   user: "Người dùng",
   role: "Vai trò",
+  department: "Phòng ban",
+  master_data: "Dữ liệu gốc",
   setting: "Cấu hình",
   audit_log: "Nhật ký kiểm toán",
   ai: "Trợ lý AI",
 };
 
-const MO_TA_HANH_DONG: Record<HanhDongQuyen, string> = {
+export const MO_TA_HANH_DONG: Record<HanhDongQuyen, string> = {
   view: "Xem",
   create: "Tạo",
   update: "Sửa",
@@ -112,25 +122,37 @@ export interface DinhNghiaVaiTro {
   description: string;
   /** `"*"` nghĩa là toàn quyền. */
   quyen: string[] | "*";
+  /**
+   * Phạm vi dữ liệu mặc định cho mọi quyền của vai trò này lúc khởi tạo.
+   * Giả định ban đầu, chờ Giám đốc xác nhận; sửa được trên màn hình Vai trò.
+   */
+  phamVi: PhamVi;
 }
 
-/** 14 vai trò theo mục 19 đặc tả. */
+/**
+ * 15 vai trò: 14 của mục 19 đặc tả 12/09 + Thực tập sinh Marketing.
+ * Bao trùm đủ 10 vai trò ban đầu của master prompt TGTH Business Cowork (19/09):
+ * Super Admin → admin, CEO → ceo, Accountant → finance, Technician → technical.
+ */
 export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "ceo",
     name: "Giám đốc",
+    phamVi: "all",
     description: "Toàn quyền. Người ra quyết định cuối cùng.",
     quyen: "*",
   },
   {
     code: "admin",
-    name: "Quản trị hệ thống",
+    name: "Quản trị hệ thống (Super Admin)",
+    phamVi: "all",
     description: "Quản trị người dùng, vai trò, cấu hình, tích hợp.",
     quyen: "*",
   },
   {
     code: "sales-manager",
     name: "Trưởng phòng Kinh doanh",
+    phamVi: "team",
     description: "Quản lý đội bán hàng, duyệt báo giá trong hạn mức.",
     quyen: [
       ...tron(["crm", "sales", "quotation", "customer", "order", "task"], LAM_VIEC),
@@ -143,6 +165,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "sales",
     name: "Nhân viên Kinh doanh",
+    phamVi: "own",
     description: "Chăm sóc lead, tạo báo giá, chốt đơn. Không tự duyệt báo giá của mình.",
     quyen: [
       ...tron(["crm", "sales", "quotation", "customer", "task"], LAM_VIEC),
@@ -153,6 +176,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "marketing-manager",
     name: "Trưởng phòng Marketing",
+    phamVi: "all",
     description: "Quản lý chiến dịch, ngân sách marketing, nội dung.",
     quyen: [
       ...tron(["marketing", "task"], LAM_VIEC),
@@ -164,6 +188,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "marketing",
     name: "Nhân viên Marketing",
+    phamVi: "all",
     description: "Thực thi chiến dịch và nội dung.",
     quyen: [
       ...tron(["marketing", "task"], LAM_VIEC),
@@ -174,6 +199,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "technical-manager",
     name: "Trưởng phòng Kỹ thuật",
+    phamVi: "department",
     description: "Quản lý kỹ thuật viên, phân công, duyệt phiếu dịch vụ.",
     quyen: [
       ...tron(["technical", "service_desk", "project", "task"], LAM_VIEC),
@@ -186,6 +212,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "technical",
     name: "Kỹ thuật viên",
+    phamVi: "own",
     description: "Xử lý phiếu dịch vụ và công việc triển khai được giao.",
     quyen: [
       ...tron(["technical", "service_desk", "task"], LAM_VIEC),
@@ -196,6 +223,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "project-manager",
     name: "Quản lý Dự án",
+    phamVi: "team",
     description: "Điều hành dự án, mốc tiến độ, vật tư, nghiệm thu.",
     quyen: [
       ...tron(["project", "task", "technical"], LAM_VIEC),
@@ -207,6 +235,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "purchasing",
     name: "Mua hàng",
+    phamVi: "all",
     description: "Yêu cầu mua, đơn mua, làm việc với nhà cung cấp.",
     quyen: [
       ...tron(["purchasing", "supplier", "task"], LAM_VIEC),
@@ -217,6 +246,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "warehouse",
     name: "Kho",
+    phamVi: "all",
     description: "Nhập kho, xuất kho, kiểm tồn, số sê-ri.",
     quyen: [
       ...tron(["inventory", "task"], LAM_VIEC),
@@ -226,7 +256,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   },
   {
     code: "finance",
-    name: "Tài chính",
+    name: "Kế toán – Tài chính",
+    phamVi: "all",
     description: "Công nợ, thu chi, hóa đơn, dòng tiền.",
     quyen: [
       ...tron(["finance", "task"], LAM_VIEC),
@@ -238,6 +269,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "customer-service",
     name: "Chăm sóc khách hàng",
+    phamVi: "all",
     description: "Tiếp nhận yêu cầu, bảo hành, khiếu nại, chăm sóc lại.",
     quyen: [
       ...tron(["service_desk", "customer", "crm", "task"], LAM_VIEC),
@@ -248,6 +280,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "marketing-intern",
     name: "Thực tập sinh Marketing",
+    phamVi: "own",
     description:
       "Chỉ xem và soạn nội dung. Bị che số điện thoại và email của lead (Phụ lục A mục 10 đặc tả Marketing — giả định chờ Giám đốc xác nhận).",
     quyen: [
@@ -261,6 +294,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     code: "ai-assistant",
     name: "ITA — Trợ lý AI",
+    phamVi: "all",
     description:
       "Đọc dữ liệu, phân tích, gợi ý, soạn nháp. Mục 17 và 30 cấm: xóa dữ liệu, đổi giá, giảm giá vượt quyền, duyệt báo giá, duyệt hợp đồng, chi tiền, sửa KPI, gửi khách khi chưa được cấp quyền.",
     quyen: [

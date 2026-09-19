@@ -20,6 +20,24 @@ export interface NoiDungPhien {
   email: string;
 }
 
+export interface PhienDaGiaiMa extends NoiDungPhien {
+  /** Thời điểm ký phiên (mili-giây). So với users.password_changed_at để vô hiệu phiên cũ. */
+  kyLucMs: number;
+}
+
+/**
+ * Phiên có còn hiệu lực so với lần đổi mật khẩu gần nhất không.
+ * Đổi mật khẩu (tự đổi hoặc quản trị đặt lại) thì mọi phiên ký TRƯỚC đó bị vô hiệu —
+ * người đang giữ phiên cũ trên máy khác bị đẩy ra.
+ *
+ * So bằng mili-giây (claim riêng `ms`), không bằng `iat` của JWT: `iat` chỉ tính theo giây,
+ * nên phiên ký trong cùng giây với lúc đổi mật khẩu sẽ lọt. Bài thử HTTP đã bắt đúng lỗi này.
+ */
+export function phienConHieuLuc(kyLucMs: number, doiMatKhauLuc: Date | null): boolean {
+  if (!doiMatKhauLuc) return true;
+  return kyLucMs >= doiMatKhauLuc.getTime();
+}
+
 function layKhoaKy(): Uint8Array {
   const secret = process.env.AUTH_SECRET;
   if (!secret || secret.length < 32) {
@@ -37,7 +55,7 @@ export async function kiemTraMatKhau(matKhau: string, bam: string): Promise<bool
 }
 
 export async function kyPhien(noiDung: NoiDungPhien): Promise<string> {
-  return new SignJWT({ tid: noiDung.tenantId, email: noiDung.email })
+  return new SignJWT({ tid: noiDung.tenantId, email: noiDung.email, ms: Date.now() })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(noiDung.userId)
     .setIssuedAt()
@@ -45,13 +63,15 @@ export async function kyPhien(noiDung: NoiDungPhien): Promise<string> {
     .sign(layKhoaKy());
 }
 
-export async function giaiMaPhien(token: string): Promise<NoiDungPhien | null> {
+export async function giaiMaPhien(token: string): Promise<PhienDaGiaiMa | null> {
   try {
     const { payload } = await jwtVerify(token, layKhoaKy(), { algorithms: ["HS256"] });
     if (!payload.sub || typeof payload.tid !== "string" || typeof payload.email !== "string") {
       return null;
     }
-    return { userId: payload.sub, tenantId: payload.tid, email: payload.email };
+    // Phiên ký trước bản 19/09 không có claim `ms` → dùng iat (giây) quy ra mili-giây.
+    const kyLucMs = typeof payload.ms === "number" ? payload.ms : (payload.iat ?? 0) * 1000;
+    return { userId: payload.sub, tenantId: payload.tid, email: payload.email, kyLucMs };
   } catch {
     return null;
   }
@@ -75,7 +95,7 @@ export async function xoaCookiePhien(): Promise<void> {
 }
 
 /** Đọc phiên hiện tại. Trả về null nếu chưa đăng nhập hoặc cookie hỏng/hết hạn. */
-export async function layPhienHienTai(): Promise<NoiDungPhien | null> {
+export async function layPhienHienTai(): Promise<PhienDaGiaiMa | null> {
   const kho = await cookies();
   const token = kho.get(TEN_COOKIE)?.value;
   if (!token) return null;

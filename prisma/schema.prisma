@@ -37,6 +37,7 @@ model Tenant {
   userRoles     UserRole[]
   events        BusinessEvent[]
   auditLogs     AuditLog[]
+  masterData    MasterDataItem[]
 
   @@map("tenants")
 }
@@ -93,15 +94,24 @@ model User {
   phone        String?   @db.VarChar(30)
   isSystem     Boolean   @default(false) @map("is_system") /// true = tác nhân máy (ví dụ trợ lý ITA)
   lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  /// Bắt đổi mật khẩu ở lần đăng nhập kế tiếp (tài khoản mới, hoặc quản trị vừa đặt lại).
+  mustChangePassword Boolean   @default(false) @map("must_change_password")
+  passwordChangedAt  DateTime? @map("password_changed_at") @db.Timestamptz(6)
+  /// Số lần sai mật khẩu liên tiếp. Về 0 khi đăng nhập đúng.
+  failedLoginCount   Int       @default(0) @map("failed_login_count")
+  /// Khóa tạm tới thời điểm này sau quá nhiều lần sai.
+  lockedUntil        DateTime? @map("locked_until") @db.Timestamptz(6)
   status       String    @default("hoat-dong") @db.VarChar(30)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy    String?   @map("created_by") @db.Uuid
   updatedBy    String?   @map("updated_by") @db.Uuid
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staffProfile StaffProfile?
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile StaffProfile?  @relation("HoSoCuaNguoiDung")
   userRoles    UserRole[]
+  /// Những người nhận người này làm quản lý trực tiếp.
+  reports      StaffProfile[] @relation("QuanLyTrucTiep")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -114,6 +124,8 @@ model StaffProfile {
   tenantId     String    @map("tenant_id") @db.Uuid
   userId       String    @unique @map("user_id") @db.Uuid
   departmentId String?   @map("department_id") @db.Uuid
+  /// Quản lý trực tiếp — dùng cho phạm vi dữ liệu "team".
+  managerId    String?   @map("manager_id") @db.Uuid
   employeeCode String?   @map("employee_code") @db.VarChar(50)
   jobTitle     String?   @map("job_title") @db.VarChar(255)
   hiredAt      DateTime? @map("hired_at") @db.Date
@@ -124,11 +136,14 @@ model StaffProfile {
   updatedBy    String?   @map("updated_by") @db.Uuid
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User        @relation("HoSoCuaNguoiDung", fields: [userId], references: [id], onDelete: Cascade)
   department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  manager    User?       @relation("QuanLyTrucTiep", fields: [managerId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, employeeCode])
   @@index([tenantId])
+  @@index([tenantId, departmentId])
+  @@index([tenantId, managerId])
   @@map("staff_profiles")
 }
 
@@ -179,6 +194,8 @@ model RolePermission {
   tenantId     String   @map("tenant_id") @db.Uuid
   roleId       String   @map("role_id") @db.Uuid
   permissionId String   @map("permission_id") @db.Uuid
+  /// Phạm vi dữ liệu: own | team | department | all. Ràng buộc CHECK ở migration.
+  dataScope    String   @default("all") @map("data_scope") @db.VarChar(20)
   status       String   @default("hoat-dong") @db.VarChar(30)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -257,4 +274,29 @@ model AuditLog {
   @@index([tenantId, actorId])
   @@index([tenantId, createdAt])
   @@map("audit_logs")
+}
+
+/// Dữ liệu gốc dùng chung: ngành nghề, loại khách, nguồn lead, lý do thua, đơn vị tính,
+/// điều khoản thanh toán/giao hàng... Một bảng cho các danh mục ngắn, ít cột, để không
+/// phải mở bảng mới cho mỗi danh sách chọn. Danh mục có nghiệp vụ riêng (nhóm sản phẩm,
+/// thương hiệu, kho) có bảng riêng ở phase của nó — không nhồi vào đây.
+model MasterDataItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  type        String   @db.VarChar(50) /// khóa loại, xem src/modules/du-lieu-goc/loai.ts
+  code        String   @db.VarChar(50)
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  sortOrder   Int      @default(0) @map("sort_order")
+  status      String   @default("hoat-dong") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type, code])
+  @@index([tenantId, type, status])
+  @@map("master_data_items")
 }

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Cowork Business OS — ITW",
+  title: "TGTH Business Cowork",
   description: "Hệ điều hành vận hành doanh nghiệp của Công ty Cổ phần Thế Giới Tin Học.",
 };
 

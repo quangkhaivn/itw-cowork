@@ -28,21 +28,27 @@ GRANT USAGE ON SCHEMA public TO cowork_app;
 
 -- --------------------------------------------------------------------------
 -- 2. Bảng có tenant_id: đọc/ghi trong phạm vi tenant của phiên
+--
+--    Danh sách bảng KHÔNG viết tay nữa (từ 19/09/2026): quét mọi bảng trong
+--    schema public có cột tenant_id. Viết tay thì bảng mới của phase sau dễ bị
+--    quên — và bảng bị quên nghĩa là không có RLS, tức rò dữ liệu mà không ai
+--    biết. Bảng chỉ-ghi-thêm được loại ra ở đây và xử lý riêng ở mục 3.
 -- --------------------------------------------------------------------------
 DO $$
 DECLARE
     ten_bang text;
-    ds_bang text[] := ARRAY[
-        'tenant_settings',
-        'departments',
-        'users',
-        'staff_profiles',
-        'roles',
-        'role_permissions',
-        'user_roles'
-    ];
 BEGIN
-    FOREACH ten_bang IN ARRAY ds_bang LOOP
+    FOR ten_bang IN
+        SELECT c.table_name
+        FROM information_schema.columns c
+        JOIN information_schema.tables t
+          ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+        WHERE c.table_schema = 'public'
+          AND c.column_name = 'tenant_id'
+          AND t.table_type = 'BASE TABLE'
+          AND c.table_name NOT IN ('business_events', 'audit_logs')
+        ORDER BY c.table_name
+    LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
         EXECUTE format('DROP POLICY IF EXISTS cach_ly_tenant ON public.%I', ten_bang);
         EXECUTE format($f$
@@ -117,3 +123,25 @@ GRANT SELECT ON public.permissions TO cowork_app;
 -- 6. Bảng ghi lịch sử migration của Prisma: ứng dụng không cần đụng tới.
 -- --------------------------------------------------------------------------
 REVOKE ALL ON public._prisma_migrations FROM cowork_app;
+
+-- --------------------------------------------------------------------------
+-- 7. Tự kiểm: mọi bảng có tenant_id phải đang bật RLS. Sai thì dừng triển khai.
+-- --------------------------------------------------------------------------
+DO $$
+DECLARE
+    thieu text;
+BEGIN
+    SELECT string_agg(c.relname, ', ') INTO thieu
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relkind = 'r'
+      AND NOT c.relrowsecurity
+      AND EXISTS (
+          SELECT 1 FROM information_schema.columns col
+          WHERE col.table_schema = 'public' AND col.table_name = c.relname AND col.column_name = 'tenant_id'
+      );
+    IF thieu IS NOT NULL THEN
+        RAISE EXCEPTION 'Bang co tenant_id nhung chua bat RLS: %', thieu;
+    END IF;
+END $$;
