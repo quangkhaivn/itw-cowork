@@ -121,6 +121,17 @@ docker compose run --rm \
 
 echo "=== 7/7 Khởi động toàn bộ ==="
 docker compose up -d
+# Nạp lại cấu hình nginx trong Docker: `up -d` không tạo lại nginx khi chỉ tệp gắn ngoài
+# nginx/cowork.conf thay đổi. Kiểm cú pháp trước, sai thì dừng chứ không nạp cấu hình hỏng.
+docker compose exec -T nginx nginx -t
+docker compose exec -T nginx nginx -s reload
+
+echo "--- chờ ứng dụng trả lời qua nginx ---"
+for i in $(seq 1 60); do
+  if curl -fsS -o /dev/null http://127.0.0.1:8080/khoe; then echo "ứng dụng sẵn sàng sau ${i}s"; break; fi
+  sleep 1
+  if [ "$i" -eq 60 ]; then echo "❌ /khoe không trả 200 sau 60s — xem: docker compose logs app nginx"; exit 1; fi
+done
 
 echo ""
 echo "=== Xong. Kiểm tra: ==="
