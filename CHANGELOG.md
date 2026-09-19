@@ -2,6 +2,15 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.2.1 — 19/09/2026 — Sửa lỗi phát hiện khi triển khai lên máy thật
+
+- **nginx trả 502 sau khi tạo lại container `app`** (khoảng 1 phút, hai lần trong ngày): nginx chỉ phân giải tên `app` lúc khởi động; container mới nhận IP khác, `worker` lấy mất IP cũ. Nay phân giải lại qua DNS Docker mỗi 10 giây; đã kiểm bằng cách ép đổi IP — nginx tự theo sau 1 giây.
+- Cấu hình nginx gắn cả thư mục thay vì một tệp (gắn một tệp giữ inode cũ, thay tệp thì container không thấy).
+- `trien-khai.sh`: kiểm cú pháp và nạp lại nginx, chờ `/khoe` trả 200 rồi mới báo xong.
+- `sao-luu.sh` báo hỏng ngẫu nhiên dù tệp tốt (`pg_restore | grep -q` + `pipefail` → SIGPIPE). Nay ghi mục lục ra tệp rồi kiểm cả `users` và `audit_logs`.
+- Bỏ `X-Frame-Options` khỏi ứng dụng: nginx máy chủ đã đặt `SAMEORIGIN`, hai giá trị mâu thuẫn.
+- Lịch sao lưu hằng ngày 02:15 trên máy chủ; đã phục hồi thử một bản vào CSDL tạm, số dòng khớp bản gốc.
+
 ## 0.2.0 — 19/09/2026 — Phase 1 hoàn thiện (TGTH Business Cowork)
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (45 mục) do Giám đốc đưa ngày 19/09/2026. Mở rộng bản 0.1.0, không viết lại.
