@@ -1,0 +1,260 @@
+// Cowork Business OS — ITW
+// Phase 1: Foundation (multi-tenant, người dùng, phân quyền, sự kiện, kiểm toán)
+//
+// Quy ước:
+// - Tên bảng và tên cột theo đúng mục 20 đặc tả: tiếng Anh, snake_case.
+// - Mọi bảng nghiệp vụ mang đủ: id, tenant_id, created_at, updated_at, created_by, updated_by, status.
+// - Cách ly tenant được chốt ở hai lớp: Prisma (mục src/lib/db.ts) và PostgreSQL RLS (migration 0002).
+//   Không dựa vào kỷ luật lập trình viên.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7: url của datasource khai ở prisma.config.ts, không khai ở đây.
+datasource db {
+  provider = "postgresql"
+}
+
+/// Doanh nghiệp thuê bao. Bảng gốc của toàn hệ thống — không mang tenant_id.
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(50) /// mã ngắn, ví dụ "itw"
+  name      String   @db.VarChar(255)
+  taxCode   String?  @map("tax_code") @db.VarChar(50)
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  settings      TenantSetting[]
+  users         User[]
+  departments   Department[]
+  roles         Role[]
+  staffProfiles StaffProfile[]
+  userRoles     UserRole[]
+  events        BusinessEvent[]
+  auditLogs     AuditLog[]
+
+  @@map("tenants")
+}
+
+/// Cấu hình riêng của từng tenant, dạng khóa–giá trị để không phải đổi schema khi thêm tùy chọn.
+model TenantSetting {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  key       String   @db.VarChar(100)
+  value     Json
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("tenant_settings")
+}
+
+/// Phòng ban. Cho phép lồng nhau qua parent_id.
+model Department {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String   @db.VarChar(50)
+  name      String   @db.VarChar(255)
+  parentId  String?  @map("parent_id") @db.Uuid
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   Department?    @relation("PhongBanCha", fields: [parentId], references: [id], onDelete: SetNull)
+  children Department[]   @relation("PhongBanCha")
+  staff    StaffProfile[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("departments")
+}
+
+/// Tài khoản đăng nhập.
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  email        String    @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  fullName     String    @map("full_name") @db.VarChar(255)
+  phone        String?   @db.VarChar(30)
+  isSystem     Boolean   @default(false) @map("is_system") /// true = tác nhân máy (ví dụ trợ lý ITA)
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  status       String    @default("hoat-dong") @db.VarChar(30)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+  updatedBy    String?   @map("updated_by") @db.Uuid
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile StaffProfile?
+  userRoles    UserRole[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+/// Hồ sơ nhân sự gắn với tài khoản. Tách khỏi users để users chỉ lo việc đăng nhập.
+model StaffProfile {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String    @unique @map("user_id") @db.Uuid
+  departmentId String?   @map("department_id") @db.Uuid
+  employeeCode String?   @map("employee_code") @db.VarChar(50)
+  jobTitle     String?   @map("job_title") @db.VarChar(255)
+  hiredAt      DateTime? @map("hired_at") @db.Date
+  status       String    @default("hoat-dong") @db.VarChar(30)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+  updatedBy    String?   @map("updated_by") @db.Uuid
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, employeeCode])
+  @@index([tenantId])
+  @@map("staff_profiles")
+}
+
+/// Vai trò. Theo tenant để mỗi doanh nghiệp tự định nghĩa được bộ vai trò của mình.
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  code        String   @db.VarChar(50)
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  isBuiltIn   Boolean  @default(false) @map("is_built_in") /// vai trò dựng sẵn, không cho xóa
+  status      String   @default("hoat-dong") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("roles")
+}
+
+/// Danh mục quyền của hệ thống. Toàn cục, không theo tenant: đây là danh sách
+/// khả năng mà phần mềm hỗ trợ, giống nhau ở mọi doanh nghiệp.
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(100) /// ví dụ "quotation.approve"
+  module      String   @db.VarChar(50)
+  action      String   @db.VarChar(50)
+  description String?  @db.Text
+  status      String   @default("hoat-dong") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rolePermissions RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+/// Nối vai trò với quyền. Mục 20 không liệt kê bảng này nhưng RBAC không chạy được nếu thiếu.
+model RolePermission {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  status       String   @default("hoat-dong") @db.VarChar(30)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?  @map("created_by") @db.Uuid
+  updatedBy    String?  @map("updated_by") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([tenantId])
+  @@map("role_permissions")
+}
+
+/// Nối người dùng với vai trò.
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([tenantId])
+  @@map("user_roles")
+}
+
+/// Sự kiện vận hành — hệ thần kinh của hệ thống (mục 16 đặc tả).
+/// Chỉ ghi thêm. Không sửa, không xóa.
+model BusinessEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  eventType  String   @map("event_type") @db.VarChar(100)
+  actorType  String   @map("actor_type") @db.VarChar(30) /// user | system | ai
+  actorId    String?  @map("actor_id") @db.Uuid
+  objectType String   @map("object_type") @db.VarChar(50)
+  objectId   String?  @map("object_id") @db.Uuid
+  payload    Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, eventType])
+  @@index([tenantId, objectType, objectId])
+  @@index([tenantId, createdAt])
+  @@map("business_events")
+}
+
+/// Nhật ký kiểm toán — truy vết ai đã đổi cái gì (mục 27 đặc tả).
+/// Chỉ ghi thêm. Không sửa, không xóa.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  actorEmail String?  @map("actor_email") @db.VarChar(255) /// chụp lại tại thời điểm ghi, phòng khi tài khoản bị xóa
+  action     String   @db.VarChar(50) /// tao | sua | xoa | dang-nhap | dang-xuat | tu-choi-quyen
+  objectType String   @map("object_type") @db.VarChar(50)
+  objectId   String?  @map("object_id") @db.Uuid
+  before     Json?
+  after      Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, objectType, objectId])
+  @@index([tenantId, actorId])
+  @@index([tenantId, createdAt])
+  @@map("audit_logs")
+}

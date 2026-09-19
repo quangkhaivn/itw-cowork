@@ -1,0 +1,85 @@
+# Cowork Business OS — ITW
+# Mục 25 đặc tả yêu cầu: frontend, backend, database, redis, worker, nginx.
+# Ở đây frontend và backend gộp làm một dịch vụ `app` (Next.js phục vụ cả giao diện
+# lẫn API). Lý do đã ghi trong docs/quyet-dinh-kien-truc.md — tách đôi không đem lại
+# lợi ích nào mà lại vi phạm mục 30 "tạo quá nhiều module rời rạc".
+
+services:
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [cowork]
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [cowork]
+
+  app:
+    image: cowork-itw:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL_OWNER: ${DATABASE_URL_OWNER}
+      REDIS_URL: ${REDIS_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      APP_URL: ${APP_URL}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    expose:
+      - "3000"
+    networks: [cowork]
+
+  worker:
+    # Dùng chung ảnh với `app` — cùng mã nguồn, chỉ khác lệnh chạy.
+    # Không khai báo `build` để khỏi cài lại toàn bộ gói npm lần thứ hai.
+    image: cowork-itw:latest
+    restart: always
+    command: ["npm", "run", "worker"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [cowork]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: always
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./nginx/cowork.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks: [cowork]
+
+networks:
+  cowork:
+    driver: bridge

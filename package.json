@@ -1,0 +1,41 @@
+{
+  "name": "cowork-itw",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cowork Business OS — Cong ty Co phan The Gioi Tin Hoc (ITW). Phase 1: Foundation.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "worker": "tsx worker/index.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed/index.ts",
+    "thu:cach-ly": "tsx thu/thu-cach-ly-tenant.ts",
+    "thu:phan-quyen": "tsx thu/thu-phan-quyen.ts",
+    "thu:su-kien": "tsx thu/thu-su-kien.ts",
+    "thu:tat-ca": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "bcryptjs": "^3.0.3",
+    "ioredis": "^5.4.1",
+    "jose": "^6.0.11",
+    "next": "16.3.1",
+    "pg": "^8.23.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^16.4.7",
+    "prisma": "^7.9.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5"
+  }
+}

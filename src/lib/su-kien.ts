@@ -1,0 +1,93 @@
+import type { ClientTenant } from "./db";
+
+/**
+ * Business Events — hệ thần kinh của hệ thống (mục 16 đặc tả).
+ *
+ * Quy tắc: sự kiện CHỈ GHI THÊM. Không sửa, không xóa. Migration 0002 chặn
+ * UPDATE và DELETE ngay ở tầng cơ sở dữ liệu, nên kể cả code có gọi nhầm cũng không sửa được.
+ */
+
+/** Danh mục sự kiện theo mục 16 đặc tả. Phase sau bổ sung dần, không đổi tên cũ. */
+export const SU_KIEN = {
+  // --- Nhóm xác thực (bổ sung ngoài mục 16 — Phase 1 cần để truy vết đăng nhập) ---
+  USER_LOGGED_IN: "USER_LOGGED_IN",
+  USER_LOGIN_FAILED: "USER_LOGIN_FAILED",
+  USER_LOGGED_OUT: "USER_LOGGED_OUT",
+  PERMISSION_DENIED: "PERMISSION_DENIED",
+
+  // --- Nhóm nền móng ---
+  TENANT_CREATED: "TENANT_CREATED",
+  USER_CREATED: "USER_CREATED",
+  ROLE_ASSIGNED: "ROLE_ASSIGNED",
+
+  // --- Mục 16: các sự kiện nghiệp vụ, dùng từ Phase 2 trở đi ---
+  LEAD_CAPTURED: "LEAD_CAPTURED",
+  LEAD_ASSIGNED: "LEAD_ASSIGNED",
+  LEAD_CONTACTED: "LEAD_CONTACTED",
+  OPPORTUNITY_CREATED: "OPPORTUNITY_CREATED",
+  QUOTATION_CREATED: "QUOTATION_CREATED",
+  QUOTATION_SENT: "QUOTATION_SENT",
+  QUOTATION_FOLLOWED_UP: "QUOTATION_FOLLOWED_UP",
+  OPPORTUNITY_WON: "OPPORTUNITY_WON",
+  OPPORTUNITY_LOST: "OPPORTUNITY_LOST",
+  ORDER_CREATED: "ORDER_CREATED",
+  PROJECT_CREATED: "PROJECT_CREATED",
+  PURCHASE_REQUESTED: "PURCHASE_REQUESTED",
+  PURCHASE_ORDER_CREATED: "PURCHASE_ORDER_CREATED",
+  STOCK_RESERVED: "STOCK_RESERVED",
+  STOCK_RECEIVED: "STOCK_RECEIVED",
+  DELIVERY_STARTED: "DELIVERY_STARTED",
+  DELIVERY_COMPLETED: "DELIVERY_COMPLETED",
+  PROJECT_STARTED: "PROJECT_STARTED",
+  PROJECT_COMPLETED: "PROJECT_COMPLETED",
+  ACCEPTANCE_COMPLETED: "ACCEPTANCE_COMPLETED",
+  INVOICE_CREATED: "INVOICE_CREATED",
+  PAYMENT_RECEIVED: "PAYMENT_RECEIVED",
+  RECEIVABLE_OVERDUE: "RECEIVABLE_OVERDUE",
+  SERVICE_TICKET_CREATED: "SERVICE_TICKET_CREATED",
+  SERVICE_TICKET_ASSIGNED: "SERVICE_TICKET_ASSIGNED",
+  SERVICE_TICKET_COMPLETED: "SERVICE_TICKET_COMPLETED",
+  CUSTOMER_FOLLOWUP_REQUIRED: "CUSTOMER_FOLLOWUP_REQUIRED",
+  TASK_CREATED: "TASK_CREATED",
+  TASK_OVERDUE: "TASK_OVERDUE",
+  KPI_UPDATED: "KPI_UPDATED",
+  ALERT_CREATED: "ALERT_CREATED",
+  CEO_DECISION_REQUIRED: "CEO_DECISION_REQUIRED",
+  AI_SUGGESTION_CREATED: "AI_SUGGESTION_CREATED",
+} as const;
+
+export type MaSuKien = (typeof SU_KIEN)[keyof typeof SU_KIEN];
+
+/** Ai gây ra sự kiện. `ai` tách riêng để sau này lọc được việc nào do trợ lý ITA làm. */
+export type LoaiTacNhan = "user" | "system" | "ai";
+
+export interface ThamSoGhiSuKien {
+  eventType: MaSuKien;
+  actorType: LoaiTacNhan;
+  actorId?: string | null;
+  objectType: string;
+  objectId?: string | null;
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * Ghi một sự kiện. Phải gọi bên trong `voiTenant()` — tenant_id lấy từ ngữ cảnh
+ * của giao dịch, không truyền tay, để không ghi nhầm sang doanh nghiệp khác.
+ */
+export async function ghiSuKien(tx: ClientTenant, thamSo: ThamSoGhiSuKien): Promise<void> {
+  const [{ tenant_id }] = await tx.$queryRaw<{ tenant_id: string }[]>`
+    SELECT current_setting('app.tenant_id')::uuid AS tenant_id
+  `;
+
+  await tx.businessEvent.create({
+    data: {
+      tenantId: tenant_id,
+      eventType: thamSo.eventType,
+      actorType: thamSo.actorType,
+      actorId: thamSo.actorId ?? null,
+      objectType: thamSo.objectType,
+      objectId: thamSo.objectId ?? null,
+      payload: (thamSo.payload ?? {}) as never,
+    },
+  });
+}
