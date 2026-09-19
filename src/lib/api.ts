@@ -21,6 +21,8 @@ import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "./loi";
  * đó sau này được trợ lý AI gọi qua tool calling, với cùng kiểm quyền.
  */
 
+const LA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface NguCanh {
   tx: ClientTenant;
   tenantId: string;
@@ -75,6 +77,11 @@ export function xuLyApi<P extends Record<string, string> = Record<string, never>
 
     try {
       const thamSo = ((await ctx?.params) ?? {}) as P;
+      // Mọi tham số đường dẫn tên `id` / `...Id` phải là UUID. Không kiểm thì chuỗi lạ
+      // ("undefined", "abc") đi thẳng xuống PostgreSQL và thành lỗi 500 (phát hiện 20/09).
+      for (const [khoa, giaTri] of Object.entries(thamSo)) {
+        if ((khoa === "id" || khoa.endsWith("Id")) && !LA_UUID.test(String(giaTri))) throw new LoiKhongTimThay();
+      }
       const ketQua = await voiTenant(phien.tenantId, async (tx) => {
         const hoSo = await layHoSoQuyen(tx, phien.userId);
         if (!hoSo || !phienConHieuLuc(phien.kyLucMs, hoSo.doiMatKhauLuc)) throw new LoiChuaDangNhap();
@@ -135,6 +142,10 @@ export function anhXaLoi(loi: unknown): NextResponse {
   // Lỗi trùng khóa duy nhất của PostgreSQL mà service chưa tự bắt.
   if (typeof loi === "object" && loi && "code" in loi && (loi as { code: unknown }).code === "P2002") {
     return traLoi(409, "Dữ liệu bị trùng với một bản ghi đã có.");
+  }
+  // Giá trị sai kiểu với cột (uuid không hợp lệ trong thân yêu cầu…) — lỗi của dữ liệu vào, không phải của máy chủ.
+  if (typeof loi === "object" && loi && "code" in loi && (loi as { code: unknown }).code === "P2007") {
+    return traLoi(400, "Dữ liệu nhập chưa hợp lệ.");
   }
   console.error("[api] lỗi ngoài dự kiến:", loi);
   // Không trả chi tiết lỗi ra ngoài: có thể lộ cấu trúc cơ sở dữ liệu.

@@ -81,6 +81,13 @@ docker compose up -d
 - Trước khi triển khai migration có sửa dữ liệu: **diễn tập nâng cấp** — dựng CSDL giống hệt bản đang chạy (migration cũ + seed cũ), áp migration mới + seed mới, kiểm kết quả. Bản 19/09 đã diễn tập đúng như vậy.
 - Không bao giờ chạy `prisma db push` hay `migrate dev` trên máy thật.
 
+### Nâng cấp lên 0.3.0 (Phase 2 — CRM)
+
+- Migration `20260919171944_phase2_crm`: chỉ thêm 7 bảng, không sửa dữ liệu cũ, trừ một câu `INSERT … ON CONFLICT DO NOTHING` cấp `sales.approve` cho vai trò dựng sẵn `sales-manager`.
+- Cần extension `pg_trgm`: có sẵn trong ảnh `postgres:16` chính thức; migration tự `CREATE EXTENSION IF NOT EXISTS` bằng vai chủ sở hữu (là superuser của container). Phục hồi từ bản sao lưu cũng tự tạo lại extension.
+- Đã diễn tập 20/09 trên máy trạm: CSDL ở trạng thái Phase 1 có dữ liệu (2 tenant, 14 người dùng, 1.186 dòng quyền) → áp migration → `rls.sql` → seed mới. Người dùng giữ nguyên; cả hai tenant nhận `sales.approve`; RLS bật trên cả 7 bảng mới.
+- Sau khi lên máy thật: đăng nhập, mở lần lượt Khách hàng, Lead, Pipeline, Cơ hội, Công việc. **Không tạo khách thử trong tenant `itw`** — mã KH đã cấp không lấy lại được, và dữ liệu thử sẽ lẫn vào báo cáo. Bản ghi đầu tiên nên là khách thật.
+
 ## Nhật ký, lỗi, sức khỏe
 
 - `docker compose logs -f app` / `worker`. Lỗi ngoài dự kiến của API ghi dòng `[api] lỗi ngoài dự kiến`; trang lỗi hiện mã `digest` để tra log.

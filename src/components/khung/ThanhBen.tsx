@@ -39,7 +39,7 @@ export default function ThanhBen({
           </div>
         ))}
       </nav>
-      <div className="chan">Phase 1 · Nền móng</div>
+      <div className="chan">Phase 2 · CRM</div>
     </aside>
   );
 }

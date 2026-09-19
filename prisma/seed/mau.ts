@@ -80,8 +80,103 @@ async function main() {
     await db.staffProfile.update({ where: { userId: idTheoEmail.get(email)! }, data: { managerId: idTheoEmail.get(quanLy)! } });
   }
 
+  await seedCrmMau(tenant.id, idTheoEmail);
+
   console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
   console.log("  Thử phạm vi dữ liệu: đăng nhập tp.kinhdoanh@demo.test (thấy nhóm), kd1@demo.test (chỉ thấy mình).");
+}
+
+/**
+ * CRM mẫu (Phase 2): tạo QUA SERVICE thật, bằng đúng tài khoản nhân viên mẫu, để dữ liệu
+ * mẫu đi qua cùng luật với dữ liệu thật (chống trùng, CH-02, nhật ký). Chỉ chạy khi
+ * tenant demo chưa có khách hàng nào — chạy lại không nhân đôi.
+ * Tên doanh nghiệp đều có chữ "Mẫu"; không dùng mã số thuế (không mượn MST của ai).
+ */
+async function seedCrmMau(tenantId: string, id: Map<string, string>) {
+  if ((await db.customer.count({ where: { tenantId } })) > 0) {
+    console.log("✓ CRM mẫu đã có — bỏ qua");
+    return;
+  }
+  const { voiTenant } = await import("../../src/lib/db");
+  const { taoNguCanh } = await import("../../src/lib/api");
+  const { layHoSoQuyen } = await import("../../src/lib/phan-quyen");
+  const kh = await import("../../src/modules/khach-hang/service");
+  const ch = await import("../../src/modules/co-hoi/service");
+  const ld = await import("../../src/modules/lead/service");
+  const tt = await import("../../src/modules/tuong-tac/service");
+  const cv = await import("../../src/modules/cong-viec/service");
+  const { LuocDoTaoKhachHang } = await import("../../src/modules/khach-hang/luoc-do");
+  const { LuocDoTaoCoHoi } = await import("../../src/modules/co-hoi/luoc-do");
+  const { LuocDoTaoLead } = await import("../../src/modules/lead/luoc-do");
+  type NC = Parameters<typeof kh.taoKhachHang>[0];
+
+  const voi = <T>(email: string, viec: (nc: NC) => Promise<T>) =>
+    voiTenant(tenantId, async (tx) => {
+      const hoSo = await layHoSoQuyen(tx, id.get(email)!);
+      if (!hoSo) throw new Error(`Không đọc được quyền của ${email}`);
+      return viec(taoNguCanh(tx, tenantId, hoSo, null, "seed-mau"));
+    });
+  const ngay = (lech: number) => new Date(Date.now() + lech * 86_400_000).toISOString().slice(0, 10);
+
+  // --- Nhân viên KD 1 ---
+  const nhaMay = await voi("kd1@demo.test", (nc) =>
+    kh.taoKhachHang(nc, LuocDoTaoKhachHang.parse({
+      ten: "Công ty TNHH Mẫu Bao Bì An Phú",
+      loaiKhach: "doanh-nghiep",
+      phanKhuc: "nha-may",
+      nganh: "san-xuat",
+      nguon: "website",
+      dienThoai: "0900 000 101",
+      diaChi: "Khu công nghiệp Mẫu, Bình Dương",
+      lienHe: { hoTen: "Nguyễn Thị Mua Hàng", chucDanh: "Trưởng phòng Mua hàng", dienThoai: "0900 000 102", email: "muahang@anphu-mau.test" },
+    })),
+  );
+  const truong = await voi("kd1@demo.test", (nc) =>
+    kh.taoKhachHang(nc, LuocDoTaoKhachHang.parse({ ten: "Trường THCS Mẫu Bình Minh", loaiKhach: "doanh-nghiep", phanKhuc: "truong-hoc", nganh: "giao-duc", nguon: "gioi-thieu" })),
+  );
+  const camera = await voi("kd1@demo.test", (nc) =>
+    ch.taoCoHoi(nc, LuocDoTaoCoHoi.parse({ khachHangId: nhaMay.id, tieuDe: "30 camera nhà xưởng", giaTri: "90000000", hanhDongKeTiep: "Gửi báo giá camera", ngayHanhDong: ngay(1), ngayDuKienChot: ngay(20) })),
+  );
+  await voi("kd1@demo.test", (nc) => ch.doiGiaiDoan(nc, camera.id, { giaiDoan: "QUOTATION" }));
+  const phongMay = await voi("kd1@demo.test", (nc) =>
+    ch.taoCoHoi(nc, LuocDoTaoCoHoi.parse({ khachHangId: truong.id, tieuDe: "Phòng máy 40 PC", giaTri: "480000000", hanhDongKeTiep: "Họp ban giám hiệu chốt cấu hình", ngayHanhDong: ngay(3), ngayDuKienChot: ngay(45) })),
+  );
+  await voi("kd1@demo.test", (nc) => ch.doiGiaiDoan(nc, phongMay.id, { giaiDoan: "NEGOTIATION" }));
+  const ups = await voi("kd1@demo.test", (nc) =>
+    ch.taoCoHoi(nc, LuocDoTaoCoHoi.parse({ khachHangId: nhaMay.id, tieuDe: "Bộ lưu điện cho phòng máy chủ", giaTri: "35000000", hanhDongKeTiep: "Giao hàng", ngayHanhDong: ngay(0) })),
+  );
+  await voi("kd1@demo.test", (nc) => ch.doiGiaiDoan(nc, ups.id, { giaiDoan: "WON" }));
+  await voi("kd1@demo.test", (nc) =>
+    tt.ghiTuongTac(nc, { loai: "meeting", tieuDe: "Khảo sát mặt bằng nhà xưởng", noiDung: "Cần 30 điểm camera, 2 đầu ghi", ketQua: "Hẹn gửi báo giá", coHoiId: camera.id, khachHangId: null, lienHeId: null, leadId: null, luc: null }),
+  );
+  await voi("kd1@demo.test", (nc) =>
+    cv.taoViec(nc, { tieuDe: "Gửi báo giá camera cho An Phú", uuTien: "cao", han: new Date(Date.now() + 86_400_000), coHoiId: camera.id, khachHangId: null, leadId: null, moTa: null, nguoiPhuTrachId: null }),
+  );
+  await voi("kd1@demo.test", (nc) =>
+    ld.taoLead(nc, LuocDoTaoLead.parse({ hoTen: "Chị Mai", congTy: "Văn phòng Mẫu Sao Việt", dienThoai: "0900 000 201", nguon: "website", nhuCau: "15 laptop văn phòng, ngân sách khoảng 15 triệu/máy", giaTriUocTinh: "225000000" })),
+  );
+
+  // --- Nhân viên KD 2 ---
+  const chuoi = await voi("kd2@demo.test", (nc) =>
+    kh.taoKhachHang(nc, LuocDoTaoKhachHang.parse({ ten: "Chuỗi cửa hàng Mẫu Hạnh Phúc", loaiKhach: "doanh-nghiep", phanKhuc: "chuoi-cua-hang", nganh: "ban-le", nguon: "zalo", dienThoai: "0900 000 301" })),
+  );
+  await voi("kd2@demo.test", (nc) =>
+    ch.taoCoHoi(nc, LuocDoTaoCoHoi.parse({ khachHangId: chuoi.id, tieuDe: "Wifi cho 12 cửa hàng", giaTri: "60000000", hanhDongKeTiep: "Gọi lại xác nhận số điểm phát", ngayHanhDong: ngay(-2) })),
+  );
+  const nas = await voi("kd2@demo.test", (nc) =>
+    ch.taoCoHoi(nc, LuocDoTaoCoHoi.parse({ khachHangId: chuoi.id, tieuDe: "Máy chủ lưu trữ", giaTri: "120000000", hanhDongKeTiep: "Gửi phương án", ngayHanhDong: ngay(0) })),
+  );
+  await voi("kd2@demo.test", (nc) => ch.doiGiaiDoan(nc, nas.id, { giaiDoan: "LOST", lyDoThua: "gia-cao", ghiChuThua: "Dữ liệu mẫu" }));
+  const leadTuan = await voi("kd2@demo.test", (nc) =>
+    ld.taoLead(nc, LuocDoTaoLead.parse({ hoTen: "Anh Tuấn", congTy: "Xưởng Mẫu Cơ Khí Tân Tiến", dienThoai: "0900 000 401", nguon: "zalo", nhuCau: "Camera + tổng đài nội bộ" })),
+  );
+  await voi("kd2@demo.test", (nc) =>
+    tt.ghiTuongTac(nc, { loai: "zalo", tieuDe: "Nhắn Zalo giới thiệu", leadId: leadTuan.id, khachHangId: null, lienHeId: null, coHoiId: null, noiDung: null, ketQua: "Khách hẹn tuần sau", luc: null }),
+  );
+  await voi("kd2@demo.test", (nc) =>
+    cv.taoViec(nc, { tieuDe: "Gọi lại anh Tuấn", uuTien: "trung-binh", han: new Date(Date.now() - 86_400_000), leadId: leadTuan.id, khachHangId: null, coHoiId: null, moTa: null, nguoiPhuTrachId: null }),
+  );
+  console.log("✓ CRM mẫu: 3 khách hàng, 5 cơ hội, 2 lead, tương tác và công việc (tạo qua service)");
 }
 
 main()

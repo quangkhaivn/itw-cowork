@@ -56,6 +56,23 @@ Mỗi công cụ là một hàm mỏng bọc service sẵn có:
 
 Trước khi chạy công cụ: kiểm quyền bằng `batBuocQuyen` với hồ sơ người hỏi; thiếu quyền thì trả cho mô hình thông báo "không có quyền" (mô hình phải nói lại với người dùng), đồng thời ghi vết từ chối như mọi API.
 
+### Ánh xạ tên công cụ của prompt 20/09 (mục 20) sang service đang có
+
+| Công cụ (prompt) | Service thật | Có từ |
+|---|---|---|
+| `searchCustomer()` | `danhSachKhachHang` / nguồn `khach-hang` của `timKiemToanCuc` | Phase 2 |
+| `getCustomer360()` | `khach360` | Phase 2 |
+| `searchOpportunities()` | `danhSachCoHoi` | Phase 2 |
+| `getSalesPipeline()` | `duLieuPipeline` | Phase 2 |
+| `getOverdueFollowups()` | `danhSachCoHoi({ quaHan: "1" })` + `danhSachViec({ cheDo: "qua-han" })` | Phase 2 |
+| `searchProducts()`, `getProductPrice()` | — | Phase 3 |
+| `checkInventory()` | — | Phase 5 |
+| `getQuotation()`, `createQuotationDraft()` | — | Phase 4 |
+| `getRenewals()` | — | Phase 6 |
+| `getRevenueSummary()` | — | Phase 7 |
+
+Mọi service trên nhận `NguCanh` của **người đang hỏi**, nên phạm vi dữ liệu của AI tự đúng bằng phạm vi của người đó.
+
 ## 3. Các tác nhân
 
 | Tác nhân | Kích hoạt | Làm gì | Giới hạn |

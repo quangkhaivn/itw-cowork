@@ -1,9 +1,9 @@
 /**
  * Thanh điều hướng bên trái — một nguồn duy nhất cho menu, tìm kiếm màn hình và breadcrumb.
  *
- * Chỉ liệt kê màn hình ĐÃ CHẠY THẬT. Phân hệ chưa xây (CRM, Báo giá, Kho…) chưa có
- * mặt ở đây — không để nút dẫn tới trang trống (mục 41 master prompt: không dead button).
- * Mỗi phase thêm mục của mình vào đúng nhóm theo sidebar mục 5 master prompt.
+ * Chỉ liệt kê màn hình ĐÃ CHẠY THẬT. Phân hệ chưa xây (Sản phẩm, Báo giá, Kho…) chưa có
+ * mặt ở đây — không để nút dẫn tới trang trống (mục 31 prompt 20/09: không dead button).
+ * Mỗi phase thêm mục của mình vào đúng nhóm theo sidebar mục 23 prompt 20/09.
  */
 
 export type BieuTuong =
@@ -13,7 +13,12 @@ export type BieuTuong =
   | "phong-ban"
   | "du-lieu-goc"
   | "cau-hinh"
-  | "nhat-ky";
+  | "nhat-ky"
+  | "khach-hang"
+  | "lead"
+  | "pipeline"
+  | "co-hoi"
+  | "cong-viec";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -42,6 +47,24 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
         tuKhoa: "dashboard trang chu",
       },
     ],
+  },
+  {
+    nhan: "CRM",
+    muc: [
+      { nhan: "Khách hàng", href: "/crm/khach-hang", quyen: "customer.view", bieuTuong: "khach-hang", tuKhoa: "customer 360 lien he contact ma so thue" },
+      { nhan: "Lead", href: "/crm/lead", quyen: "crm.view", bieuTuong: "lead", tuKhoa: "khach tiem nang lead chuyen doi" },
+    ],
+  },
+  {
+    nhan: "Bán hàng",
+    muc: [
+      { nhan: "Pipeline", href: "/ban-hang/pipeline", quyen: "sales.view", bieuTuong: "pipeline", tuKhoa: "kanban pipeline giai doan" },
+      { nhan: "Cơ hội", href: "/ban-hang/co-hoi", quyen: "sales.view", bieuTuong: "co-hoi", tuKhoa: "opportunity co hoi ban hang" },
+    ],
+  },
+  {
+    nhan: "Công việc",
+    muc: [{ nhan: "Công việc", href: "/cong-viec", quyen: "task.view", bieuTuong: "cong-viec", tuKhoa: "task viec can lam qua han activity" }],
   },
   {
     nhan: "Quản trị",

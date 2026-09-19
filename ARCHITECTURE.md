@@ -1,6 +1,6 @@
 # Kiến trúc — TGTH Business Cowork
 
-Cập nhật: 19/09/2026 (Phase 1 hoàn thành).
+Cập nhật: 20/09/2026 (Phase 2 — CRM xong trên máy phát triển).
 
 ## 1. Nguyên tắc
 
@@ -85,7 +85,16 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 
 ## 7. Tìm kiếm toàn cục
 
-`src/modules/tim-kiem/service.ts` giữ danh sách **nguồn**. Mỗi nguồn tự kiểm quyền và phạm vi. Phase 1 có: màn hình, người dùng, phòng ban. Phase 2 thêm khách hàng / liên hệ / số điện thoại / mã số thuế; Phase 3 thêm SKU; Phase 4 thêm số báo giá — mỗi phase thêm một phần tử vào mảng `NGUON`.
+`src/modules/tim-kiem/service.ts` giữ danh sách **nguồn**. Mỗi nguồn tự kiểm quyền và phạm vi. Đang có: màn hình, người dùng, phòng ban (Phase 1); khách hàng — tên, mã, MST, điện thoại, email —, liên hệ, lead, cơ hội (Phase 2). Phase 3 thêm SKU; Phase 4 thêm số báo giá — mỗi phase thêm một phần tử vào mảng `NGUON`. Câu tìm có chữ số được so với cột đã chuẩn hóa, nên "0909 111 222" hay "0305.547.654" đều ra.
+
+## 7b. CRM (Phase 2)
+
+- Phân hệ: `src/modules/{khach-hang,lead,co-hoi,tuong-tac,cong-viec}` + phần dùng chung `src/modules/crm/{chuan-hoa,hang-so,chung}.ts`.
+- Quyền: khách/liên hệ `customer.*`, lead/tương tác `crm.*`, cơ hội `sales.*`, công việc `task.*`. Phạm vi theo `owner_id` qua `locTheoPhamVi()`.
+- Xem cơ hội theo tài khoản khách (QĐ-13): `dieuKienXemCoHoi()`.
+- Chuyển đổi lead gọi lần lượt `taoKhachHang` → `taoLienHe` → `taoCoHoi` trong cùng giao dịch của `xuLyApi`: lỗi ở đâu cũng cuộn ngược hết.
+- Luật nghiệp vụ và nơi chặn: `BUSINESS_RULES.md` mục 3.
+- Giao diện: thành phần dùng chung ở `src/components/crm/` (cảnh báo trùng, chọn khách, ô tiền, ghi tương tác, tạo việc, hộp đổi giai đoạn, dòng thời gian).
 
 ## 8. Tác vụ nền
 
@@ -96,6 +105,7 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 | Việc | Vì sao chưa | Làm ở |
 |---|---|---|
 | Chuông thông báo | Chưa có sự kiện nào cần báo cho người dùng; chuông không có gì bên trong là nút chết | Phase 8 |
-| Tùy chọn cột trên bảng | Bảng Phase 1 ít cột; làm một lần cho thành phần bảng dùng chung khi CRM cần | Phase 2 |
+| Tùy chọn cột trên bảng | Bảng CRM 5–7 cột vẫn đọc tốt; chưa có yêu cầu thật để ẩn/hiện cột | khi có yêu cầu |
+| Xuất CSV khách hàng | Quyền `customer.export` đã có nhưng chưa có màn hình; không để nút chết | Phase 3 (dùng chung bộ nhập/xuất của sản phẩm) |
 | Song ngữ Việt–Anh | Chữ giao diện hiện viết thẳng; chuẩn bị bằng cách gom nhãn menu vào một tệp. Tách từ điển khi có yêu cầu thật | khi cần |
 | Lưu tệp (đối tượng) | Chưa phân hệ nào cần đính kèm | Phase 6 (ảnh nghiệm thu) |

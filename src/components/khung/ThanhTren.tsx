@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import BieuTuong from "@/components/ui/BieuTuong";
+import TaoNhanh, { type MucTaoNhanh } from "./TaoNhanh";
 
 function chuCaiDau(hoTen: string) {
   const tu = hoTen.trim().split(/\s+/);
@@ -14,10 +15,12 @@ export default function ThanhTren({
   nguoiDung,
   batMenu,
   moTimKiem,
+  taoNhanh,
 }: {
   nguoiDung: { hoTen: string; email: string; vaiTro: string };
   batMenu: () => void;
   moTimKiem: () => void;
+  taoNhanh: MucTaoNhanh[];
 }) {
   const router = useRouter();
   const [moMenu, datMoMenu] = useState(false);
@@ -54,10 +57,11 @@ export default function ThanhTren({
       </button>
       <button className="o-tim" onClick={moTimKiem} aria-label="Tìm kiếm (Ctrl+K)">
         <BieuTuong ten="tim-kiem" co={16} />
-        <span>Tìm người dùng, phòng ban, màn hình…</span>
+        <span>Tìm khách hàng, MST, điện thoại, cơ hội…</span>
         <kbd>Ctrl K</kbd>
       </button>
       <div className="dem" />
+      <TaoNhanh muc={taoNhanh} />
       <div className="menu-nguoi" ref={vung}>
         <button onClick={() => datMoMenu((m) => !m)} aria-haspopup="menu" aria-expanded={moMenu}>
           <span className="anh-dai-dien" aria-hidden="true">

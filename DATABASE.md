@@ -1,6 +1,6 @@
 # Cơ sở dữ liệu — TGTH Business Cowork
 
-Cập nhật: 19/09/2026. PostgreSQL 16, Prisma 7.
+Cập nhật: 20/09/2026 (Phase 2 — CRM). PostgreSQL 16, Prisma 7.
 
 Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và **(B) thiết kế đề xuất** cho Phase 2–9 (bước 4 của master prompt). Phần B là đề xuất: mỗi phase sẽ chốt lại chi tiết khi viết migration, và cập nhật tệp này.
 
@@ -18,7 +18,7 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 
 ---
 
-## A. Đang chạy (Phase 1)
+## A. Đang có (Phase 1 chạy thật; Phase 2 chờ triển khai)
 
 | Bảng | Vai trò | Ghi chú |
 |---|---|---|
@@ -34,8 +34,15 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `master_data_items` | Dữ liệu gốc: phân khúc, loại khách, ngành, nguồn lead, lý do thua, đơn vị tính, điều khoản, đối thủ | Thêm 19/09. Duy nhất theo `(tenant_id, type, code)` |
 | `business_events` | Sự kiện nghiệp vụ | Chỉ ghi thêm (trigger) |
 | `audit_logs` | Ai đổi gì, trước/sau, IP | Chỉ ghi thêm (trigger); che khóa nhạy cảm |
+| `document_sequences` | Bộ đếm số chứng từ `(doc_type, period)` | Phase 2. Cấp số bằng `INSERT … ON CONFLICT DO UPDATE … RETURNING` (`src/lib/so-chung-tu.ts`) |
+| `customers` | Khách hàng | Phase 2. Duy nhất `(tenant_id, code)`, `(tenant_id, tax_code_normalized)`; GIN trigram `name_normalized`; CHECK trạng thái, MST 10/13 số |
+| `contacts` | Người liên hệ của khách | Phase 2. Chỉ mục điện thoại / email chuẩn hóa |
+| `leads` | Lead | Phase 2. CHECK giai đoạn; phải có điện thoại hoặc email; loại phải có lý do; đã chuyển đổi phải trỏ sang khách |
+| `interactions` | Tương tác đã xảy ra | Phase 2. CHECK loại; phải gắn khách hoặc lead. QĐ-12 |
+| `opportunities` | Cơ hội | Phase 2. **CHECK: đang mở ⇒ có next_action + next_action_date**; thua ⇒ có lost_reason; đóng ⇒ có closed_at; xác suất 0–100 |
+| `tasks` | Công việc có hạn | Phase 2. CHECK trạng thái, ưu tiên; xong ⇒ có completed_at. QĐ-17 |
 
-Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay).
+Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ).
 
 Vai kết nối: `cowork_app` (ứng dụng, bị RLS) và chủ sở hữu (migration, seed). Ứng dụng **không bao giờ** chạy bằng chủ sở hữu.
 
@@ -61,7 +68,9 @@ customers ─┬─< contacts
 leads ──(chuyển đổi)──> customers + contacts + opportunities
 ```
 
-### Phase 2 — CRM
+### Phase 2 — CRM (ĐÃ LÀM 20/09 — bảng thật ở phần A; bảng dưới là đề xuất gốc 19/09, giữ để đối chiếu)
+
+Khác đề xuất: `activities` → `interactions` + `tasks` (QĐ-12); công việc dùng ba khóa ngoại thay cho `related_type/related_id` (QĐ-17); điện thoại chuẩn hóa về dạng quốc nội `0xxxxxxxxx` thay vì `84xxxxxxxxx` (người dùng gõ tìm theo số bắt đầu bằng 0).
 
 | Bảng | Cột chính | Ràng buộc / chỉ mục |
 |---|---|---|

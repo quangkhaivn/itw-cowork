@@ -16,6 +16,12 @@ const DUONG_VE: Record<string, string> = {
   dong: "M18 6 6 18M6 6l12 12",
   them: "M12 5v14M5 12h14",
   "mui-ten-xuong": "m6 9 6 6 6-6",
+  // Phase 2 — CRM
+  "khach-hang": "M3 21h18M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M15 9h2a2 2 0 0 1 2 2v10M9 7h2M9 11h2M9 15h2",
+  lead: "M22 12h-4l-3 9L9 3l-3 9H2",
+  pipeline: "M3 3h5v18H3zM10 3h5v12h-5zM17 3h4v7h-4z",
+  "co-hoi": "M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
+  "cong-viec": "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
 };
 
 export default function BieuTuong({ ten, co = 18 }: { ten: string; co?: number }) {

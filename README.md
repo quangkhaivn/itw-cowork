@@ -3,7 +3,7 @@
 Hệ điều hành vận hành doanh nghiệp (Business Operating System) nội bộ của **Công ty Cổ phần Thế Giới Tin Học (TGTH / ITW)**: CRM, bán hàng, báo giá, đơn hàng, kho, dự án kỹ thuật, chăm sóc khách hàng, tài chính quản trị, tự động hóa và trợ lý AI — trên **một** nguồn dữ liệu.
 
 - Máy chủ thật: <https://thegioitinhoc.io.vn>
-- Trạng thái: **Phase 1 — Nền móng** hoàn thành 19/09/2026. Lộ trình ở [`docs/PHASE-0-KHAO-SAT.md`](docs/PHASE-0-KHAO-SAT.md).
+- Trạng thái: **Phase 1 — Nền móng** chạy thật từ 19/09/2026. **Phase 2 — CRM** xong trên máy phát triển 20/09/2026 (bản 0.3.0), chờ triển khai. Điểm vào cho phiên làm việc mới: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). Luật nghiệp vụ: [`BUSINESS_RULES.md`](BUSINESS_RULES.md).
 
 > Giao diện, chú thích mã và tài liệu viết bằng tiếng Việt. Tên bảng và cột cơ sở dữ liệu viết bằng tiếng Anh, `snake_case` (quyết định QĐ-02 trong [`docs/quyet-dinh-kien-truc.md`](docs/quyet-dinh-kien-truc.md)).
 
@@ -81,9 +81,9 @@ Không có bí mật nào trong mã nguồn. `.env` nằm trong `.gitignore`.
 | `npm run dev` / `build` / `start` | Phát triển / dựng / chạy bản dựng |
 | `npm run typecheck` | Kiểm kiểu TypeScript |
 | `npm run lint` | ESLint (luật của Next.js) |
-| `npm run thu:don-vi` | Kiểm thử đơn vị — không cần CSDL (25 bài) |
-| `npm run thu:tich-hop` | Kiểm thử tích hợp trên CSDL thật: cách ly tenant, phân quyền, nhật ký, bất biến quản trị (75 kiểm chứng). **Chỉ chạy trên CSDL phát triển** |
-| `npm run thu:http` | Kiểm thử đầu-cuối qua HTTP trên máy chủ đang chạy (46 kiểm chứng). Cần `THU_URL`, `THU_EMAIL`, `THU_MAT_KHAU` |
+| `npm run thu:don-vi` | Kiểm thử đơn vị — không cần CSDL (52 bài) |
+| `npm run thu:tich-hop` | Kiểm thử tích hợp trên CSDL thật: cách ly tenant, phân quyền, nhật ký, bất biến quản trị, CRM (156 kiểm chứng). **Chỉ chạy trên CSDL phát triển** |
+| `npm run thu:http` | Kiểm thử đầu-cuối qua HTTP trên máy chủ đang chạy (87 kiểm chứng, thêm 4 nếu quản trị đang bị bắt đổi mật khẩu). Cần `THU_URL`, `THU_EMAIL`, `THU_MAT_KHAU` |
 | `npm run kiem-tra` | typecheck + lint + đơn vị + build — chạy trước mỗi lần commit |
 | `npm run db:migrate` / `db:seed` / `db:seed:mau` | Migration / seed nền móng / dữ liệu mẫu |
 

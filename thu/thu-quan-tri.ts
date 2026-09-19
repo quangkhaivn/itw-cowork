@@ -15,7 +15,7 @@ import { clientChuSoHuu, dat, datNemLoi, ketLuan } from "./thu-lib";
  * Kiểm chứng các bất biến quản trị của Phase 1 trên cơ sở dữ liệu THẬT, qua đúng
  * service mà API gọi (cùng voiTenant + RLS + kiểm quyền).
  *
- * Dùng một tenant thử riêng "thu-qt". Tenant này KHÔNG xóa được sau khi chạy vì
+ * Dùng một tenant thử riêng "thu-qt-<mốc>" cho mỗi lần chạy. Tenant này KHÔNG xóa được sau khi chạy vì
  * audit_logs và business_events chặn xóa ở tầng CSDL — đó là chủ đích. Vì vậy:
  * CHỈ chạy trên cơ sở dữ liệu phát triển, không chạy trên máy chủ thật.
  *
@@ -52,7 +52,9 @@ async function nemLoiKieu(ten: string, kieu: "nghiep-vu" | "quyen", khoi: () => 
 
 async function main() {
   console.log("=== Thử quản trị (Phase 1) ===\n");
-  const tenant = await seedNenMong(chu, "thu-qt", "Doanh nghiệp thử quản trị");
+  // Tenant riêng cho MỖI lần chạy: nhật ký chỉ-ghi-thêm nên tenant cũ không dọn được, và quản trị viên
+  // của lần chạy trước còn đó sẽ làm sai phép thử "quản trị viên cuối cùng" (phát hiện 20/09).
+  const tenant = await seedNenMong(chu, `thu-qt-${DAU}`, "Doanh nghiệp thử quản trị");
   const vaiTro = async (code: string) =>
     (await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: tenant.id, code } } })).id;
 
@@ -274,7 +276,7 @@ async function main() {
   await nemLoiKieu("Mã dữ liệu gốc trùng trong cùng loại bị từ chối", "nghiep-vu", () =>
     voi(T, qt.id, (nc) => taoMuc(nc, { loai: "doi_thu", ma: `${DAU}-dt`, ten: "Trùng", moTa: "", thuTu: 0 })),
   );
-  const tenantKhac = await chu.tenant.findFirst({ where: { code: { not: "thu-qt" } }, select: { id: true } });
+  const tenantKhac = await chu.tenant.findFirst({ where: { code: { not: tenant.code } }, select: { id: true } });
   if (tenantKhac) {
     const thayTuTenantKhac = await voiTenant(tenantKhac.id, (tx) => tx.masterDataItem.findMany({ where: { id: muc.id } }));
     dat("Tenant khác KHÔNG thấy dữ liệu gốc của tenant thử (RLS trên bảng mới)", thayTuTenantKhac.length === 0);

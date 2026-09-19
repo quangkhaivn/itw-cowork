@@ -46,6 +46,8 @@ export const LuocDoLocViec = z.object({
   q: z.string().trim().max(100).optional().default(""),
   trang: z.coerce.number().int().min(1).max(10_000).optional().default(1),
   coTrang: z.coerce.number().int().min(10).max(100).optional().default(30),
+  /** Mở đúng một công việc (liên kết từ Customer 360, dòng thời gian). */
+  id: z.union([z.uuid(), z.literal("")]).optional().default(""),
 });
 export type BoLocViec = z.infer<typeof LuocDoLocViec>;
 
@@ -102,6 +104,11 @@ function anhChup(v: CongViec) {
 export async function danhSachViec(nc: NguCanh, boLoc: BoLocViec) {
   batBuocQuyen(nc.hoSo, "task.view");
   const dieuKien: Prisma.TaskWhereInput[] = [await locTheoPhamVi(nc, "task.view")];
+  // Mở đúng một việc: bỏ qua chế độ và trạng thái, vẫn giữ phạm vi.
+  if (boLoc.id) {
+    dieuKien.push({ id: boLoc.id });
+    boLoc = { ...boLoc, cheDo: "tat-ca", trangThai: "tat-ca" };
+  }
   if (boLoc.cheDo === "cua-toi") dieuKien.push({ ownerId: nc.hoSo.userId });
   if (boLoc.cheDo === "qua-han") dieuKien.push({ status: { in: CHUA_XONG }, dueAt: { lt: new Date() } });
   if (boLoc.trangThai === "") dieuKien.push({ status: { in: CHUA_XONG } });

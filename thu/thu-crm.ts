@@ -327,7 +327,7 @@ async function main() {
     taoViec(nc, { tieuDe: "Gọi lại khách Ánh Dương", nguoiPhuTrachId: nv1, uuTien: "khan", han: new Date(Date.now() - 3600000), khachHangId: k1.id, leadId: null, coHoiId: null, moTa: null }),
   );
   dat("Trưởng phòng giao việc cho cấp dưới", viec.nguoiPhuTrach.id === nv1 && viec.quaHan);
-  const dsViec = await voi(T, nv1, (nc) => danhSachViec(nc, { cheDo: "qua-han", trangThai: "", nguoiPhuTrach: "", q: "", trang: 1, coTrang: 30 }));
+  const dsViec = await voi(T, nv1, (nc) => danhSachViec(nc, { cheDo: "qua-han", trangThai: "", nguoiPhuTrach: "", q: "", id: "", trang: 1, coTrang: 30 }));
   dat("CV-02: việc quá hạn hiện trong danh sách quá hạn", dsViec.dong.some((v) => v.id === viec.id) && dsViec.soQuaHanCuaToi >= 1);
   const xong = await voi(T, nv1, (nc) => suaViec(nc, viec.id, { trangThai: "xong" }));
   dat("CV-01: hoàn thành ghi thời điểm xong", xong.trangThai === "xong" && Boolean(xong.xongLuc));

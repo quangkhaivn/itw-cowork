@@ -230,6 +230,102 @@ async function main() {
   const kqNv = (timNv.json.ketQua as { loai: string }[]) ?? [];
   dat("Nhân viên tìm cùng từ khóa KHÔNG thấy người dùng khác", timNv.status === 200 && !kqNv.some((k) => k.loai === "nguoi-dung"));
 
+  // --- 7b. CRM (Phase 2): trang, API, chống trùng, chuyển đổi, phạm vi, CSRF ---
+  const cacTrangCrm: [string, string][] = [
+    ["/crm/khach-hang", "Khách hàng"],
+    ["/crm/khach-hang/moi", "Thêm khách hàng"],
+    ["/crm/lead", "Lead"],
+    ["/crm/lead/moi", "Thêm lead"],
+    ["/ban-hang/pipeline", "Pipeline"],
+    ["/ban-hang/co-hoi", "Cơ hội"],
+    ["/ban-hang/co-hoi/moi", "Tạo cơ hội"],
+    ["/cong-viec", "Công việc"],
+  ];
+  for (const [duong, chu] of cacTrangCrm) {
+    const r = await goi(duong, { cookie: cookieQT });
+    dat(`Trang ${duong} trả 200 và có nội dung`, r.status === 200 && r.text.includes(chu) && !r.text.includes("Không hiển thị được trang này"), `status ${r.status}`);
+  }
+  const bangQt = await goi("/bang-dieu-khien", { cookie: cookieQT });
+  dat("Menu có nhóm CRM, Bán hàng và nút + Tạo mới", bangQt.text.includes('href="/crm/khach-hang"') && bangQt.text.includes('href="/ban-hang/pipeline"') && bangQt.text.includes("Tạo mới"));
+
+  const mst = `05${String(Date.now()).slice(-8)}`;
+  const tenKhach = `Công ty TNHH Thử HTTP ${DAU}`;
+  // Mỗi lần chạy một số máy bàn riêng — CSDL phát triển giữ khách của các lần chạy trước, và luật chống trùng (KH-03) sẽ bắt số cũ.
+  const soMayBan = `028${String(Date.now()).slice(-8)}`;
+  const taoKh = await goi("/api/v1/khach-hang", { phuongThuc: "POST", cookie: cookieQT, than: { ten: tenKhach, maSoThue: mst, dienThoai: soMayBan, xacNhanKhongTrung: true } });
+  dat("Tạo khách hàng qua API", taoKh.status === 200 && /^KH-\d{6}$/.test(String(taoKh.json.ma)), JSON.stringify(taoKh.json));
+  const idKh = taoKh.json.id as string;
+  const trungMst = await goi("/api/v1/khach-hang", { phuongThuc: "POST", cookie: cookieQT, than: { ten: "Tên khác", maSoThue: `${mst.slice(0, 4)} ${mst.slice(4)}`, xacNhanKhongTrung: true } });
+  dat("Trùng mã số thuế (viết khác) trả 409 kèm khách cũ", trungMst.status === 409 && trungMst.json.ma === "trung-ma-so-thue" && JSON.stringify(trungMst.json.chiTiet).includes(idKh));
+  const doTrung = await goi(`/api/v1/khach-hang/do-trung?dienThoai=${soMayBan}`, { cookie: cookieQT });
+  dat("API dò trùng tìm ra khách theo điện thoại", ((doTrung.json.ungVien as { id: string }[]) ?? []).some((u) => u.id === idKh));
+  const trang360 = await goi(`/crm/khach-hang/${idKh}`, { cookie: cookieQT });
+  dat("Trang Customer 360 dựng được", trang360.status === 200 && trang360.text.includes(tenKhach) && trang360.text.includes("Dòng thời gian"));
+  for (const tab of ["lien-he", "co-hoi", "tuong-tac", "cong-viec", "dong-thoi-gian", "sua"]) {
+    const r = await goi(`/crm/khach-hang/${idKh}?tab=${tab}`, { cookie: cookieQT });
+    dat(`Customer 360 thẻ "${tab}" trả 200`, r.status === 200 && !r.text.includes("Không hiển thị được trang này"), `status ${r.status}`);
+  }
+  const idSai = await goi("/api/v1/khach-hang/khong-phai-uuid", { cookie: cookieQT });
+  dat("Id sai định dạng trên đường dẫn trả 404, không phải 500", idSai.status === 404, `status ${idSai.status}`);
+  const idSaiGhi = await goi("/api/v1/lead/undefined/chuyen-doi", { phuongThuc: "POST", cookie: cookieQT, than: { khachMoi: { ten: "X" } } });
+  dat("Ghi vào id sai định dạng trả 404", idSaiGhi.status === 404, `status ${idSaiGhi.status}`);
+  const uuidSaiTrongThan = await goi("/api/v1/tuong-tac", { phuongThuc: "POST", cookie: cookieQT, than: { loai: "note", tieuDe: "Thử", khachHangId: "khong-phai-uuid" } });
+  dat("UUID sai trong thân yêu cầu trả 400", uuidSaiTrongThan.status === 400, `status ${uuidSaiTrongThan.status}`);
+  const csrfKh = await goi("/api/v1/khach-hang", { phuongThuc: "POST", cookie: cookieQT, origin: "https://ke-gian.example", than: { ten: "CSRF" } });
+  dat("POST khách hàng từ trang khác bị chặn 403", csrfKh.status === 403);
+
+  const thieuHanhDong = await goi("/api/v1/co-hoi", { phuongThuc: "POST", cookie: cookieQT, than: { khachHangId: idKh, tieuDe: "Thiếu hành động" } });
+  dat("Tạo cơ hội thiếu hành động kế tiếp trả 400 đúng trường", thieuHanhDong.status === 400 && Boolean((thieuHanhDong.json.loiTruong as Record<string, unknown>)?.hanhDongKeTiep));
+  const ngayMai = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const taoCh = await goi("/api/v1/co-hoi", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, tieuDe: `Máy chủ thử HTTP ${DAU}`, giaTri: "150.000.000", hanhDongKeTiep: "Gửi cấu hình", ngayHanhDong: ngayMai },
+  });
+  dat("Tạo cơ hội qua API", taoCh.status === 200 && String(taoCh.json.ma).startsWith("CH-"), JSON.stringify(taoCh.json));
+  const idCh = taoCh.json.id as string;
+  const thuaKhongLyDo = await goi(`/api/v1/co-hoi/${idCh}/giai-doan`, { phuongThuc: "POST", cookie: cookieQT, than: { giaiDoan: "LOST" } });
+  dat("Thua không có lý do trả 400", thuaKhongLyDo.status === 400);
+  const sangBaoGia = await goi(`/api/v1/co-hoi/${idCh}/giai-doan`, { phuongThuc: "POST", cookie: cookieQT, than: { giaiDoan: "QUOTATION" } });
+  dat("Đổi giai đoạn sang Báo giá", sangBaoGia.status === 200 && sangBaoGia.json.giaiDoan === "QUOTATION");
+  const trangCh = await goi(`/ban-hang/co-hoi/${idCh}`, { cookie: cookieQT });
+  dat("Trang chi tiết cơ hội dựng được", trangCh.status === 200 && trangCh.text.includes(`Máy chủ thử HTTP ${DAU}`));
+  const kanban = await goi("/ban-hang/pipeline", { cookie: cookieQT });
+  dat("Kanban hiện cơ hội vừa tạo", kanban.text.includes(`Máy chủ thử HTTP ${DAU}`));
+
+  const taoLd = await goi("/api/v1/lead", { phuongThuc: "POST", cookie: cookieQT, than: { hoTen: "Khách lead HTTP", congTy: `Xưởng HTTP ${DAU}`, email: `lead-${DAU}@thu.test`, xacNhanKhongTrung: true } });
+  dat("Tạo lead qua API", taoLd.status === 200 && String(taoLd.json.ma).startsWith("LD-"), JSON.stringify(taoLd.json));
+  const idLd = taoLd.json.id as string;
+  const ghiTt = await goi("/api/v1/tuong-tac", { phuongThuc: "POST", cookie: cookieQT, than: { loai: "call", tieuDe: "Gọi lần đầu", leadId: idLd } });
+  dat("Ghi tương tác trên lead", ghiTt.status === 200);
+  const cdLd = await goi(`/api/v1/lead/${idLd}/chuyen-doi`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachMoi: { ten: `Xưởng HTTP ${DAU}` }, xacNhanKhongTrung: true, coHoi: { tieuDe: "Camera xưởng", giaTri: "80000000", hanhDongKeTiep: "Khảo sát", ngayHanhDong: ngayMai } },
+  });
+  dat("Chuyển đổi lead thành khách + cơ hội qua API", cdLd.status === 200 && Boolean(cdLd.json.khachHangId) && Boolean(cdLd.json.coHoiId), JSON.stringify(cdLd.json));
+  const trangLd = await goi(`/crm/lead/${idLd}`, { cookie: cookieQT });
+  dat("Trang lead sau chuyển đổi báo đã chuyển đổi", trangLd.status === 200 && trangLd.text.includes("Đã chuyển đổi"));
+
+  const taoViec = await goi("/api/v1/cong-viec", { phuongThuc: "POST", cookie: cookieQT, than: { tieuDe: "Gọi lại khách HTTP", khachHangId: idKh, han: "2020-01-01T09:00" } });
+  dat("Tạo công việc gắn khách", taoViec.status === 200 && taoViec.json.quaHan === true);
+  const xongViec = await goi(`/api/v1/cong-viec/${taoViec.json.id}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { trangThai: "xong" } });
+  dat("Hoàn thành công việc", xongViec.status === 200 && Boolean(xongViec.json.xongLuc));
+
+  // Phạm vi: nhân viên "own" không thấy khách của quản trị, kể cả gõ thẳng đường dẫn.
+  const nvXemKh = await goi(`/api/v1/khach-hang/${idKh}`, { cookie: dnNv.cookie });
+  dat("Nhân viên gọi API khách của người khác bị 404", nvXemKh.status === 404);
+  const nvTrangKh = await goi(`/crm/khach-hang/${idKh}`, { cookie: dnNv.cookie });
+  dat("Nhân viên mở trang khách của người khác không thấy nội dung", !nvTrangKh.text.includes(tenKhach));
+  const nvDs = await goi("/crm/khach-hang", { cookie: dnNv.cookie });
+  dat("Danh sách khách của nhân viên không có khách của người khác", nvDs.status === 200 && !nvDs.text.includes(tenKhach));
+  const nvTaoKh = await goi("/api/v1/khach-hang", { phuongThuc: "POST", cookie: dnNv.cookie, than: { ten: `Khách của NV HTTP ${DAU}`, xacNhanKhongTrung: true } });
+  dat("Nhân viên tạo được khách của mình", nvTaoKh.status === 200);
+  const nvTimKh = await goi(`/api/v1/tim-kiem?q=${encodeURIComponent(mst)}`, { cookie: dnNv.cookie });
+  dat("Nhân viên tìm theo MST không ra khách của người khác", !((nvTimKh.json.ketQua as { href: string }[]) ?? []).some((k) => k.href.includes(idKh)));
+  const qtTimKh = await goi(`/api/v1/tim-kiem?q=${encodeURIComponent(mst)}`, { cookie: cookieQT });
+  dat("Quản trị tìm theo MST ra đúng khách", ((qtTimKh.json.ketQua as { href: string }[]) ?? []).some((k) => k.href.includes(idKh)));
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

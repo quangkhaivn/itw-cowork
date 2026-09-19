@@ -5,6 +5,14 @@ import { yeuCauDangNhap } from "@/lib/trang";
 
 export const dynamic = "force-dynamic";
 
+/** Nút "+ Tạo mới": chỉ loại bản ghi đã có màn hình tạo, lọc theo quyền trên máy chủ. */
+const TAO_NHANH = [
+  { nhan: "Khách hàng", href: "/crm/khach-hang/moi", quyen: "customer.create" },
+  { nhan: "Lead", href: "/crm/lead/moi", quyen: "crm.create" },
+  { nhan: "Cơ hội", href: "/ban-hang/co-hoi/moi", quyen: "sales.create" },
+  { nhan: "Công việc", href: "/cong-viec?tao=1", quyen: "task.create" },
+];
+
 /**
  * Bố cục chung của mọi màn hình sau đăng nhập.
  * Menu được lọc theo quyền NGAY TRÊN MÁY CHỦ rồi mới gửi xuống trình duyệt.
@@ -21,6 +29,7 @@ export default async function BoCucHeThong({ children }: { children: React.React
     <KhungUngDung
       dieuHuong={dieuHuong}
       tenDoanhNghiep={nd.tenant.name}
+      taoNhanh={TAO_NHANH.filter((m) => coQuyen(nd.hoSo, m.quyen)).map(({ nhan, href }) => ({ nhan, href }))}
       nguoiDung={{
         hoTen: nd.hoSo.hoTen,
         email: nd.hoSo.email,

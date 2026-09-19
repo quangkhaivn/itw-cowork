@@ -12,6 +12,10 @@ export interface LoiApi {
   thongBao: string;
   loiTruong: Record<string, string[] | undefined>;
   status: number;
+  /** Mã lỗi nghiệp vụ, ví dụ "co-the-trung", "trung-ma-so-thue". */
+  ma?: string;
+  /** Dữ liệu kèm lỗi (danh sách bản ghi có thể trùng…). */
+  chiTiet?: unknown;
 }
 
 export function useGoiApi() {
@@ -38,6 +42,8 @@ export function useGoiApi() {
           thongBao: duLieu.thongBao ?? `Lỗi ${phanHoi.status}.`,
           loiTruong: duLieu.loiTruong ?? {},
           status: phanHoi.status,
+          ma: duLieu.ma,
+          chiTiet: duLieu.chiTiet,
         });
         return null;
       }

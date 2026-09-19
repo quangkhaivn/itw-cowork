@@ -6,6 +6,7 @@ import ThanhBen from "./ThanhBen";
 import ThanhTren from "./ThanhTren";
 import HopTimKiem from "./HopTimKiem";
 import type { NhomDieuHuong } from "./dieu-huong";
+import type { MucTaoNhanh } from "./TaoNhanh";
 
 /**
  * Khung ứng dụng phía trình duyệt: giữ trạng thái mở menu trên điện thoại và hộp tìm kiếm.
@@ -16,11 +17,13 @@ export default function KhungUngDung({
   dieuHuong,
   nguoiDung,
   tenDoanhNghiep,
+  taoNhanh,
   children,
 }: {
   dieuHuong: NhomDieuHuong[];
   nguoiDung: { hoTen: string; email: string; vaiTro: string };
   tenDoanhNghiep: string;
+  taoNhanh: MucTaoNhanh[];
   children: React.ReactNode;
 }) {
   const [menuMoTai, datMenuMoTai] = useState<string | null>(null);
@@ -49,6 +52,7 @@ export default function KhungUngDung({
           nguoiDung={nguoiDung}
           batMenu={() => datMenuMoTai(moMenu ? null : duongDan)}
           moTimKiem={() => datMoTim(true)}
+          taoNhanh={taoNhanh}
         />
         <main className="noi-dung">{children}</main>
       </div>

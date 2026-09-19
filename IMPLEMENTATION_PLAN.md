@@ -11,7 +11,7 @@ Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt
 |---|---|---|---|
 | 0 | Audit | — | **Xong** 19/09, rà lại 20/09 (mục 2) |
 | 1 | Nền móng: đăng nhập, người dùng, phòng ban, RBAC + phạm vi, nhật ký kiểm toán | P0 | **Xong** 19/09 — đang chạy thật (bản 0.2.1) |
-| 2 | CRM: khách hàng + chống trùng, liên hệ, lead, tương tác, cơ hội + pipeline, công việc, Customer 360 | P0 | **Đang làm** 20/09 — xem mục 4 |
+| 2 | CRM: khách hàng + chống trùng, liên hệ, lead, tương tác, cơ hội + pipeline, công việc, Customer 360 | P0 | **Xong trên máy phát triển** 20/09 (bản 0.3.0) — chưa triển khai máy thật, xem mục 4 |
 | 3 | Sản phẩm, nhóm, thương hiệu, nhà cung cấp, giá nhiều nguồn, lịch sử giá, nhập/xuất CSV | P0 | Chưa |
 | 4 | Báo giá: phiên bản, biên lợi nhuận, duyệt theo ngưỡng, PDF, chuyển đơn | P0 | Chưa |
 | 5 | Đơn hàng, kho, serial | P1 | Chưa |
@@ -89,12 +89,21 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 | Kiểm thử | Đơn vị (chuẩn hóa, cấp số, luật cơ hội), tích hợp (phạm vi own/team, chống trùng, chuyển đổi lead, CHECK CSDL), HTTP |
 
 ### Tiến độ
-- [ ] Migration + schema
-- [ ] Service + API
-- [ ] Giao diện
-- [ ] Kiểm thử + build
-- [ ] Kiểm tra trên trình duyệt
-- [ ] Triển khai máy thật (cần Giám đốc cho phép thời điểm — mục 6)
+- [x] Migration + schema — `20260919171944_phase2_crm`, diễn tập nâng cấp từ Phase 1 có dữ liệu: đạt
+- [x] Service + API — 5 phân hệ, 18 route
+- [x] Giao diện — 12 màn hình + nút "+ Tạo mới" + tìm kiếm
+- [x] Kiểm thử + build — 52 đơn vị, 156 tích hợp, 87 HTTP, lint, build: đạt
+- [~] Kiểm tra trên trình duyệt — soát bố cục bằng HTML dựng thật ở 1440 px và 375 px; **chưa có người bấm thử sau đăng nhập** (trợ lý không gõ mật khẩu)
+- [ ] Triển khai máy thật (cần Giám đốc cho phép thời điểm — Q6)
+
+### Việc kế tiếp của Phase 2 (nhỏ, làm khi triển khai hoặc đầu Phase 3)
+- Giám đốc / nhân viên đăng nhập bấm thử: kéo thả Kanban, chuyển đổi lead, hộp thoại thua/mở lại.
+- Tách `Promise.all` trong giao dịch thành tuần tự (cảnh báo `pg`).
+- Bảng điều hành: thêm ô "Việc của tôi hôm nay" và "Cơ hội quá hạn hành động" (dữ liệu đã có; phần chỉ số CEO đầy đủ để Phase 7).
+
+## 4b. Phase 3 — Sản phẩm và bảng giá (việc kế tiếp)
+
+Bắt đầu ngay khi Phase 2 lên máy thật hoặc Giám đốc cho làm song song. Thiết kế bảng ở `DATABASE.md` phần B. Cần: tệp bảng giá thật của 1–2 nhà cung cấp để kiểm nhập CSV/Excel.
 
 ## 5. Phase 3 trở đi — việc kế tiếp đã rõ
 
@@ -113,4 +122,14 @@ Thiết kế bảng ở `DATABASE.md` phần B. Phase 3 cần tệp giá mẫu t
 
 ## 7. Known issues
 
-Xem mục "Vấn đề đã biết" cuối `CHANGELOG.md` của bản mới nhất.
+Xem mục "Vấn đề đã biết" của bản mới nhất trong `CHANGELOG.md`.
+
+## 8. Môi trường phát triển trên máy trạm (không có Docker)
+
+- CSDL: cụm PostgreSQL nhúng tại `.pgdata/` (gitignore), cổng 5434, UTF8. Bản nhị phân mượn từ `L:\CODE\tmdt\node_modules\@embedded-postgres\windows-x64\native\bin`.
+  - Khởi động: `"<bin>/pg_ctl.exe" -D .pgdata -o "-p 5434" -l .pgdata/log.txt start -w`
+  - Không có `psql` — chạy SQL bằng thư viện `pg` của dự án (ví dụ áp `prisma/rls.sql`).
+- Vai: `cowork_owner` (chủ sở hữu, chạy migration/seed) và `cowork_app` (ứng dụng, bị RLS). Mật khẩu cục bộ trong `.env` (không commit).
+- Chạy thử bản dựng: cấu hình `cowork-itw` trong `.claude/launch.json` của vault (cổng 3300).
+- Tài khoản mẫu tenant `demo`: xem `prisma/seed/mau.ts`; CRM mẫu thuộc `kd1@demo.test`, `kd2@demo.test`, trưởng phòng `tp.kinhdoanh@demo.test` thấy cả hai.
+- Có **một phiên Claude khác** đang khảo sát tích hợp trên cùng kho (tạo `docs/integration/`). Khi commit, chỉ `git add` tệp của mình.

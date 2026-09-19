@@ -2,6 +2,39 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.3.0 — 20/09/2026 — Phase 2: CRM
+
+Căn cứ: prompt triển khai 36 mục của Giám đốc ngày 20/09/2026 (mục 7, 23–25). Luật nghiệp vụ: `BUSINESS_RULES.md` mục 3.
+**Chưa triển khai lên máy thật** — xem "Vấn đề đã biết".
+
+### Thêm
+- **CSDL** (migration `20260919171944_phase2_crm`, chỉ thêm bảng): `customers`, `contacts`, `leads`, `interactions`, `opportunities`, `tasks`, `document_sequences`; extension `pg_trgm`; 20 ràng buộc CHECK cho luật nghiệp vụ.
+- **Khách hàng**: danh sách lọc/phân trang theo phạm vi; tạo/sửa; mã tự cấp `KH-000001`; **chống trùng** — trùng mã số thuế bị chặn, trùng điện thoại/email (của khách hoặc liên hệ) hoặc tên gần giống thì cảnh báo và phải xác nhận; dò trùng quét toàn doanh nghiệp nhưng chỉ lộ mã + tên + người phụ trách của khách ngoài phạm vi.
+- **Customer 360**: tổng quan (chỉ số cơ hội, pipeline có trọng số, tương tác gần nhất), liên hệ, cơ hội, tương tác, công việc, dòng thời gian hợp nhất (đọc thẳng từ bảng gốc, không chép dữ liệu).
+- **Lead**: tạo (dò trùng với khách, liên hệ, lead đang mở), giao người phụ trách, ghi tương tác (lead mới tự sang "Đã liên hệ"), loại có lý do, mở lại, **chuyển đổi** thành khách mới hoặc khách có sẵn + liên hệ + cơ hội trong một giao dịch.
+- **Cơ hội**: mã `CH-2026-0001` theo năm giờ Việt Nam; luật **Owner + Hành động kế tiếp + Ngày** chặn ở cả form, service và CSDL; thua bắt buộc lý do (Dữ liệu gốc); thắng/thua ghi thời điểm đóng; mở lại cần quyền duyệt; xác suất gợi ý theo giai đoạn.
+- **Pipeline Kanban** 8 cột (3 cột lead + 5 cột cơ hội), kéo thả đổi giai đoạn, thẻ quá hạn viền đỏ, tổng giá trị và pipeline có trọng số.
+- **Công việc**: việc của tôi / quá hạn / cả nhóm, giao việc theo phạm vi, đổi trạng thái ngay trên danh sách.
+- **Nút "+ Tạo mới"** (Khách hàng, Lead, Cơ hội, Công việc) — chỉ loại đã có màn hình tạo, lọc theo quyền trên máy chủ.
+- **Tìm kiếm toàn cục** thêm khách hàng (tên, mã, MST, điện thoại, email), liên hệ, lead, cơ hội — mỗi nguồn tự lọc theo phạm vi.
+- Dữ liệu mẫu CRM cho tenant `demo`, tạo **qua service** bằng tài khoản nhân viên mẫu.
+- Kiểm thử: 27 bài đơn vị mới (tổng 52), `thu-crm` 81 kiểm chứng (tổng tích hợp 156), `thu-http` thêm 44 kiểm chứng CRM (tổng 87–88).
+- Tài liệu: `IMPLEMENTATION_PLAN.md`, `BUSINESS_RULES.md`.
+
+### Sửa
+- **Bố cục máy tính bị vỡ từ bản 0.2.x**: lớp phủ menu điện thoại `.man-che` chỉ bị ẩn trong `@media` hẹp, nên trên màn hình rộng hơn 900 px nó chiếm một ô lưới và đẩy toàn bộ vùng nội dung xuống dưới thanh bên. Lỗi có trên máy thật; chưa ai thấy vì trước đây chưa soát giao diện sau đăng nhập.
+- API nhận id sai định dạng (`/api/v1/.../undefined`) trả **500**; nay trả 404. UUID sai trong thân yêu cầu (lỗi Prisma P2007) trả 400.
+- Vai trò Trưởng phòng Kinh doanh thiếu `sales.approve` → không mở lại được cơ hội đã đóng. Cấp bù cho vai trò đã có bằng migration (seed không cấp lại mã quyền cũ — QĐ-10).
+- `thu-quan-tri` không chạy lại được trên cùng CSDL (dùng tenant cố định); nay mỗi lần chạy một tenant riêng.
+- `npm run db:seed` và `thu:*` tự nạp `.env` (`--env-file-if-exists`).
+- Ô tìm kiếm trên điện thoại không còn xuống 3 dòng; trên màn hẹp cột thao tác lên trước form dài.
+
+### Vấn đề đã biết
+- **Chưa triển khai lên `thegioitinhoc.io.vn`** — chờ Giám đốc cho phép (Q6 trong `IMPLEMENTATION_PLAN.md`). Migration đã diễn tập nâng cấp từ trạng thái Phase 1 có dữ liệu: đạt.
+- Chưa có màn hình sau đăng nhập nào được người thật bấm thử: trợ lý không gõ mật khẩu vào trình duyệt. Giao diện được soát bằng HTML dựng thật (đăng nhập qua API) ở 1440 px và 375 px; tương tác phía trình duyệt (kéo thả, hộp thoại) mới kiểm qua API tương ứng.
+- Nhiều service dùng `Promise.all` trong một giao dịch → thư viện `pg` báo *DeprecationWarning* (sẽ thành lỗi ở `pg@9`). Có từ Phase 1; chưa sửa.
+- Ô chọn ngày hiển thị theo ngôn ngữ trình duyệt (trình duyệt tiếng Anh thấy mm/dd/yyyy); giá trị lưu vẫn đúng.
+
 ## 0.2.1 — 19/09/2026 — Sửa lỗi phát hiện khi triển khai lên máy thật
 
 - **nginx trả 502 sau khi tạo lại container `app`** (khoảng 1 phút, hai lần trong ngày): nginx chỉ phân giải tên `app` lúc khởi động; container mới nhận IP khác, `worker` lấy mất IP cũ. Nay phân giải lại qua DNS Docker mỗi 10 giây; đã kiểm bằng cách ép đổi IP — nginx tự theo sau 1 giây.
