@@ -25,7 +25,7 @@ Căn cứ: master prompt "TGTH Business Cowork Platform" (45 mục) do Giám đ�
 - Chống CSRF: kiểm Origin cho mọi yêu cầu ghi tới `/api`.
 - Đổi / đặt lại mật khẩu vô hiệu mọi phiên cũ (so tới mili-giây); tài khoản mới và tài khoản vừa đặt lại bị bắt đổi mật khẩu.
 - Chính sách mật khẩu dùng chung cho mọi đường đặt mật khẩu.
-- Tiêu đề bảo mật trong ứng dụng (X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, CSP frame-ancestors).
+- Tiêu đề bảo mật trong ứng dụng (nosniff, Referrer-Policy, Permissions-Policy, CSP frame-ancestors). Không đặt X-Frame-Options vì nginx máy chủ đã đặt.
 - IP khách lấy từ `X-Real-IP` của nginx máy chủ; nginx trong Docker không ghi đè nữa.
 - `/api/khoe` không còn trả chi tiết lỗi cơ sở dữ liệu.
 - `rls.sql` tự bật RLS cho mọi bảng có `tenant_id` và dừng triển khai nếu sót.

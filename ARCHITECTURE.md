@@ -69,7 +69,7 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 | Dò mật khẩu | 30 lần / 15 phút / IP; 5 lần / 15 phút / (doanh nghiệp, email) — áp cả email không tồn tại; sai N lần liên tiếp thì khóa tài khoản M phút (N, M ở màn hình Cấu hình) |
 | Liệt kê tài khoản | Một thông báo lỗi cho mọi kiểu sai; vẫn băm một lần khi email không tồn tại để thời gian phản hồi như nhau |
 | CSRF | SameSite=Lax + kiểm Origin/Referer ở `proxy.ts` cho mọi yêu cầu ghi tới `/api` |
-| XSS | React tự thoát ký tự; không dùng `dangerouslySetInnerHTML`; CSP `frame-ancestors 'none'` |
+| XSS, nhúng khung | React tự thoát ký tự; không dùng `dangerouslySetInnerHTML`; CSP `frame-ancestors 'none'` (không đặt X-Frame-Options ở ứng dụng vì nginx máy chủ đã đặt — hai giá trị sẽ mâu thuẫn) |
 | SQL injection | Prisma tham số hóa; SQL thô chỉ dùng template có tham số (`$queryRaw\`...${x}\``) |
 | IP thật | Chỉ tin `X-Real-IP` do nginx máy chủ đặt; nginx trong Docker chuyển tiếp nguyên giá trị |
 | Lộ lỗi | Lỗi ngoài dự kiến chỉ trả câu chung; chi tiết vào log máy chủ. `/api/khoe` không trả chi tiết lỗi |

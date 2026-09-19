@@ -92,7 +92,11 @@ async function main() {
   const apiChuaDn = await goi("/api/v1/nguoi-dung");
   dat("Chưa đăng nhập gọi API bị 401", apiChuaDn.status === 401);
   const tieuDe = await fetch(`${URL_GOC}/dang-nhap`);
-  dat("Có header chống nhúng khung và chống đoán kiểu", tieuDe.headers.get("x-frame-options") === "DENY" && tieuDe.headers.get("x-content-type-options") === "nosniff");
+  dat(
+    "Có header chống nhúng khung (CSP frame-ancestors) và chống đoán kiểu",
+    (tieuDe.headers.get("content-security-policy") ?? "").includes("frame-ancestors 'none'") &&
+      (tieuDe.headers.get("x-content-type-options") ?? "").includes("nosniff"),
+  );
 
   // --- 2. Đăng nhập quản trị (có thể đang bị bắt đổi mật khẩu) ---
   const dn = await dangNhap(EMAIL_QT!, MAT_KHAU_QT);
