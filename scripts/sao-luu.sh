@@ -35,12 +35,23 @@ docker compose exec -T db pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format
 mv "$TEP.dang-ghi" "$TEP"
 chmod 600 "$TEP"
 
-# Đọc lại mục lục: phải thấy bảng users và audit_logs.
-if ! docker compose exec -T db pg_restore --list < "$TEP" | grep -q "TABLE DATA public audit_logs"; then
-  echo "❌ Tệp sao lưu không đọc lại được hoặc thiếu bảng audit_logs: $TEP"
+# Đọc lại mục lục: pg_restore phải đọc hết tệp không lỗi, và phải thấy dữ liệu của users và audit_logs.
+# Ghi mục lục ra tệp trước rồi mới grep. KHÔNG dùng `pg_restore | grep -q`: grep -q thoát ngay khi
+# khớp, pg_restore nhận SIGPIPE, và với `set -o pipefail` cả đường ống bị coi là hỏng — báo sai
+# "không đọc lại được" một cách ngẫu nhiên (đã xảy ra trên máy thật 19/09).
+MUC_LUC="$(mktemp)"
+trap 'rm -f "$MUC_LUC"' EXIT
+if ! docker compose exec -T db pg_restore --list < "$TEP" > "$MUC_LUC"; then
+  echo "❌ pg_restore không đọc được tệp sao lưu: $TEP"
   exit 1
 fi
-echo "✓ sao lưu đọc lại được: $(du -h "$TEP" | cut -f1)"
+for bang in users audit_logs; do
+  if ! grep "TABLE DATA public $bang " "$MUC_LUC" > /dev/null; then
+    echo "❌ Tệp sao lưu thiếu dữ liệu bảng $bang: $TEP"
+    exit 1
+  fi
+done
+echo "✓ sao lưu đọc lại được: $(du -h "$TEP" | cut -f1), $(grep -c 'TABLE DATA' "$MUC_LUC") bảng có dữ liệu"
 
 if [ -n "${CHEP_RA_NGOAI:-}" ]; then
   echo "--- chép ra ngoài máy ---"
