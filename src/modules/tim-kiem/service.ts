@@ -1,5 +1,5 @@
 import type { NguCanh } from "@/lib/api";
-import { coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
+import { coMotTrongCacQuyen, coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
 import { DIEU_HUONG } from "@/components/khung/dieu-huong";
 import { locTheoPhamVi } from "@/modules/crm/chung";
 import { chuanHoaTen } from "@/modules/crm/chuan-hoa";
@@ -49,7 +49,14 @@ const NGUON: NguonTimKiem[] = [
     async tim(nc, q, gioiHan) {
       const khoa = boDau(q);
       return DIEU_HUONG.flatMap((nhom) => nhom.muc)
-        .filter((m) => (!m.quyen || coQuyen(nc.hoSo, m.quyen)) && boDau(`${m.nhan} ${m.tuKhoa ?? ""}`).includes(khoa))
+        .filter((m) => {
+          const duocXem = !m.quyen
+            ? true
+            : Array.isArray(m.quyen)
+              ? coMotTrongCacQuyen(nc.hoSo, m.quyen)
+              : coQuyen(nc.hoSo, m.quyen);
+          return duocXem && boDau(`${m.nhan} ${m.tuKhoa ?? ""}`).includes(khoa);
+        })
         .slice(0, gioiHan)
         .map((m) => ({ loai: "trang", nhanLoai: "Màn hình", tieuDe: m.nhan, href: m.href }));
     },

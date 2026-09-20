@@ -27,7 +27,7 @@ export interface MucCauHinh {
   dungTuPhase: number;
 }
 
-export const PHASE_HIEN_TAI = 6;
+export const PHASE_HIEN_TAI = 8;
 
 export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
   {
@@ -186,6 +186,18 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     soNguyen: true,
     macDinh: null,
     dungTuPhase: 7,
+  },
+  {
+    khoa: "tu_dong.gio_quet_hang_ngay",
+    nhom: "Nhắc việc tự động",
+    nhan: "Giờ chạy bản quét nhắc việc mỗi ngày",
+    moTa: "Giờ (0–23, giờ Việt Nam) mà máy quét toàn bộ quy tắc và lập danh sách Việc hôm nay. CHƯA ĐẶT thì máy không tự quét — vẫn bấm Chạy quét ngay được ở màn hình Tự động hóa.",
+    donVi: "giờ",
+    toiThieu: 0,
+    toiDa: 23,
+    soNguyen: true,
+    macDinh: null,
+    dungTuPhase: 8,
   },
   {
     khoa: "theo_doi.bao_hanh_sap_het_ngay",

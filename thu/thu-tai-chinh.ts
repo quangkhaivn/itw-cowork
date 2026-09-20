@@ -19,6 +19,7 @@ import { LuocDoNhapKho, LuocDoTaoKho } from "../src/modules/kho/luoc-do";
 import { LuocDoTaoDon, LuocDoTaoPhieuXuat } from "../src/modules/don-hang/luoc-do";
 import { LuocDoTaoHoaDon, LuocDoThuTien } from "../src/modules/tai-chinh/luoc-do";
 import { homNayVN } from "../src/modules/crm/chung";
+import { congNgay } from "../src/modules/nhac-viec/tinh-toan";
 import { seedNenMong } from "../prisma/seed/index";
 import { clientChuSoHuu, dat, ketLuan } from "./thu-lib";
 
@@ -59,7 +60,9 @@ async function nemLoi(ten: string, kieu: KieuLoi, khoi: () => Promise<unknown>, 
   }
 }
 
-const ngayTruoc = (soNgay: number) => new Date(Date.now() - soNgay * 86_400_000).toISOString().slice(0, 10);
+// Mốc ngày phải tính theo GIỜ VIỆT NAM như sản phẩm; dùng giờ UTC sẽ lệch một ngày
+// trong khung 0–7 giờ sáng và bài thử báo hỏng oan.
+const ngayTruoc = (soNgay: number) => congNgay(homNayVN(), -soNgay);
 
 async function main() {
   console.log("=== Thử Tài chính và Bảng điều hành (Phase 7) ===\n");
@@ -125,7 +128,7 @@ async function main() {
   await voi(T, gd, (nc) => capNhatCauHinh(nc, { giaTri: { "tai_chinh.so_ngay_cong_no_mac_dinh": 30, "tai_chinh.canh_bao_qua_han_ngay": 15 } }));
 
   const phatHanh = await voi(T, ketoan, (nc) => phatHanhHoaDon(nc, hd.id, { ngayPhatHanh: ngayTruoc(40), hanThanhToan: "", ghiChu: "" }));
-  dat("TC-03: phát hành lấy hạn = ngày phát hành + 30 ngày công nợ", phatHanh.hanThanhToan === new Date(Date.parse(`${ngayTruoc(40)}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10), JSON.stringify(phatHanh));
+  dat("TC-03: phát hành lấy hạn = ngày phát hành + 30 ngày công nợ", phatHanh.hanThanhToan === congNgay(ngayTruoc(40), 30), JSON.stringify(phatHanh));
   const ct2 = await voi(T, ketoan, (nc) => chiTietHoaDon(nc, hd.id));
   dat("Phát hành rồi thì công nợ bằng đúng tổng hóa đơn", ct2.hoaDon.conNo === 132_000_000 && ct2.hoaDon.tinhTrangThu === "chua-thu");
   dat("TC-07: hóa đơn quá hạn 10 ngày, vào nhóm tuổi nợ 1–30", ct2.hoaDon.soNgayQuaHan === 10 && ct2.hoaDon.nhomTuoiNo === "1-30", JSON.stringify({ qh: ct2.hoaDon.soNgayQuaHan, nhom: ct2.hoaDon.nhomTuoiNo }));

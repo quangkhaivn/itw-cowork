@@ -10,6 +10,7 @@ import { batBuocThayKhach } from "@/modules/khach-hang/service";
 import { tinhBaoGia, type DongBaoGia } from "@/modules/bao-gia/tinh-toan";
 import { congNo, dong, hanThanhToanGoiY, nhomTuoiNo, soNgayQuaHan, tongHopTuoiNo } from "./tinh-toan";
 import type { BoLocHoaDon, BoLocPhieuThu, DuLieuPhatHanh, DuLieuTaoHoaDon, DuLieuThuTien } from "./luoc-do";
+import { taoThongBao } from "@/modules/thong-bao/service";
 
 /**
  * Tài chính quản trị — mục 19 prompt 20/09. Luật: BUSINESS_RULES.md mục 11.
@@ -482,7 +483,7 @@ export async function thuTien(nc: NguCanh, d: DuLieuThuTien) {
   const ids = d.phanBo.map((p) => p.hoaDonId);
   const hoaDon = await nc.tx.invoice.findMany({
     where: { AND: [{ id: { in: ids } }, await dieuKienXemHoaDon(nc)] },
-    select: { id: true, number: true, customerId: true, status: true, total: true, allocations: { select: { amount: true, payment: { select: { status: true } } } } },
+    select: { id: true, number: true, customerId: true, ownerId: true, status: true, total: true, allocations: { select: { amount: true, payment: { select: { status: true } } } } },
   });
   if (hoaDon.length !== new Set(ids).size) throw new LoiKhongTimThay("Hóa đơn");
 
@@ -525,6 +526,18 @@ export async function thuTien(nc: NguCanh, d: DuLieuThuTien) {
     const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd) + dong(pb.soTien));
     if (cn.conNo === 0) {
       await nc.suKien({ eventType: SU_KIEN.INVOICE_PAID, objectType: "invoice", objectId: hd.id, payload: { so: hd.number, tongCong: cn.tong } });
+      if (hd.ownerId !== nc.hoSo.userId) {
+        await taoThongBao(nc.tx, nc.tenantId, {
+          nguoiNhanId: hd.ownerId,
+          loai: "hoa-don-thu-du",
+          tieuDe: `Hóa đơn ${hd.number} đã thu đủ`,
+          noiDung: `Khách ${khach.ten} đã trả hết ${cn.tong.toLocaleString("vi-VN")} ₫.`,
+          duongDan: `/tai-chinh/hoa-don/${hd.id}`,
+          doiTuong: "invoice",
+          doiTuongId: hd.id,
+          khoaChongTrung: `hoa-don-thu-du:${hd.id}`,
+        });
+      }
     }
   }
   return { id: pt.id, so, soTien: tien };

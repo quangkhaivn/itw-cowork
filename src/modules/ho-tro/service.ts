@@ -9,6 +9,7 @@ import { kiemTraNguoiPhuTrach } from "@/modules/crm/chung";
 import { batBuocThayKhach } from "@/modules/khach-hang/service";
 import { chuyenDuoc, dangMo, hanSla, mucSla, type NguongSla } from "./tinh-toan";
 import type { BoLocPhieu, DuLieuDoiTrangThai, DuLieuSuaPhieu, DuLieuTaoPhieu } from "./luoc-do";
+import { taoThongBao } from "@/modules/thong-bao/service";
 
 /**
  * Bàn dịch vụ (phiếu hỗ trợ) — mục 18 prompt 20/09. Luật: BUSINESS_RULES.md mục 9.
@@ -324,6 +325,19 @@ export async function giaoPhieu(nc: NguCanh, id: string, nguoiXuLyId: string, gh
   await ghiDienBienNoiBo(nc, id, { loai: "giao-viec", noiDung: ghiChu, tu: p.status, den: p.status === "MOI" ? "DANG_XU_LY" : p.status });
   await nc.kiemToan({ action: "sua", objectType: "support_ticket", objectId: id, before: { nguoiXuLyId: p.assigneeId }, after: { nguoiXuLyId } });
   await nc.suKien({ eventType: SU_KIEN.SERVICE_TICKET_ASSIGNED, objectType: "support_ticket", objectId: id, payload: { so: p.number, nguoiXuLyId } });
+  if (nguoiXuLyId !== nc.hoSo.userId) {
+    await taoThongBao(nc.tx, nc.tenantId, {
+      nguoiNhanId: nguoiXuLyId,
+      loai: "phieu-duoc-giao",
+      mucDo: p.priority === "khan" ? "khan" : "canh-bao",
+      tieuDe: `Bạn được giao phiếu ${p.number}: ${p.title}`,
+      noiDung: ghiChu,
+      duongDan: `/dich-vu/ho-tro/${id}`,
+      doiTuong: "support_ticket",
+      doiTuongId: id,
+      khoaChongTrung: `phieu-duoc-giao:${id}:${nguoiXuLyId}`,
+    });
+  }
   return { id, nguoiXuLyId };
 }
 

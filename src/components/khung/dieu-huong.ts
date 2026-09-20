@@ -36,13 +36,21 @@ export type BieuTuong =
   | "ho-tro"
   | "hoa-don"
   | "cong-no"
-  | "phieu-thu";
+  | "phieu-thu"
+  | "viec-hom-nay"
+  | "tu-dong-hoa"
+  | "bao-tri"
+  | "gia-han";
 
 export interface MucDieuHuong {
   nhan: string;
   href: string;
-  /** Quyền cần có để thấy mục này. `null` = ai đăng nhập cũng thấy. */
-  quyen: string | null;
+  /**
+   * Quyền cần có để thấy mục này. `null` = ai đăng nhập cũng thấy.
+   * Mảng = thấy nếu có **bất kỳ** quyền nào trong danh sách (ví dụ Lịch gia hạn:
+   * người lo dịch vụ hoặc người bán đều cần nhìn).
+   */
+  quyen: string | string[] | null;
   bieuTuong: BieuTuong;
   /** Từ khóa phụ cho ô tìm kiếm (không dấu cũng được). */
   tuKhoa?: string;
@@ -63,6 +71,13 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
         quyen: null,
         bieuTuong: "bang-dieu-khien",
         tuKhoa: "dashboard trang chu",
+      },
+      {
+        nhan: "Việc hôm nay",
+        href: "/viec-hom-nay",
+        quyen: null,
+        bieuTuong: "viec-hom-nay",
+        tuKhoa: "nhac viec today action can lam hom nay",
       },
     ],
   },
@@ -107,6 +122,8 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     muc: [
       { nhan: "Phiếu hỗ trợ", href: "/dich-vu/ho-tro", quyen: "service_desk.view", bieuTuong: "ho-tro", tuKhoa: "ticket ho tro su co bao tri sla" },
       { nhan: "Bảo hành", href: "/dich-vu/bao-hanh", quyen: "service_desk.view", bieuTuong: "bao-hanh", tuKhoa: "warranty bao hanh het han serial" },
+      { nhan: "Hợp đồng bảo trì", href: "/dich-vu/bao-tri", quyen: "service_desk.view", bieuTuong: "bao-tri", tuKhoa: "maintenance bao tri dinh ky chu ky hop dong" },
+      { nhan: "Lịch gia hạn", href: "/dich-vu/gia-han", quyen: ["service_desk.view", "sales.view"], bieuTuong: "gia-han", tuKhoa: "renewal gia han sap het han ban lai" },
     ],
   },
   {
@@ -134,6 +151,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Dữ liệu gốc", href: "/quan-tri/du-lieu-goc", quyen: "master_data.view", bieuTuong: "du-lieu-goc", tuKhoa: "master data danh muc nguon lead don vi tinh" },
       { nhan: "Cấu hình hệ thống", href: "/quan-tri/cau-hinh", quyen: "setting.view", bieuTuong: "cau-hinh", tuKhoa: "settings nguong bien loi nhuan" },
       { nhan: "Hồ sơ công ty", href: "/quan-tri/ho-so-cong-ty", quyen: "setting.view", bieuTuong: "ho-so-cong-ty", tuKhoa: "company profile dia chi ma so thue tai khoan nguoi ky ban in" },
+      { nhan: "Tự động hóa", href: "/quan-tri/tu-dong-hoa", quyen: "setting.view", bieuTuong: "tu-dong-hoa", tuKhoa: "automation quy tac nhac viec lich chay nen job" },
       { nhan: "Nhật ký kiểm toán", href: "/quan-tri/nhat-ky-kiem-toan", quyen: "audit_log.view", bieuTuong: "nhat-ky", tuKhoa: "audit log lich su" },
     ],
   },

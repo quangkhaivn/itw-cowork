@@ -137,6 +137,15 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Bảng điều hành **dùng lại `dieuKienXem*` của từng phân hệ** thay vì viết truy vấn riêng, nên phạm vi dữ liệu trên trang tổng quan luôn khớp với phạm vi trên màn hình chi tiết. Khối nào người xem không có quyền thì trả `null` và màn hình bỏ hẳn khối đó.
 - Mọi ngưỡng (số ngày công nợ, cảnh báo quá hạn) đọc từ Cấu hình. **Chưa đặt thì không bịa**: phát hành hóa đơn bị từ chối cho tới khi có hạn, và màn hình công nợ nói rõ là chưa đặt ngưỡng.
 
+## 7h. Tự động hóa, nhắc việc, bảo trì và gia hạn (Phase 8)
+
+- Phân hệ: `src/modules/{nhac-viec,thong-bao,bao-tri}`. Phần thuần ở `nhac-viec/tinh-toan.ts` (ngày tháng theo giờ Việt Nam, kỳ bảo trì, điều kiện chạy quy tắc, câu tóm tắt chuông) và danh mục quy tắc ở `nhac-viec/quy-tac.ts`.
+- **Quy tắc là mã, không phải dữ liệu.** Bảng `automation_rules` chỉ giữ công tắc; mỗi quy tắc tự biết mình quét gì và cần ngưỡng nào (QĐ-30).
+- **Bản quét chạy với tư cách hệ thống**, nên nó nhìn toàn bộ dữ liệu của doanh nghiệp. Việc sinh ra luôn gắn đúng người phụ trách bản ghi, và mỗi người chỉ đọc được việc của chính mình — phạm vi dữ liệu không bị bản quét chọc thủng.
+- **Chống chạy hai lần dựa vào CSDL, không dựa vào bộ nhớ**: chỉ mục riêng phần `job_runs_lich_moi_ngay` cho lần chạy theo lịch, khóa duy nhất cho từng việc và từng thông báo. Worker khởi động lại giữa chừng cũng không quét lại.
+- `worker/index.ts` quét **từng doanh nghiệp trong một giao dịch riêng**: một doanh nghiệp hỏng không kéo theo doanh nghiệp khác, và lần chạy hỏng vẫn nằm lại trong `job_runs` kèm lỗi.
+- Thông báo dùng chung một hàm `taoThongBao(tx, tenantId, …)` nhận `tx` chứ không nhận `NguCanh`, vì worker nền cũng gọi nó mà không có người dùng nào đứng sau.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

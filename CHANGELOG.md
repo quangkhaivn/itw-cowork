@@ -2,6 +2,32 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.9.0 — 21/09/2026 — Phase 8: Tự động hóa, Việc hôm nay, bảo trì và gia hạn
+
+Căn cứ: prompt triển khai 36 mục, mục 21–22. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 13 (TD), mục 14 (BT/GH).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.8.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **Bản quét nhắc việc**: 8 quy tắc (báo giá chờ phản hồi, cơ hội im lặng, việc quá hạn, hóa đơn quá hạn, phiếu hỗ trợ trễ cam kết, bảo hành sắp hết, bảo trì tới kỳ, khách lâu chưa mua lại). Quy tắc thiếu ngưỡng thì **không quét** và nói rõ thiếu gì.
+- **"Việc hôm nay"**: danh sách gợi ý riêng của từng người, đánh dấu đã xử lý hoặc bỏ qua kèm lý do. Chạy lại bản quét trong ngày không nhân đôi việc.
+- **Chuông thông báo** trên thanh trên: tóm tắt việc hôm nay, phiếu hỗ trợ được giao, báo giá chờ duyệt, hóa đơn đã thu đủ. Chống trùng bằng khóa, không báo khi không có gì.
+- **Màn hình Tự động hóa** (Quản trị): bật/tắt từng quy tắc, xem ngưỡng đang dùng, lịch sử chạy nền, nút Chạy quét ngay.
+- **Worker chạy thật**: mỗi nhịp kiểm tra từng doanh nghiệp, tới giờ đã đặt thì quét. Chưa đặt giờ thì **không tự quét**.
+- **Hợp đồng bảo trì định kỳ** (`BT-<năm>-0001`): chu kỳ tháng, ghi nhận từng kỳ, tự hết hạn sau kỳ cuối.
+- **Lịch gia hạn**: bảo hành và hợp đồng sắp hết hạn, chốt thành cơ hội hoặc bỏ qua kèm lý do.
+- 6 bảng CSDL (`notifications`, `automation_rules`, `job_runs`, `daily_action_items`, `maintenance_contracts`, `renewals`), 16 route API, 6 màn hình, một cấu hình mới (giờ quét hằng ngày).
+
+### Sửa
+- Bài thử Tài chính và HTTP lấy mốc "N ngày trước" theo **giờ UTC** trong khi hệ thống tính theo giờ Việt Nam: từ 0 đến 7 giờ sáng hai mốc lệch nhau một ngày và bài thử báo hỏng oan. Nay dùng chung hàm thuần theo giờ Việt Nam.
+- Bài thử HTTP mục 7h chọn đúng dòng việc của lần chạy hiện tại thay vì dòng đầu danh sách (chạy nhiều lần trong ngày thì danh sách còn cả việc đã đóng của lần trước).
+
+### Quyết định đáng ghi
+- Đã cân nhắc cấp `service_desk.view` cho vai trò Kinh doanh để họ xem lịch gia hạn, rồi **bỏ**: cấp như vậy mở luôn cả hàng đợi phiếu hỗ trợ. Thay bằng kiểm `service_desk.view` HOẶC `sales.view` ngay trong service (QĐ-31).
+
+### Kiểm thử
+- 184 bài đơn vị, 457 bài tích hợp (thêm `thu:tu-dong-hoa` 67 bài), 268 bài HTTP đầu-cuối — tất cả đạt.
+- Diễn tập cài mới trên CSDL rỗng: 9 migration chạy sạch, RLS phủ đủ mọi bảng có `tenant_id`.
+
 ## 0.8.0 — 20/09/2026 — Phase 7: Tài chính và Bảng điều hành
 
 Căn cứ: prompt triển khai 36 mục, mục 6 và mục 20. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 11 (TC), mục 12 (BDK).

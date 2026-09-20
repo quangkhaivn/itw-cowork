@@ -65,8 +65,14 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `support_ticket_events` | Diễn biến xử lý phiếu | Phase 6. **Chỉ ghi thêm** (trigger `chan_sua_support_ticket_events`) |
 | `invoices`, `invoice_items` | Hóa đơn bán ra và dòng hàng | Phase 7. Số `HD-2026-0001`; dòng giữ `order_item_id` để truy ngược về dòng đơn; CHECK: đã phát hành phải có ngày phát hành + người phát hành + hạn thanh toán, đã hủy phải có thời điểm và lý do |
 | `payments`, `payment_allocations` | Phiếu thu và phần trừ cho từng hóa đơn | Phase 7. Số `PT-2026-0001`; một phiếu trừ được nhiều hóa đơn; CHECK số tiền > 0, hủy phải có thời điểm và lý do. **Công nợ không lưu cột nào** — tính từ hai bảng này (QĐ-09, TC-06) |
+| `notifications` | Thông báo trong ứng dụng (chuông) | Phase 8. Chỉ của một người; `dedupe_key` duy nhất theo (tenant, người) nên bản quét chạy lại không nhân đôi chuông |
+| `automation_rules` | Công tắc bật/tắt từng quy tắc nhắc việc | Phase 8. **Chỉ giữ công tắc**; nội dung quy tắc nằm trong mã `src/modules/nhac-viec/quy-tac.ts` (QĐ-30) |
+| `job_runs` | Mỗi lần chạy tác vụ nền | Phase 8. Chỉ mục riêng phần `job_runs_lich_moi_ngay` chặn chạy theo lịch hai lần một ngày; CHECK trạng thái, thời điểm kết thúc, lỗi |
+| `daily_action_items` | "Việc hôm nay" theo người | Phase 8. Duy nhất (tenant, người, ngày, quy tắc, đối tượng) → chống nhân đôi; CHECK đóng phải có người và thời điểm, bỏ qua phải có lý do |
+| `maintenance_contracts` | Hợp đồng bảo trì định kỳ | Phase 8. Mã `BT-2026-0001`; CHECK kỳ hạn hợp lệ, chu kỳ 1–60 tháng, hủy phải có lý do |
+| `renewals` | Gia hạn sắp tới (bảo hành / bảo trì) | Phase 8. Duy nhất theo (nguồn, ngày đến hạn); CHECK đúng một nguồn khớp loại đã khai, đã tạo cơ hội thì phải có `opportunity_id` |
 
-Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ), `20260920103433_phase5_don_hang_kho` (thêm 8 bảng đơn hàng/kho + 2 cột trên `products` + CHECK + trigger sổ cái; kèm cấp bù quyền kho cho vai trò Thủ kho), `20260920140406_phase6_du_an_bao_hanh_ho_tro` (thêm 5 bảng dịch vụ/dự án + cột `project_id` trên `tasks` + CHECK + trigger diễn biến phiếu; kèm cấp bù `order.view` cho CSKH và kỹ thuật), `20260920153128_phase7_tai_chinh` (thêm 4 bảng hóa đơn/thu tiền + CHECK; kèm cấp bù `finance.view`/`finance.export` phạm vi **nhóm** cho Trưởng phòng Kinh doanh).
+Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ), `20260920103433_phase5_don_hang_kho` (thêm 8 bảng đơn hàng/kho + 2 cột trên `products` + CHECK + trigger sổ cái; kèm cấp bù quyền kho cho vai trò Thủ kho), `20260920140406_phase6_du_an_bao_hanh_ho_tro` (thêm 5 bảng dịch vụ/dự án + cột `project_id` trên `tasks` + CHECK + trigger diễn biến phiếu; kèm cấp bù `order.view` cho CSKH và kỹ thuật), `20260920153128_phase7_tai_chinh` (thêm 4 bảng hóa đơn/thu tiền + CHECK; kèm cấp bù `finance.view`/`finance.export` phạm vi **nhóm** cho Trưởng phòng Kinh doanh), `20260920183019_phase8_tu_dong_hoa` (thêm 6 bảng tự động hóa/bảo trì/gia hạn + CHECK + chỉ mục riêng phần; **không** cấp bù quyền nào).
 
 Vai kết nối: `cowork_app` (ứng dụng, bị RLS) và chủ sở hữu (migration, seed). Ứng dụng **không bao giờ** chạy bằng chủ sở hữu.
 
@@ -160,9 +166,11 @@ Doanh thu / giá vốn / lợi nhuận gộp của bảng điều hành **hiện
 
 **Đã làm**: `invoices`, `invoice_items`, `payments`, `payment_allocations`. **Chưa làm**: `supplier_bills`, `supplier_payments` (công nợ phải trả), và hai view `receivables` / `payables` — công nợ phải thu hiện tính trong service bằng hàm thuần `congNo()`, chưa cần view.
 
-### Phase 8 — Tự động hóa
+### Phase 8 — Tự động hóa (ĐÃ LÀM 21/09 — bảng thật ở phần A)
 
-`notifications` (`user_id`, `type`, `title`, `link`, `read_at`), `automation_rules` (loại quy tắc + tham số, đọc ngưỡng từ Cấu hình), `job_runs` (lần chạy, kết quả, lỗi), `daily_action_items` (Today's Sales Actions theo người).
+`notifications` (`user_id`, `type`, `title`, `link`, `read_at`), `automation_rules`, `job_runs` (lần chạy, kết quả, lỗi), `daily_action_items` ("Việc hôm nay" theo người) — **đã làm đủ**, kèm `maintenance_contracts` và `renewals` vốn dự kiến ở Phase 6.
+
+Khác thiết kế ban đầu một điểm: `automation_rules` **chỉ giữ công tắc bật/tắt**, không giữ "loại quy tắc + tham số". Để tham số trong bảng nghĩa là phải dựng một ngôn ngữ cấu hình rồi tự viết trình thông dịch cho nó, trong khi tám quy tắc hiện tại đều là câu truy vấn cụ thể. Ngưỡng vẫn nằm ở Cấu hình như dự kiến (QĐ-30).
 
 ### Phase 9 — AI
 

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import BieuTuong from "@/components/ui/BieuTuong";
 import TaoNhanh, { type MucTaoNhanh } from "./TaoNhanh";
+import Chuong from "./Chuong";
 
 function chuCaiDau(hoTen: string) {
   const tu = hoTen.trim().split(/\s+/);
@@ -62,6 +63,7 @@ export default function ThanhTren({
       </button>
       <div className="dem" />
       <TaoNhanh muc={taoNhanh} />
+      <Chuong />
       <div className="menu-nguoi" ref={vung}>
         <button onClick={() => datMoMenu((m) => !m)} aria-haspopup="menu" aria-expanded={moMenu}>
           <span className="anh-dai-dien" aria-hidden="true">

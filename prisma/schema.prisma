@@ -79,6 +79,13 @@ model Tenant {
   invoiceItems       InvoiceItem[]
   payments           Payment[]
   paymentAllocations PaymentAllocation[]
+  // Phase 8 — Tự động hóa
+  notifications      Notification[]
+  automationRules    AutomationRule[]
+  jobRuns            JobRun[]
+  dailyActionItems   DailyActionItem[]
+  maintenanceOrders  MaintenanceContract[]
+  renewals           Renewal[]
 
   @@map("tenants")
 }
@@ -148,23 +155,28 @@ model User {
   createdBy          String?   @map("created_by") @db.Uuid
   updatedBy          String?   @map("updated_by") @db.Uuid
 
-  tenant             Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staffProfile       StaffProfile?   @relation("HoSoCuaNguoiDung")
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile       StaffProfile?         @relation("HoSoCuaNguoiDung")
   userRoles          UserRole[]
   /// Những người nhận người này làm quản lý trực tiếp.
-  reports            StaffProfile[]  @relation("QuanLyTrucTiep")
+  reports            StaffProfile[]        @relation("QuanLyTrucTiep")
   // Phase 2 — người phụ trách
-  ownedCustomers     Customer[]      @relation("KhachPhuTrach")
-  ownedLeads         Lead[]          @relation("LeadPhuTrach")
-  ownedInteractions  Interaction[]   @relation("TuongTacCua")
-  ownedOpportunities Opportunity[]   @relation("CoHoiPhuTrach")
-  ownedTasks         Task[]          @relation("ViecPhuTrach")
-  ownedQuotations    Quotation[]     @relation("BaoGiaPhuTrach")
-  ownedSalesOrders   SalesOrder[]    @relation("DonHangPhuTrach")
-  managedProjects    Project[]       @relation("DuAnPhuTrach")
-  ownedTickets       SupportTicket[] @relation("PhieuHoTroTiepNhan")
-  assignedTickets    SupportTicket[] @relation("PhieuHoTroXuLy")
-  ownedInvoices      Invoice[]       @relation("HoaDonPhuTrach")
+  ownedCustomers     Customer[]            @relation("KhachPhuTrach")
+  ownedLeads         Lead[]                @relation("LeadPhuTrach")
+  ownedInteractions  Interaction[]         @relation("TuongTacCua")
+  ownedOpportunities Opportunity[]         @relation("CoHoiPhuTrach")
+  ownedTasks         Task[]                @relation("ViecPhuTrach")
+  ownedQuotations    Quotation[]           @relation("BaoGiaPhuTrach")
+  ownedSalesOrders   SalesOrder[]          @relation("DonHangPhuTrach")
+  managedProjects    Project[]             @relation("DuAnPhuTrach")
+  ownedTickets       SupportTicket[]       @relation("PhieuHoTroTiepNhan")
+  assignedTickets    SupportTicket[]       @relation("PhieuHoTroXuLy")
+  ownedInvoices      Invoice[]             @relation("HoaDonPhuTrach")
+  // Phase 8
+  notifications      Notification[]        @relation("ThongBaoCuaNguoiDung")
+  dailyActionItems   DailyActionItem[]     @relation("ViecHomNayCuaNguoiDung")
+  ownedMaintenance   MaintenanceContract[] @relation("BaoTriPhuTrach")
+  ownedRenewals      Renewal[]             @relation("GiaHanPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -407,20 +419,22 @@ model Customer {
   createdBy         String?  @map("created_by") @db.Uuid
   updatedBy         String?  @map("updated_by") @db.Uuid
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner          User            @relation("KhachPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
-  contacts       Contact[]
-  interactions   Interaction[]
-  opportunities  Opportunity[]
-  tasks          Task[]
-  convertedLeads Lead[]          @relation("LeadThanhKhach")
-  quotations     Quotation[]
-  salesOrders    SalesOrder[]
-  warranties     Warranty[]
-  projects       Project[]
-  tickets        SupportTicket[]
-  invoices       Invoice[]
-  payments       Payment[]
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner                User                  @relation("KhachPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  contacts             Contact[]
+  interactions         Interaction[]
+  opportunities        Opportunity[]
+  tasks                Task[]
+  convertedLeads       Lead[]                @relation("LeadThanhKhach")
+  quotations           Quotation[]
+  salesOrders          SalesOrder[]
+  warranties           Warranty[]
+  projects             Project[]
+  tickets              SupportTicket[]
+  invoices             Invoice[]
+  payments             Payment[]
+  maintenanceContracts MaintenanceContract[]
+  renewals             Renewal[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
@@ -588,6 +602,7 @@ model Opportunity {
   fromLeads    Lead[]        @relation("LeadThanhCoHoi")
   quotations   Quotation[]
   salesOrders  SalesOrder[]
+  renewals     Renewal[]
 
   @@unique([tenantId, code])
   @@index([tenantId, ownerId, stage])
@@ -1326,6 +1341,7 @@ model Warranty {
   salesOrderItem SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
   delivery       Delivery?       @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
   tickets        SupportTicket[]
+  renewals       Renewal[]
 
   @@index([tenantId, customerId])
   @@index([tenantId, endDate])
@@ -1595,4 +1611,191 @@ model PaymentAllocation {
   @@unique([paymentId, invoiceId])
   @@index([tenantId, invoiceId])
   @@map("payment_allocations")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Tự động hóa: thông báo, quy tắc nhắc việc, lần chạy nền, "Việc hôm nay",
+// hợp đồng bảo trì định kỳ và gia hạn.
+// ---------------------------------------------------------------------------
+
+/// Thông báo trong ứng dụng cho MỘT người. Không gửi ra ngoài (email, Zalo) ở phase này.
+model Notification {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  /// Mã loại, ví dụ viec-hom-nay | phieu-duoc-giao | bao-gia-cho-duyet | hoa-don-thu-du.
+  type       String    @db.VarChar(50)
+  /// thong-tin | canh-bao | khan
+  severity   String    @default("thong-tin") @db.VarChar(20)
+  title      String    @db.VarChar(300)
+  body       String?   @db.Text
+  link       String?   @db.VarChar(500)
+  objectType String?   @map("object_type") @db.VarChar(50)
+  objectId   String?   @map("object_id") @db.Uuid
+  /// Khóa chống trùng: cùng người + cùng khóa thì chỉ có một thông báo (bản quét
+  /// hằng ngày chạy lại không nhân đôi chuông). Null = không chống trùng.
+  dedupeKey  String?   @map("dedupe_key") @db.VarChar(200)
+  readAt     DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("ThongBaoCuaNguoiDung", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, dedupeKey])
+  @@index([tenantId, userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+/// Bật/tắt từng quy tắc nhắc việc theo doanh nghiệp. Nội dung quy tắc (quét gì, cần
+/// ngưỡng nào) nằm trong mã `src/modules/nhac-viec/quy-tac.ts` — bảng này chỉ giữ công tắc.
+model AutomationRule {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  code      String    @db.VarChar(50)
+  enabled   Boolean   @default(true)
+  note      String?   @db.Text
+  lastRunAt DateTime? @map("last_run_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy String?   @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@map("automation_rules")
+}
+
+/// Một lần chạy tác vụ nền. Chỉ có một lần chạy THEO LỊCH cho mỗi ngày (chỉ mục
+/// riêng phần `job_runs_lich_moi_ngay` trong migration); chạy tay thì không giới hạn.
+model JobRun {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  /// quet-nhac-viec (hiện chỉ có một loại).
+  jobCode       String    @map("job_code") @db.VarChar(50)
+  /// Ngày nghiệp vụ được quét (giờ Việt Nam), không phải thời điểm chạy.
+  forDate       DateTime  @map("for_date") @db.Date
+  /// lich | tay
+  trigger       String    @default("lich") @db.VarChar(10)
+  /// dang-chay | xong | hong
+  status        String    @default("dang-chay") @db.VarChar(20)
+  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt    DateTime? @map("finished_at") @db.Timestamptz(6)
+  rulesRun      Int       @default(0) @map("rules_run")
+  rulesSkipped  Int       @default(0) @map("rules_skipped")
+  itemsCreated  Int       @default(0) @map("items_created")
+  notifsCreated Int       @default(0) @map("notifs_created")
+  error         String?   @db.Text
+  /// Chi tiết từng quy tắc: chạy được không, vì sao bỏ qua, sinh bao nhiêu việc.
+  detail        Json      @default("{}")
+  startedBy     String?   @map("started_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, jobCode, forDate])
+  @@map("job_runs")
+}
+
+/// "Việc hôm nay" — một dòng là một việc bản quét đề nghị cho một người trong một ngày.
+/// Đây là GỢI Ý, không phải công việc chính thức (`tasks`); người dùng đánh dấu xong
+/// hoặc bỏ qua, và dòng vẫn ở lại để đo xem quy tắc có hữu ích không.
+model DailyActionItem {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  forDate    DateTime  @map("for_date") @db.Date
+  ruleCode   String    @map("rule_code") @db.VarChar(50)
+  /// thong-tin | canh-bao | khan
+  severity   String    @default("thong-tin") @db.VarChar(20)
+  title      String    @db.VarChar(300)
+  /// Vì sao lọt vào danh sách — câu chữ cụ thể, kèm số ngày thật.
+  reason     String    @db.Text
+  link       String?   @db.VarChar(500)
+  objectType String    @map("object_type") @db.VarChar(50)
+  objectId   String    @map("object_id") @db.Uuid
+  /// mo | xong | bo-qua
+  status     String    @default("mo") @db.VarChar(20)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(6)
+  resolvedBy String?   @map("resolved_by") @db.Uuid
+  skipReason String?   @map("skip_reason") @db.Text
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("ViecHomNayCuaNguoiDung", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, forDate, ruleCode, objectType, objectId])
+  @@index([tenantId, userId, forDate, status])
+  @@map("daily_action_items")
+}
+
+/// Hợp đồng bảo trì định kỳ. Mã BT-2026-0001. Kỳ kế tiếp tính từ lần bảo trì gần nhất.
+model MaintenanceContract {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  code            String    @db.VarChar(30)
+  customerId      String    @map("customer_id") @db.Uuid
+  ownerId         String    @map("owner_id") @db.Uuid
+  name            String    @db.VarChar(300)
+  scope           String?   @db.Text
+  startDate       DateTime  @map("start_date") @db.Date
+  endDate         DateTime  @map("end_date") @db.Date
+  /// Bảo trì mỗi bao nhiêu tháng.
+  cycleMonths     Int       @map("cycle_months")
+  lastServiceDate DateTime? @map("last_service_date") @db.Date
+  nextServiceDate DateTime? @map("next_service_date") @db.Date
+  amount          Decimal?  @db.Decimal(18, 2)
+  /// hieu-luc | tam-dung | het-han | huy
+  status          String    @default("hieu-luc") @db.VarChar(20)
+  note            String?   @db.Text
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason    String?   @map("cancel_reason") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.Uuid
+  updatedBy       String?   @map("updated_by") @db.Uuid
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  owner    User      @relation("BaoTriPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  renewals Renewal[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, nextServiceDate])
+  @@index([tenantId, customerId])
+  @@map("maintenance_contracts")
+}
+
+/// Việc gia hạn sắp tới: bảo hành sắp hết, hợp đồng bảo trì sắp hết. Bản quét sinh ra,
+/// người bán chốt bằng cách mở cơ hội. Một nguồn (một bảo hành / một hợp đồng) chỉ có
+/// một dòng gia hạn — chạy quét lại không nhân đôi.
+model Renewal {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  /// bao-hanh | bao-tri
+  sourceType            String   @map("source_type") @db.VarChar(20)
+  warrantyId            String?  @map("warranty_id") @db.Uuid
+  maintenanceContractId String?  @map("maintenance_contract_id") @db.Uuid
+  customerId            String   @map("customer_id") @db.Uuid
+  ownerId               String?  @map("owner_id") @db.Uuid
+  title                 String   @db.VarChar(300)
+  dueDate               DateTime @map("due_date") @db.Date
+  /// moi | da-tao-co-hoi | bo-qua
+  status                String   @default("moi") @db.VarChar(20)
+  opportunityId         String?  @map("opportunity_id") @db.Uuid
+  note                  String?  @db.Text
+  skipReason            String?  @map("skip_reason") @db.Text
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy             String?  @map("updated_by") @db.Uuid
+
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warranty            Warranty?            @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  maintenanceContract MaintenanceContract? @relation(fields: [maintenanceContractId], references: [id], onDelete: Cascade)
+  customer            Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  owner               User?                @relation("GiaHanPhuTrach", fields: [ownerId], references: [id], onDelete: SetNull)
+  opportunity         Opportunity?         @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, warrantyId, dueDate])
+  @@unique([tenantId, maintenanceContractId, dueDate])
+  @@index([tenantId, status, dueDate])
+  @@map("renewals")
 }

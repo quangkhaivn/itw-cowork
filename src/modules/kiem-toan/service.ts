@@ -55,6 +55,10 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   support_ticket: "Phiếu hỗ trợ",
   invoice: "Hóa đơn",
   payment: "Phiếu thu",
+  maintenance_contract: "Hợp đồng bảo trì",
+  renewal: "Gia hạn",
+  automation_rule: "Quy tắc nhắc việc",
+  job_run: "Lần chạy nền",
 };
 
 export const LuocDoLocKiemToan = z.object({

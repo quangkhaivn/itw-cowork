@@ -251,3 +251,38 @@ Số tiền trên hóa đơn tính bằng đúng hàm `tinhBaoGia()` mà báo gi
 | BDK-05 | Biên lợi nhuận khi doanh thu bằng 0 trả **null** (chưa tính được), không phải 0% | [SV] hàm thuần · [ĐV] |
 
 Các con số đọc thẳng từ bảng gốc lúc mở trang. Bảng tổng hợp theo ngày chỉ dựng khi dữ liệu đủ lớn (DATABASE.md phần B) — làm sớm chỉ tạo thêm một nơi có thể lệch số.
+
+## 13. Nhắc việc tự động và "Việc hôm nay" (Phase 8)
+
+Bản quét chạy mỗi ngày một lần theo giờ đặt ở Cấu hình, lập danh sách gợi ý cho từng người. Danh sách này **không phải** công việc chính thức (`tasks`) — nó là lời nhắc, đóng lại được mà không ảnh hưởng bản ghi gốc.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| TD-01 | **Quy tắc thiếu ngưỡng thì không quét.** Lần chạy ghi rõ quy tắc nào bị bỏ và vì sao; màn hình Tự động hóa hiện "Chưa đặt" kèm đường tới Cấu hình. Hệ thống không tự chọn một con số thay Giám đốc | [SV] hàm thuần `kiemTraDieuKien()` · [ĐV] · [TH] |
+| TD-02 | **Chạy lại trong ngày không nhân đôi.** Việc hôm nay duy nhất theo (người, ngày, quy tắc, đối tượng); thông báo duy nhất theo (người, khóa chống trùng). Lần chạy **theo lịch** chỉ có một mỗi ngày | [CSDL] duy nhất + chỉ mục riêng phần `job_runs_lich_moi_ngay` · [SV] · [TH] |
+| TD-03 | **"Việc hôm nay" là của riêng mỗi người.** Máy chủ lọc theo phiên; không có đường nào xem hay đóng việc của người khác, kể cả trưởng phòng | [SV] · [TH] |
+| TD-04 | Mỗi người **một thông báo tóm tắt** mỗi ngày, và chỉ khi thật sự có việc. Không có việc thì không rung chuông | [SV] hàm thuần `cauTomTatHangNgay()` · [ĐV] · [TH] |
+| TD-05 | Đóng một việc phải ghi ai đóng và lúc nào; việc đã đóng không đóng lại được | [CSDL] CHECK · [SV] · [TH] |
+| TD-06 | **Bỏ qua phải ghi lý do.** Lý do bỏ qua là dữ liệu để biết quy tắc nào đang nhắc sai và cần chỉnh ngưỡng | [CSDL] CHECK · [SV] · [TH] |
+| TD-07 | Bật/tắt quy tắc và chạy quét tay cần `setting.update`. Mỗi lần chạy ghi lại nguồn (lịch hay tay), người bấm, kết quả từng quy tắc | [SV] · [TH] |
+| TD-08 | Việc chỉ giao cho **người phụ trách bản ghi gốc**. Bản ghi không có người phụ trách thì bỏ qua, không đẩy bừa cho ai | [SV] |
+
+**Tám quy tắc đang có**: báo giá chờ phản hồi, cơ hội lâu không hoạt động, việc quá hạn, hóa đơn quá hạn, phiếu hỗ trợ trễ cam kết, bảo hành sắp hết, hợp đồng bảo trì tới kỳ, khách lâu chưa mua lại. Năm quy tắc cần ngưỡng; ba quy tắc còn lại đọc mốc đã có sẵn trên bản ghi.
+
+**Chưa làm ở phase này**: gửi nhắc ra ngoài (email, Zalo) — cần dịch vụ gửi và mẫu thư được duyệt; nhắc theo giờ trong ngày thay vì theo ngày; quy tắc do người dùng tự định nghĩa.
+
+## 14. Bảo trì định kỳ và gia hạn (Phase 8)
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| BT-01 | Mã hợp đồng `BT-<năm>-0001`. Kỳ hạn phải hợp lệ (kết thúc ≥ bắt đầu), chu kỳ 1–60 tháng | [CSDL] CHECK + duy nhất · [SV] · [TH] |
+| BT-02 | **Kỳ đầu tiên là ngày bắt đầu hợp đồng**; kỳ sau = lần bảo trì gần nhất + chu kỳ. Vượt ngày kết thúc thì **không còn kỳ nào** — hệ thống không nhắc bảo trì cho hợp đồng đã hết hạn | [SV] hàm thuần `kyBaoTriKeTiep()` · [ĐV] · [TH] |
+| BT-03 | Ghi nhận bảo trì là **chỗ duy nhất** đẩy mốc kỳ kế tiếp — không có ô nhập tay "kỳ sau là ngày nào". Không ghi nhận cho ngày ở tương lai, cũng không ghi trước ngày bắt đầu hợp đồng | [CSDL] CHECK · [SV] · [TH] |
+| BT-04 | Ghi nhận kỳ cuối xong thì hợp đồng **tự chuyển sang Hết hạn**, không nằm mãi ở Hiệu lực | [SV] · [TH] |
+| BT-05 | Hủy hợp đồng phải ghi lý do; đã hủy thì khóa | [CSDL] CHECK · [SV] · [TH] |
+| GH-01 | Gia hạn do bản quét lập sẵn từ bảo hành sắp hết hoặc hợp đồng bảo trì. Một nguồn + một ngày đến hạn = **một dòng**, quét lại không nhân đôi | [CSDL] duy nhất · [SV] · [TH] |
+| GH-02 | Gia hạn **không tự thành cơ hội**. Người bán xem rồi quyết: mở cơ hội, hoặc bỏ qua kèm lý do. Máy tự mở cơ hội cho mọi máy sắp hết bảo hành sẽ làm pipeline đầy rác trong một tuần | [SV] · [TH] |
+| GH-03 | Chốt gia hạn đi qua đúng `taoCoHoi()` như mọi cơ hội khác — cùng kiểm quyền, cùng cấp mã, cùng nhật ký. Không có đường tắt riêng. Bắt buộc có **việc kế tiếp và ngày làm** | [SV] · [TH] |
+| GH-04 | Bỏ qua phải ghi lý do; dòng đã xử lý thì không chốt hay bỏ lại | [CSDL] CHECK · [SV] · [TH] |
+
+**Ai xem được lịch gia hạn**: `service_desk.view` **hoặc** `sales.view`. Cố ý kiểm ở service chứ không cấp `service_desk.view` cho vai trò Kinh doanh — cấp như vậy sẽ mở luôn cả hàng đợi phiếu hỗ trợ cho phòng kinh doanh, rộng hơn nhiều so với việc họ cần làm.

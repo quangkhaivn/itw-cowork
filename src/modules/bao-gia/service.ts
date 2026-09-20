@@ -10,6 +10,7 @@ import { batBuocThayKhach } from "@/modules/khach-hang/service";
 import { batBuocThayCoHoi } from "@/modules/co-hoi/service";
 import { canDuyet, chuaGui, daChot, hetHieuLuc, tinhBaoGia, type DongBaoGia } from "./tinh-toan";
 import type { BoLocBaoGia, DuLieuDongBaoGia, DuLieuSuaPhienBan, DuLieuTaoBaoGia } from "./luoc-do";
+import { baoChoNguoiCoQuyen } from "@/modules/thong-bao/service";
 
 /**
  * Phân hệ Báo giá — mục 10–14 prompt 20/09. Luật: BUSINESS_RULES.md mục 5.
@@ -540,6 +541,22 @@ export async function xinDuyet(nc: NguCanh, id: string, ghiChu: string | null) {
   await nc.tx.quotation.update({ where: { id }, data: { status: "PENDING_APPROVAL", updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "sua", objectType: "quotation", objectId: id, before: { trangThai: "DRAFT" }, after: { trangThai: "PENDING_APPROVAL", bien, nguong } });
   await nc.suKien({ eventType: SU_KIEN.QUOTATION_APPROVAL_REQUESTED, objectType: "quotation", objectId: id, payload: { phienBan: v.versionNo, bien, nguong, lyDo: kq.lyDo } });
+  await baoChoNguoiCoQuyen(
+    nc.tx,
+    nc.tenantId,
+    "quotation.approve",
+    {
+      loai: "bao-gia-cho-duyet",
+      mucDo: "canh-bao",
+      tieuDe: `Báo giá ${q.number} chờ bạn duyệt`,
+      noiDung: "Biên lợi nhuận dưới ngưỡng hoặc chưa đặt ngưỡng nên cần người duyệt.",
+      duongDan: `/ban-hang/bao-gia/${id}`,
+      doiTuong: "quotation",
+      doiTuongId: id,
+      khoaChongTrung: `bao-gia-cho-duyet:${v.id}`,
+    },
+    nc.hoSo.userId,
+  );
   return chiTietBaoGia(nc, id);
 }
 

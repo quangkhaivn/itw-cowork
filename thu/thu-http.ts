@@ -11,6 +11,9 @@
  * Bài thử tạo thêm người dùng thử — không chạy trên máy chủ thật.
  */
 
+import { homNayVN } from "../src/modules/crm/chung";
+import { congNgay } from "../src/modules/nhac-viec/tinh-toan";
+
 const URL_GOC = (process.env.THU_URL ?? "http://localhost:3300").replace(/\/$/, "");
 const MA_DN = process.env.THU_MA_DN ?? "itw";
 const EMAIL_QT = process.env.THU_EMAIL;
@@ -710,7 +713,8 @@ async function main() {
   console.log("\n[7g] Tài chính và bảng điều hành");
 
   const homNayThu = new Date().toISOString().slice(0, 10);
-  const truocDay = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+  // Theo giờ Việt Nam, giống sản phẩm (xem ghi chú ở thu-tai-chinh.ts).
+  const truocDay = (n: number) => congNgay(homNayVN(), -n);
 
   const taoHd = await goi("/api/v1/hoa-don", { phuongThuc: "POST", cookie: cookieQT, than: { donHangId: idDon2, ghiChu: "Xuất theo đơn thử HTTP" } });
   dat("TC-01: lập hóa đơn từ đơn đã xác nhận, số HD-", taoHd.status === 200 && String(taoHd.json.so).startsWith("HD-"), JSON.stringify(taoHd.json));
@@ -808,6 +812,165 @@ async function main() {
   dat("Bảng điều hành dựng được với khối bán hàng", trangBdk.status === 200 && trangBdk.text.includes("Bán hàng tháng này"), `status ${trangBdk.status}`);
   const nvBangSau = await goi("/bang-dieu-khien", { cookie: dnNv.cookie });
   dat("Bảng điều hành của nhân viên không có khối doanh thu", nvBangSau.status === 200 && !nvBangSau.text.includes("Bán hàng tháng này"), `status ${nvBangSau.status}`);
+
+  // --- 7h. Tự động hóa, Việc hôm nay, bảo trì, gia hạn (Phase 8) ---
+  console.log("\n[7h] Tự động hóa và Việc hôm nay");
+
+  const traiNgay = (n: number) => congNgay(homNayVN(), -n);
+
+  // Đặt ngưỡng để mọi quy tắc đủ điều kiện chạy.
+  const datNguong8 = await goi("/api/v1/cau-hinh", {
+    phuongThuc: "PATCH",
+    cookie: cookieQT,
+    than: {
+      giaTri: {
+        "theo_doi.bao_gia_khong_phan_hoi_ngay": 5,
+        "theo_doi.co_hoi_khong_hoat_dong_ngay": 7,
+        "theo_doi.khach_chua_mua_lai_thang": 6,
+        "theo_doi.bao_hanh_sap_het_ngay": 60,
+        "tai_chinh.canh_bao_qua_han_ngay": 3,
+        "tu_dong.gio_quet_hang_ngay": 7,
+      },
+    },
+  });
+  dat("Đặt được ngưỡng nhắc việc và giờ quét", datNguong8.status === 200, `status ${datNguong8.status}`);
+
+  const tdh0 = await goi("/api/v1/tu-dong-hoa", { cookie: cookieQT });
+  const tdhJson = tdh0.json as unknown as { quyTac: { ma: string; chay: boolean; lyDoBoQua: string }[]; duocSua: boolean };
+  dat("TD-01: màn hình Tự động hóa liệt kê đủ quy tắc", tdh0.status === 200 && tdhJson.quyTac.length >= 8, `${tdhJson.quyTac?.length}`);
+  dat("TD-01: mọi quy tắc đã đủ ngưỡng nên đều đang canh", tdhJson.quyTac.every((q) => q.chay), tdhJson.quyTac.filter((q) => !q.chay).map((q) => q.ma).join(","));
+
+  // Một việc quá hạn để bản quét bắt được.
+  const taoViecQuaHan = await goi("/api/v1/cong-viec", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { tieuDe: `Việc quá hạn HTTP ${DAU}`, han: `${traiNgay(2)}T09:00:00+07:00` },
+  });
+  dat("Tạo được việc quá hạn làm mồi cho bản quét", taoViecQuaHan.status === 200, JSON.stringify(taoViecQuaHan.json));
+
+  const quet1 = await goi("/api/v1/tu-dong-hoa/chay", { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  const q1 = quet1.json as unknown as { soViec: number; soThongBao: number; soQuyTacChay: number; soQuyTacBoQua: number };
+  dat("TD-02: chạy quét tay chạy được mọi quy tắc", quet1.status === 200 && q1.soQuyTacBoQua === 0, JSON.stringify(q1));
+  dat("TD-02: bản quét sinh ít nhất một việc", q1.soViec >= 1, `${q1.soViec}`);
+
+  const quet2 = await goi("/api/v1/tu-dong-hoa/chay", { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  dat("TD-02: quét lại trong ngày không sinh thêm việc", quet2.status === 200 && (quet2.json as unknown as { soViec: number }).soViec === 0, JSON.stringify(quet2.json));
+
+  const vhn = await goi("/api/v1/viec-hom-nay", { cookie: cookieQT });
+  const vhnJson = vhn.json as unknown as {
+    daQuet: boolean;
+    tomTat: { mo: number; khan: number };
+    dong: { id: string; maQuyTac: string; mucDo: string; trangThai: string; tieuDe: string }[];
+  };
+  dat("Việc hôm nay đã có danh sách và biết là đã quét", vhn.status === 200 && vhnJson.daQuet === true);
+  dat("Việc quá hạn nằm trong danh sách, mức Gấp", vhnJson.dong.some((v) => v.maQuyTac === "viec-qua-han" && v.mucDo === "khan"), JSON.stringify(vhnJson.tomTat));
+  // Chạy nhiều lần trong ngày thì danh sách còn cả việc của lần chạy trước (đã đóng).
+  // Lấy đúng dòng của việc vừa tạo ở bài này, và phải còn đang mở.
+  const viecCuaBaiNay = vhnJson.dong.find((v) => v.maQuyTac === "viec-qua-han" && v.trangThai === "mo" && v.tieuDe.includes(DAU));
+  dat("Tìm được đúng việc của lần chạy này, đang mở", Boolean(viecCuaBaiNay), JSON.stringify(vhnJson.dong.map((v) => [v.maQuyTac, v.trangThai])));
+  const viecId = viecCuaBaiNay!.id;
+
+  const boQuaThieuLyDo = await goi(`/api/v1/viec-hom-nay/${viecId}/bo-qua`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "" } });
+  dat("TD-06: bỏ qua mà không ghi lý do bị 400", boQuaThieuLyDo.status === 400, `status ${boQuaThieuLyDo.status}`);
+
+  const xongViec8 = await goi(`/api/v1/viec-hom-nay/${viecId}/xong`, { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  dat("TD-05: đánh dấu đã xử lý", xongViec8.status === 200 && xongViec8.json.trangThai === "xong");
+  const xongLai = await goi(`/api/v1/viec-hom-nay/${viecId}/xong`, { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  dat("TD-05: đóng lại một việc đã đóng bị 409", xongLai.status === 409 && xongLai.json.ma === "da-dong", `status ${xongLai.status}`);
+
+  const nvXemViec = await goi(`/api/v1/viec-hom-nay/${viecId}/xong`, { phuongThuc: "POST", cookie: dnNv.cookie, than: {} });
+  dat("TD-03: không đóng được việc hôm nay của người khác (404)", nvXemViec.status === 404, `status ${nvXemViec.status}`);
+
+  const tb = await goi("/api/v1/thong-bao", { cookie: cookieQT });
+  const tbJson = tb.json as unknown as { soChuaDoc: number; dong: { id: string; loai: string; daDoc: boolean }[] };
+  dat("TD-04: chuông có thông báo tóm tắt việc hôm nay", tb.status === 200 && tbJson.dong.some((t) => t.loai === "viec-hom-nay"), JSON.stringify(tbJson.soChuaDoc));
+  const tbId = tbJson.dong.find((t) => t.loai === "viec-hom-nay")!.id;
+  const docTb = await goi(`/api/v1/thong-bao/${tbId}/doc`, { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  dat("Đánh dấu một thông báo đã đọc", docTb.status === 200);
+  const nvDocTb = await goi(`/api/v1/thong-bao/${tbId}/doc`, { phuongThuc: "POST", cookie: dnNv.cookie, than: {} });
+  dat("TD-04: không đọc được thông báo của người khác (404)", nvDocTb.status === 404, `status ${nvDocTb.status}`);
+  const docHet = await goi("/api/v1/thong-bao/doc-het", { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  dat("Đánh dấu đã đọc hết", docHet.status === 200);
+  dat("Sau khi đọc hết thì không còn chưa đọc", ((await goi("/api/v1/thong-bao", { cookie: cookieQT })).json as unknown as { soChuaDoc: number }).soChuaDoc === 0);
+
+  const nvBatQuyTac = await goi("/api/v1/tu-dong-hoa/quy-tac/viec-qua-han", { phuongThuc: "PATCH", cookie: dnNv.cookie, than: { bat: false } });
+  dat("TD-07: nhân viên không tắt được quy tắc", nvBatQuyTac.status === 403, `status ${nvBatQuyTac.status}`);
+  const nvChayQuet = await goi("/api/v1/tu-dong-hoa/chay", { phuongThuc: "POST", cookie: dnNv.cookie, than: {} });
+  dat("TD-07: nhân viên không chạy được bản quét", nvChayQuet.status === 403, `status ${nvChayQuet.status}`);
+  const tatQuyTac = await goi("/api/v1/tu-dong-hoa/quy-tac/viec-qua-han", { phuongThuc: "PATCH", cookie: cookieQT, than: { bat: false } });
+  dat("Quản trị tắt được quy tắc", tatQuyTac.status === 200 && tatQuyTac.json.bat === false);
+  const quyTacLa = await goi("/api/v1/tu-dong-hoa/quy-tac/khong-co-that", { phuongThuc: "PATCH", cookie: cookieQT, than: { bat: true } });
+  dat("Mã quy tắc không có thật bị 404", quyTacLa.status === 404, `status ${quyTacLa.status}`);
+  await goi("/api/v1/tu-dong-hoa/quy-tac/viec-qua-han", { phuongThuc: "PATCH", cookie: cookieQT, than: { bat: true } });
+
+  // --- Hợp đồng bảo trì ---
+  const taoBt = await goi("/api/v1/bao-tri", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: {
+      khachHangId: idKh,
+      ten: `Bảo trì định kỳ HTTP ${DAU}`,
+      phamVi: "Vệ sinh, kiểm tra, thay vật tư",
+      ngayBatDau: traiNgay(10),
+      ngayKetThuc: `${new Date().getFullYear() + 1}-12-31`,
+      chuKyThang: 3,
+      giaTri: "12.000.000",
+    },
+  });
+  dat("BT-01: lập hợp đồng bảo trì, mã BT-", taoBt.status === 200 && String(taoBt.json.ma).startsWith("BT-"), JSON.stringify(taoBt.json));
+  const idBt = taoBt.json.id as string;
+
+  const ngaySai = await goi("/api/v1/bao-tri", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, ten: "Hợp đồng sai ngày", ngayBatDau: traiNgay(1), ngayKetThuc: traiNgay(5), chuKyThang: 3 },
+  });
+  dat("Ngày kết thúc trước ngày bắt đầu bị 400", ngaySai.status === 400, `status ${ngaySai.status}`);
+
+  const ctBt = await goi(`/api/v1/bao-tri/${idBt}`, { cookie: cookieQT });
+  const btJson = ctBt.json as unknown as { hopDong: { kyKeTiep: string | null; tinhTrangKy: string; chuKyThang: number } };
+  dat("BT-02: kỳ đầu tiên là ngày bắt đầu hợp đồng", btJson.hopDong.kyKeTiep === traiNgay(10), String(btJson.hopDong.kyKeTiep));
+  dat("BT-02: kỳ đầu đã qua nên đang trễ kỳ", btJson.hopDong.tinhTrangKy === "tre-ky", btJson.hopDong.tinhTrangKy);
+
+  const ghiTuongLai = await goi(`/api/v1/bao-tri/${idBt}/ghi-nhan`, { phuongThuc: "POST", cookie: cookieQT, than: { ngayBaoTri: "2099-01-01" } });
+  dat("Không ghi nhận bảo trì cho ngày tương lai", ghiTuongLai.status === 400, `status ${ghiTuongLai.status}`);
+
+  const ghiNhan = await goi(`/api/v1/bao-tri/${idBt}/ghi-nhan`, { phuongThuc: "POST", cookie: cookieQT, than: { ngayBaoTri: traiNgay(1), ghiChu: "Đã vệ sinh" } });
+  dat("BT-03: ghi nhận bảo trì đẩy mốc kỳ kế tiếp", ghiNhan.status === 200 && Boolean(ghiNhan.json.kyKeTiep), JSON.stringify(ghiNhan.json));
+  const ctBt2 = await goi(`/api/v1/bao-tri/${idBt}`, { cookie: cookieQT });
+  dat("BT-03: sau ghi nhận thì không còn trễ kỳ", (ctBt2.json as unknown as { hopDong: { tinhTrangKy: string } }).hopDong.tinhTrangKy === "cho-ky-sau");
+
+  const huyThieuLyDo8 = await goi(`/api/v1/bao-tri/${idBt}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "" } });
+  dat("Hủy hợp đồng bảo trì phải ghi lý do", huyThieuLyDo8.status === 400, `status ${huyThieuLyDo8.status}`);
+
+  // --- Gia hạn ---
+  const dsGh = await goi("/api/v1/gia-han?trangThai=tat-ca", { cookie: cookieQT });
+  dat("Đọc được lịch gia hạn", dsGh.status === 200);
+
+  const trangVhn = await goi("/viec-hom-nay", { cookie: cookieQT });
+  dat("Trang Việc hôm nay dựng được", trangVhn.status === 200 && trangVhn.text.includes("Việc hôm nay"), `status ${trangVhn.status}`);
+  const trangTdh = await goi("/quan-tri/tu-dong-hoa", { cookie: cookieQT });
+  dat("Trang Tự động hóa dựng được", trangTdh.status === 200 && trangTdh.text.includes("Quy tắc đang canh"), `status ${trangTdh.status}`);
+  const trangBt = await goi("/dich-vu/bao-tri", { cookie: cookieQT });
+  dat("Trang Hợp đồng bảo trì dựng được", trangBt.status === 200 && trangBt.text.includes(String(taoBt.json.ma)), `status ${trangBt.status}`);
+  const trangBtCt = await goi(`/dich-vu/bao-tri/${idBt}`, { cookie: cookieQT });
+  dat("Trang chi tiết hợp đồng bảo trì dựng được", trangBtCt.status === 200 && trangBtCt.text.includes("Kỳ bảo trì kế tiếp"), `status ${trangBtCt.status}`);
+  const trangBtMoi = await goi("/dich-vu/bao-tri/moi", { cookie: cookieQT });
+  dat("Trang lập hợp đồng bảo trì dựng được", trangBtMoi.status === 200 && trangBtMoi.text.includes("Kỳ hạn và chu kỳ"), `status ${trangBtMoi.status}`);
+  const trangGh = await goi("/dich-vu/gia-han", { cookie: cookieQT });
+  dat("Trang Lịch gia hạn dựng được", trangGh.status === 200 && trangGh.text.includes("Lịch gia hạn"), `status ${trangGh.status}`);
+
+  const nvTrangTdh = await goi("/quan-tri/tu-dong-hoa", { cookie: dnNv.cookie });
+  const tdhChuyenHuong =
+    (nvTrangTdh.status === 307 && Boolean(nvTrangTdh.location?.includes("/khong-co-quyen"))) ||
+    (nvTrangTdh.status === 200 && nvTrangTdh.text.includes("NEXT_REDIRECT;replace;/khong-co-quyen"));
+  dat(
+    "Nhân viên mở trang Tự động hóa bị chuyển sang /khong-co-quyen, không lộ quy tắc",
+    tdhChuyenHuong && !nvTrangTdh.text.includes("Quy tắc đang canh"),
+    `status ${nvTrangTdh.status}`,
+  );
+  const nvTrangVhn = await goi("/viec-hom-nay", { cookie: dnNv.cookie });
+  dat("Ai đăng nhập cũng mở được Việc hôm nay của mình", nvTrangVhn.status === 200, `status ${nvTrangVhn.status}`);
 
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;

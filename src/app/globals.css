@@ -672,3 +672,43 @@ table.bang-in .mo-ta-in { color: #555; font-size: 12px; margin-top: 2px; white-s
   .chan-in { page-break-inside: avoid; }
   @page { size: A4; margin: 14mm 12mm; }
 }
+
+/* --------------------------------------------------------------------------
+ * Phase 8 — chuông thông báo và Việc hôm nay
+ * ------------------------------------------------------------------------ */
+
+.chuong { position: relative; }
+.chuong > button { position: relative; }
+.chuong .dau-cham {
+  position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 9px; background: var(--loi); color: #fff; font-size: 10px; font-weight: 700;
+  line-height: 16px; text-align: center;
+}
+.menu-tha.rong { width: min(380px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; }
+.dau-chuong { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; }
+.dau-chuong button { background: none; border: 0; color: var(--chinh); cursor: pointer; padding: 0; }
+
+.ds-thong-bao { list-style: none; margin: 0; padding: 0; }
+.ds-thong-bao > li + li { border-top: 1px solid var(--vien-nhat); }
+.ds-thong-bao button {
+  display: flex; gap: 8px; width: 100%; padding: 10px; background: none; border: 0;
+  text-align: left; cursor: pointer; color: inherit;
+}
+.ds-thong-bao button:hover { background: var(--nen-nhat); }
+.ds-thong-bao li.da-doc .tieu-de { font-weight: 400; color: var(--chu-mo); }
+.ds-thong-bao .noi-dung { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ds-thong-bao .tieu-de { font-weight: 600; font-size: 13px; }
+.cham-muc-do { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--chu-nhat); }
+.cham-muc-do.khan { background: var(--loi); }
+.cham-muc-do.canh-bao { background: var(--canh-bao); }
+
+.viec-hom-nay { list-style: none; margin: 0; padding: 0; }
+.viec-hom-nay > li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; }
+.viec-hom-nay > li + li { border-top: 1px solid var(--vien-nhat); }
+.viec-hom-nay > li.da-dong { opacity: .55; }
+.viec-hom-nay .than-viec { flex: 1 1 auto; min-width: 0; }
+.viec-hom-nay .tac-vu { display: flex; gap: 8px; flex-shrink: 0; }
+@media (max-width: 640px) {
+  .viec-hom-nay > li { flex-wrap: wrap; }
+  .viec-hom-nay .tac-vu { width: 100%; }
+}

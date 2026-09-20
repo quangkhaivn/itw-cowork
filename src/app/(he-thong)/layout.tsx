@@ -1,6 +1,6 @@
 import KhungUngDung from "@/components/khung/KhungUngDung";
 import { DIEU_HUONG } from "@/components/khung/dieu-huong";
-import { coQuyen } from "@/lib/phan-quyen";
+import { coMotTrongCacQuyen, coQuyen } from "@/lib/phan-quyen";
 import { yeuCauDangNhap } from "@/lib/trang";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,7 @@ const TAO_NHANH = [
   { nhan: "Đơn hàng", href: "/ban-hang/don-hang/moi", quyen: "order.create" },
   { nhan: "Phiếu hỗ trợ", href: "/dich-vu/ho-tro/moi", quyen: "service_desk.create" },
   { nhan: "Hóa đơn", href: "/tai-chinh/hoa-don/moi", quyen: "finance.create" },
+  { nhan: "Hợp đồng bảo trì", href: "/dich-vu/bao-tri/moi", quyen: "service_desk.create" },
   { nhan: "Dự án", href: "/du-an/moi", quyen: "project.create" },
   { nhan: "Công việc", href: "/cong-viec?tao=1", quyen: "task.create" },
   { nhan: "Sản phẩm", href: "/san-pham/moi", quyen: "product.create" },
@@ -29,7 +30,9 @@ export default async function BoCucHeThong({ children }: { children: React.React
 
   const dieuHuong = DIEU_HUONG.map((nhom) => ({
     ...nhom,
-    muc: nhom.muc.filter((m) => !m.quyen || coQuyen(nd.hoSo, m.quyen)),
+    muc: nhom.muc.filter((m) =>
+      !m.quyen ? true : Array.isArray(m.quyen) ? coMotTrongCacQuyen(nd.hoSo, m.quyen) : coQuyen(nd.hoSo, m.quyen),
+    ),
   })).filter((nhom) => nhom.muc.length > 0);
 
   return (
