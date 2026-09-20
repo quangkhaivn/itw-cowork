@@ -96,7 +96,25 @@ Nhiều vai trò → phạm vi rộng nhất. Bản ghi ngoài phạm vi trả *
 | TT-03 | Tương tác gắn cơ hội thì tự gắn luôn khách của cơ hội đó (để dòng thời gian Customer 360 không sót) | [SV] |
 | TT-04 | Không sửa nội dung tương tác của người khác | [SV] |
 
-## 4. Báo giá (Phase 4 — đã chốt từ prompt, chưa triển khai)
+## 4. Sản phẩm và bảng giá (Phase 3)
+
+Quyền: sản phẩm, nhóm, thương hiệu dùng `product.*`; nhà cung cấp dùng `supplier.*`; giá của nhà cung cấp cho một sản phẩm sửa bằng `product.update` (nó nằm trên trang sản phẩm). **Không có phạm vi theo người phụ trách** — danh mục là tài sản dùng chung (QĐ-18).
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| SP-01 | SKU là duy nhất trong doanh nghiệp. So trùng theo bản chuẩn hóa: viết hoa, gộp khoảng trắng — "lap-dell-3420" và "LAP DELL 3420" là **một** sản phẩm. Cách viết người dùng nhập được giữ nguyên để hiển thị | [CSDL] duy nhất `(tenant_id, sku_normalized)` + [SV] · [TH] |
+| SP-02 | Tiền lưu `numeric(18,2)`, không âm; VAT 0–100%; bảo hành ≥ 0 tháng | [CSDL] CHECK · [TH] |
+| SP-03 | Sản phẩm mới kế thừa bảo hành, VAT và "quản lý số sê-ri" từ nhóm; người nhập sửa đè được | [SV] · [TH] |
+| SP-04 | Không xóa sản phẩm, nhóm, thương hiệu, nhà cung cấp — đổi trạng thái. Ngừng nhóm/thương hiệu khi còn hàng đang kinh doanh thì bị chặn | [SV] · [TH] |
+| SP-05 | Một sản phẩm có nhiều nhà cung cấp; mỗi cặp (sản phẩm, nhà cung cấp) đúng một dòng giá hiện hành | [CSDL] duy nhất `(tenant_id, product_id, supplier_id)` · [TH] |
+| SP-06 | Ngừng nhà cung cấp khi còn dòng giá đang dùng thì bị chặn — nếu không, bảng giá sẽ còn giá của nơi không còn bán | [SV] · [TH] |
+| SP-07 | "Nguồn nên mua" = còn hàng trước, rồi giá thấp, rồi giao nhanh. Hết hàng chỉ được chọn khi không còn nguồn nào khác. Chưa có nguồn thì trả `null`, không đoán | [SV] hàm thuần · [TH] |
+| SP-08 | **Mọi thay đổi giá** (giá vốn, giá bán, giá từng nhà cung cấp, kể cả lúc tạo và lúc gỡ nguồn) ghi một dòng `price_history`. Bảng này **chỉ ghi thêm** — trigger chặn sửa/xóa kể cả với vai chủ sở hữu | [CSDL] trigger + [SV] · [TH] |
+| SP-09 | Nhập CSV luôn **xem trước** rồi mới ghi. Dòng hỏng bị bỏ qua kèm lý do; dòng tốt vẫn vào; mỗi lần ghi lưu một phiếu nhập `import_jobs` | [SV] · [TH] |
+| SP-10 | Ô giá trong CSV: trống hoặc ghi rõ "liên hệ", "—", "N/A" = chưa có giá; nội dung khác mà không đọc được ra số thì **báo lỗi dòng**, không âm thầm coi là không có giá | [SV] hàm thuần · [TH] |
+| SP-11 | Nhập CSV cập nhật sản phẩm cũ **không đổi cách viết SKU** đã có trên hệ thống | [SV] · [TH] |
+
+## 5. Báo giá (Phase 4 — đã chốt từ prompt, chưa triển khai)
 
 - Biên lợi nhuận gộp % = (Doanh thu − Giá vốn) / Doanh thu × 100. Hàm thuần, có bài thử.
 - Dưới ngưỡng `bao_gia.nguong_bien_loi_nhuan` → `PENDING_APPROVAL` → Trưởng phòng KD / Giám đốc duyệt. Ngưỡng chưa đặt → mọi báo giá phải duyệt.

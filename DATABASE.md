@@ -1,6 +1,6 @@
 # Cơ sở dữ liệu — TGTH Business Cowork
 
-Cập nhật: 20/09/2026 (Phase 2 — CRM). PostgreSQL 16, Prisma 7.
+Cập nhật: 20/09/2026 (Phase 2 — CRM, Phase 3 — Sản phẩm). PostgreSQL 16, Prisma 7.
 
 Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và **(B) thiết kế đề xuất** cho Phase 2–9 (bước 4 của master prompt). Phần B là đề xuất: mỗi phase sẽ chốt lại chi tiết khi viết migration, và cập nhật tệp này.
 
@@ -41,8 +41,15 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `interactions` | Tương tác đã xảy ra | Phase 2. CHECK loại; phải gắn khách hoặc lead. QĐ-12 |
 | `opportunities` | Cơ hội | Phase 2. **CHECK: đang mở ⇒ có next_action + next_action_date**; thua ⇒ có lost_reason; đóng ⇒ có closed_at; xác suất 0–100 |
 | `tasks` | Công việc có hạn | Phase 2. CHECK trạng thái, ưu tiên; xong ⇒ có completed_at. QĐ-17 |
+| `product_categories` | Nhóm sản phẩm, cây qua parent_id | Phase 3. `requires_serial`, `default_warranty_months`, `default_vat_rate` — mặc định cho sản phẩm mới |
+| `brands` | Thương hiệu | Phase 3 |
+| `suppliers` | Nhà cung cấp | Phase 3. Mã NCC-0001; duy nhất `(tenant_id, tax_code_normalized)`; GIN trigram tên |
+| `products` | Sản phẩm / dịch vụ | Phase 3. Duy nhất `(tenant_id, sku_normalized)`; GIN trigram tên và SKU; `specifications jsonb` |
+| `supplier_product_prices` | Giá mua theo từng nhà cung cấp | Phase 3. Duy nhất `(tenant_id, product_id, supplier_id)`; CHECK tình trạng hàng, giá ≥ 0 |
+| `price_history` | Lịch sử giá | Phase 3. **Chỉ ghi thêm** (trigger `chan_sua_price_history`); CHECK giá cũ ≠ giá mới |
+| `import_jobs` | Mỗi lần nhập CSV: số dòng tạo/sửa/hỏng và lỗi từng dòng | Phase 3 |
 
-Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ).
+Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn).
 
 Vai kết nối: `cowork_app` (ứng dụng, bị RLS) và chủ sở hữu (migration, seed). Ứng dụng **không bao giờ** chạy bằng chủ sở hữu.
 
@@ -86,7 +93,9 @@ Khác đề xuất: `activities` → `interactions` + `tasks` (QĐ-12); công vi
 
 **Customer 360 — dòng thời gian:** không chép dữ liệu sang bảng dòng thời gian. Một truy vấn `UNION ALL` trên `activities`, `quotations`, `sales_orders`, `payments`, `support_tickets`, `warranties`, `tasks` theo `customer_id`, mỗi nhánh có chỉ mục `(tenant_id, customer_id, <thời điểm>)`, phân trang theo con trỏ thời gian.
 
-### Phase 3 — Sản phẩm và bảng giá
+### Phase 3 — Sản phẩm và bảng giá (ĐÃ LÀM 20/09 — bảng thật ở phần A; bảng dưới là đề xuất gốc 19/09)
+
+Khác đề xuất: thêm `sku_normalized`/`name_normalized` để chống trùng và tìm nhanh; `import_jobs` lưu cả số dòng tạo/sửa; giá vốn trên `products` là **giá tham chiếu** (giá vốn thực theo lô nhập là việc Phase 5).
 
 | Bảng | Cột chính | Ghi chú |
 |---|---|---|

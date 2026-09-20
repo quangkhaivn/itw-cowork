@@ -320,3 +320,13 @@ DROP TRIGGER IF EXISTS chan_sua_price_history ON "price_history";
 CREATE TRIGGER chan_sua_price_history
     BEFORE UPDATE OR DELETE ON "price_history"
     FOR EACH ROW EXECUTE FUNCTION public.chan_sua_xoa();
+
+-- Cấp bù `supplier.view` cho các vai trò dựng sẵn cần biết nguồn hàng khi báo giá.
+-- `supplier.view` là mã quyền CŨ (có từ Phase 1) nên seed không tự cấp cho vai trò đã tồn tại
+-- (QĐ-10: seed chỉ cấp mã quyền MỚI). Chạy một lần ở đây; Giám đốc gỡ trên giao diện thì không cấp lại.
+INSERT INTO "role_permissions" ("id", "tenant_id", "role_id", "permission_id", "data_scope", "status", "created_at", "updated_at")
+SELECT gen_random_uuid(), r."tenant_id", r."id", p."id", 'all', 'hoat-dong', now(), now()
+FROM "roles" r
+JOIN "permissions" p ON p."code" = 'supplier.view'
+WHERE r."code" IN ('sales', 'sales-manager', 'warehouse', 'finance') AND r."is_built_in"
+ON CONFLICT ("role_id", "permission_id") DO NOTHING;

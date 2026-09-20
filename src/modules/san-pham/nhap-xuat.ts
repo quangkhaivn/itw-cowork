@@ -10,7 +10,7 @@ import { LuocDoLocSanPham, type DuLieuNhapCsv } from "./luoc-do";
 /**
  * Nhập và xuất CSV cho danh mục sản phẩm và bảng giá nhà cung cấp (mục 8 prompt).
  *
- * Luật (BUSINESS_RULES mục 5): nhập LUÔN xem trước — máy chủ đọc tệp, kiểm từng dòng và
+ * Luật (BUSINESS_RULES.md mục 4): nhập LUÔN xem trước — máy chủ đọc tệp, kiểm từng dòng và
  * trả về "sẽ tạo bao nhiêu, sẽ sửa bao nhiêu, dòng nào hỏng vì sao". Chỉ khi người dùng
  * bấm xác nhận mới ghi. Dòng hỏng bị bỏ qua, dòng tốt vẫn vào — và mọi thay đổi giá vẫn
  * đi qua service thường nên vẫn có lịch sử giá và nhật ký kiểm toán.

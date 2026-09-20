@@ -1,6 +1,6 @@
 # Kiến trúc — TGTH Business Cowork
 
-Cập nhật: 20/09/2026 (Phase 2 — CRM xong trên máy phát triển).
+Cập nhật: 20/09/2026 (Phase 2 — CRM và Phase 3 — Sản phẩm xong trên máy phát triển).
 
 ## 1. Nguyên tắc
 
@@ -96,6 +96,14 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Luật nghiệp vụ và nơi chặn: `BUSINESS_RULES.md` mục 3.
 - Giao diện: thành phần dùng chung ở `src/components/crm/` (cảnh báo trùng, chọn khách, ô tiền, ghi tương tác, tạo việc, hộp đổi giai đoạn, dòng thời gian).
 
+## 7c. Sản phẩm và bảng giá (Phase 3)
+
+- Phân hệ: `src/modules/{san-pham,danh-muc-san-pham,nha-cung-cap}`; phần thuần ở `src/modules/san-pham/chuan-hoa.ts` và `src/lib/csv.ts`.
+- Quyền: `product.*` cho sản phẩm / nhóm / thương hiệu / bảng giá; `supplier.*` cho nhà cung cấp. **Không có phạm vi theo người** (QĐ-18).
+- Mọi đổi giá đi qua `ghiLichSuGia()` → `price_history` chỉ-ghi-thêm; kể cả nhập CSV, vì nhập gọi lại đúng service thường.
+- `giaChoBaoGia(nc, ids)` là cửa cho Phase 4: trả giá vốn tham chiếu, giá bán, VAT, bảo hành và nguồn nên mua của từng SKU.
+- Nhập CSV chạy trong chính giao dịch của `xuLyApi`: xem trước không ghi gì; khi ghi thật, dòng hỏng bị bỏ qua và cả lần nhập lưu một `import_jobs`.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.
@@ -106,6 +114,7 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 |---|---|---|
 | Chuông thông báo | Chưa có sự kiện nào cần báo cho người dùng; chuông không có gì bên trong là nút chết | Phase 8 |
 | Tùy chọn cột trên bảng | Bảng CRM 5–7 cột vẫn đọc tốt; chưa có yêu cầu thật để ẩn/hiện cột | khi có yêu cầu |
-| Xuất CSV khách hàng | Quyền `customer.export` đã có nhưng chưa có màn hình; không để nút chết | Phase 3 (dùng chung bộ nhập/xuất của sản phẩm) |
+| Xuất CSV khách hàng | Quyền `customer.export` đã có nhưng chưa có màn hình; bộ xuất CSV dùng chung đã sẵn ở `src/lib/csv.ts` | khi cần |
+| Đọc thẳng tệp .xlsx | Excel lưu được CSV UTF-8; thêm thư viện đọc xlsx là thêm phụ thuộc nặng cho một việc người dùng làm được bằng hai cú bấm | khi có yêu cầu thật |
 | Song ngữ Việt–Anh | Chữ giao diện hiện viết thẳng; chuẩn bị bằng cách gom nhãn menu vào một tệp. Tách từ điển khi có yêu cầu thật | khi cần |
 | Lưu tệp (đối tượng) | Chưa phân hệ nào cần đính kèm | Phase 6 (ảnh nghiệm thu) |

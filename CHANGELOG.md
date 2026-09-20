@@ -2,6 +2,29 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.4.0 — 20/09/2026 — Phase 3: Sản phẩm và bảng giá
+
+Căn cứ: prompt triển khai 36 mục, mục 8–9. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 4.
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **CSDL** (migration `20260920011356_phase3_san_pham`, chỉ thêm bảng): `product_categories`, `brands`, `suppliers`, `products`, `supplier_product_prices`, `price_history`, `import_jobs`; 20 ràng buộc CHECK; **trigger chặn sửa/xóa `price_history`**.
+- **Phân hệ quyền mới `product`** (6 quyền). Kinh doanh và kế toán xem + xuất; Mua hàng giữ danh mục và bảng giá; kho, kỹ thuật, CSKH, marketing chỉ xem. Seed tự cấp mã quyền mới khi triển khai; `supplier.view` (mã cũ) được cấp bù bằng migration.
+- **Sản phẩm**: SKU chuẩn hóa chống trùng ("lap-dell-3420" = "LAP DELL 3420"), thông số kỹ thuật dạng khóa–giá trị, kế thừa bảo hành/VAT/số sê-ri từ nhóm, biên lợi nhuận tính sẵn, lọc theo nhóm/thương hiệu/nhà cung cấp/chưa có giá, sắp xếp 5 kiểu.
+- **Nhóm sản phẩm** dạng cây (12 nhóm khởi tạo theo mục 9 prompt), **thương hiệu**, **nhà cung cấp** (mã NCC-0001, chống trùng mã số thuế).
+- **Bảng giá nhiều nguồn**: mỗi sản phẩm nhiều nhà cung cấp, kèm tình trạng hàng và thời gian giao; hệ thống chỉ ra **nguồn nên mua** (còn hàng → giá thấp → giao nhanh).
+- **Lịch sử giá chỉ-ghi-thêm** cho mọi thay đổi giá vốn, giá bán, giá từng nguồn — kể cả lúc tạo và lúc gỡ nguồn; ghi rõ ai đổi, lý do, nhập tay hay nhập CSV.
+- **Nhập CSV** hai loại (danh mục sản phẩm; bảng giá của một nhà cung cấp): luôn xem trước, đối chiếu từng dòng, bỏ dòng hỏng kèm lý do, lưu phiếu nhập; **xuất CSV** theo bộ lọc; tệp mẫu tải sẵn.
+- Bộ đọc/ghi CSV tự viết: dấu phân cách `;` của Excel tiếng Việt, BOM, CRLF, ô có dấu nháy kép, số tiền kiểu Việt Nam.
+- Tìm kiếm toàn cục thêm nguồn **sản phẩm** (SKU, tên, model). 13 route `/api/v1` mới, 8 màn hình mới.
+- Dữ liệu mẫu tenant `demo`: 5 sản phẩm, 2 nhà cung cấp, 5 dòng giá.
+- Kiểm thử: 21 bài đơn vị mới (73), `thu-san-pham` 56 kiểm chứng (tích hợp 212), `thu-http` thêm 25 kiểm chứng (112).
+
+### Vấn đề đã biết
+- Chỉ nhập **CSV**, chưa đọc thẳng `.xlsx` — Excel phải "Lưu thành → CSV UTF-8". Thêm thư viện đọc xlsx khi có yêu cầu thật.
+- Nhập tệp chạy đồng bộ trong một yêu cầu; giới hạn 5.000 dòng mỗi lần.
+- Giá vốn trên sản phẩm là **giá tham chiếu**. Giá vốn thực theo từng lần nhập kho là việc của Phase 5.
+
 ## 0.3.0 — 20/09/2026 — Phase 2: CRM
 
 Căn cứ: prompt triển khai 36 mục của Giám đốc ngày 20/09/2026 (mục 7, 23–25). Luật nghiệp vụ: `BUSINESS_RULES.md` mục 3.

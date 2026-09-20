@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 20/09/2026.
+> Cập nhật lần cuối: 20/09/2026 (sau Phase 3).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -12,7 +12,7 @@ Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt
 | 0 | Audit | — | **Xong** 19/09, rà lại 20/09 (mục 2) |
 | 1 | Nền móng: đăng nhập, người dùng, phòng ban, RBAC + phạm vi, nhật ký kiểm toán | P0 | **Xong** 19/09 — đang chạy thật (bản 0.2.1) |
 | 2 | CRM: khách hàng + chống trùng, liên hệ, lead, tương tác, cơ hội + pipeline, công việc, Customer 360 | P0 | **Xong trên máy phát triển** 20/09 (bản 0.3.0) — chưa triển khai máy thật, xem mục 4 |
-| 3 | Sản phẩm, nhóm, thương hiệu, nhà cung cấp, giá nhiều nguồn, lịch sử giá, nhập/xuất CSV | P0 | Chưa |
+| 3 | Sản phẩm, nhóm, thương hiệu, nhà cung cấp, giá nhiều nguồn, lịch sử giá, nhập/xuất CSV | P0 | **Xong trên máy phát triển** 20/09 (bản 0.4.0) — chưa triển khai |
 | 4 | Báo giá: phiên bản, biên lợi nhuận, duyệt theo ngưỡng, PDF, chuyển đơn | P0 | Chưa |
 | 5 | Đơn hàng, kho, serial | P1 | Chưa |
 | 6 | Dự án, phiếu hỗ trợ, bảo hành, bảo trì, gia hạn | P2 | Chưa |
@@ -101,9 +101,15 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - Tách `Promise.all` trong giao dịch thành tuần tự (cảnh báo `pg`).
 - Bảng điều hành: thêm ô "Việc của tôi hôm nay" và "Cơ hội quá hạn hành động" (dữ liệu đã có; phần chỉ số CEO đầy đủ để Phase 7).
 
-## 4b. Phase 3 — Sản phẩm và bảng giá (việc kế tiếp)
+## 4b. Phase 3 — Sản phẩm và bảng giá (xong trên máy phát triển)
 
-Bắt đầu ngay khi Phase 2 lên máy thật hoặc Giám đốc cho làm song song. Thiết kế bảng ở `DATABASE.md` phần B. Cần: tệp bảng giá thật của 1–2 nhà cung cấp để kiểm nhập CSV/Excel.
+- [x] CSDL 7 bảng + CHECK + trigger lịch sử giá · [x] service + 13 route · [x] 8 màn hình · [x] kiểm thử (73 đơn vị, 212 tích hợp, 112 HTTP) · [x] soát giao diện
+- [ ] Triển khai máy thật (cùng đợt với 0.3.0 — `VD-101`)
+- **Cần Giám đốc/nhân viên làm tiếp**: nhập bảng giá thật của 1–2 nhà cung cấp bằng màn hình Nhập CSV, và khai 12 nhóm sản phẩm cho khớp cách gọi nội bộ (đã tạo sẵn theo mục 9 prompt).
+
+## 4c. Phase 4 — Báo giá (việc kế tiếp)
+
+Thiết kế bảng ở `DATABASE.md` phần B. Đã có sẵn: `giaChoBaoGia()` trả giá vốn tham chiếu + nguồn nên mua cho một loạt SKU; ngưỡng biên lợi nhuận ở màn hình Cấu hình (chưa đặt → mọi báo giá phải duyệt). **Cần Giám đốc**: ngưỡng biên và cấp duyệt (Q2), mẫu báo giá TGTH (logo, điều khoản) cho bản PDF.
 
 ## 5. Phase 3 trở đi — việc kế tiếp đã rõ
 

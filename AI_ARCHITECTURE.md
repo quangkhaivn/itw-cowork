@@ -65,7 +65,8 @@ Trước khi chạy công cụ: kiểm quyền bằng `batBuocQuyen` với hồ 
 | `searchOpportunities()` | `danhSachCoHoi` | Phase 2 |
 | `getSalesPipeline()` | `duLieuPipeline` | Phase 2 |
 | `getOverdueFollowups()` | `danhSachCoHoi({ quaHan: "1" })` + `danhSachViec({ cheDo: "qua-han" })` | Phase 2 |
-| `searchProducts()`, `getProductPrice()` | — | Phase 3 |
+| `searchProducts()` | `danhSachSanPham` / nguồn `san-pham` của `timKiemToanCuc` | Phase 3 |
+| `getProductPrice()` | `giaChoBaoGia` (giá bán, giá vốn, nguồn nên mua) | Phase 3 |
 | `checkInventory()` | — | Phase 5 |
 | `getQuotation()`, `createQuotationDraft()` | — | Phase 4 |
 | `getRenewals()` | — | Phase 6 |

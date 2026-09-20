@@ -11,6 +11,8 @@ const TAO_NHANH = [
   { nhan: "Lead", href: "/crm/lead/moi", quyen: "crm.create" },
   { nhan: "Cơ hội", href: "/ban-hang/co-hoi/moi", quyen: "sales.create" },
   { nhan: "Công việc", href: "/cong-viec?tao=1", quyen: "task.create" },
+  { nhan: "Sản phẩm", href: "/san-pham/moi", quyen: "product.create" },
+  { nhan: "Nhà cung cấp", href: "/san-pham/nha-cung-cap?tao=1", quyen: "supplier.create" },
 ];
 
 /**

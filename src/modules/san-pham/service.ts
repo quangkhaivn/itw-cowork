@@ -8,7 +8,7 @@ import { bienLoiNhuan, chonNguonTot, chuanHoaSku, chuanHoaTenSanPham } from "./c
 import type { BoLocSanPham, DuLieuDatGiaNguon, DuLieuSuaSanPham, DuLieuTaoSanPham } from "./luoc-do";
 
 /**
- * Phân hệ Sản phẩm và bảng giá. Luật: BUSINESS_RULES.md mục 5.
+ * Phân hệ Sản phẩm và bảng giá. Luật: BUSINESS_RULES.md mục 4.
  *
  * Quyền `product.*`. **Không có phạm vi theo người phụ trách**: danh mục sản phẩm là
  * tài sản dùng chung, ai được xem thì xem hết (QĐ-18).

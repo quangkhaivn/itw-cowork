@@ -326,6 +326,74 @@ async function main() {
   const qtTimKh = await goi(`/api/v1/tim-kiem?q=${encodeURIComponent(mst)}`, { cookie: cookieQT });
   dat("Quản trị tìm theo MST ra đúng khách", ((qtTimKh.json.ketQua as { href: string }[]) ?? []).some((k) => k.href.includes(idKh)));
 
+  // --- 7c. Sản phẩm và bảng giá (Phase 3) ---
+  const cacTrangSp: [string, string][] = [
+    ["/san-pham", "Sản phẩm"],
+    ["/san-pham/moi", "Thêm sản phẩm"],
+    ["/san-pham/nhom", "Nhóm sản phẩm"],
+    ["/san-pham/thuong-hieu", "Thương hiệu"],
+    ["/san-pham/nha-cung-cap", "Nhà cung cấp"],
+    ["/san-pham/nhap-csv", "Nhập CSV"],
+  ];
+  for (const [duong, chu] of cacTrangSp) {
+    const r = await goi(duong, { cookie: cookieQT });
+    dat(`Trang ${duong} trả 200 và có nội dung`, r.status === 200 && r.text.includes(chu) && !r.text.includes("Không hiển thị được trang này"), `status ${r.status}`);
+  }
+
+  const taoNcc = await goi("/api/v1/nha-cung-cap", { phuongThuc: "POST", cookie: cookieQT, than: { ten: `Nhà cung cấp Thử HTTP ${DAU}`, soNgayGiao: 3 } });
+  dat("Tạo nhà cung cấp qua API, mã NCC-", taoNcc.status === 200 && String(taoNcc.json.ma).startsWith("NCC-"), JSON.stringify(taoNcc.json));
+  const idNcc = taoNcc.json.id as string;
+
+  const taoTh = await goi("/api/v1/thuong-hieu", { phuongThuc: "POST", cookie: cookieQT, than: { ma: `th-${DAU}`, ten: `Hãng thử ${DAU}` } });
+  dat("Tạo thương hiệu qua API", taoTh.status === 200);
+  const dsNhom = await goi("/api/v1/nhom-san-pham", { cookie: cookieQT });
+  const nhomLaptop = (dsNhom.json as unknown as { id: string; ma: string }[]).find?.((n) => n.ma === "laptop");
+  dat("Seed đã có nhóm sản phẩm chuẩn (laptop)", Boolean(nhomLaptop));
+
+  const skuThu = `SP-HTTP-${DAU}`.toUpperCase();
+  const taoSp = await goi("/api/v1/san-pham", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { sku: skuThu, ten: `Laptop thử HTTP ${DAU}`, nhomId: nhomLaptop?.id, giaVon: "15.000.000", giaBan: "18.000.000", donViTinh: "cai" },
+  });
+  dat("Tạo sản phẩm qua API", taoSp.status === 200 && taoSp.json.sku === skuThu, JSON.stringify(taoSp.json));
+  dat("Sản phẩm kế thừa bảo hành và số sê-ri từ nhóm", taoSp.json.baoHanhThang === 24 && taoSp.json.batBuocSerial === true);
+  const idSp = taoSp.json.id as string;
+  const trungSku = await goi("/api/v1/san-pham", { phuongThuc: "POST", cookie: cookieQT, than: { sku: skuThu.toLowerCase(), ten: "Trùng SKU" } });
+  dat("SKU trùng (khác hoa thường) trả 409", trungSku.status === 409 && trungSku.json.ma === "trung-sku");
+
+  const datGia = await goi(`/api/v1/san-pham/${idSp}/gia`, { phuongThuc: "POST", cookie: cookieQT, than: { nhaCungCapId: idNcc, giaMua: "14.500.000", tinhTrang: "con-hang", soNgayGiao: 2 } });
+  dat("Đặt giá nhà cung cấp qua API", datGia.status === 200 && datGia.json.giaMua === "14500000", JSON.stringify(datGia.json));
+  const ctSp = await goi(`/api/v1/san-pham/${idSp}`, { cookie: cookieQT });
+  const ct = ctSp.json as unknown as { nenMua: { giaMua: string } | null; lichSuGia: { loai: string }[] };
+  dat("Chi tiết sản phẩm nêu nguồn nên mua và lịch sử giá", ct.nenMua?.giaMua === "14500000" && ct.lichSuGia.some((h) => h.loai === "supplier"));
+  const trangSp = await goi(`/san-pham/${idSp}`, { cookie: cookieQT });
+  dat("Trang chi tiết sản phẩm dựng được", trangSp.status === 200 && trangSp.text.includes(skuThu));
+
+  const csvSp = ["SKU,Tên,Giá bán", `${skuThu},Laptop thử HTTP ${DAU},19.000.000`, `SP-MOI-${DAU},Sản phẩm mới ${DAU},2.000.000`, "SP-LOI,,1.000.000"].join("\n");
+  const xemTruoc = await goi("/api/v1/nhap-csv", { phuongThuc: "POST", cookie: cookieQT, than: { tenTep: "thu.csv", noiDung: csvSp, loai: "san-pham", ghiThat: false } });
+  dat("Nhập CSV xem trước: 1 tạo, 1 sửa, 1 hỏng", xemTruoc.status === 200 && xemTruoc.json.soTao === 1 && xemTruoc.json.soSua === 1 && xemTruoc.json.soLoi === 1, JSON.stringify(xemTruoc.json));
+  const ghiThat = await goi("/api/v1/nhap-csv", { phuongThuc: "POST", cookie: cookieQT, than: { tenTep: "thu.csv", noiDung: csvSp, loai: "san-pham", ghiThat: true } });
+  dat("Nhập CSV ghi thật trả phiếu nhập", ghiThat.status === 200 && Boolean(ghiThat.json.importJobId));
+  const thieuCot = await goi("/api/v1/nhap-csv", { phuongThuc: "POST", cookie: cookieQT, than: { tenTep: "x.csv", noiDung: "a,b\n1,2", loai: "san-pham", ghiThat: false } });
+  dat("Tệp thiếu cột bắt buộc trả 400 kèm mã lỗi", thieuCot.status === 400 && thieuCot.json.ma === "thieu-cot");
+
+  const mau = await goi("/api/v1/nhap-csv/mau?loai=gia-nha-cung-cap", { cookie: cookieQT });
+  dat("Tải được tệp mẫu CSV", mau.status === 200 && String(mau.json.noiDung).includes("SKU"));
+  const xuatSp = await goi("/api/v1/san-pham/xuat?trangThai=hoat-dong", { cookie: cookieQT });
+  dat("Xuất CSV sản phẩm trả tên tệp và nội dung", xuatSp.status === 200 && String(xuatSp.json.tenTep).endsWith(".csv") && String(xuatSp.json.noiDung).includes(skuThu));
+
+  const nvXemSp = await goi("/api/v1/san-pham", { cookie: dnNv.cookie });
+  dat("Nhân viên kinh doanh XEM được danh mục sản phẩm", nvXemSp.status === 200 && Number(nvXemSp.json.tong) >= 1);
+  const nvTaoSp = await goi("/api/v1/san-pham", { phuongThuc: "POST", cookie: dnNv.cookie, than: { sku: `NV-${DAU}`, ten: "Của nhân viên" } });
+  dat("Nhân viên kinh doanh KHÔNG tạo được sản phẩm", nvTaoSp.status === 403);
+  const nvXemNcc = await goi("/api/v1/nha-cung-cap", { cookie: dnNv.cookie });
+  dat("Nhân viên kinh doanh xem được nhà cung cấp", nvXemNcc.status === 200);
+  const nvNhap = await goi("/api/v1/nhap-csv", { phuongThuc: "POST", cookie: dnNv.cookie, than: { tenTep: "x.csv", noiDung: csvSp, loai: "san-pham", ghiThat: true } });
+  dat("Nhân viên kinh doanh không nhập được CSV", nvNhap.status === 403);
+  const timSp = await goi(`/api/v1/tim-kiem?q=${encodeURIComponent(skuThu)}`, { cookie: dnNv.cookie });
+  dat("Tìm kiếm toàn cục ra sản phẩm theo SKU", ((timSp.json.ketQua as { loai: string }[]) ?? []).some((k) => k.loai === "san-pham"));
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

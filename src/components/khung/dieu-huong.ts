@@ -18,7 +18,12 @@ export type BieuTuong =
   | "lead"
   | "pipeline"
   | "co-hoi"
-  | "cong-viec";
+  | "cong-viec"
+  | "san-pham"
+  | "nhom"
+  | "thuong-hieu"
+  | "nha-cung-cap"
+  | "nhap-csv";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -60,6 +65,16 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     muc: [
       { nhan: "Pipeline", href: "/ban-hang/pipeline", quyen: "sales.view", bieuTuong: "pipeline", tuKhoa: "kanban pipeline giai doan" },
       { nhan: "Cơ hội", href: "/ban-hang/co-hoi", quyen: "sales.view", bieuTuong: "co-hoi", tuKhoa: "opportunity co hoi ban hang" },
+    ],
+  },
+  {
+    nhan: "Sản phẩm",
+    muc: [
+      { nhan: "Sản phẩm", href: "/san-pham", quyen: "product.view", bieuTuong: "san-pham", tuKhoa: "product sku bang gia hang hoa" },
+      { nhan: "Nhóm sản phẩm", href: "/san-pham/nhom", quyen: "product.view", bieuTuong: "nhom", tuKhoa: "category nhom hang" },
+      { nhan: "Thương hiệu", href: "/san-pham/thuong-hieu", quyen: "product.view", bieuTuong: "thuong-hieu", tuKhoa: "brand hang san xuat" },
+      { nhan: "Nhà cung cấp", href: "/san-pham/nha-cung-cap", quyen: "supplier.view", bieuTuong: "nha-cung-cap", tuKhoa: "supplier nguon hang ncc" },
+      { nhan: "Nhập CSV", href: "/san-pham/nhap-csv", quyen: "product.update", bieuTuong: "nhap-csv", tuKhoa: "import excel bang gia nhap lieu" },
     ],
   },
   {

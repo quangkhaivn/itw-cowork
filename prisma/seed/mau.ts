@@ -81,6 +81,7 @@ async function main() {
   }
 
   await seedCrmMau(tenant.id, idTheoEmail);
+  await seedSanPhamMau(tenant.id, idTheoEmail);
 
   console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
   console.log("  Thử phạm vi dữ liệu: đăng nhập tp.kinhdoanh@demo.test (thấy nhóm), kd1@demo.test (chỉ thấy mình).");
@@ -177,6 +178,77 @@ async function seedCrmMau(tenantId: string, id: Map<string, string>) {
     cv.taoViec(nc, { tieuDe: "Gọi lại anh Tuấn", uuTien: "trung-binh", han: new Date(Date.now() - 86_400_000), leadId: leadTuan.id, khachHangId: null, coHoiId: null, moTa: null, nguoiPhuTrachId: null }),
   );
   console.log("✓ CRM mẫu: 3 khách hàng, 5 cơ hội, 2 lead, tương tác và công việc (tạo qua service)");
+}
+
+/**
+ * Sản phẩm và bảng giá mẫu (Phase 3) — cũng tạo qua service bằng tài khoản Mua hàng mẫu.
+ * Giá là số minh họa của tenant `demo`, KHÔNG phải giá thật của TGTH.
+ */
+async function seedSanPhamMau(tenantId: string, id: Map<string, string>) {
+  if ((await db.product.count({ where: { tenantId } })) > 0) {
+    console.log("✓ Sản phẩm mẫu đã có — bỏ qua");
+    return;
+  }
+  const { voiTenant } = await import("../../src/lib/db");
+  const { taoNguCanh } = await import("../../src/lib/api");
+  const { layHoSoQuyen } = await import("../../src/lib/phan-quyen");
+  const ncc = await import("../../src/modules/nha-cung-cap/service");
+  const sp = await import("../../src/modules/san-pham/service");
+  const dm = await import("../../src/modules/danh-muc-san-pham/service");
+  const { LuocDoTaoSanPham } = await import("../../src/modules/san-pham/luoc-do");
+  type NC = Parameters<typeof sp.taoSanPham>[0];
+
+  // Mua hàng mẫu: dùng tài khoản kho (có quyền product/supplier hạn chế) không đủ, nên dùng quản trị mẫu.
+  const voi = <T>(email: string, viec: (nc: NC) => Promise<T>) =>
+    voiTenant(tenantId, async (tx) => {
+      const hoSo = await layHoSoQuyen(tx, id.get(email)!);
+      if (!hoSo) throw new Error(`Không đọc được quyền của ${email}`);
+      return viec(taoNguCanh(tx, tenantId, hoSo, null, "seed-mau"));
+    });
+  const QT = "quantri@demo.test";
+
+  const dell = await voi(QT, (nc) => dm.taoThuongHieu(nc, { ma: "dell", ten: "Dell", website: null, ghiChu: null }));
+  const hik = await voi(QT, (nc) => dm.taoThuongHieu(nc, { ma: "hikvision", ten: "Hikvision", website: null, ghiChu: null }));
+  const nhom = await voi(QT, (nc) => dm.cayNhomSanPham(nc));
+  const maNhom = (ma: string) => nhom.find((n) => n.ma === ma)?.id ?? null;
+
+  const anPhat = await voi(QT, (nc) =>
+    ncc.taoNhaCungCap(nc, { ten: "Công ty Mẫu Phân Phối An Phát", maSoThue: null, nguoiLienHe: "Anh Phát", dienThoai: "0900 000 501", email: null, diaChi: null, website: null, dieuKhoanThanhToan: null, soNgayGiao: 3, ghiChu: null }),
+  );
+  const minhTin = await voi(QT, (nc) =>
+    ncc.taoNhaCungCap(nc, { ten: "Nhà phân phối Mẫu Minh Tín", maSoThue: null, nguoiLienHe: "Chị Tín", dienThoai: "0900 000 502", email: null, diaChi: null, website: null, dieuKhoanThanhToan: null, soNgayGiao: 7, ghiChu: null }),
+  );
+
+  const dsSp: [string, string, string | null, string | null, string, string][] = [
+    ["LAP-DELL-3420", "Laptop Dell Vostro 3420 i5-1235U 8GB 256GB", maNhom("laptop"), dell.id, "15200000", "17900000"],
+    ["PC-VP-I5", "PC văn phòng i5 12400 / 8GB / SSD 512GB", maNhom("desktop"), null, "9800000", "12500000"],
+    ["CAM-HIK-2MP", "Camera Hikvision 2MP hồng ngoại 30m", maNhom("camera"), hik.id, "780000", "1150000"],
+    ["SW-24P", "Switch 24 cổng Gigabit", maNhom("mang"), null, "2100000", "2950000"],
+    ["DV-LAP-DAT", "Dịch vụ lắp đặt và cấu hình tại chỗ", maNhom("dich-vu"), null, "0", "500000"],
+  ];
+  const daTao: { id: string; sku: string }[] = [];
+  for (const [sku, ten, nhomId, thuongHieuId, giaVon, giaBan] of dsSp) {
+    const p = await voi(QT, (nc) =>
+      sp.taoSanPham(nc, LuocDoTaoSanPham.parse({ sku, ten, nhomId, thuongHieuId, donViTinh: sku.startsWith("DV-") ? "lan" : "cai", giaVon, giaBan })),
+    );
+    daTao.push({ id: p.id, sku: p.sku });
+  }
+
+  // Hai nguồn cho laptop và camera để thấy chức năng "nguồn nên mua".
+  const gia: [string, string, string, "con-hang" | "het-hang" | "dat-truoc"][] = [
+    ["LAP-DELL-3420", anPhat.id, "15200000", "con-hang"],
+    ["LAP-DELL-3420", minhTin.id, "14950000", "het-hang"],
+    ["CAM-HIK-2MP", anPhat.id, "790000", "con-hang"],
+    ["CAM-HIK-2MP", minhTin.id, "765000", "con-hang"],
+    ["SW-24P", anPhat.id, "2100000", "dat-truoc"],
+  ];
+  for (const [sku, nhaCungCapId, giaMua, tinhTrang] of gia) {
+    const p = daTao.find((x) => x.sku === sku)!;
+    await voi(QT, (nc) =>
+      sp.datGiaNguon(nc, p.id, { nhaCungCapId, giaMua, tinhTrang, soNgayGiao: tinhTrang === "con-hang" ? 2 : 7, thamChieu: "Bảng giá mẫu", ghiChu: null, lyDo: "Giá khởi tạo mẫu" }),
+    );
+  }
+  console.log("✓ Sản phẩm mẫu: 5 sản phẩm, 2 nhà cung cấp, 5 dòng giá (tạo qua service)");
 }
 
 main()

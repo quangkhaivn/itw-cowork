@@ -557,6 +557,11 @@ ol.thanh-giai-doan li[data-trang-thai="hien-tai"][data-giai-doan="LOST"] button 
   .hang-nhap > input[type="datetime-local"] { flex: 1 1 100%; }
 }
 
+/* Bảng thông số kỹ thuật trong form sản phẩm (Phase 3) */
+.bang-thong-so { display: grid; gap: 8px; }
+.bang-thong-so .hang-nhap input { flex: 1 1 180px; }
+.chi-so.the { padding: 14px 16px; }
+
 /* --------------------------------------------------------------------------
  * Màn hình hẹp
  * ------------------------------------------------------------------------ */

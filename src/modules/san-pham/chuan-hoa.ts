@@ -3,7 +3,7 @@ import { boDau } from "@/modules/crm/chuan-hoa";
 
 /**
  * Chuẩn hóa và luật chọn nguồn hàng — hàm thuần, có kiểm thử đơn vị.
- * Luật: BUSINESS_RULES.md mục 5.
+ * Luật: BUSINESS_RULES.md mục 4.
  */
 
 /**
