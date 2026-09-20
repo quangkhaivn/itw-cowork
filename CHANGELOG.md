@@ -2,6 +2,31 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.7.0 — 20/09/2026 — Phase 6: Dự án, bảo hành, bàn dịch vụ
+
+Căn cứ: prompt triển khai 36 mục, mục 17–18. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 8 (BH), mục 9 (HT), mục 10 (DU).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.6.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **CSDL** (migration `20260920140406_phase6_du_an_bao_hanh_ho_tro`, chỉ thêm bảng và cột): `warranties`, `projects`, `project_milestones`, `support_tickets`, `support_ticket_events`; cột `project_id` trên `tasks`; 17 ràng buộc CHECK; **trigger chặn sửa/xóa diễn biến phiếu**; cấp bù `order.view` cho CSKH và kỹ thuật để tra được máy đã bán.
+- **Bảo hành tự sinh khi giao hàng**: mỗi số sê-ri một phiếu, thời hạn = ngày giao + số tháng của sản phẩm (chụp lại lúc giao). Tra theo số sê-ri ra ngay khách, đơn hàng và còn hạn hay không.
+- **Bàn dịch vụ**: phiếu `HT-2026-0001` gắn thẳng với chiếc máy đã bán; giao kỹ thuật; ghi diễn biến **chỉ-ghi-thêm**; hoàn thành bắt buộc ghi cách xử lý; đóng phiếu.
+- **Cam kết dịch vụ (SLA)**: hạn phản hồi và hạn xử lý tính từ ngưỡng trong Cấu hình (4 ngưỡng mới, phiếu Khẩn có ngưỡng riêng), **chụp lại lúc mở phiếu** nên đổi ngưỡng không làm đổi phiếu cũ. Danh sách lọc được phiếu trễ hạn.
+- **Dự án triển khai**: mã `DA-2026-0001` từ đơn đã xác nhận, chia hạng mục, tiến độ theo hạng mục, tự chuyển sang "đang triển khai" khi hạng mục đầu chạy, **nghiệm thu chỉ mở khi mọi hạng mục đã xong**, nghiệm thu rồi thì khóa.
+- Việc (`tasks`) và phiếu hỗ trợ gắn được vào dự án; trang đơn hàng có nút "Mở dự án triển khai".
+- **Màn hình**: Phiếu hỗ trợ (danh sách, mở phiếu có tra sê-ri, chi tiết + diễn biến), Bảo hành (danh sách, chi tiết, sửa hạn, hủy), Dự án (danh sách, mở dự án, chi tiết + hạng mục + nghiệm thu). 14 route `/api/v1` mới.
+- Dữ liệu mẫu tenant `demo`: 14 phiếu bảo hành, 2 phiếu hỗ trợ (1 đã đóng đủ diễn biến, 1 chờ khách), 1 dự án đang chạy.
+- Kiểm thử: 25 bài đơn vị mới (**138**), `thu-dich-vu` 51 kiểm chứng (tích hợp **350**), `thu-http` thêm 31 kiểm chứng (**200**).
+
+### Sửa
+- `suaBaoHanh()` tự kiểm lý do ngay trong service, không chỉ dựa vào lược đồ — gọi thẳng service (seed, AI sau này) vẫn bị chặn.
+- Ngưỡng cảnh báo bảo hành sắp hết chuyển từ "dùng từ Phase 8" sang **dùng từ Phase 6**, nên màn hình Cấu hình không còn báo nhầm là chưa dùng đến.
+
+### Vấn đề đã biết
+- **Chưa có hợp đồng bảo trì định kỳ và gia hạn tự động** (`maintenance_contracts`, `renewals`) — để Phase 8 cùng bộ nhắc việc.
+- Chưa có trả hàng / đổi máy và tệp đính kèm cho phiếu.
+- Trưởng phòng Kỹ thuật có phạm vi khách hàng theo **phòng ban** nên không tự mở dự án cho khách của phòng kinh doanh; Giám đốc mở phạm vi ở màn hình Vai trò nếu muốn (câu hỏi Q9).
+
 ## 0.6.0 — 20/09/2026 — Phase 5: Đơn hàng và kho
 
 Căn cứ: prompt triển khai 36 mục, mục 15–16. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 6 (DH-01 → DH-09) và mục 7 (KHO-01 → KHO-08).

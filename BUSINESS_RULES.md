@@ -173,3 +173,49 @@ Hai bảng đi cùng nhau: `inventory_balances` là **số dư hiện tại**, `
 | KHO-08 | Mức tồn tối thiểu (tùy chọn) sinh cảnh báo "sắp hết"; hết sạch thì cảnh báo "hết hàng" dù chưa đặt mức | [SV] hàm thuần `mucTon()` · [CSDL] CHECK không âm |
 
 **Chưa làm ở phase này**: mua hàng (`purchase_requests`, `purchase_orders`) — nhập kho hiện ghi thẳng kèm nguồn hàng; chuyển kho nội bộ; trả hàng và bảo hành (Phase 6); giá vốn bình quân theo lô (Phase 7 tài chính).
+
+## 8. Bảo hành (Phase 6)
+
+Quyền `service_desk.*`, không có phạm vi theo người — ai trực bàn dịch vụ cũng phải tra được máy của mọi khách.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| BH-01 | Bảo hành **tự sinh khi xuất kho giao hàng**: mỗi số sê-ri một phiếu; hàng không quản lý sê-ri thì một phiếu cho cả dòng. Hàng bảo hành 0 tháng thì không sinh phiếu | [SV] gọi từ `taoPhieuXuat()` · [TH] |
+| BH-02 | Thời hạn = ngày giao + số tháng bảo hành của sản phẩm, **lùi một ngày** (24 tháng từ 20/09/2026 hết 19/09/2028). Ngày 31 cộng sang tháng ngắn hơn thì lấy ngày cuối tháng | [SV] hàm thuần có kiểm thử · [CSDL] CHECK `end_date >= start_date` |
+| BH-03 | Số tháng bảo hành **chụp lại lúc giao**. Sau này đổi chính sách hãng cũng không làm đổi bảo hành đã cấp | [SV] · [CSDL] |
+| BH-04 | Sửa thời hạn bảo hành **luôn phải ghi lý do**, và ghi vào Nhật ký kiểm toán | [SV] (lược đồ + chốt chặn trong service) · [TH] |
+| BH-05 | Không xóa bảo hành — hủy thì chuyển trạng thái `huy` kèm lý do, bản ghi vẫn còn để tra | [CSDL] CHECK · [SV] · [TH] |
+| BH-06 | "Sắp hết bảo hành" tính theo ngưỡng `theo_doi.bao_hanh_sap_het_ngay` trong Cấu hình. **Ngưỡng chưa đặt thì không có mức "sắp hết"** — hệ thống không tự chọn con số | [SV] hàm thuần · [TH] |
+
+## 9. Bàn dịch vụ — phiếu hỗ trợ (Phase 6)
+
+Quyền `service_desk.*`. **Phạm vi**: người tiếp nhận hoặc người đang xử lý — kỹ thuật viên phạm vi "own" thấy đúng phiếu được giao cho mình.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| HT-01 | Số phiếu `HT-<năm>-0001`. Phiếu gắn được với **đúng chiếc máy** đã bán qua bảo hành → sê-ri → đơn hàng; bảo hành của khách khác thì bị chặn | [SV] `capSoChungTu` + kiểm chéo khách · [CSDL] duy nhất `(tenant_id, number)` |
+| HT-02 | Trạng thái đi theo luồng: Mới → Đang xử lý / Chờ khách → Đã xử lý xong → Đã đóng. Không nhảy thẳng sang Đóng; phiếu đã đóng hoặc đã hủy thì khóa | [SV] hàm thuần `chuyenDuoc()` · [CSDL] CHECK danh sách trạng thái · [TH] |
+| HT-03 | Hạn cam kết (SLA) **chụp lại lúc mở phiếu** từ ngưỡng trong Cấu hình (`dich_vu.gio_*`), phiếu Khẩn dùng ngưỡng riêng. **Ngưỡng chưa đặt thì phiếu không có hạn** — không bịa hạn | [SV] hàm thuần `hanSla()` · [CSDL] CHECK hạn xử lý ≥ hạn phản hồi |
+| HT-04 | Lần liên hệ khách đầu tiên (ghi diễn biến "đã liên hệ khách", hoặc chuyển sang đang xử lý) là **mốc phản hồi** của SLA | [SV] · [TH] |
+| HT-05 | Hoàn thành phiếu **bắt buộc ghi đã xử lý thế nào** và thời điểm xong — không có phiếu "xong" mà trống trơn | [CSDL] CHECK · [SV] · [TH] |
+| HT-06 | Đóng phiếu ghi thời điểm đóng; hủy phiếu phải ghi lý do | [CSDL] CHECK · [SV] |
+| HT-07 | Diễn biến phiếu là **chỉ ghi thêm** — không sửa, không xóa, kể cả bằng vai chủ sở hữu | [CSDL] trigger `chan_sua_support_ticket_events` · [TH] |
+| HT-08 | Đổi mức ưu tiên thì tính lại hạn cho phần **chưa làm**; phần đã phản hồi hoặc đã xong giữ nguyên mốc cũ | [SV] |
+
+## 10. Dự án triển khai (Phase 6)
+
+Quyền `project.*`; phạm vi theo người phụ trách dự án, cộng người đang được giao việc trong dự án đó.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| DU-01 | Mã dự án `DA-<năm>-0001`. Dự án gắn với **một đơn hàng đã xác nhận** (đơn còn nháp thì chưa triển khai), và đơn phải cùng khách | [SV] · [CSDL] duy nhất `(tenant_id, code)` · [TH] |
+| DU-02 | Trạng thái: Đang chuẩn bị → Đang triển khai ↔ Tạm dừng → Đã nghiệm thu \| Đã hủy. Nghiệm thu và hủy là **điểm dừng** | [SV] hàm thuần · [CSDL] CHECK · [TH] |
+| DU-03 | Hạng mục đầu tiên bắt đầu chạy thì dự án **tự** chuyển sang Đang triển khai và ghi ngày bắt đầu | [SV] |
+| DU-04 | Hạng mục xong thì ghi thời điểm xong; hạng mục đã xong **không xóa được** (còn để đối chiếu khi nghiệm thu) | [CSDL] CHECK · [SV] · [TH] |
+| DU-05 | **Nghiệm thu chỉ mở khi mọi hạng mục đã xong** và dự án có ít nhất một hạng mục. Nghiệm thu ghi người và thời điểm, rồi khóa dự án | [CSDL] CHECK · [SV] · [TH] |
+| DU-06 | Hủy dự án phải ghi lý do; đã hủy thì khóa | [CSDL] CHECK · [SV] · [TH] |
+| DU-07 | Việc (`tasks`) và phiếu hỗ trợ gắn được vào dự án, hiện ngay trên trang dự án — không phải mở màn hình khác để biết dự án đang vướng gì | [SV] |
+
+**Lưu ý vận hành**: Trưởng phòng Kỹ thuật có phạm vi khách hàng theo **phòng ban** (mục 19 đặc tả), nên không thấy khách do phòng kinh doanh phụ trách và không tự mở dự án cho khách đó được. Muốn kỹ thuật tự mở dự án thì Giám đốc mở phạm vi `customer.view` cho vai trò đó ở màn hình Vai trò (câu hỏi Q9).
+
+**Chưa làm ở phase này**: hợp đồng bảo trì định kỳ và gia hạn tự động (`maintenance_contracts`, `renewals`), trả hàng / đổi máy, tệp đính kèm (`attachments`).

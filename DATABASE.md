@@ -18,7 +18,7 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 
 ---
 
-## A. Đang có (Phase 1 chạy thật; Phase 2–5 chờ triển khai)
+## A. Đang có (Phase 1 chạy thật; Phase 2–6 chờ triển khai)
 
 | Bảng | Vai trò | Ghi chú |
 |---|---|---|
@@ -59,8 +59,12 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `inventory_transactions` | Sổ cái kho | Phase 5. **Chỉ ghi thêm** (trigger `chan_sua_inventory_transactions`); ghi cả số dư sau giao dịch để đối soát |
 | `deliveries`, `delivery_items` | Phiếu xuất giao hàng | Phase 5. Số `XK-2026-0001`; ghi sổ kho ngay khi lập |
 | `serial_numbers` | Số sê-ri từng máy | Phase 5. Duy nhất `(tenant_id, product_id, serial)`; CHECK còn trong kho thì phải biết kho nào, đã bán thì phải gắn dòng đơn |
+| `warranties` | Bảo hành từng máy | Phase 6. Sinh khi xuất kho; một sê-ri một phiếu (`serial_number_id` duy nhất); CHECK hạn ≥ ngày bắt đầu, đã hủy phải có thời điểm |
+| `projects`, `project_milestones` | Dự án triển khai và hạng mục | Phase 6. Mã `DA-2026-0001`; CHECK nghiệm thu phải có người và thời điểm, hủy phải có lý do, hạng mục xong phải có thời điểm |
+| `support_tickets` | Phiếu hỗ trợ (bảo hành, sự cố, yêu cầu, bảo trì) | Phase 6. Số `HT-2026-0001`; chụp hạn SLA lúc mở; CHECK hoàn thành phải có cách xử lý và thời điểm |
+| `support_ticket_events` | Diễn biến xử lý phiếu | Phase 6. **Chỉ ghi thêm** (trigger `chan_sua_support_ticket_events`) |
 
-Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ), `20260920103433_phase5_don_hang_kho` (thêm 8 bảng đơn hàng/kho + 2 cột trên `products` + CHECK + trigger sổ cái; kèm cấp bù quyền kho cho vai trò Thủ kho).
+Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ), `20260920103433_phase5_don_hang_kho` (thêm 8 bảng đơn hàng/kho + 2 cột trên `products` + CHECK + trigger sổ cái; kèm cấp bù quyền kho cho vai trò Thủ kho), `20260920140406_phase6_du_an_bao_hanh_ho_tro` (thêm 5 bảng dịch vụ/dự án + cột `project_id` trên `tasks` + CHECK + trigger diễn biến phiếu; kèm cấp bù `order.view` cho CSKH và kỹ thuật).
 
 Vai kết nối: `cowork_app` (ứng dụng, bị RLS) và chủ sở hữu (migration, seed). Ứng dụng **không bao giờ** chạy bằng chủ sở hữu.
 
@@ -140,7 +144,7 @@ Trạng thái: Draft → Pending Approval → Approved → Sent → Viewed → N
 | `serial_numbers` | `serial`, `product_id`, `warehouse_id`, `status` (in_stock/reserved/sold/returned/rma), `sales_order_item_id`, `purchase_order_item_id` — duy nhất `(tenant_id, product_id, serial)` |
 | `purchase_requests`, `purchase_orders`, `purchase_order_items` | Mua hàng cho đơn thiếu hàng |
 
-### Phase 6 — Dự án, dịch vụ, bảo hành
+### Phase 6 — Dự án, dịch vụ, bảo hành (ĐÃ LÀM 20/09 trừ bảo trì định kỳ / gia hạn — bảng thật ở phần A)
 
 `projects`, `project_tasks`, `project_acceptances`, `support_tickets` (SLA: `response_due_at`, `resolve_due_at`), `warranties` (`serial_id`, `start_date`, `end_date`), `maintenance_contracts`, `renewals` (`source_type` warranty/license/maintenance, `due_date`, `opportunity_id` tự tạo), `attachments` (`storage_key`, `file_name`, `mime`, `size`, `related_type`, `related_id`).
 

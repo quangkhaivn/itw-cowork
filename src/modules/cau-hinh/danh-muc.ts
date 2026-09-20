@@ -27,7 +27,7 @@ export interface MucCauHinh {
   dungTuPhase: number;
 }
 
-export const PHASE_HIEN_TAI = 5;
+export const PHASE_HIEN_TAI = 6;
 
 export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
   {
@@ -116,16 +116,64 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     dungTuPhase: 8,
   },
   {
+    khoa: "dich_vu.gio_phan_hoi_khan",
+    nhom: "Bàn dịch vụ (SLA)",
+    nhan: "Giờ phải phản hồi — phiếu Khẩn",
+    moTa: "Kể từ lúc mở phiếu, trong bao nhiêu giờ phải có người phản hồi khách. Chưa đặt thì hệ thống không đặt hạn.",
+    donVi: "giờ",
+    toiThieu: 1,
+    toiDa: 168,
+    soNguyen: true,
+    macDinh: null,
+    dungTuPhase: 6,
+  },
+  {
+    khoa: "dich_vu.gio_phan_hoi_thuong",
+    nhom: "Bàn dịch vụ (SLA)",
+    nhan: "Giờ phải phản hồi — phiếu thường",
+    moTa: "Áp cho phiếu Cao, Trung bình, Thấp. Chưa đặt thì hệ thống không đặt hạn.",
+    donVi: "giờ",
+    toiThieu: 1,
+    toiDa: 336,
+    soNguyen: true,
+    macDinh: null,
+    dungTuPhase: 6,
+  },
+  {
+    khoa: "dich_vu.gio_xu_ly_khan",
+    nhom: "Bàn dịch vụ (SLA)",
+    nhan: "Giờ phải xử lý xong — phiếu Khẩn",
+    moTa: "Kể từ lúc mở phiếu, trong bao nhiêu giờ phải xử lý xong cho khách.",
+    donVi: "giờ",
+    toiThieu: 1,
+    toiDa: 336,
+    soNguyen: true,
+    macDinh: null,
+    dungTuPhase: 6,
+  },
+  {
+    khoa: "dich_vu.gio_xu_ly_thuong",
+    nhom: "Bàn dịch vụ (SLA)",
+    nhan: "Giờ phải xử lý xong — phiếu thường",
+    moTa: "Áp cho phiếu Cao, Trung bình, Thấp.",
+    donVi: "giờ",
+    toiThieu: 1,
+    toiDa: 720,
+    soNguyen: true,
+    macDinh: null,
+    dungTuPhase: 6,
+  },
+  {
     khoa: "theo_doi.bao_hanh_sap_het_ngay",
     nhom: "Nhắc việc tự động",
     nhan: "Cảnh báo bảo hành / bản quyền sắp hết trước",
-    moTa: "Bảo hành, bản quyền Microsoft, hợp đồng bảo trì sắp hết hạn trong số ngày này thì tạo cơ hội gia hạn.",
+    moTa: "Bảo hành, bản quyền Microsoft, hợp đồng bảo trì sắp hết hạn trong số ngày này thì hiện ở danh sách Bảo hành (Phase 6) và tạo cơ hội gia hạn (Phase 8).",
     donVi: "ngày",
     toiThieu: 1,
     toiDa: 365,
     soNguyen: true,
     macDinh: null,
-    dungTuPhase: 8,
+    dungTuPhase: 6,
   },
 ];
 

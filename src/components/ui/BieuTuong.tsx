@@ -37,6 +37,10 @@ const DUONG_VE: Record<string, string> = {
   "nhap-kho": "M12 3v10m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2",
   "the-kho": "M4 3h16v18H4zM8 7h8M8 11h8M8 15h5",
   serial: "M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12",
+  // Phase 6 — dự án, bảo hành, phiếu hỗ trợ
+  "du-an": "M3 3h7l2 3h9v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 14l3 3 5-6",
+  "bao-hanh": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4",
+  "ho-tro": "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 8v4M12 15h.01",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
 };
 

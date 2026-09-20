@@ -602,6 +602,109 @@ async function main() {
   const nvXacNhan = await goi(`/api/v1/don-hang/${idDon2}/xac-nhan`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { khoId: idKho } });
   dat("Nhân viên kinh doanh không xác nhận được đơn", nvXacNhan.status === 403);
 
+  // --- 7f. Bảo hành, phiếu hỗ trợ, dự án (Phase 6) ---
+  const cacTrangDv: [string, string][] = [
+    ["/dich-vu/ho-tro", "Phiếu hỗ trợ"],
+    ["/dich-vu/ho-tro/moi", "Mở phiếu hỗ trợ"],
+    ["/dich-vu/bao-hanh", "Bảo hành"],
+    ["/du-an", "Dự án triển khai"],
+    ["/du-an/moi", "Mở dự án triển khai"],
+  ];
+  for (const [duong, chu] of cacTrangDv) {
+    const r = await goi(duong, { cookie: cookieQT });
+    dat(`Trang ${duong} trả 200 và có nội dung`, r.status === 200 && r.text.includes(chu) && !r.text.includes("Không hiển thị được trang này"), `status ${r.status}`);
+  }
+
+  // Bảo hành đã sinh ở mục 7e khi xuất 2 máy có sê-ri của đơn idDon2.
+  const dsBaoHanh = await goi(`/api/v1/bao-hanh?q=SN-HTTP-${DAU}&tinhTrang=tat-ca`, { cookie: cookieQT });
+  const dongBh = ((dsBaoHanh.json.dong as { id: string; serial: string; soThang: number; ngayHetHan: string; donHang: { id: string } | null }[]) ?? []);
+  dat("BH-01: giao hàng sinh bảo hành cho từng máy", dsBaoHanh.status === 200 && dongBh.length === 2, `${dongBh.length} phiếu`);
+  dat("Bảo hành lấy đúng số tháng của sản phẩm và gắn đơn hàng", dongBh[0]?.soThang === 24 && dongBh[0]?.donHang?.id === idDon2, JSON.stringify({ thang: dongBh[0]?.soThang }));
+  const idBh = dongBh[0]?.id as string;
+
+  const traSerialHttp = await goi(`/api/v1/bao-hanh/tra-serial?serial=SN-HTTP-${DAU}-1`, { cookie: cookieQT });
+  dat("Tra bảo hành theo số sê-ri", traSerialHttp.status === 200 && ((traSerialHttp.json as unknown as { serial: string }[]) ?? []).length === 1);
+
+  const suaBhThieuLyDo = await goi(`/api/v1/bao-hanh/${idBh}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { soThang: 36 } });
+  dat("BH-04: sửa bảo hành không ghi lý do bị 400", suaBhThieuLyDo.status === 400, `status ${suaBhThieuLyDo.status}`);
+  const suaBh = await goi(`/api/v1/bao-hanh/${idBh}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { soThang: 36, lyDo: "Hãng nâng bảo hành" } });
+  dat("Sửa bảo hành có lý do thì hạn tính lại", suaBh.status === 200 && suaBh.json.soThang === 36, JSON.stringify(suaBh.json));
+
+  // Phiếu hỗ trợ: SLA đọc từ Cấu hình.
+  await goi("/api/v1/cau-hinh", {
+    phuongThuc: "PATCH",
+    cookie: cookieQT,
+    than: { giaTri: { "dich_vu.gio_phan_hoi_khan": 1, "dich_vu.gio_phan_hoi_thuong": 8, "dich_vu.gio_xu_ly_khan": 4, "dich_vu.gio_xu_ly_thuong": 48 } },
+  });
+  const taoPhieuHt = await goi("/api/v1/ho-tro", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, baoHanhId: idBh, loai: "bao-hanh", uuTien: "khan", tieuDe: `Máy lỗi nguồn ${DAU}`, moTa: "Khách báo máy không lên." },
+  });
+  dat("HT-01: mở phiếu hỗ trợ, số HT-", taoPhieuHt.status === 200 && String(taoPhieuHt.json.so).startsWith("HT-"), JSON.stringify(taoPhieuHt.json));
+  dat("HT-03: phiếu Khẩn có hạn phản hồi và hạn xử lý", Boolean(taoPhieuHt.json.hanPhanHoi) && Boolean(taoPhieuHt.json.hanXuLy));
+  const idPhieu = taoPhieuHt.json.id as string;
+
+  const ctPhieu = await goi(`/api/v1/ho-tro/${idPhieu}`, { cookie: cookieQT });
+  const phieuJson = ctPhieu.json as unknown as { phieu: { baoHanh: { serial: string } | null; donHang: { id: string } | null }; dienBien: unknown[] };
+  dat("Phiếu gắn đúng máy và đơn hàng qua bảo hành", phieuJson.phieu.baoHanh?.serial === `SN-HTTP-${DAU}-1` && phieuJson.phieu.donHang?.id === idDon2);
+  dat("Phiếu mới có ngay diễn biến tiếp nhận", phieuJson.dienBien.length === 1);
+
+  const giaoPhieuHt = await goi(`/api/v1/ho-tro/${idPhieu}/giao`, { phuongThuc: "POST", cookie: cookieQT, than: { nguoiXuLyId: idNv, ghiChu: "Nhờ kiểm tra" } });
+  dat("HT-04: giao phiếu cho người xử lý", giaoPhieuHt.status === 200);
+  const ghiDb = await goi(`/api/v1/ho-tro/${idPhieu}/dien-bien`, { phuongThuc: "POST", cookie: cookieQT, than: { loai: "phan-hoi-khach", noiDung: "Đã gọi khách, hẹn chiều nay." } });
+  dat("Ghi diễn biến liên hệ khách", ghiDb.status === 200);
+
+  const xongThieu = await goi(`/api/v1/ho-tro/${idPhieu}/trang-thai`, { phuongThuc: "POST", cookie: cookieQT, than: { trangThai: "HOAN_THANH", cachXuLy: "" } });
+  dat("HT-05: hoàn thành mà không ghi cách xử lý bị 400", xongThieu.status === 400, `status ${xongThieu.status}`);
+  const nhayTrangThai = await goi(`/api/v1/ho-tro/${idPhieu}/trang-thai`, { phuongThuc: "POST", cookie: cookieQT, than: { trangThai: "DONG", cachXuLy: "x" } });
+  dat("HT-02: không nhảy thẳng sang Đóng khi chưa hoàn thành", nhayTrangThai.status === 409 && nhayTrangThai.json.ma === "sai-trang-thai", `status ${nhayTrangThai.status}`);
+  const xong = await goi(`/api/v1/ho-tro/${idPhieu}/trang-thai`, { phuongThuc: "POST", cookie: cookieQT, than: { trangThai: "HOAN_THANH", cachXuLy: "Thay bộ nguồn, chạy ổn." } });
+  dat("Hoàn thành phiếu kèm cách xử lý", xong.status === 200 && xong.json.trangThai === "HOAN_THANH");
+  const dongPhieu = await goi(`/api/v1/ho-tro/${idPhieu}/trang-thai`, { phuongThuc: "POST", cookie: cookieQT, than: { trangThai: "DONG", ghiChu: "Khách xác nhận" } });
+  dat("HT-06: đóng phiếu sau khi hoàn thành", dongPhieu.status === 200 && dongPhieu.json.trangThai === "DONG");
+  const ghiSauDong = await goi(`/api/v1/ho-tro/${idPhieu}/dien-bien`, { phuongThuc: "POST", cookie: cookieQT, than: { loai: "ghi-chu", noiDung: "Ghi thêm" } });
+  dat("Phiếu đã đóng thì không ghi thêm diễn biến (409)", ghiSauDong.status === 409 && ghiSauDong.json.ma === "phieu-da-dong", `status ${ghiSauDong.status}`);
+
+  const trangPhieu = await goi(`/dich-vu/ho-tro/${idPhieu}`, { cookie: cookieQT });
+  dat("Trang chi tiết phiếu dựng được", trangPhieu.status === 200 && trangPhieu.text.includes(String(taoPhieuHt.json.so)), `status ${trangPhieu.status}`);
+
+  // Dự án triển khai từ đơn đã xác nhận.
+  const taoDa = await goi("/api/v1/du-an", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, donHangId: idDon2, ten: `Lắp đặt thử HTTP ${DAU}`, hangMuc: ["Khảo sát", "Lắp đặt", "Bàn giao"] },
+  });
+  dat("DU-01: mở dự án từ đơn đã xác nhận, mã DA-", taoDa.status === 200 && String(taoDa.json.ma).startsWith("DA-"), JSON.stringify(taoDa.json));
+  const idDa = taoDa.json.id as string;
+
+  const ctDa = await goi(`/api/v1/du-an/${idDa}`, { cookie: cookieQT });
+  const daJson = ctDa.json as unknown as { duAn: { hangMuc: { id: string }[]; tienDo: { tong: number } }; quyen: { nghiemThu: boolean } };
+  dat("Dự án có 3 hạng mục, chưa cho nghiệm thu", daJson.duAn.hangMuc.length === 3 && daJson.quyen.nghiemThu === false);
+
+  const nghiemThuSom = await goi(`/api/v1/du-an/${idDa}/trang-thai`, { phuongThuc: "POST", cookie: cookieQT, than: { trangThai: "ACCEPTED", ghiChu: "Thử" } });
+  dat("DU-05: nghiệm thu khi chưa xong hạng mục bị 409", nghiemThuSom.status === 409, `status ${nghiemThuSom.status}`);
+
+  for (const h of daJson.duAn.hangMuc) {
+    await goi(`/api/v1/du-an/${idDa}/hang-muc/${h.id}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { trangThai: "xong" } });
+  }
+  const ctDa2 = await goi(`/api/v1/du-an/${idDa}`, { cookie: cookieQT });
+  const daJson2 = ctDa2.json as unknown as { duAn: { trangThai: string; tienDo: { phanTram: number } }; quyen: { nghiemThu: boolean } };
+  dat("DU-03: hạng mục chạy thì dự án sang Đang triển khai, 100% thì mở nghiệm thu", daJson2.duAn.trangThai === "IN_PROGRESS" && daJson2.duAn.tienDo.phanTram === 100 && daJson2.quyen.nghiemThu === true, JSON.stringify(daJson2.duAn));
+
+  const nghiemThu = await goi(`/api/v1/du-an/${idDa}/trang-thai`, { phuongThuc: "POST", cookie: cookieQT, than: { trangThai: "ACCEPTED", ghiChu: "Khách ký biên bản" } });
+  dat("DU-05: nghiệm thu khi mọi hạng mục xong", nghiemThu.status === 200 && nghiemThu.json.trangThai === "ACCEPTED");
+  const suaSauNghiemThu = await goi(`/api/v1/du-an/${idDa}/hang-muc`, { phuongThuc: "POST", cookie: cookieQT, than: { ten: "Thêm sau nghiệm thu" } });
+  dat("Dự án đã nghiệm thu thì khóa hạng mục (409)", suaSauNghiemThu.status === 409 && suaSauNghiemThu.json.ma === "du-an-da-dong", `status ${suaSauNghiemThu.status}`);
+  const trangDa = await goi(`/du-an/${idDa}`, { cookie: cookieQT });
+  dat("Trang chi tiết dự án dựng được", trangDa.status === 200 && trangDa.text.includes(String(taoDa.json.ma)), `status ${trangDa.status}`);
+
+  // Phân quyền: nhân viên kinh doanh không đụng bàn dịch vụ.
+  const nvXemPhieu = await goi("/api/v1/ho-tro", { cookie: dnNv.cookie });
+  dat("Nhân viên kinh doanh không xem được phiếu hỗ trợ", nvXemPhieu.status === 403);
+  const nvTaoDuAn = await goi("/api/v1/du-an", { phuongThuc: "POST", cookie: dnNv.cookie, than: { khachHangId: khachNv, ten: "Dự án của NV" } });
+  dat("Nhân viên kinh doanh không mở được dự án", nvTaoDuAn.status === 403);
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

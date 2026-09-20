@@ -9,6 +9,7 @@ import { batBuocThayKhach } from "@/modules/khach-hang/service";
 import { dieuKienXemBaoGia } from "@/modules/bao-gia/service";
 import { tinhBaoGia, type DongBaoGia } from "@/modules/bao-gia/tinh-toan";
 import { ghiSoKho, batBuocThayKho } from "@/modules/kho/service";
+import { sinhBaoHanhKhiGiao } from "@/modules/bao-hanh/service";
 import { conPhaiGiao, duocSuaDong, tienDoGiao } from "./tinh-toan";
 import type { BoLocDon, DuLieuSuaDon, DuLieuTaoDon, DuLieuTaoPhieuXuat } from "./luoc-do";
 
@@ -27,7 +28,7 @@ const CHON_DONG = {
   id: true, lineNo: true, productId: true, quotationItemId: true, sku: true, name: true, description: true,
   quantity: true, deliveredQty: true, unit: true, unitPrice: true, discountPct: true, vatRate: true,
   unitCost: true, lineTotal: true, lineCost: true,
-  product: { select: { id: true, sku: true, requiresSerial: true, quanLyTon: true } },
+  product: { select: { id: true, sku: true, requiresSerial: true, quanLyTon: true, warrantyMonths: true } },
 } satisfies Prisma.SalesOrderItemSelect;
 
 const CHON_DON = {
@@ -603,6 +604,26 @@ export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXua
       where: { id: goc.id },
       data: { deliveredQty: String(Number(goc.deliveredQty) + sl) },
     });
+
+    // Giao hàng là lúc bảo hành bắt đầu tính (BH-01). Mỗi sê-ri một phiếu bảo hành.
+    const soThangBaoHanh = goc.product?.warrantyMonths ?? 0;
+    if (goc.productId && soThangBaoHanh > 0) {
+      const serialDaXuat = serialSeDung.length
+        ? await nc.tx.serialNumber.findMany({ where: { id: { in: serialSeDung } }, select: { id: true, serial: true } })
+        : [];
+      await sinhBaoHanhKhiGiao(nc, {
+        khachHangId: don.customer.id,
+        sanPhamId: goc.productId,
+        tenHang: goc.name,
+        soThang: soThangBaoHanh,
+        ngayGiao: new Date(),
+        donHangId: id,
+        dongDonId: goc.id,
+        phieuXuatId: phieu.id,
+        serial: serialDaXuat,
+        soLuongKhongSerial: serialDaXuat.length ? 0 : sl,
+      });
+    }
   }
 
   const sauKhiXuat = await nc.tx.salesOrderItem.findMany({ where: { orderId: id }, select: { quantity: true, deliveredQty: true } });

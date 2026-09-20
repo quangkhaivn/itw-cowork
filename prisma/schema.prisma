@@ -68,6 +68,12 @@ model Tenant {
   deliveries         Delivery[]
   deliveryItems      DeliveryItem[]
   serialNumbers      SerialNumber[]
+  // Phase 6 — Dự án, bảo hành, phiếu hỗ trợ
+  warranties         Warranty[]
+  projects           Project[]
+  projectMilestones  ProjectMilestone[]
+  supportTickets     SupportTicket[]
+  ticketEvents       SupportTicketEvent[]
 
   @@map("tenants")
 }
@@ -150,6 +156,9 @@ model User {
   ownedTasks         Task[]         @relation("ViecPhuTrach")
   ownedQuotations    Quotation[]    @relation("BaoGiaPhuTrach")
   ownedSalesOrders   SalesOrder[]   @relation("DonHangPhuTrach")
+  managedProjects    Project[]       @relation("DuAnPhuTrach")
+  ownedTickets       SupportTicket[] @relation("PhieuHoTroTiepNhan")
+  assignedTickets    SupportTicket[] @relation("PhieuHoTroXuLy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -401,6 +410,9 @@ model Customer {
   convertedLeads Lead[]        @relation("LeadThanhKhach")
   quotations     Quotation[]
   salesOrders    SalesOrder[]
+  warranties     Warranty[]
+  projects       Project[]
+  tickets        SupportTicket[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
@@ -439,6 +451,7 @@ model Contact {
   opportunities Opportunity[]
   quotations    Quotation[]
   salesOrders   SalesOrder[]
+  tickets       SupportTicket[]
 
   @@index([tenantId, customerId])
   @@index([tenantId, phoneNormalized])
@@ -591,6 +604,8 @@ model Task {
   customerId    String?   @map("customer_id") @db.Uuid
   leadId        String?   @map("lead_id") @db.Uuid
   opportunityId String?   @map("opportunity_id") @db.Uuid
+  /// Việc thuộc một dự án triển khai (Phase 6).
+  projectId     String?   @map("project_id") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy     String?   @map("created_by") @db.Uuid
@@ -601,10 +616,12 @@ model Task {
   customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, ownerId, status, dueAt])
   @@index([tenantId, customerId])
   @@index([tenantId, opportunityId])
+  @@index([tenantId, projectId])
   @@index([tenantId, leadId])
   @@map("tasks")
 }
@@ -754,6 +771,7 @@ model Product {
   inventoryTxns   InventoryTransaction[]
   deliveryItems   DeliveryItem[]
   serials         SerialNumber[]
+  warranties      Warranty[]
 
   @@unique([tenantId, skuNormalized])
   @@index([tenantId, status])
@@ -1078,6 +1096,9 @@ model SalesOrder {
   owner            User              @relation("DonHangPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
   items            SalesOrderItem[]
   deliveries       Delivery[]
+  warranties       Warranty[]
+  projects         Project[]
+  tickets          SupportTicket[]
 
   @@unique([tenantId, number])
   @@index([tenantId, ownerId, status])
@@ -1116,6 +1137,7 @@ model SalesOrderItem {
   quotationItem QuotationItem? @relation(fields: [quotationItemId], references: [id], onDelete: SetNull)
   deliveryItems DeliveryItem[]
   serials       SerialNumber[]
+  warranties    Warranty[]
 
   @@unique([orderId, lineNo])
   @@index([tenantId, productId])
@@ -1193,8 +1215,9 @@ model Delivery {
   tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   order     SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   warehouse Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-  items     DeliveryItem[]
-  serials   SerialNumber[]
+  items      DeliveryItem[]
+  serials    SerialNumber[]
+  warranties Warranty[]
 
   @@unique([tenantId, number])
   @@index([tenantId, orderId])
@@ -1242,9 +1265,192 @@ model SerialNumber {
   warehouse      Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
   salesOrderItem SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
   delivery       Delivery?       @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  warranty       Warranty?
+  tickets        SupportTicket[]
 
   @@unique([tenantId, productId, serial])
   @@index([tenantId, status])
   @@index([tenantId, warehouseId])
   @@map("serial_numbers")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 — Dự án, bảo hành, phiếu hỗ trợ (mục 17–18 prompt 20/09)
+//
+// Chuỗi tiếp nối Phase 5: hàng xuất kho → bảo hành tự sinh theo từng máy (số sê-ri)
+// → khách gọi thì mở phiếu hỗ trợ gắn đúng máy đó. Dự án triển khai đi ra từ đơn hàng,
+// chia thành hạng mục và kết thúc bằng nghiệm thu.
+// ---------------------------------------------------------------------------
+
+/// Bảo hành của một máy (hoặc một dòng hàng không có sê-ri). Sinh tự động khi xuất kho.
+model Warranty {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  customerId       String    @map("customer_id") @db.Uuid
+  productId        String?   @map("product_id") @db.Uuid
+  serialNumberId   String?   @unique @map("serial_number_id") @db.Uuid
+  /// Chụp lại số sê-ri và tên hàng lúc giao — chứng từ bảo hành không đổi theo danh mục.
+  serial           String?   @db.VarChar(100)
+  productName      String    @map("product_name") @db.VarChar(500)
+  salesOrderId     String?   @map("sales_order_id") @db.Uuid
+  salesOrderItemId String?   @map("sales_order_item_id") @db.Uuid
+  deliveryId       String?   @map("delivery_id") @db.Uuid
+  months           Int       @default(0)
+  startDate        DateTime  @map("start_date") @db.Date
+  /// Hết hạn = ngày bắt đầu + số tháng. Không có bảo hành (0 tháng) thì bằng ngày bắt đầu.
+  endDate          DateTime  @map("end_date") @db.Date
+  /// hieu-luc | het-han | huy — trạng thái ghi lại, còn hạn hay không thì tính theo ngày.
+  status           String    @default("hieu-luc") @db.VarChar(20)
+  note             String?   @db.Text
+  cancelledAt      DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?   @map("created_by") @db.Uuid
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product        Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  serialNumber   SerialNumber?   @relation(fields: [serialNumberId], references: [id], onDelete: SetNull)
+  salesOrder     SalesOrder?     @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  salesOrderItem SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
+  delivery       Delivery?       @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  tickets        SupportTicket[]
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, endDate])
+  @@index([tenantId, serial])
+  @@map("warranties")
+}
+
+/// Dự án triển khai cho khách: lắp đặt, thi công, chuyển giao. Đi ra từ một đơn hàng.
+model Project {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  code           String    @db.VarChar(30)
+  name           String    @db.VarChar(500)
+  customerId     String    @map("customer_id") @db.Uuid
+  salesOrderId   String?   @map("sales_order_id") @db.Uuid
+  /// Người chịu trách nhiệm dự án (quản lý dự án hoặc trưởng phòng kỹ thuật).
+  managerId      String    @map("manager_id") @db.Uuid
+  /// PLANNING | IN_PROGRESS | ON_HOLD | ACCEPTED | CANCELLED
+  status         String    @default("PLANNING") @db.VarChar(20)
+  description    String?   @db.Text
+  startDate      DateTime? @map("start_date") @db.Date
+  dueDate        DateTime? @map("due_date") @db.Date
+  acceptedAt     DateTime? @map("accepted_at") @db.Timestamptz(6)
+  acceptedBy     String?   @map("accepted_by") @db.Uuid
+  acceptanceNote String?   @map("acceptance_note") @db.Text
+  cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason   String?   @map("cancel_reason") @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer   Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesOrder SalesOrder?        @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  manager    User               @relation("DuAnPhuTrach", fields: [managerId], references: [id], onDelete: Restrict)
+  milestones ProjectMilestone[]
+  tasks      Task[]
+  tickets    SupportTicket[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, managerId, status])
+  @@index([tenantId, customerId])
+  @@map("projects")
+}
+
+/// Hạng mục / mốc của dự án. Dự án xong khi mọi hạng mục xong và khách nghiệm thu.
+model ProjectMilestone {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  projectId String    @map("project_id") @db.Uuid
+  name      String    @db.VarChar(500)
+  /// chua-lam | dang-lam | xong
+  status    String    @default("chua-lam") @db.VarChar(20)
+  dueDate   DateTime? @map("due_date") @db.Date
+  doneAt    DateTime? @map("done_at") @db.Timestamptz(6)
+  note      String?   @db.Text
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, projectId])
+  @@map("project_milestones")
+}
+
+/// Phiếu hỗ trợ khách: bảo hành, sự cố, yêu cầu, bảo trì. Số HT-2026-0001.
+model SupportTicket {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  number          String    @db.VarChar(30)
+  customerId      String    @map("customer_id") @db.Uuid
+  contactId       String?   @map("contact_id") @db.Uuid
+  warrantyId      String?   @map("warranty_id") @db.Uuid
+  serialNumberId  String?   @map("serial_number_id") @db.Uuid
+  salesOrderId    String?   @map("sales_order_id") @db.Uuid
+  projectId       String?   @map("project_id") @db.Uuid
+  /// bao-hanh | su-co | yeu-cau | bao-tri
+  type            String    @db.VarChar(20)
+  /// khan | cao | trung-binh | thap
+  priority        String    @default("trung-binh") @db.VarChar(20)
+  /// MOI | DANG_XU_LY | CHO_KHACH | HOAN_THANH | DONG | HUY
+  status          String    @default("MOI") @db.VarChar(20)
+  title           String    @db.VarChar(500)
+  description     String?   @db.Text
+  /// Người tiếp nhận (CSKH) và kỹ thuật viên đang xử lý.
+  ownerId         String    @map("owner_id") @db.Uuid
+  assigneeId      String?   @map("assignee_id") @db.Uuid
+  /// Hạn cam kết tính từ ngưỡng SLA lúc mở phiếu — chụp lại để sau đổi ngưỡng không làm đổi lịch sử.
+  responseDueAt   DateTime? @map("response_due_at") @db.Timestamptz(6)
+  resolveDueAt    DateTime? @map("resolve_due_at") @db.Timestamptz(6)
+  firstResponseAt DateTime? @map("first_response_at") @db.Timestamptz(6)
+  resolvedAt      DateTime? @map("resolved_at") @db.Timestamptz(6)
+  closedAt        DateTime? @map("closed_at") @db.Timestamptz(6)
+  resolution      String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.Uuid
+  updatedBy       String?   @map("updated_by") @db.Uuid
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contact      Contact?             @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  warranty     Warranty?            @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+  serialNumber SerialNumber?        @relation(fields: [serialNumberId], references: [id], onDelete: SetNull)
+  salesOrder   SalesOrder?          @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  project      Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  owner        User                 @relation("PhieuHoTroTiepNhan", fields: [ownerId], references: [id], onDelete: Restrict)
+  assignee     User?                @relation("PhieuHoTroXuLy", fields: [assigneeId], references: [id], onDelete: SetNull)
+  events       SupportTicketEvent[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, priority])
+  @@index([tenantId, assigneeId, status])
+  @@index([tenantId, customerId])
+  @@map("support_tickets")
+}
+
+/// Diễn biến xử lý một phiếu — CHỈ GHI THÊM, là bằng chứng đã làm gì cho khách.
+model SupportTicketEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  ticketId   String   @map("ticket_id") @db.Uuid
+  /// tiep-nhan | ghi-chu | giao-viec | doi-trang-thai | phan-hoi-khach | hoan-thanh | dong
+  type       String   @db.VarChar(20)
+  content    String?  @db.Text
+  fromStatus String?  @map("from_status") @db.VarChar(20)
+  toStatus   String?  @map("to_status") @db.VarChar(20)
+  actorId    String?  @map("actor_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, ticketId, createdAt])
+  @@map("support_ticket_events")
 }

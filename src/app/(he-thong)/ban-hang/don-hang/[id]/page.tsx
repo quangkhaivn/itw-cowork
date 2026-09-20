@@ -61,11 +61,18 @@ export default async function TrangChiTietDon({ params, searchParams }: { params
           </>
         }
         hanhDong={
-          ct.quyen.sua && (
-            <Link className="nut" href={`/ban-hang/don-hang/${don.id}/sua`}>
-              Sửa
-            </Link>
-          )
+          <>
+            {coQuyen(nd.hoSo, "project.create") && don.trangThai !== "DRAFT" && don.trangThai !== "CANCELLED" && (
+              <Link className="nut" href={`/du-an/moi?donHang=${don.id}`}>
+                Mở dự án triển khai
+              </Link>
+            )}
+            {ct.quyen.sua && (
+              <Link className="nut" href={`/ban-hang/don-hang/${don.id}/sua`}>
+                Sửa
+              </Link>
+            )}
+          </>
         }
       />
 

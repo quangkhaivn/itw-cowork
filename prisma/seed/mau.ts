@@ -84,6 +84,7 @@ async function main() {
   await seedSanPhamMau(tenant.id, idTheoEmail);
   await seedBaoGiaMau(tenant.id, idTheoEmail);
   await seedKhoDonHangMau(tenant.id, idTheoEmail);
+  await seedDichVuMau(tenant.id, idTheoEmail);
 
   console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
   console.log("  Thử phạm vi dữ liệu: đăng nhập tp.kinhdoanh@demo.test (thấy nhóm), kd1@demo.test (chỉ thấy mình).");
@@ -463,6 +464,140 @@ async function seedKhoDonHangMau(tenantId: string, id: Map<string, string>) {
   }
 
   console.log("✓ Kho mẫu: 2 kho, 4 mặt hàng có tồn, 1 đơn hàng đã xác nhận và giao một phần");
+}
+
+/**
+ * Dịch vụ mẫu (Phase 6) — giao nốt hàng để sinh bảo hành, rồi mở một phiếu hỗ trợ đã xử lý
+ * xong và một phiếu đang chờ, cùng một dự án triển khai đang chạy. Tất cả qua service thật.
+ */
+async function seedDichVuMau(tenantId: string, id: Map<string, string>) {
+  if ((await db.supportTicket.count({ where: { tenantId } })) > 0) {
+    console.log("✓ Dịch vụ mẫu đã có — bỏ qua");
+    return;
+  }
+  const { voiTenant } = await import("../../src/lib/db");
+  const { taoNguCanh } = await import("../../src/lib/api");
+  const { layHoSoQuyen } = await import("../../src/lib/phan-quyen");
+  const chinh = await import("../../src/modules/cau-hinh/service");
+  const dh = await import("../../src/modules/don-hang/service");
+  const ht = await import("../../src/modules/ho-tro/service");
+  const da = await import("../../src/modules/du-an/service");
+  const { LuocDoTaoPhieuXuat } = await import("../../src/modules/don-hang/luoc-do");
+  const { LuocDoTaoPhieu } = await import("../../src/modules/ho-tro/luoc-do");
+  const { LuocDoTaoDuAn } = await import("../../src/modules/du-an/luoc-do");
+  type NC = Parameters<typeof ht.taoPhieu>[0];
+
+  const voi = <T>(email: string, viec: (nc: NC) => Promise<T>) =>
+    voiTenant(tenantId, async (tx) => {
+      const q = await layHoSoQuyen(tx, id.get(email)!);
+      if (!q) throw new Error(`Không đọc được quyền của ${email}`);
+      return viec(taoNguCanh(tx, tenantId, q, null, "seed-mau"));
+    });
+
+  const GD = "giamdoc@demo.test";
+  const KHO = "kho@demo.test";
+  const CSKH = "cskh@demo.test";
+  const KTV = "ktv1@demo.test";
+  const TPKT = "tp.kythuat@demo.test";
+
+  // Ngưỡng cam kết dịch vụ và cảnh báo bảo hành (để màn hình có số thật).
+  await voi(GD, (nc) =>
+    chinh.capNhatCauHinh(nc, {
+      giaTri: {
+        "dich_vu.gio_phan_hoi_khan": 2,
+        "dich_vu.gio_phan_hoi_thuong": 8,
+        "dich_vu.gio_xu_ly_khan": 8,
+        "dich_vu.gio_xu_ly_thuong": 48,
+        "theo_doi.bao_hanh_sap_het_ngay": 60,
+      },
+    }),
+  );
+
+  // Giao nốt phần camera còn lại của đơn mẫu → bảo hành tự sinh cho từng máy.
+  const don = await db.salesOrder.findFirst({ where: { tenantId, status: { in: ["CONFIRMED", "PARTIALLY_DELIVERED"] } }, select: { id: true } });
+  const khoChinh = await db.warehouse.findFirst({ where: { tenantId, code: "KHO-CHINH" }, select: { id: true } });
+  if (don && khoChinh) {
+    const ct = await voi(TPKT, (nc) => dh.chiTietDonHang(nc, don.id));
+    const conGiao = ct.don.dong.filter((d) => d.conPhaiGiao > 0 && d.theoSerial);
+    if (conGiao.length > 0) {
+      const serialConLai = await db.serialNumber.findMany({
+        where: { tenantId, status: "trong-kho", productId: conGiao[0].sanPhamId ?? undefined },
+        select: { serial: true },
+        take: Math.floor(conGiao[0].conPhaiGiao),
+      });
+      if (serialConLai.length > 0) {
+        await voi(KHO, (nc) =>
+          dh.taoPhieuXuat(nc, don.id, LuocDoTaoPhieuXuat.parse({
+            khoId: khoChinh.id,
+            nguoiNhan: "Anh Mẫu — quản lý cửa hàng",
+            ghiChu: "Giao nốt camera cho 6 cửa hàng còn lại",
+            dong: [{ dongDonId: conGiao[0].id, soLuong: String(serialConLai.length), serial: serialConLai.map((s) => s.serial) }],
+          })),
+        );
+      }
+    }
+  }
+
+  const baoHanh = await db.warranty.findFirst({ where: { tenantId }, select: { id: true, customerId: true, serial: true } });
+
+  // Phiếu 1: đã xử lý xong, có đủ diễn biến.
+  if (baoHanh) {
+    const p1 = await voi(CSKH, (nc) =>
+      ht.taoPhieu(nc, LuocDoTaoPhieu.parse({
+        khachHangId: baoHanh.customerId,
+        baoHanhId: baoHanh.id,
+        loai: "bao-hanh",
+        uuTien: "cao",
+        tieuDe: "Camera cửa hàng số 3 mất tín hiệu ban đêm",
+        moTa: "Khách báo từ 20h camera số 3 không xem được, ban ngày vẫn bình thường.",
+      })),
+    );
+    await voi(CSKH, (nc) => ht.giaoPhieu(nc, p1.id, id.get(KTV)!, "Nhờ anh Cường qua kiểm tra trong ngày"));
+    await voi(KTV, (nc) => ht.ghiDienBien(nc, p1.id, { loai: "phan-hoi-khach", noiDung: "Đã gọi khách, hẹn 15h qua cửa hàng." }));
+    await voi(KTV, (nc) => ht.ghiDienBien(nc, p1.id, { loai: "ghi-chu", noiDung: "Kiểm tra tại chỗ: nguồn adapter yếu, thay adapter mới." }));
+    await voi(KTV, (nc) => ht.doiTrangThaiPhieu(nc, p1.id, { trangThai: "HOAN_THANH", cachXuLy: "Thay adapter 12V, theo dõi 30 phút không mất tín hiệu.", ghiChu: "" }));
+    await voi(CSKH, (nc) => ht.doiTrangThaiPhieu(nc, p1.id, { trangThai: "DONG", cachXuLy: "", ghiChu: "Khách xác nhận camera chạy ổn." }));
+  }
+
+  // Phiếu 2: đang chờ khách phản hồi.
+  const khachChuoi = await db.customer.findFirst({ where: { tenantId, name: { contains: "Hạnh Phúc" } }, select: { id: true } });
+  if (khachChuoi) {
+    const p2 = await voi(CSKH, (nc) =>
+      ht.taoPhieu(nc, LuocDoTaoPhieu.parse({
+        khachHangId: khachChuoi.id,
+        loai: "yeu-cau",
+        uuTien: "trung-binh",
+        tieuDe: "Xin hướng dẫn xem camera trên điện thoại",
+        moTa: "Khách đổi điện thoại mới, cần cài lại ứng dụng xem camera.",
+        nguoiXuLyId: id.get(KTV)!,
+      })),
+    );
+    await voi(KTV, (nc) => ht.ghiDienBien(nc, p2.id, { loai: "phan-hoi-khach", noiDung: "Đã gửi hướng dẫn qua Zalo, chờ khách làm theo." }));
+    await voi(KTV, (nc) => ht.doiTrangThaiPhieu(nc, p2.id, { trangThai: "CHO_KHACH", cachXuLy: "", ghiChu: "Chờ khách xác nhận đã xem được." }));
+  }
+
+  // Dự án triển khai đang chạy, một hạng mục xong.
+  if (don && khachChuoi) {
+    // Trưởng phòng Kỹ thuật có phạm vi khách hàng theo PHÒNG BAN nên không thấy khách của
+    // phòng kinh doanh — Giám đốc mở dự án rồi giao lại cho kỹ thuật (xem ghi chú Phase 6).
+    const duAn = await voi(GD, (nc) =>
+      da.taoDuAn(nc, LuocDoTaoDuAn.parse({
+        khachHangId: khachChuoi.id,
+        donHangId: don.id,
+        nguoiPhuTrachId: id.get(TPKT)!,
+        ten: "Lắp camera cho 12 cửa hàng (mẫu)",
+        moTa: "Lắp 24 camera, 2 switch cho 12 điểm bán; bàn giao theo từng cụm 6 cửa hàng.",
+        ngayDuKien: new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10),
+        hangMuc: ["Khảo sát 12 cửa hàng", "Lắp cụm 6 cửa hàng đầu", "Lắp cụm 6 cửa hàng sau", "Bàn giao và hướng dẫn"],
+      })),
+    );
+    const ctDuAn = await voi(TPKT, (nc) => da.chiTietDuAn(nc, duAn.id));
+    if (ctDuAn.duAn.hangMuc[0]) await voi(TPKT, (nc) => da.suaHangMuc(nc, duAn.id, ctDuAn.duAn.hangMuc[0].id, { trangThai: "xong" }));
+    if (ctDuAn.duAn.hangMuc[1]) await voi(TPKT, (nc) => da.suaHangMuc(nc, duAn.id, ctDuAn.duAn.hangMuc[1].id, { trangThai: "dang-lam" }));
+  }
+
+  const soBaoHanh = await db.warranty.count({ where: { tenantId } });
+  console.log(`✓ Dịch vụ mẫu: ${soBaoHanh} phiếu bảo hành, 2 phiếu hỗ trợ (1 đã đóng, 1 chờ khách), 1 dự án đang chạy`);
 }
 
 main()

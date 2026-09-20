@@ -1,6 +1,6 @@
 {
   "name": "cowork-itw",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "TGTH Business Cowork — hệ điều hành vận hành doanh nghiệp của Công ty Cổ phần Thế Giới Tin Học.",
   "scripts": {
@@ -20,13 +20,14 @@
     "thu:su-kien": "tsx --env-file-if-exists=.env thu/thu-su-kien.ts",
     "thu:quan-tri": "tsx --env-file-if-exists=.env thu/thu-quan-tri.ts",
     "thu:http": "tsx --env-file-if-exists=.env thu/thu-http.ts",
-    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm && npm run thu:san-pham && npm run thu:bao-gia && npm run thu:don-hang",
+    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm && npm run thu:san-pham && npm run thu:bao-gia && npm run thu:don-hang && npm run thu:dich-vu",
     "thu:tat-ca": "npm run thu:don-vi && npm run thu:tich-hop",
     "kiem-tra": "npm run typecheck && npm run lint && npm run thu:don-vi && npm run build",
     "thu:crm": "tsx --env-file-if-exists=.env thu/thu-crm.ts",
     "thu:san-pham": "tsx --env-file-if-exists=.env thu/thu-san-pham.ts",
     "thu:bao-gia": "tsx --env-file-if-exists=.env thu/thu-bao-gia.ts",
-    "thu:don-hang": "tsx --env-file-if-exists=.env thu/thu-don-hang.ts"
+    "thu:don-hang": "tsx --env-file-if-exists=.env thu/thu-don-hang.ts",
+    "thu:dich-vu": "tsx --env-file-if-exists=.env thu/thu-dich-vu.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

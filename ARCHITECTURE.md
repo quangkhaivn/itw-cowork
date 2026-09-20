@@ -121,6 +121,14 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Tiền của đơn dùng lại `tinhBaoGia()` của Phase 4 — một cách tính cho cả báo giá và đơn (DH-08).
 - `doiSoatKho()` so tổng sổ cái với số dư từng cặp (kho, sản phẩm); bài thử tích hợp chạy hàm này sau mọi nghiệp vụ.
 
+## 7f. Dự án, bảo hành, bàn dịch vụ (Phase 6)
+
+- Phân hệ: `src/modules/{bao-hanh,ho-tro,du-an}`; phần thuần ở `bao-hanh/tinh-toan.ts` (ngày hết hạn tính theo NGÀY, không theo giờ), `ho-tro/tinh-toan.ts` (luồng trạng thái + hạn SLA), `du-an/tinh-toan.ts` (tiến độ theo hạng mục).
+- **Chuỗi nối tiếp Phase 5**: `taoPhieuXuat()` gọi `sinhBaoHanhKhiGiao()` ngay trong cùng giao dịch — giao hàng và bảo hành không bao giờ lệch nhau. Phiếu hỗ trợ gắn bảo hành → sê-ri → đơn hàng, nên mở phiếu chỉ cần số máy.
+- Hạn SLA **chụp lại lúc mở phiếu**: đổi ngưỡng trong Cấu hình không làm đổi cam kết đã hứa với khách (HT-03).
+- Diễn biến phiếu và sổ cái kho dùng chung một cách: bảng chỉ-ghi-thêm + trigger `chan_sua_xoa()`.
+- Nghiệm thu dự án là **cổng chặn có điều kiện dữ liệu**: service tính lại tiến độ từ hạng mục chứ không tin cờ trạng thái (DU-05).
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.
@@ -132,6 +140,9 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 | Chuông thông báo | Chưa có sự kiện nào cần báo cho người dùng; chuông không có gì bên trong là nút chết | Phase 8 |
 | Tùy chọn cột trên bảng | Bảng CRM 5–7 cột vẫn đọc tốt; chưa có yêu cầu thật để ẩn/hiện cột | khi có yêu cầu |
 | Xuất CSV khách hàng | Quyền `customer.export` đã có nhưng chưa có màn hình; bộ xuất CSV dùng chung đã sẵn ở `src/lib/csv.ts` | khi cần |
+| Hợp đồng bảo trì định kỳ và gia hạn tự động | Cần bộ nhắc việc chạy nền mới có ích; dữ liệu bảo hành đã đủ để sinh nhắc khi có | Phase 8 |
+| Trả hàng, đổi máy | Đi kèm công nợ và hóa đơn; làm một nửa sẽ lệch kho và lệch tiền | Phase 7 |
+| Tệp đính kèm (ảnh hiện trường, biên bản) | Chưa chọn nơi lưu tệp trên máy chủ thật; cần bàn với Giám đốc về dung lượng và sao lưu | khi có yêu cầu |
 | Mua hàng (đề nghị mua, đơn mua, nhận hàng) | Nhập kho hiện ghi thẳng kèm nguồn hàng; làm mua hàng tử tế cần luồng duyệt riêng và đối chiếu công nợ nhà cung cấp | Phase 5b / 7 |
 | Chuyển kho nội bộ | Chưa có nhu cầu thật; hiện làm được bằng hai lần điều chỉnh có lý do | khi có yêu cầu |
 | Trả hàng, bảo hành theo sê-ri | Sê-ri đã ghi đủ vết để làm sau; nghiệp vụ trả hàng đi kèm công nợ | Phase 6 |
