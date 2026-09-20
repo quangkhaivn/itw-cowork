@@ -621,6 +621,7 @@ async function main() {
   dat("BH-01: giao hàng sinh bảo hành cho từng máy", dsBaoHanh.status === 200 && dongBh.length === 2, `${dongBh.length} phiếu`);
   dat("Bảo hành lấy đúng số tháng của sản phẩm và gắn đơn hàng", dongBh[0]?.soThang === 24 && dongBh[0]?.donHang?.id === idDon2, JSON.stringify({ thang: dongBh[0]?.soThang }));
   const idBh = dongBh[0]?.id as string;
+  const serialBh = dongBh[0]?.serial as string;
 
   const traSerialHttp = await goi(`/api/v1/bao-hanh/tra-serial?serial=SN-HTTP-${DAU}-1`, { cookie: cookieQT });
   dat("Tra bảo hành theo số sê-ri", traSerialHttp.status === 200 && ((traSerialHttp.json as unknown as { serial: string }[]) ?? []).length === 1);
@@ -647,7 +648,7 @@ async function main() {
 
   const ctPhieu = await goi(`/api/v1/ho-tro/${idPhieu}`, { cookie: cookieQT });
   const phieuJson = ctPhieu.json as unknown as { phieu: { baoHanh: { serial: string } | null; donHang: { id: string } | null }; dienBien: unknown[] };
-  dat("Phiếu gắn đúng máy và đơn hàng qua bảo hành", phieuJson.phieu.baoHanh?.serial === `SN-HTTP-${DAU}-1` && phieuJson.phieu.donHang?.id === idDon2);
+  dat("Phiếu gắn đúng máy và đơn hàng qua bảo hành", phieuJson.phieu.baoHanh?.serial === serialBh && phieuJson.phieu.donHang?.id === idDon2, JSON.stringify({ serial: phieuJson.phieu.baoHanh?.serial, mong: serialBh, don: phieuJson.phieu.donHang?.id, mongDon: idDon2 }));
   dat("Phiếu mới có ngay diễn biến tiếp nhận", phieuJson.dienBien.length === 1);
 
   const giaoPhieuHt = await goi(`/api/v1/ho-tro/${idPhieu}/giao`, { phuongThuc: "POST", cookie: cookieQT, than: { nguoiXuLyId: idNv, ghiChu: "Nhờ kiểm tra" } });
@@ -704,6 +705,109 @@ async function main() {
   dat("Nhân viên kinh doanh không xem được phiếu hỗ trợ", nvXemPhieu.status === 403);
   const nvTaoDuAn = await goi("/api/v1/du-an", { phuongThuc: "POST", cookie: dnNv.cookie, than: { khachHangId: khachNv, ten: "Dự án của NV" } });
   dat("Nhân viên kinh doanh không mở được dự án", nvTaoDuAn.status === 403);
+
+  // --- 7g. Hóa đơn, công nợ, thu tiền và bảng điều hành (Phase 7) ---
+  console.log("\n[7g] Tài chính và bảng điều hành");
+
+  const homNayThu = new Date().toISOString().slice(0, 10);
+  const truocDay = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
+  const taoHd = await goi("/api/v1/hoa-don", { phuongThuc: "POST", cookie: cookieQT, than: { donHangId: idDon2, ghiChu: "Xuất theo đơn thử HTTP" } });
+  dat("TC-01: lập hóa đơn từ đơn đã xác nhận, số HD-", taoHd.status === 200 && String(taoHd.json.so).startsWith("HD-"), JSON.stringify(taoHd.json));
+  const idHd = taoHd.json.id as string;
+
+  const taoHdLai = await goi("/api/v1/hoa-don", { phuongThuc: "POST", cookie: cookieQT, than: { donHangId: idDon2 } });
+  dat("TC-02: một đơn chỉ có một hóa đơn còn hiệu lực", taoHdLai.status === 200 && taoHdLai.json.id === idHd && taoHdLai.json.daCoTruoc === true, JSON.stringify(taoHdLai.json));
+
+  const ctHdNhap = await goi(`/api/v1/hoa-don/${idHd}`, { cookie: cookieQT });
+  const hdNhap = ctHdNhap.json as unknown as { hoaDon: { trangThai: string; tongCong: string; dong: unknown[]; conNo: number } };
+  dat("Hóa đơn mới ở trạng thái Nháp, chép đủ dòng từ đơn", hdNhap.hoaDon.trangThai === "DRAFT" && hdNhap.hoaDon.dong.length > 0);
+  dat("TC-03: hóa đơn nháp chưa sinh công nợ", hdNhap.hoaDon.conNo === 0, String(hdNhap.hoaDon.conNo));
+
+  const hanSai = await goi(`/api/v1/hoa-don/${idHd}/phat-hanh`, { phuongThuc: "POST", cookie: cookieQT, than: { ngayPhatHanh: truocDay(10), hanThanhToan: truocDay(20) } });
+  dat("Hạn thanh toán trước ngày phát hành bị 400", hanSai.status === 400, `status ${hanSai.status}`);
+
+  const phatHanh = await goi(`/api/v1/hoa-don/${idHd}/phat-hanh`, { phuongThuc: "POST", cookie: cookieQT, than: { ngayPhatHanh: truocDay(10), hanThanhToan: truocDay(3) } });
+  dat("TC-03: phát hành hóa đơn, chốt hạn thanh toán", phatHanh.status === 200 && phatHanh.json.trangThai === "ISSUED", JSON.stringify(phatHanh.json));
+  const phatHanhLai = await goi(`/api/v1/hoa-don/${idHd}/phat-hanh`, { phuongThuc: "POST", cookie: cookieQT, than: { hanThanhToan: homNayThu } });
+  dat("Phát hành lần hai bị 409", phatHanhLai.status === 409 && phatHanhLai.json.ma === "sai-trang-thai", `status ${phatHanhLai.status}`);
+
+  const conNoKh = await goi(`/api/v1/cong-no/${idKh}`, { cookie: cookieQT });
+  const hdConNo = conNoKh.json as unknown as { id: string; conNo: number; soNgayQuaHan: number }[];
+  const cuaTa = hdConNo.find((h) => h.id === idHd);
+  dat("Hóa đơn đã phát hành thì hiện trong công nợ và đã quá hạn", Boolean(cuaTa) && cuaTa!.conNo > 0 && cuaTa!.soNgayQuaHan >= 3, JSON.stringify(cuaTa));
+  const tongHd = cuaTa ? cuaTa.conNo : 0;
+
+  const thuQua = await goi("/api/v1/phieu-thu", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, phuongThuc: "chuyen-khoan", soTien: String(tongHd + 1000), phanBo: [{ hoaDonId: idHd, soTien: String(tongHd + 1000) }] },
+  });
+  dat("TC-05: không thu quá phần còn nợ", thuQua.status === 409 || thuQua.status === 400, `status ${thuQua.status}`);
+
+  const lechPhanBo = await goi("/api/v1/phieu-thu", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, phuongThuc: "tien-mat", soTien: "1.000.000", phanBo: [{ hoaDonId: idHd, soTien: "600.000" }] },
+  });
+  dat("TC-05: tổng phân bổ lệch số tiền thu bị chặn", lechPhanBo.status === 409 || lechPhanBo.status === 400, `status ${lechPhanBo.status}`);
+
+  const motPhan = Math.max(1, Math.round(tongHd / 2));
+  const thu1 = await goi("/api/v1/phieu-thu", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, phuongThuc: "chuyen-khoan", soTien: String(motPhan), thamChieu: `UNC ${DAU}`, phanBo: [{ hoaDonId: idHd, soTien: String(motPhan) }] },
+  });
+  dat("TC-04: thu một phần, số phiếu PT-", thu1.status === 200 && String(thu1.json.so).startsWith("PT-"), JSON.stringify(thu1.json));
+  const idPt = thu1.json.id as string;
+
+  const ctHdSauThu = await goi(`/api/v1/hoa-don/${idHd}`, { cookie: cookieQT });
+  const hdSauThu = ctHdSauThu.json as unknown as { hoaDon: { daThu: number; conNo: number; tinhTrangThu: string } };
+  dat("Công nợ trừ đúng phần đã thu", hdSauThu.hoaDon.daThu === motPhan && hdSauThu.hoaDon.conNo === tongHd - motPhan && hdSauThu.hoaDon.tinhTrangThu === "thu-mot-phan", JSON.stringify([hdSauThu.hoaDon.daThu, hdSauThu.hoaDon.conNo, hdSauThu.hoaDon.tinhTrangThu]));
+
+  const huyKhiDaThu = await goi(`/api/v1/hoa-don/${idHd}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "Thử hủy khi đã thu" } });
+  dat("TC-08: hóa đơn đã thu tiền thì không hủy được", huyKhiDaThu.status === 409 && huyKhiDaThu.json.ma === "da-co-tien-thu", `status ${huyKhiDaThu.status}`);
+
+  const huyPtThieuLyDo = await goi(`/api/v1/phieu-thu/${idPt}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "" } });
+  dat("TC-09: hủy phiếu thu phải ghi lý do", huyPtThieuLyDo.status === 400, `status ${huyPtThieuLyDo.status}`);
+  const huyPt = await goi(`/api/v1/phieu-thu/${idPt}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "Ghi nhầm khách trong bài thử" } });
+  dat("TC-09: hủy phiếu thu", huyPt.status === 200, JSON.stringify(huyPt.json));
+
+  const ctHdSauHuyPt = await goi(`/api/v1/hoa-don/${idHd}`, { cookie: cookieQT });
+  const hdSauHuyPt = ctHdSauHuyPt.json as unknown as { hoaDon: { daThu: number; conNo: number } };
+  dat("Hủy phiếu thu thì công nợ quay lại như trước", hdSauHuyPt.hoaDon.daThu === 0 && hdSauHuyPt.hoaDon.conNo === tongHd, JSON.stringify([hdSauHuyPt.hoaDon.daThu, hdSauHuyPt.hoaDon.conNo]));
+
+  const congNoChung = await goi("/api/v1/cong-no", { cookie: cookieQT });
+  const cnChung = congNoChung.json as unknown as { tomTat: { tongConNo: number; tongQuaHan: number }; khach: { khachHang: { id: string } }[] };
+  dat("Công nợ tổng hợp có khách vừa phát hành, có phần quá hạn", cnChung.tomTat.tongConNo >= tongHd && cnChung.tomTat.tongQuaHan >= tongHd && cnChung.khach.some((k) => k.khachHang.id === idKh), JSON.stringify(cnChung.tomTat));
+
+  const bdkQt = await goi("/api/v1/bang-dieu-khien", { cookie: cookieQT });
+  const bdk = bdkQt.json as unknown as { banHang: { doanhThuThangNay: number } | null; congNo: { tongQuaHan: number } | null; donHang: unknown; viec: unknown };
+  dat("Bảng điều hành trả số thật cho người có quyền tài chính", bdkQt.status === 200 && bdk.banHang !== null && bdk.congNo !== null && bdk.congNo!.tongQuaHan >= tongHd, JSON.stringify(bdk.congNo));
+
+  const bdkNv = await goi("/api/v1/bang-dieu-khien", { cookie: dnNv.cookie });
+  const bdkNvJson = bdkNv.json as unknown as { banHang: unknown; congNo: unknown; viec: unknown };
+  dat("Người không có quyền tài chính không nhận khối doanh thu", bdkNv.status === 200 && bdkNvJson.banHang === null && bdkNvJson.congNo === null && bdkNvJson.viec !== undefined, JSON.stringify(bdkNvJson.banHang));
+
+  const nvXemHd = await goi("/api/v1/hoa-don", { cookie: dnNv.cookie });
+  dat("Nhân viên kinh doanh không xem được hóa đơn", nvXemHd.status === 403, `status ${nvXemHd.status}`);
+  const nvThuTien = await goi("/api/v1/phieu-thu", { phuongThuc: "POST", cookie: dnNv.cookie, than: { khachHangId: idKh, phuongThuc: "tien-mat", soTien: "100.000", phanBo: [{ hoaDonId: idHd, soTien: "100.000" }] } });
+  dat("Nhân viên kinh doanh không ghi được phiếu thu", nvThuTien.status === 403, `status ${nvThuTien.status}`);
+
+  const trangHd = await goi(`/tai-chinh/hoa-don/${idHd}`, { cookie: cookieQT });
+  dat("Trang chi tiết hóa đơn dựng được", trangHd.status === 200 && trangHd.text.includes(String(taoHd.json.so)), `status ${trangHd.status}`);
+  const trangDsHd = await goi("/tai-chinh/hoa-don", { cookie: cookieQT });
+  dat("Trang danh sách hóa đơn dựng được", trangDsHd.status === 200 && trangDsHd.text.includes(String(taoHd.json.so)), `status ${trangDsHd.status}`);
+  const trangLapHd = await goi(`/tai-chinh/hoa-don/moi?donHang=${idDon2}`, { cookie: cookieQT });
+  dat("Trang lập hóa đơn dựng được", trangLapHd.status === 200 && trangLapHd.text.includes("Lập hóa đơn"), `status ${trangLapHd.status}`);
+  const trangCongNo = await goi("/tai-chinh/cong-no", { cookie: cookieQT });
+  dat("Trang công nợ dựng được", trangCongNo.status === 200 && trangCongNo.text.includes("Tuổi nợ"), `status ${trangCongNo.status}`);
+  const trangPt = await goi("/tai-chinh/phieu-thu", { cookie: cookieQT });
+  dat("Trang phiếu thu dựng được", trangPt.status === 200 && trangPt.text.includes(String(thu1.json.so)), `status ${trangPt.status}`);
+  const trangBdk = await goi("/bang-dieu-khien", { cookie: cookieQT });
+  dat("Bảng điều hành dựng được với khối bán hàng", trangBdk.status === 200 && trangBdk.text.includes("Bán hàng tháng này"), `status ${trangBdk.status}`);
+  const nvBangSau = await goi("/bang-dieu-khien", { cookie: dnNv.cookie });
+  dat("Bảng điều hành của nhân viên không có khối doanh thu", nvBangSau.status === 200 && !nvBangSau.text.includes("Bán hàng tháng này"), `status ${nvBangSau.status}`);
 
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;

@@ -13,6 +13,7 @@ const TAO_NHANH = [
   { nhan: "Báo giá", href: "/ban-hang/bao-gia/moi", quyen: "quotation.create" },
   { nhan: "Đơn hàng", href: "/ban-hang/don-hang/moi", quyen: "order.create" },
   { nhan: "Phiếu hỗ trợ", href: "/dich-vu/ho-tro/moi", quyen: "service_desk.create" },
+  { nhan: "Hóa đơn", href: "/tai-chinh/hoa-don/moi", quyen: "finance.create" },
   { nhan: "Dự án", href: "/du-an/moi", quyen: "project.create" },
   { nhan: "Công việc", href: "/cong-viec?tao=1", quyen: "task.create" },
   { nhan: "Sản phẩm", href: "/san-pham/moi", quyen: "product.create" },

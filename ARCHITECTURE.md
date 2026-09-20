@@ -129,6 +129,14 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Diễn biến phiếu và sổ cái kho dùng chung một cách: bảng chỉ-ghi-thêm + trigger `chan_sua_xoa()`.
 - Nghiệm thu dự án là **cổng chặn có điều kiện dữ liệu**: service tính lại tiến độ từ hạng mục chứ không tin cờ trạng thái (DU-05).
 
+## 7g. Tài chính và bảng điều hành (Phase 7)
+
+- Phân hệ: `src/modules/tai-chinh` (hóa đơn, công nợ, thu tiền) và `src/modules/bang-dieu-khien`. Phần thuần ở `tai-chinh/tinh-toan.ts`: `congNo()`, `soNgayQuaHan()`, `nhomTuoiNo()`, `tongHopTuoiNo()`, `hanThanhToanGoiY()`, `bienLoiNhuanKy()`.
+- **Số tiền một nguồn**: hóa đơn tính bằng đúng `tinhBaoGia()` mà báo giá và đơn hàng dùng. Ba chứng từ không thể ra ba con số cho cùng một dòng hàng.
+- **Công nợ không lưu**: còn nợ = hóa đơn đã phát hành − phân bổ của phiếu thu còn hiệu lực, tính lúc đọc (QĐ-09). Hủy phiếu thu chỉ đổi trạng thái nên công nợ tự quay lại, không cần bút toán đảo.
+- Bảng điều hành **dùng lại `dieuKienXem*` của từng phân hệ** thay vì viết truy vấn riêng, nên phạm vi dữ liệu trên trang tổng quan luôn khớp với phạm vi trên màn hình chi tiết. Khối nào người xem không có quyền thì trả `null` và màn hình bỏ hẳn khối đó.
+- Mọi ngưỡng (số ngày công nợ, cảnh báo quá hạn) đọc từ Cấu hình. **Chưa đặt thì không bịa**: phát hành hóa đơn bị từ chối cho tới khi có hạn, và màn hình công nợ nói rõ là chưa đặt ngưỡng.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

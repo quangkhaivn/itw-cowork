@@ -33,7 +33,10 @@ export type BieuTuong =
   | "serial"
   | "du-an"
   | "bao-hanh"
-  | "ho-tro";
+  | "ho-tro"
+  | "hoa-don"
+  | "cong-no"
+  | "phieu-thu";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -109,6 +112,14 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
   {
     nhan: "Dự án",
     muc: [{ nhan: "Dự án triển khai", href: "/du-an", quyen: "project.view", bieuTuong: "du-an", tuKhoa: "project du an lap dat nghiem thu hang muc" }],
+  },
+  {
+    nhan: "Tài chính",
+    muc: [
+      { nhan: "Hóa đơn", href: "/tai-chinh/hoa-don", quyen: "finance.view", bieuTuong: "hoa-don", tuKhoa: "invoice hoa don phat hanh vat" },
+      { nhan: "Công nợ", href: "/tai-chinh/cong-no", quyen: "finance.view", bieuTuong: "cong-no", tuKhoa: "cong no phai thu tuoi no qua han receivable" },
+      { nhan: "Phiếu thu", href: "/tai-chinh/phieu-thu", quyen: "finance.view", bieuTuong: "phieu-thu", tuKhoa: "payment thu tien chuyen khoan tien mat" },
+    ],
   },
   {
     nhan: "Công việc",

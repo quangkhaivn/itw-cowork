@@ -74,6 +74,11 @@ model Tenant {
   projectMilestones  ProjectMilestone[]
   supportTickets     SupportTicket[]
   ticketEvents       SupportTicketEvent[]
+  // Phase 7 — Tài chính
+  invoices           Invoice[]
+  invoiceItems       InvoiceItem[]
+  payments           Payment[]
+  paymentAllocations PaymentAllocation[]
 
   @@map("tenants")
 }
@@ -143,22 +148,23 @@ model User {
   createdBy          String?   @map("created_by") @db.Uuid
   updatedBy          String?   @map("updated_by") @db.Uuid
 
-  tenant             Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staffProfile       StaffProfile?  @relation("HoSoCuaNguoiDung")
+  tenant             Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile       StaffProfile?   @relation("HoSoCuaNguoiDung")
   userRoles          UserRole[]
   /// Những người nhận người này làm quản lý trực tiếp.
-  reports            StaffProfile[] @relation("QuanLyTrucTiep")
+  reports            StaffProfile[]  @relation("QuanLyTrucTiep")
   // Phase 2 — người phụ trách
-  ownedCustomers     Customer[]     @relation("KhachPhuTrach")
-  ownedLeads         Lead[]         @relation("LeadPhuTrach")
-  ownedInteractions  Interaction[]  @relation("TuongTacCua")
-  ownedOpportunities Opportunity[]  @relation("CoHoiPhuTrach")
-  ownedTasks         Task[]         @relation("ViecPhuTrach")
-  ownedQuotations    Quotation[]    @relation("BaoGiaPhuTrach")
-  ownedSalesOrders   SalesOrder[]   @relation("DonHangPhuTrach")
+  ownedCustomers     Customer[]      @relation("KhachPhuTrach")
+  ownedLeads         Lead[]          @relation("LeadPhuTrach")
+  ownedInteractions  Interaction[]   @relation("TuongTacCua")
+  ownedOpportunities Opportunity[]   @relation("CoHoiPhuTrach")
+  ownedTasks         Task[]          @relation("ViecPhuTrach")
+  ownedQuotations    Quotation[]     @relation("BaoGiaPhuTrach")
+  ownedSalesOrders   SalesOrder[]    @relation("DonHangPhuTrach")
   managedProjects    Project[]       @relation("DuAnPhuTrach")
   ownedTickets       SupportTicket[] @relation("PhieuHoTroTiepNhan")
   assignedTickets    SupportTicket[] @relation("PhieuHoTroXuLy")
+  ownedInvoices      Invoice[]       @relation("HoaDonPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -401,18 +407,20 @@ model Customer {
   createdBy         String?  @map("created_by") @db.Uuid
   updatedBy         String?  @map("updated_by") @db.Uuid
 
-  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner          User          @relation("KhachPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner          User            @relation("KhachPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
   contacts       Contact[]
   interactions   Interaction[]
   opportunities  Opportunity[]
   tasks          Task[]
-  convertedLeads Lead[]        @relation("LeadThanhKhach")
+  convertedLeads Lead[]          @relation("LeadThanhKhach")
   quotations     Quotation[]
   salesOrders    SalesOrder[]
   warranties     Warranty[]
   projects       Project[]
   tickets        SupportTicket[]
+  invoices       Invoice[]
+  payments       Payment[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
@@ -445,8 +453,8 @@ model Contact {
   createdBy       String?  @map("created_by") @db.Uuid
   updatedBy       String?  @map("updated_by") @db.Uuid
 
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer      Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
   interactions  Interaction[]
   opportunities Opportunity[]
   quotations    Quotation[]
@@ -772,6 +780,7 @@ model Product {
   deliveryItems   DeliveryItem[]
   serials         SerialNumber[]
   warranties      Warranty[]
+  invoiceItems    InvoiceItem[]
 
   @@unique([tenantId, skuNormalized])
   @@index([tenantId, status])
@@ -1099,6 +1108,7 @@ model SalesOrder {
   warranties       Warranty[]
   projects         Project[]
   tickets          SupportTicket[]
+  invoices         Invoice[]
 
   @@unique([tenantId, number])
   @@index([tenantId, ownerId, status])
@@ -1138,6 +1148,7 @@ model SalesOrderItem {
   deliveryItems DeliveryItem[]
   serials       SerialNumber[]
   warranties    Warranty[]
+  invoiceItems  InvoiceItem[]
 
   @@unique([orderId, lineNo])
   @@index([tenantId, productId])
@@ -1212,9 +1223,9 @@ model Delivery {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy    String?  @map("created_by") @db.Uuid
 
-  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  order     SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  warehouse Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order      SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  warehouse  Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   items      DeliveryItem[]
   serials    SerialNumber[]
   warranties Warranty[]
@@ -1354,6 +1365,7 @@ model Project {
   milestones ProjectMilestone[]
   tasks      Task[]
   tickets    SupportTicket[]
+  invoices   Invoice[]
 
   @@unique([tenantId, code])
   @@index([tenantId, managerId, status])
@@ -1453,4 +1465,134 @@ model SupportTicketEvent {
 
   @@index([tenantId, ticketId, createdAt])
   @@map("support_ticket_events")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Tài chính quản trị (mục 19–20 prompt 20/09)
+//
+// Hóa đơn sinh từ đơn hàng, thu tiền ghi vào phiếu thu, một phiếu thu phân bổ được
+// cho nhiều hóa đơn. **Công nợ KHÔNG lưu thành bảng**: còn nợ = tổng hóa đơn − tổng
+// phân bổ đã thu, tính ngay lúc đọc (DATABASE.md phần B, mục 4 master prompt: một
+// nguồn dữ liệu, không giữ hai nơi cùng một con số).
+// ---------------------------------------------------------------------------
+
+/// Hóa đơn bán hàng. Số HD-2026-0001.
+model Invoice {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  number        String    @db.VarChar(30)
+  customerId    String    @map("customer_id") @db.Uuid
+  salesOrderId  String?   @map("sales_order_id") @db.Uuid
+  projectId     String?   @map("project_id") @db.Uuid
+  ownerId       String    @map("owner_id") @db.Uuid
+  /// DRAFT | ISSUED | CANCELLED — "đã thu đủ hay chưa" TÍNH từ phân bổ, không lưu.
+  status        String    @default("DRAFT") @db.VarChar(20)
+  issueDate     DateTime? @map("issue_date") @db.Date
+  dueDate       DateTime? @map("due_date") @db.Date
+  /// Mã dữ liệu gốc dieu_khoan_thanh_toan (chép từ đơn hàng).
+  paymentTerms  String?   @map("payment_terms") @db.VarChar(50)
+  notes         String?   @db.Text
+  subtotal      Decimal   @default(0) @db.Decimal(18, 2)
+  discountTotal Decimal   @default(0) @map("discount_total") @db.Decimal(18, 2)
+  vatTotal      Decimal   @default(0) @map("vat_total") @db.Decimal(18, 2)
+  total         Decimal   @default(0) @db.Decimal(18, 2)
+  costTotal     Decimal   @default(0) @map("cost_total") @db.Decimal(18, 2)
+  issuedAt      DateTime? @map("issued_at") @db.Timestamptz(6)
+  issuedBy      String?   @map("issued_by") @db.Uuid
+  cancelledAt   DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason  String?   @map("cancel_reason") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesOrder  SalesOrder?         @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  project     Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  owner       User                @relation("HoaDonPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  items       InvoiceItem[]
+  allocations PaymentAllocation[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, dueDate])
+  @@index([tenantId, customerId])
+  @@map("invoices")
+}
+
+/// Dòng hóa đơn — chép từ dòng đơn hàng lúc lập, giữ liên kết để truy ngược.
+model InvoiceItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  invoiceId   String   @map("invoice_id") @db.Uuid
+  lineNo      Int      @map("line_no")
+  orderItemId String?  @map("order_item_id") @db.Uuid
+  productId   String?  @map("product_id") @db.Uuid
+  sku         String?  @db.VarChar(64)
+  name        String   @db.VarChar(500)
+  quantity    Decimal  @default(1) @db.Decimal(18, 3)
+  unit        String?  @db.VarChar(50)
+  unitPrice   Decimal  @default(0) @map("unit_price") @db.Decimal(18, 2)
+  discountPct Decimal  @default(0) @map("discount_pct") @db.Decimal(7, 4)
+  vatRate     Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
+  unitCost    Decimal  @default(0) @map("unit_cost") @db.Decimal(18, 2)
+  lineTotal   Decimal  @default(0) @map("line_total") @db.Decimal(18, 2)
+  lineCost    Decimal  @default(0) @map("line_cost") @db.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice   Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  orderItem SalesOrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  product   Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([invoiceId, lineNo])
+  @@index([tenantId, productId])
+  @@map("invoice_items")
+}
+
+/// Phiếu thu tiền của khách. Số PT-2026-0001. Một phiếu phân bổ cho nhiều hóa đơn.
+model Payment {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  number       String    @db.VarChar(30)
+  customerId   String    @map("customer_id") @db.Uuid
+  /// tien-mat | chuyen-khoan | the | bu-tru
+  method       String    @db.VarChar(20)
+  amount       Decimal   @db.Decimal(18, 2)
+  receivedAt   DateTime  @map("received_at") @db.Date
+  reference    String?   @db.VarChar(255)
+  note         String?   @db.Text
+  /// hoat-dong | huy — hủy thì giữ lại bản ghi kèm lý do, không xóa.
+  status       String    @default("hoat-dong") @db.VarChar(20)
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?   @map("cancel_reason") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  allocations PaymentAllocation[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, customerId, receivedAt])
+  @@map("payments")
+}
+
+/// Phân bổ một phiếu thu cho một hóa đơn. Tổng phân bổ của phiếu = số tiền đã thu.
+model PaymentAllocation {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  paymentId String   @map("payment_id") @db.Uuid
+  invoiceId String   @map("invoice_id") @db.Uuid
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, invoiceId])
+  @@index([tenantId, invoiceId])
+  @@map("payment_allocations")
 }

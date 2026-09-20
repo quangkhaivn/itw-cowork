@@ -265,6 +265,10 @@ kbd {
 .chi-so.canh-bao .gia-tri { color: var(--canh-bao); }
 .chi-so.loi .gia-tri { color: var(--loi); }
 
+/* Tiêu đề nhóm chỉ số trên bảng điều hành. */
+.tieu-de-khoi { font-size: 14px; font-weight: 600; color: var(--chu-mo); text-transform: uppercase; letter-spacing: .04em; margin: 4px 0 10px; }
+.luoi-chi-so + .tieu-de-khoi, .luoi-the + .tieu-de-khoi, .the + .tieu-de-khoi { margin-top: 20px; }
+
 .luoi-the { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .luoi-ben { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
 

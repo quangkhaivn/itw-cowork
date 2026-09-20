@@ -2,6 +2,26 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.8.0 — 20/09/2026 — Phase 7: Tài chính và Bảng điều hành
+
+Căn cứ: prompt triển khai 36 mục, mục 6 và mục 20. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 11 (TC), mục 12 (BDK).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.7.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **Hóa đơn**: lập từ đơn hàng đã xác nhận (chép dòng, giữ liên kết tới dòng đơn) hoặc lập tay cho khoản lẻ; vòng đời Nháp → Đã phát hành → (Đã hủy). Số `HD-<năm>-0001` cấp nguyên tử. Màn hình danh sách, chi tiết, lập mới.
+- **Công nợ phải thu**: bảng tuổi nợ năm nhóm và công nợ theo từng khách. **Không lưu thành cột** — tính từ hóa đơn đã phát hành trừ tiền đã thu, nên không có hai nguồn số để lệch.
+- **Phiếu thu**: một phiếu trừ cho nhiều hóa đơn, tổng phân bổ phải khớp số tiền thu; hủy phiếu thu giữ lại bản ghi kèm lý do và trả công nợ về đúng như trước.
+- **Bảng điều hành dựng bằng số liệu thật**: doanh thu và lợi nhuận gộp tháng này so với tháng trước, công nợ và nợ quá hạn, pipeline có trọng số, báo giá chờ duyệt, đơn chờ giao, cảnh báo tồn kho, phiếu hỗ trợ trễ hạn, dự án quá hạn, việc của tôi. Mỗi khối gắn quyền và phạm vi riêng; không có quyền thì khối không hiện.
+- 4 bảng CSDL (`invoices`, `invoice_items`, `payments`, `payment_allocations`), 9 route API, nhóm điều hướng **Tài chính**, nút **Lập hóa đơn** trên trang đơn hàng, mục Hóa đơn trong nút Tạo mới.
+- Dữ liệu mẫu tenant `demo` có hóa đơn, phiếu thu và một khoản đã quá hạn để bảng điều hành có gì để cảnh báo.
+
+### Sửa
+- Bài thử HTTP mục 7f gắn phiếu hỗ trợ vào bảo hành theo **số sê-ri thực tế của bản ghi đầu danh sách** thay vì đoán là sê-ri số 1 — thứ tự danh sách bảo hành không được bảo đảm nên khẳng định cũ thỉnh thoảng báo hỏng oan.
+
+### Kiểm thử
+- 151 bài đơn vị, 390 bài tích hợp (thêm `thu:tai-chinh` 40 bài), 228 bài HTTP đầu-cuối — tất cả đạt.
+- Diễn tập cài mới trên CSDL rỗng: 8 migration chạy sạch, RLS phủ đủ mọi bảng có `tenant_id`.
+
 ## 0.7.0 — 20/09/2026 — Phase 6: Dự án, bảo hành, bàn dịch vụ
 
 Căn cứ: prompt triển khai 36 mục, mục 17–18. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 8 (BH), mục 9 (HT), mục 10 (DU).

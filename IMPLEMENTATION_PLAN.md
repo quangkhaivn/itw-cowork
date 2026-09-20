@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 20/09/2026 (sau Phase 6).
+> Cập nhật lần cuối: 20/09/2026 (sau Phase 7).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -16,8 +16,8 @@ Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt
 | 4 | Báo giá: phiên bản, biên lợi nhuận, duyệt theo ngưỡng, bản in PDF, hồ sơ công ty | P0 | **Xong trên máy phát triển** 20/09 (bản 0.5.0) — chưa triển khai. Chuyển đơn để Phase 5 |
 | 5 | Đơn hàng, kho, serial | P1 | **Xong trên máy phát triển** 20/09 (bản 0.6.0) — chưa triển khai. Mua hàng tách sang sau |
 | 6 | Dự án, phiếu hỗ trợ, bảo hành, bảo trì, gia hạn | P2 | **Xong trên máy phát triển** 20/09 (bản 0.7.0) — chưa triển khai. Bảo trì định kỳ và gia hạn để Phase 8 |
-| 7 | Bảng điều hành CEO | P1 | Chưa (bảng điều khiển Phase 1 chỉ có số liệu hệ thống) |
-| 8 | Tự động hóa, "Việc hôm nay" | P2 | Chưa |
+| 7 | Tài chính quản trị (hóa đơn, công nợ, thu tiền) + Bảng điều hành CEO | P1/P2 | **Xong trên máy phát triển** 20/09 (bản 0.8.0) — chưa triển khai. Phần chi và công nợ phải trả để sau |
+| 8 | Tự động hóa, "Việc hôm nay", nhắc việc, chuông thông báo, bảo trì định kỳ / gia hạn | P2 | Chưa — **việc kế tiếp** |
 | 9 | AI | P3 | Chỉ có thiết kế (`AI_ARCHITECTURE.md`) |
 
 Thứ tự ưu tiên khi thiếu thời gian (mục 34 prompt 20/09): Auth+RBAC → Customer → Product → Price → Opportunity → Quotation → Order → Dashboard → Task → Inventory → Project → Support → Finance → Automation → AI. **Không hy sinh P0 để làm AI sớm.**
@@ -127,13 +127,16 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - **Cần Giám đốc**: đặt 4 ngưỡng cam kết dịch vụ và ngưỡng cảnh báo bảo hành ở Quản trị → Cấu hình (`VD-106`); trả lời Q9 (kỹ thuật có được thấy khách của phòng kinh doanh không).
 - **Chưa làm có chủ đích**: hợp đồng bảo trì định kỳ, gia hạn tự động, trả hàng/đổi máy, tệp đính kèm.
 
-## 4f. Phase 7 — Tài chính quản trị và bảng điều hành (việc kế tiếp)
+## 4f. Phase 7 — Tài chính quản trị và bảng điều hành (xong trên máy phát triển)
 
-Thiết kế bảng ở `DATABASE.md` phần B. Điểm nối đã sẵn: đơn hàng có tổng tiền và giá vốn, phiếu xuất có ngày giao, dự án có mốc nghiệm thu — đủ để dựng hóa đơn, công nợ và các chỉ số cho Bảng điều hành của Giám đốc (mục 20 prompt).
+- [x] CSDL 4 bảng + CHECK · [x] service + 9 route · [x] 6 màn hình (hóa đơn: danh sách / chi tiết / lập mới, công nợ, phiếu thu, bảng điều hành dựng lại) · [x] kiểm thử (151 đơn vị, 390 tích hợp, 228 HTTP) · [x] diễn tập cài mới trên CSDL trống · [x] soát giao diện
+- [ ] Triển khai máy thật (cùng đợt với 0.3.0 → 0.8.0 — `VD-101`)
+- **Cần Giám đốc**: đặt **số ngày công nợ mặc định** và **ngưỡng cảnh báo quá hạn** ở Quản trị → Cấu hình (`VD-107`). Chưa đặt thì phát hành hóa đơn phải nhập tay hạn thanh toán từng lần, và màn hình công nợ không tô đỏ khoản nào.
+- **Chưa làm có chủ đích**: phiếu chi và công nợ phải trả nhà cung cấp, hóa đơn điện tử theo chuẩn cơ quan thuế, đối soát ngân hàng, ngoại tệ, bản in hóa đơn A4 (báo giá đã có, hóa đơn dùng lại được khi cần).
 
-## 5. Phase 7 trở đi — việc kế tiếp đã rõ
+## 5. Phase 8 — việc kế tiếp
 
-Thiết kế bảng ở `DATABASE.md` phần B.
+Tự động hóa và "Việc hôm nay" (mục 21–22 prompt 20/09): bộ lập lịch trong `worker/`, quy tắc nhắc việc đọc ngưỡng từ Cấu hình, chuông thông báo, hợp đồng bảo trì định kỳ và gia hạn (`maintenance_contracts`, `renewals`). Điểm nối đã sẵn: `business_events` đã ghi đủ sự kiện của 6 phase (INVOICE_ISSUED, INVOICE_PAID, ORDER_CONFIRMED, TICKET_*…), worker đã đấu dây và đang chạy nhịp 60 giây. Thiết kế bảng ở `DATABASE.md` phần B.
 
 ## 6. Câu hỏi chờ Giám đốc
 
@@ -148,6 +151,7 @@ Thiết kế bảng ở `DATABASE.md` phần B.
 | Q7 | Mẫu báo giá TGTH đang dùng (logo, câu chữ, điều khoản chuẩn) | Bản in dùng mẫu chuẩn của hệ thống, chưa có logo | Không chặn |
 | Q9 | Trưởng phòng Kỹ thuật / Quản lý dự án có được thấy khách hàng của phòng kinh doanh không? | Theo mục 19 đặc tả: phạm vi **phòng ban**, nên không thấy — Giám đốc hoặc kinh doanh mở dự án rồi giao lại cho kỹ thuật | Không chặn; đổi bằng màn hình Vai trò |
 | Q8 | Nhân viên Kinh doanh có được tự tạo và xác nhận đơn hàng không? | Theo mục 19 đặc tả: **không** — chỉ xem; Trưởng phòng KD tạo, xác nhận, hủy. Đổi được ngay trên màn hình Vai trò | Không chặn kỹ thuật, nhưng đổi nhịp làm việc của phòng kinh doanh |
+| Q10 | Doanh thu trên bảng điều hành tính theo **hóa đơn đã phát hành** — có đúng cách Giám đốc vẫn nhìn con số không? | Đang lấy mốc hóa đơn phát hành (QĐ-29). Nếu Giám đốc quen nhìn theo đơn đã xác nhận hoặc theo tiền thực thu thì đổi được, nhưng phải chọn **một** mốc duy nhất | Không chặn; đổi mốc thì mọi con số lịch sử đổi theo |
 
 ## 7. Known issues
 

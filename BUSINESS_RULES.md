@@ -219,3 +219,35 @@ Quyền `project.*`; phạm vi theo người phụ trách dự án, cộng ngư�
 **Lưu ý vận hành**: Trưởng phòng Kỹ thuật có phạm vi khách hàng theo **phòng ban** (mục 19 đặc tả), nên không thấy khách do phòng kinh doanh phụ trách và không tự mở dự án cho khách đó được. Muốn kỹ thuật tự mở dự án thì Giám đốc mở phạm vi `customer.view` cho vai trò đó ở màn hình Vai trò (câu hỏi Q9).
 
 **Chưa làm ở phase này**: hợp đồng bảo trì định kỳ và gia hạn tự động (`maintenance_contracts`, `renewals`), trả hàng / đổi máy, tệp đính kèm (`attachments`).
+
+## 11. Tài chính — hóa đơn, công nợ, thu tiền (Phase 7)
+
+Quyền `finance.*`; phạm vi hóa đơn đi theo **khách hàng** (QĐ-13: thấy khách thì thấy hóa đơn của khách đó). Kế toán có phạm vi toàn công ty; trưởng phòng Kinh doanh được cấp `finance.view`/`finance.export` phạm vi **nhóm** để theo dõi tiền về của nhóm mình.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| TC-01 | Số hóa đơn `HD-<năm>-0001`, cấp nguyên tử. Lập từ **đơn hàng đã xác nhận** (chép nguyên dòng, giữ liên kết từng dòng về dòng đơn) hoặc lập tay cho khoản lẻ | [SV] · [CSDL] duy nhất `(tenant_id, number)` · [TH] |
+| TC-02 | **Một đơn hàng chỉ có một hóa đơn còn hiệu lực.** Gọi lập lần hai trả về đúng hóa đơn cũ (`daCoTruoc: true`), không sinh bản thứ hai | [SV] · [TH] |
+| TC-03 | Hóa đơn sinh ra ở trạng thái Nháp và **chưa tính công nợ**. Phát hành mới chốt số tiền, ghi ngày phát hành, người phát hành và hạn thanh toán; từ đó mới tính nợ | [CSDL] CHECK (phát hành phải đủ ngày + người) · [SV] · [TH] |
+| TC-04 | Hạn thanh toán lấy từ Cấu hình `tai_chinh.so_ngay_cong_no_mac_dinh`, hoặc nhập tay. **Chưa đặt cấu hình và không nhập tay thì từ chối phát hành** — hệ thống không bịa hạn | [SV] · [TH] |
+| TC-05 | Một phiếu thu trừ được cho nhiều hóa đơn. **Tổng phân bổ phải đúng bằng số tiền thu**, và từng hóa đơn không nhận quá phần còn nợ | [CSDL] CHECK (số tiền > 0) · [SV] · [TH] |
+| TC-06 | **Công nợ không lưu thành cột.** Còn nợ = tổng hóa đơn đã phát hành − tổng phân bổ của phiếu thu còn hiệu lực. Một nguồn số, không bao giờ lệch | [SV] hàm thuần `congNo()` · [TH] |
+| TC-07 | Tuổi nợ chia năm nhóm: trong hạn, 1–30, 31–60, 61–90, trên 90 ngày. Ngưỡng cảnh báo lấy từ `tai_chinh.canh_bao_qua_han_ngay`; **chưa đặt thì không cảnh báo**, màn hình nói rõ là chưa đặt | [SV] hàm thuần · [TH] |
+| TC-08 | Hủy hóa đơn phải ghi lý do, và **chỉ hủy được khi chưa thu đồng nào** — muốn hủy thì hủy phiếu thu trước | [CSDL] CHECK · [SV] · [TH] |
+| TC-09 | Hủy phiếu thu phải ghi lý do. Phiếu **không bị xóa**, chỉ đổi trạng thái; công nợ của hóa đơn quay lại đúng như trước khi thu | [CSDL] CHECK · [SV] · [TH] |
+
+Số tiền trên hóa đơn tính bằng đúng hàm `tinhBaoGia()` mà báo giá và đơn hàng dùng, nên ba chứng từ không bao giờ ra số khác nhau cho cùng một dòng hàng.
+
+**Chưa làm ở phase này**: chi (phiếu chi, công nợ phải trả nhà cung cấp), hóa đơn điện tử theo chuẩn cơ quan thuế, đối soát ngân hàng tự động, ngoại tệ.
+
+## 12. Bảng điều hành (Phase 7)
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| BDK-01 | Mỗi khối chỉ tính khi người xem **có quyền tương ứng**; không có quyền thì khối trả `null` và màn hình **không vẽ ô trống** | [SV] · [TH] |
+| BDK-02 | Mỗi khối chỉ đếm trong **phạm vi dữ liệu** của người xem (Giám đốc toàn công ty, trưởng phòng theo nhóm, nhân viên theo mình) | [SV] dùng lại `dieuKienXem*` của từng phân hệ · [TH] |
+| BDK-03 | **Doanh thu ghi nhận theo hóa đơn đã phát hành**, không theo đơn hàng — đơn đã xác nhận nhưng chưa xuất hóa đơn thì chưa phải doanh thu | [SV] |
+| BDK-04 | Không có số minh họa. Chưa có dữ liệu thì hiện 0 kèm lời giải thích, hoặc ẩn khối — không bịa con số cho đẹp | [SV] · [TH] |
+| BDK-05 | Biên lợi nhuận khi doanh thu bằng 0 trả **null** (chưa tính được), không phải 0% | [SV] hàm thuần · [ĐV] |
+
+Các con số đọc thẳng từ bảng gốc lúc mở trang. Bảng tổng hợp theo ngày chỉ dựng khi dữ liệu đủ lớn (DATABASE.md phần B) — làm sớm chỉ tạo thêm một nơi có thể lệch số.

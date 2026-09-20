@@ -63,8 +63,10 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `projects`, `project_milestones` | Dự án triển khai và hạng mục | Phase 6. Mã `DA-2026-0001`; CHECK nghiệm thu phải có người và thời điểm, hủy phải có lý do, hạng mục xong phải có thời điểm |
 | `support_tickets` | Phiếu hỗ trợ (bảo hành, sự cố, yêu cầu, bảo trì) | Phase 6. Số `HT-2026-0001`; chụp hạn SLA lúc mở; CHECK hoàn thành phải có cách xử lý và thời điểm |
 | `support_ticket_events` | Diễn biến xử lý phiếu | Phase 6. **Chỉ ghi thêm** (trigger `chan_sua_support_ticket_events`) |
+| `invoices`, `invoice_items` | Hóa đơn bán ra và dòng hàng | Phase 7. Số `HD-2026-0001`; dòng giữ `order_item_id` để truy ngược về dòng đơn; CHECK: đã phát hành phải có ngày phát hành + người phát hành + hạn thanh toán, đã hủy phải có thời điểm và lý do |
+| `payments`, `payment_allocations` | Phiếu thu và phần trừ cho từng hóa đơn | Phase 7. Số `PT-2026-0001`; một phiếu trừ được nhiều hóa đơn; CHECK số tiền > 0, hủy phải có thời điểm và lý do. **Công nợ không lưu cột nào** — tính từ hai bảng này (QĐ-09, TC-06) |
 
-Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ), `20260920103433_phase5_don_hang_kho` (thêm 8 bảng đơn hàng/kho + 2 cột trên `products` + CHECK + trigger sổ cái; kèm cấp bù quyền kho cho vai trò Thủ kho), `20260920140406_phase6_du_an_bao_hanh_ho_tro` (thêm 5 bảng dịch vụ/dự án + cột `project_id` trên `tasks` + CHECK + trigger diễn biến phiếu; kèm cấp bù `order.view` cho CSKH và kỹ thuật).
+Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ), `20260920103433_phase5_don_hang_kho` (thêm 8 bảng đơn hàng/kho + 2 cột trên `products` + CHECK + trigger sổ cái; kèm cấp bù quyền kho cho vai trò Thủ kho), `20260920140406_phase6_du_an_bao_hanh_ho_tro` (thêm 5 bảng dịch vụ/dự án + cột `project_id` trên `tasks` + CHECK + trigger diễn biến phiếu; kèm cấp bù `order.view` cho CSKH và kỹ thuật), `20260920153128_phase7_tai_chinh` (thêm 4 bảng hóa đơn/thu tiền + CHECK; kèm cấp bù `finance.view`/`finance.export` phạm vi **nhóm** cho Trưởng phòng Kinh doanh).
 
 Vai kết nối: `cowork_app` (ứng dụng, bị RLS) và chủ sở hữu (migration, seed). Ứng dụng **không bao giờ** chạy bằng chủ sở hữu.
 
@@ -148,13 +150,15 @@ Trạng thái: Draft → Pending Approval → Approved → Sent → Viewed → N
 
 `projects`, `project_tasks`, `project_acceptances`, `support_tickets` (SLA: `response_due_at`, `resolve_due_at`), `warranties` (`serial_id`, `start_date`, `end_date`), `maintenance_contracts`, `renewals` (`source_type` warranty/license/maintenance, `due_date`, `opportunity_id` tự tạo), `attachments` (`storage_key`, `file_name`, `mime`, `size`, `related_type`, `related_id`).
 
-### Phase 7 — Tài chính quản trị
+### Phase 7 — Tài chính quản trị (ĐÃ LÀM 20/09 phần bán ra — bảng thật ở phần A)
 
 `invoices`, `invoice_items`, `payments`, `payment_allocations` (một lần thu trả cho nhiều hóa đơn), `supplier_bills`, `supplier_payments`.
 
 **Công nợ phải thu / phải trả là VIEW, không phải bảng**: `receivables` = hóa đơn − phân bổ thanh toán; `payables` tương tự. Master prompt mục 28 liệt kê `Receivable`, `Payable` như thực thể; lưu thành bảng riêng sẽ có hai nơi giữ cùng một con số và sớm muộn lệch nhau — trái với mục 4 (một nguồn dữ liệu).
 
-Doanh thu / giá vốn / lợi nhuận gộp của bảng điều hành đọc từ các view tổng hợp theo ngày (`daily_sales_summary`), làm mới bằng worker, để trang CEO không quét toàn bộ đơn hàng mỗi lần mở.
+Doanh thu / giá vốn / lợi nhuận gộp của bảng điều hành **hiện đọc thẳng từ `invoices`** lúc mở trang, chưa qua `daily_sales_summary`: ở quy mô hiện tại (vài trăm hóa đơn) một bảng tổng hợp chỉ thêm một nơi có thể lệch số và một tác vụ nền phải canh. Dựng bảng tổng hợp khi số hóa đơn vượt vài chục nghìn hoặc khi trang chậm đo được (QĐ-28).
+
+**Đã làm**: `invoices`, `invoice_items`, `payments`, `payment_allocations`. **Chưa làm**: `supplier_bills`, `supplier_payments` (công nợ phải trả), và hai view `receivables` / `payables` — công nợ phải thu hiện tính trong service bằng hàm thuần `congNo()`, chưa cần view.
 
 ### Phase 8 — Tự động hóa
 

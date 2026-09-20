@@ -85,6 +85,7 @@ async function main() {
   await seedBaoGiaMau(tenant.id, idTheoEmail);
   await seedKhoDonHangMau(tenant.id, idTheoEmail);
   await seedDichVuMau(tenant.id, idTheoEmail);
+  await seedTaiChinhMau(tenant.id, idTheoEmail);
 
   console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
   console.log("  Thử phạm vi dữ liệu: đăng nhập tp.kinhdoanh@demo.test (thấy nhóm), kd1@demo.test (chỉ thấy mình).");
@@ -598,6 +599,89 @@ async function seedDichVuMau(tenantId: string, id: Map<string, string>) {
 
   const soBaoHanh = await db.warranty.count({ where: { tenantId } });
   console.log(`✓ Dịch vụ mẫu: ${soBaoHanh} phiếu bảo hành, 2 phiếu hỗ trợ (1 đã đóng, 1 chờ khách), 1 dự án đang chạy`);
+}
+
+/**
+ * Tài chính mẫu (Phase 7) — lập hóa đơn từ đơn hàng đã giao, phát hành, thu một phần;
+ * thêm một hóa đơn dịch vụ lẻ chưa thu. Mục đích: Bảng điều hành và màn hình Công nợ có
+ * số thật để nhìn, gồm cả một khoản **đã quá hạn**. Tất cả đi qua service thật.
+ */
+async function seedTaiChinhMau(tenantId: string, id: Map<string, string>) {
+  if ((await db.invoice.count({ where: { tenantId } })) > 0) {
+    console.log("✓ Hóa đơn mẫu đã có — bỏ qua");
+    return;
+  }
+  const { voiTenant } = await import("../../src/lib/db");
+  const { taoNguCanh } = await import("../../src/lib/api");
+  const { layHoSoQuyen } = await import("../../src/lib/phan-quyen");
+  const chinh = await import("../../src/modules/cau-hinh/service");
+  const tc = await import("../../src/modules/tai-chinh/service");
+  const { LuocDoTaoHoaDon, LuocDoPhatHanh, LuocDoThuTien } = await import("../../src/modules/tai-chinh/luoc-do");
+  type NC = Parameters<typeof tc.taoHoaDon>[0];
+
+  const voi = <T>(email: string, viec: (nc: NC) => Promise<T>) =>
+    voiTenant(tenantId, async (tx) => {
+      const q = await layHoSoQuyen(tx, id.get(email)!);
+      if (!q) throw new Error(`Không đọc được quyền của ${email}`);
+      return viec(taoNguCanh(tx, tenantId, q, null, "seed-mau"));
+    });
+
+  const GD = "giamdoc@demo.test";
+  const KT = "ketoan@demo.test";
+  const ngay = (lech: number) => new Date(Date.now() + lech * 86_400_000).toISOString().slice(0, 10);
+
+  // Số ngày công nợ mặc định và ngưỡng cảnh báo — để màn hình có ngưỡng thật, không phải số bịa.
+  await voi(GD, (nc) =>
+    chinh.capNhatCauHinh(nc, { giaTri: { "tai_chinh.so_ngay_cong_no_mac_dinh": 30, "tai_chinh.canh_bao_qua_han_ngay": 15 } }),
+  );
+
+  // 1) Hóa đơn từ đơn hàng mẫu: phát hành lùi ngày, hạn đã qua → thành nợ quá hạn, đã thu một phần.
+  const don = await db.salesOrder.findFirst({
+    where: { tenantId, status: { in: ["CONFIRMED", "PARTIALLY_DELIVERED", "DELIVERED"] } },
+    select: { id: true, customerId: true },
+  });
+  if (don) {
+    const hd = await voi(KT, (nc) => tc.taoHoaDon(nc, LuocDoTaoHoaDon.parse({ donHangId: don.id, ghiChu: "Xuất theo hợp đồng lắp camera (mẫu)" })));
+    await voi(KT, (nc) =>
+      tc.phatHanhHoaDon(nc, hd.id, LuocDoPhatHanh.parse({ ngayPhatHanh: ngay(-20), hanThanhToan: ngay(-5), ghiChu: "" })),
+    );
+    const conNo = await voi(KT, (nc) => tc.hoaDonConNo(nc, don.customerId));
+    const cua = conNo.find((h) => h.id === hd.id);
+    if (cua && cua.conNo > 0) {
+      const traTruoc = Math.round(cua.conNo * 0.4);
+      await voi(KT, (nc) =>
+        tc.thuTien(nc, LuocDoThuTien.parse({
+          khachHangId: don.customerId,
+          phuongThuc: "chuyen-khoan",
+          soTien: String(traTruoc),
+          ngayThu: ngay(-12),
+          thamChieu: "UNC mẫu 0001",
+          ghiChu: "Khách trả trước 40%",
+          phanBo: [{ hoaDonId: hd.id, soTien: String(traTruoc) }],
+        })),
+      );
+    }
+  }
+
+  // 2) Hóa đơn dịch vụ lẻ, còn trong hạn — để tuổi nợ có cả nhóm "trong hạn".
+  const khachChuoi = await db.customer.findFirst({ where: { tenantId, name: { contains: "Hạnh Phúc" } }, select: { id: true } });
+  if (khachChuoi) {
+    const hd2 = await voi(KT, (nc) =>
+      tc.taoHoaDon(nc, LuocDoTaoHoaDon.parse({
+        khachHangId: khachChuoi.id,
+        ghiChu: "Phí triển khai và hướng dẫn sử dụng (mẫu)",
+        dong: [
+          { ten: "Phí khảo sát và triển khai tại 12 cửa hàng", soLuong: "1", donGia: "6.000.000", vat: 10, giaVon: "2.400.000" },
+          { ten: "Đào tạo sử dụng phần mềm xem camera", soLuong: "2", donGia: "1.500.000", vat: 10, giaVon: "600.000" },
+        ],
+      })),
+    );
+    await voi(KT, (nc) => tc.phatHanhHoaDon(nc, hd2.id, LuocDoPhatHanh.parse({ ngayPhatHanh: ngay(-3), hanThanhToan: "", ghiChu: "" })));
+  }
+
+  const soHoaDon = await db.invoice.count({ where: { tenantId } });
+  const soPhieuThu = await db.payment.count({ where: { tenantId } });
+  console.log(`✓ Tài chính mẫu: ${soHoaDon} hóa đơn đã phát hành, ${soPhieuThu} phiếu thu, có nợ quá hạn để bảng điều hành cảnh báo`);
 }
 
 main()

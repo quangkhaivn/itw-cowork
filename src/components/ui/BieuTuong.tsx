@@ -41,6 +41,10 @@ const DUONG_VE: Record<string, string> = {
   "du-an": "M3 3h7l2 3h9v13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 14l3 3 5-6",
   "bao-hanh": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4",
   "ho-tro": "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 8v4M12 15h.01",
+  // Phase 7 — tài chính
+  "hoa-don": "M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM14 2v6h6M8 13h8M8 17h5",
+  "cong-no": "M3 5h18v14H3zM3 10h18M7 15h4",
+  "phieu-thu": "M12 1v22M17 6.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 3 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
 };
 

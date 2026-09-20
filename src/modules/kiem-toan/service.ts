@@ -53,6 +53,8 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   project: "Dự án",
   project_milestone: "Hạng mục dự án",
   support_ticket: "Phiếu hỗ trợ",
+  invoice: "Hóa đơn",
+  payment: "Phiếu thu",
 };
 
 export const LuocDoLocKiemToan = z.object({
