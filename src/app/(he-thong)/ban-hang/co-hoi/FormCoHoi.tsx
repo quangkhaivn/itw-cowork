@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loiCua, useGoiApi, type LoiApi } from "@/components/ui/goi-api";
 import ChonKhachHang, { type KhachDaChon } from "@/components/crm/ChonKhachHang";
-import ONhapTien, { dinhDangNhapTien } from "@/components/crm/ONhapTien";
+import ONhapTien from "@/components/crm/ONhapTien";
+import { dinhDangNhapTien } from "@/lib/dinh-dang";
 
 export interface GiaTriCoHoi {
   id?: string;

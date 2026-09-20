@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 20/09/2026 (sau Phase 3).
+> Cập nhật lần cuối: 20/09/2026 (sau Phase 4).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -13,7 +13,7 @@ Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt
 | 1 | Nền móng: đăng nhập, người dùng, phòng ban, RBAC + phạm vi, nhật ký kiểm toán | P0 | **Xong** 19/09 — đang chạy thật (bản 0.2.1) |
 | 2 | CRM: khách hàng + chống trùng, liên hệ, lead, tương tác, cơ hội + pipeline, công việc, Customer 360 | P0 | **Xong trên máy phát triển** 20/09 (bản 0.3.0) — chưa triển khai máy thật, xem mục 4 |
 | 3 | Sản phẩm, nhóm, thương hiệu, nhà cung cấp, giá nhiều nguồn, lịch sử giá, nhập/xuất CSV | P0 | **Xong trên máy phát triển** 20/09 (bản 0.4.0) — chưa triển khai |
-| 4 | Báo giá: phiên bản, biên lợi nhuận, duyệt theo ngưỡng, PDF, chuyển đơn | P0 | Chưa |
+| 4 | Báo giá: phiên bản, biên lợi nhuận, duyệt theo ngưỡng, bản in PDF, hồ sơ công ty | P0 | **Xong trên máy phát triển** 20/09 (bản 0.5.0) — chưa triển khai. Chuyển đơn để Phase 5 |
 | 5 | Đơn hàng, kho, serial | P1 | Chưa |
 | 6 | Dự án, phiếu hỗ trợ, bảo hành, bảo trì, gia hạn | P2 | Chưa |
 | 7 | Bảng điều hành CEO | P1 | Chưa (bảng điều khiển Phase 1 chỉ có số liệu hệ thống) |
@@ -107,24 +107,31 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - [ ] Triển khai máy thật (cùng đợt với 0.3.0 — `VD-101`)
 - **Cần Giám đốc/nhân viên làm tiếp**: nhập bảng giá thật của 1–2 nhà cung cấp bằng màn hình Nhập CSV, và khai 12 nhóm sản phẩm cho khớp cách gọi nội bộ (đã tạo sẵn theo mục 9 prompt).
 
-## 4c. Phase 4 — Báo giá (việc kế tiếp)
+## 4c. Phase 4 — Báo giá (xong trên máy phát triển)
 
-Thiết kế bảng ở `DATABASE.md` phần B. Đã có sẵn: `giaChoBaoGia()` trả giá vốn tham chiếu + nguồn nên mua cho một loạt SKU; ngưỡng biên lợi nhuận ở màn hình Cấu hình (chưa đặt → mọi báo giá phải duyệt). **Cần Giám đốc**: ngưỡng biên và cấp duyệt (Q2), mẫu báo giá TGTH (logo, điều khoản) cho bản PDF.
+- [x] CSDL 4 bảng + CHECK · [x] service + 9 route · [x] 6 màn hình (danh sách, lập, sửa, chi tiết, bản in, hồ sơ công ty) · [x] kiểm thử (91 đơn vị, 246 tích hợp, 139 HTTP) · [x] soát giao diện
+- [ ] Triển khai máy thật (cùng đợt với 0.3.0 và 0.4.0 — `VD-101`)
+- **Cần Giám đốc**: đặt ngưỡng biên lợi nhuận ở Quản trị → Cấu hình (Q2); khai **Hồ sơ công ty** (địa chỉ, mã số thuế, tài khoản ngân hàng, người ký) để bản in đủ phần đầu; khai điều khoản thanh toán / giao hàng ở Quản trị → Dữ liệu gốc; gửi mẫu báo giá TGTH đang dùng (logo, câu chữ) để đối chiếu.
 
-## 5. Phase 3 trở đi — việc kế tiếp đã rõ
+## 4d. Phase 5 — Đơn hàng và kho (việc kế tiếp)
 
-Thiết kế bảng ở `DATABASE.md` phần B. Phase 3 cần tệp giá mẫu thật của nhà cung cấp để kiểm nhập CSV; Phase 4 cần mẫu báo giá TGTH (logo, điều khoản).
+Thiết kế bảng ở `DATABASE.md` phần B. Điểm nối đã sẵn: báo giá ở trạng thái "Khách chấp nhận" là đầu vào của đơn hàng (một thao tác, không nhập lại — mục 15 prompt); `quotation_items` đã chụp SKU, giá bán, giá vốn và nhà cung cấp của từng dòng.
+
+## 5. Phase 5 trở đi — việc kế tiếp đã rõ
+
+Thiết kế bảng ở `DATABASE.md` phần B.
 
 ## 6. Câu hỏi chờ Giám đốc
 
 | # | Câu hỏi | Mặc định đang chạy | Chặn |
 |---|---|---|---|
 | Q1 | Cowork là dòng thiết kế chính (VD-088)? | Coi là **có** — prompt 20/09 tiếp tục chỉ định `thegioitinhoc.io.vn` | Không chặn |
-| Q2 | Ngưỡng biên lợi nhuận + cấp duyệt (VD-095) | Chưa đặt → mọi báo giá phải duyệt | Phase 4 |
+| Q2 | Ngưỡng biên lợi nhuận + cấp duyệt (VD-095) | Chưa đặt → **mọi báo giá phải qua duyệt**; ai có `quotation.approve` (Trưởng phòng KD, Giám đốc) thì duyệt được, người lập không tự duyệt | Không chặn, nhưng làm chậm mọi báo giá cho tới khi đặt ngưỡng |
 | Q3 | Danh sách nhân sự thật (VD-091) | Chỉ có tài khoản quản trị | Đưa người dùng thật vào |
 | Q4 | Nhân viên KD thấy khách của mình hay toàn bộ (VD-096) | `own` cho NV, `team` cho TP — đổi trên màn hình Vai trò | Không chặn |
 | Q5 | Nơi cất sao lưu ngoài máy chủ (VD-068) | Sao lưu cùng máy, giữ 14 ngày | **Nên có trước khi nhập dữ liệu khách thật** |
-| Q6 | Thời điểm cho phép triển khai Phase 2 lên máy thật | Chưa triển khai; chạy trên máy phát triển | Triển khai |
+| Q6 | Thời điểm cho phép triển khai Phase 2–4 lên máy thật | Chưa triển khai; chạy trên máy phát triển | Triển khai |
+| Q7 | Mẫu báo giá TGTH đang dùng (logo, câu chữ, điều khoản chuẩn) | Bản in dùng mẫu chuẩn của hệ thống, chưa có logo | Không chặn |
 
 ## 7. Known issues
 
@@ -137,5 +144,6 @@ Xem mục "Vấn đề đã biết" của bản mới nhất trong `CHANGELOG.md
   - Không có `psql` — chạy SQL bằng thư viện `pg` của dự án (ví dụ áp `prisma/rls.sql`).
 - Vai: `cowork_owner` (chủ sở hữu, chạy migration/seed) và `cowork_app` (ứng dụng, bị RLS). Mật khẩu cục bộ trong `.env` (không commit).
 - Chạy thử bản dựng: cấu hình `cowork-itw` trong `.claude/launch.json` của vault (cổng 3300).
-- Tài khoản mẫu tenant `demo`: xem `prisma/seed/mau.ts`; CRM mẫu thuộc `kd1@demo.test`, `kd2@demo.test`, trưởng phòng `tp.kinhdoanh@demo.test` thấy cả hai.
+- Tài khoản mẫu tenant `demo`: xem `prisma/seed/mau.ts`; CRM mẫu thuộc `kd1@demo.test`, `kd2@demo.test`, trưởng phòng `tp.kinhdoanh@demo.test` thấy cả hai. Mật khẩu chung đặt bằng `DEMO_MAT_KHAU`; seed **không ghi đè** mật khẩu của tài khoản đã có, muốn đặt lại thì sửa thẳng trong CSDL.
+- Chạy `npm run thu:http` cần `THU_EMAIL` + `THU_MAT_KHAU` của quản trị tenant `itw`. Bài thử **đổi mật khẩu quản trị cục bộ** ở lần chạy đầu (thêm hậu tố `-Moi1`) rồi in ra khi đặt `THU_GHI_MAT_KHAU_MOI=1` — lần sau phải truyền mật khẩu mới, `.env` không tự cập nhật.
 - Có **một phiên Claude khác** đang khảo sát tích hợp trên cùng kho (tạo `docs/integration/`). Khi commit, chỉ `git add` tệp của mình.

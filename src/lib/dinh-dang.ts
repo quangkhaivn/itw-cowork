@@ -89,3 +89,14 @@ export function dauHomNayVN(bayGio: Date = new Date()): Date {
   const [ngay, thang, nam] = DINH_DANG_NGAY.format(bayGio).split("/");
   return new Date(`${nam}-${thang}-${ngay}T00:00:00+07:00`);
 }
+
+/**
+ * Chuỗi người dùng gõ → dạng hiển thị trong ô nhập tiền: "12000000" → "12.000.000".
+ *
+ * Để ở đây (không để trong tệp "use client") vì trang máy chủ cũng cần dựng sẵn giá trị
+ * ban đầu cho form — gọi hàm của Client Component từ máy chủ thì Next.js ném lỗi.
+ */
+export function dinhDangNhapTien(s: string): string {
+  const so = s.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  return so.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}

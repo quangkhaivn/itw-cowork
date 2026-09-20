@@ -82,6 +82,7 @@ async function main() {
 
   await seedCrmMau(tenant.id, idTheoEmail);
   await seedSanPhamMau(tenant.id, idTheoEmail);
+  await seedBaoGiaMau(tenant.id, idTheoEmail);
 
   console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
   console.log("  Thử phạm vi dữ liệu: đăng nhập tp.kinhdoanh@demo.test (thấy nhóm), kd1@demo.test (chỉ thấy mình).");
@@ -249,6 +250,134 @@ async function seedSanPhamMau(tenantId: string, id: Map<string, string>) {
     );
   }
   console.log("✓ Sản phẩm mẫu: 5 sản phẩm, 2 nhà cung cấp, 5 dòng giá (tạo qua service)");
+}
+
+/**
+ * Báo giá mẫu (Phase 4) — cũng tạo QUA SERVICE, đi đúng luồng: lập → xin duyệt → duyệt →
+ * gửi khách → chốt. Nhờ vậy dữ liệu mẫu có đủ lịch sử duyệt và phiên bản để xem thử.
+ * Mọi con số là số minh họa của tenant `demo`.
+ */
+async function seedBaoGiaMau(tenantId: string, id: Map<string, string>) {
+  if ((await db.quotation.count({ where: { tenantId } })) > 0) {
+    console.log("✓ Báo giá mẫu đã có — bỏ qua");
+    return;
+  }
+  const { voiTenant } = await import("../../src/lib/db");
+  const { taoNguCanh } = await import("../../src/lib/api");
+  const { layHoSoQuyen } = await import("../../src/lib/phan-quyen");
+  const bg = await import("../../src/modules/bao-gia/service");
+  const ch = await import("../../src/modules/co-hoi/service");
+  const chinh = await import("../../src/modules/cau-hinh/service");
+  const hoSo = await import("../../src/modules/ho-so-cong-ty/service");
+  const { LuocDoSuaPhienBan, LuocDoTaoBaoGia } = await import("../../src/modules/bao-gia/luoc-do");
+  const dlg = await import("../../src/modules/du-lieu-goc/service");
+  type NC = Parameters<typeof bg.taoBaoGia>[0];
+
+  const voi = <T>(email: string, viec: (nc: NC) => Promise<T>) =>
+    voiTenant(tenantId, async (tx) => {
+      const q = await layHoSoQuyen(tx, id.get(email)!);
+      if (!q) throw new Error(`Không đọc được quyền của ${email}`);
+      return viec(taoNguCanh(tx, tenantId, q, null, "seed-mau"));
+    });
+  const ngay = (lech: number) => new Date(Date.now() + lech * 86_400_000).toISOString().slice(0, 10);
+
+  // Giám đốc đặt ngưỡng duyệt và khai hồ sơ công ty (để bản in mẫu có đủ phần đầu).
+  await voi("giamdoc@demo.test", (nc) => chinh.capNhatCauHinh(nc, { giaTri: { "bao_gia.nguong_bien_loi_nhuan": 15 } }));
+  await voi("giamdoc@demo.test", (nc) =>
+    hoSo.capNhatHoSoCongTy(nc, {
+      giaTri: {
+        "cong_ty.ten": "Công ty Mẫu (dữ liệu thử)",
+        "cong_ty.dia_chi": "Số 1 Đường Mẫu, Phường Mẫu, TP. Hồ Chí Minh",
+        "cong_ty.dien_thoai": "0900 000 000",
+        "cong_ty.email": "lienhe@demo.test",
+        "cong_ty.nguoi_ky": "Trần Văn Mẫu",
+        "cong_ty.chuc_vu_nguoi_ky": "Giám đốc",
+        "cong_ty.dieu_khoan_mac_dinh": "Báo giá mẫu, chỉ dùng để thử hệ thống. Giá chưa gồm chi phí phát sinh ngoài phạm vi nêu trên.",
+      },
+    }),
+  );
+
+  // Điều khoản thanh toán / giao hàng là DỮ LIỆU GỐC (seed nền để trống có chủ đích),
+  // nên tenant mẫu tự khai vài mục trước khi lập báo giá.
+  const dieuKhoan: [string, string, string][] = [
+    ["dieu_khoan_thanh_toan", "tt-50-50", "50% tạm ứng, 50% khi bàn giao"],
+    ["dieu_khoan_thanh_toan", "tt-nghiem-thu", "Thanh toán sau khi nghiệm thu"],
+    ["dieu_khoan_giao_hang", "gh-7-ngay", "Giao trong 7 ngày làm việc"],
+    ["dieu_khoan_giao_hang", "gh-tai-kho", "Nhận tại kho công ty"],
+  ];
+  for (const [loai, ma, ten] of dieuKhoan) {
+    await voi("quantri@demo.test", (nc) => dlg.taoMuc(nc, { loai, ma, ten, moTa: "", thuTu: 0 }));
+  }
+
+  const sp = new Map(
+    (await db.product.findMany({ where: { tenantId }, select: { id: true, sku: true } })).map((p) => [p.sku, p.id] as const),
+  );
+  const khach = async (ten: string) =>
+    (await db.customer.findFirstOrThrow({ where: { tenantId, name: { contains: ten } }, select: { id: true } })).id;
+  const coHoiCua = async (khachHangId: string) =>
+    (await db.opportunity.findFirst({ where: { tenantId, customerId: khachHangId, stage: { notIn: ["WON", "LOST"] } }, select: { id: true }, orderBy: { createdAt: "asc" } }))?.id ?? null;
+
+  // --- 1. Biên thấp → phải qua trưởng phòng duyệt, rồi gửi khách ---
+  const anPhu = await khach("An Phú");
+  const chAnPhu = await coHoiCua(anPhu);
+  const bg1 = await voi("kd1@demo.test", (nc) =>
+    bg.taoBaoGia(nc, LuocDoTaoBaoGia.parse({
+      khachHangId: anPhu,
+      coHoiId: chAnPhu,
+      hieuLucDen: ngay(21),
+      dieuKhoanThanhToan: "tt-50-50",
+      dieuKhoanGiaoHang: "gh-7-ngay",
+      dieuKhoanBaoHanh: "Bảo hành chính hãng 24 tháng tại trung tâm bảo hành.",
+      dong: [
+        { sanPhamId: sp.get("LAP-DELL-3420"), ten: "Laptop Dell Vostro 3420 i5-1235U 8GB 256GB", soLuong: "10", donViTinh: "cai", donGia: "16.800.000", vat: 10, giaVon: "15.200.000" },
+        { sanPhamId: sp.get("DV-LAP-DAT"), ten: "Dịch vụ lắp đặt và cấu hình tại chỗ", soLuong: "10", donViTinh: "lan", donGia: "400.000", vat: 10, giaVon: "0" },
+      ],
+    })),
+  );
+  await voi("kd1@demo.test", (nc) => bg.xinDuyet(nc, bg1.id, "Khách so giá với hai nhà cung cấp khác, xin duyệt giảm."));
+  await voi("tp.kinhdoanh@demo.test", (nc) => bg.quyetDuyet(nc, bg1.id, { quyetDinh: "cho-duyet", ghiChu: "Đồng ý để giữ khách, bù bằng gói dịch vụ." }));
+  await voi("kd1@demo.test", (nc) => bg.guiKhach(nc, bg1.id, { kenh: "email", ghiChu: "Gửi qua email cho chị phụ trách mua hàng." }));
+
+  // --- 2. Biên đạt ngưỡng → gửi thẳng, khách chấp nhận ---
+  const hanhPhuc = await khach("Hạnh Phúc");
+  const chHanhPhuc = await coHoiCua(hanhPhuc);
+  const bg2 = await voi("kd2@demo.test", (nc) =>
+    bg.taoBaoGia(nc, LuocDoTaoBaoGia.parse({
+      khachHangId: hanhPhuc,
+      coHoiId: chHanhPhuc,
+      hieuLucDen: ngay(14),
+      dieuKhoanThanhToan: "tt-nghiem-thu",
+      dong: [
+        { sanPhamId: sp.get("CAM-HIK-2MP"), ten: "Camera Hikvision 2MP hồng ngoại 30m", soLuong: "24", donViTinh: "cai", donGia: "1.150.000", vat: 10, giaVon: "765.000" },
+        { sanPhamId: sp.get("SW-24P"), ten: "Switch 24 cổng Gigabit", soLuong: "2", donViTinh: "cai", donGia: "2.950.000", vat: 10, giaVon: "2.100.000" },
+      ],
+    })),
+  );
+  await voi("kd2@demo.test", (nc) => bg.guiKhach(nc, bg2.id, { kenh: "zalo", ghiChu: null }));
+  await voi("kd2@demo.test", (nc) => bg.chotBaoGia(nc, bg2.id, { ketQua: "ACCEPTED", ghiChu: "Khách chốt, hẹn lắp trong tuần." }));
+
+  // --- 3. Bản đã gửi được thay bằng phiên bản mới (V2 đang soạn) ---
+  const bg3 = await voi("kd1@demo.test", (nc) =>
+    bg.taoBaoGia(nc, LuocDoTaoBaoGia.parse({
+      khachHangId: anPhu,
+      hieuLucDen: ngay(30),
+      dong: [{ sanPhamId: sp.get("PC-VP-I5"), ten: "PC văn phòng i5 12400 / 8GB / SSD 512GB", soLuong: "6", donViTinh: "bo", donGia: "12.500.000", vat: 10, giaVon: "9.800.000" }],
+    })),
+  );
+  await voi("kd1@demo.test", (nc) => bg.guiKhach(nc, bg3.id, { kenh: "email", ghiChu: null }));
+  await voi("kd1@demo.test", (nc) => bg.chotBaoGia(nc, bg3.id, { ketQua: "NEGOTIATING", ghiChu: "Khách xin thêm 2 máy và giảm giá." }));
+  const v2 = await voi("kd1@demo.test", (nc) => bg.taoPhienBanMoi(nc, bg3.id));
+  await voi("kd1@demo.test", (nc) =>
+    bg.suaPhienBan(nc, bg3.id, LuocDoSuaPhienBan.parse({
+      ghiChu: `Bản V${v2.phienBan}: tăng lên 8 máy theo yêu cầu khách.`,
+      dong: [{ sanPhamId: sp.get("PC-VP-I5"), ten: "PC văn phòng i5 12400 / 8GB / SSD 512GB", soLuong: "8", donViTinh: "bo", donGia: "12.200.000", vat: 10, giaVon: "9.800.000", moTa: "Tặng kèm chuột và bàn phím" }],
+    })),
+  );
+
+  // Cơ hội của báo giá đã chốt: đẩy sang thắng cho khớp câu chuyện mẫu.
+  if (chHanhPhuc) await voi("kd2@demo.test", (nc) => ch.doiGiaiDoan(nc, chHanhPhuc, { giaiDoan: "WON" }));
+
+  console.log("✓ Báo giá mẫu: 3 báo giá (1 qua duyệt, 1 đã chốt, 1 có phiên bản V2), hồ sơ công ty mẫu");
 }
 
 main()

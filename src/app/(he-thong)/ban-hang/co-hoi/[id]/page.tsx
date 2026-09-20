@@ -11,6 +11,9 @@ import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { banDoTenDuLieuGoc, danhSachNguoiPhuTrach, dateVeNgay, homNayVN, luaChonDuLieuGoc } from "@/modules/crm/chung";
 import { LOP_GIAI_DOAN, NHAN_GIAI_DOAN, NHAN_TRANG_THAI_VIEC, NHAN_TUONG_TAC, NHAN_UU_TIEN, laCoHoiDangMo } from "@/modules/crm/hang-so";
 import { chiTietCoHoi } from "@/modules/co-hoi/service";
+import { dieuKienXemBaoGia } from "@/modules/bao-gia/service";
+import { LOP_TRANG_THAI_BAO_GIA, NHAN_TRANG_THAI_BAO_GIA } from "@/modules/bao-gia/tinh-toan";
+import { coQuyen } from "@/lib/phan-quyen";
 import FormCoHoi from "../FormCoHoi";
 import ThanhGiaiDoan from "./ThanhGiaiDoan";
 
@@ -41,14 +44,22 @@ export default async function TrangChiTietCoHoi({ params, searchParams }: { para
           orderBy: [{ isPrimary: "desc" }, { fullName: "asc" }],
         })
       ).map((l) => ({ id: l.id, hoTen: l.fullName }));
-      return { ...d, luaChon, tenDuLieu, nguoiSua, nguoiViec, lienHe };
+      // Chuỗi Cơ hội → Báo giá: xem ngay ở đây, không phải sang màn khác (mục 6 prompt).
+      const baoGia = coQuyen(nd.hoSo, "quotation.view")
+        ? await tx.quotation.findMany({
+            where: { AND: [{ opportunityId: id }, await dieuKienXemBaoGia(nc)] },
+            select: { id: true, number: true, status: true, currentVersion: { select: { versionNo: true, total: true } } },
+            orderBy: { createdAt: "desc" },
+          })
+        : [];
+      return { ...d, luaChon, tenDuLieu, nguoiSua, nguoiViec, lienHe, baoGia };
     } catch (loi) {
       if (loi instanceof LoiKhongTimThay) return null;
       throw loi;
     }
   });
   if (!duLieu) notFound();
-  const { coHoi, tuongTac, viec, leadGoc, quyen, luaChon, tenDuLieu, nguoiSua, nguoiViec, lienHe } = duLieu;
+  const { coHoi, tuongTac, viec, leadGoc, quyen, luaChon, tenDuLieu, nguoiSua, nguoiViec, lienHe, baoGia } = duLieu;
   const dangMo = laCoHoiDangMo(coHoi.giaiDoan);
   const quaHan = dangMo && coHoi.ngayHanhDong && dateVeNgay(coHoi.ngayHanhDong) < homNayVN();
 
@@ -67,7 +78,16 @@ export default async function TrangChiTietCoHoi({ params, searchParams }: { para
             )}
           </>
         }
-        hanhDong={quyen.taoViec && <NutTaoViec ganKem={{ coHoiId: coHoi.id }} nguoiPhuTrach={nguoiViec} toiId={nd.hoSo.userId} />}
+        hanhDong={
+          <>
+            {coQuyen(nd.hoSo, "quotation.create") && dangMo && (
+              <Link className="nut" href={`/ban-hang/bao-gia/moi?coHoi=${coHoi.id}`}>
+                Lập báo giá
+              </Link>
+            )}
+            {quyen.taoViec && <NutTaoViec ganKem={{ coHoiId: coHoi.id }} nguoiPhuTrach={nguoiViec} toiId={nd.hoSo.userId} />}
+          </>
+        }
       />
 
       {moTao && <div className="hop-thong-bao tot" role="status">Đã tạo cơ hội {coHoi.ma}.</div>}
@@ -157,6 +177,42 @@ export default async function TrangChiTietCoHoi({ params, searchParams }: { para
                 <dt>Tạo lúc</dt>
                 <dd>{dinhDangNgayGio(coHoi.taoLuc)}</dd>
               </dl>
+            </section>
+          )}
+
+          {baoGia.length > 0 && (
+            <section className="the">
+              <div className="dau">
+                <h2>Báo giá</h2>
+                {coQuyen(nd.hoSo, "quotation.create") && dangMo && (
+                  <Link className="nut nho" href={`/ban-hang/bao-gia/moi?coHoi=${coHoi.id}`}>
+                    Lập báo giá
+                  </Link>
+                )}
+              </div>
+              <table className="bang">
+                <thead>
+                  <tr>
+                    <th>Số báo giá</th>
+                    <th>Trạng thái</th>
+                    <th className="so">Giá trị</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {baoGia.map((b) => (
+                    <tr key={b.id}>
+                      <td>
+                        <Link href={`/ban-hang/bao-gia/${b.id}`}>{b.number}</Link>
+                        {b.currentVersion && <div className="dong-phu">Phiên bản V{b.currentVersion.versionNo}</div>}
+                      </td>
+                      <td>
+                        <span className={`huy-hieu ${LOP_TRANG_THAI_BAO_GIA[b.status] ?? ""}`}>{NHAN_TRANG_THAI_BAO_GIA[b.status] ?? b.status}</span>
+                      </td>
+                      <td className="so">{b.currentVersion ? dinhDangTien(b.currentVersion.total.toString()) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </section>
           )}
 

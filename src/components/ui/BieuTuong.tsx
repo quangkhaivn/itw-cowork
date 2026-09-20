@@ -28,6 +28,9 @@ const DUONG_VE: Record<string, string> = {
   "thuong-hieu": "M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01",
   "nha-cung-cap": "M10 17h4V5H2v12h3M20 17h2v-3.3a4 4 0 0 0-.9-2.5L18.6 8H14v9h2M8 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0zM16 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0z",
   "nhap-csv": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",
+  // Phase 4 — báo giá
+  "bao-gia": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h4M9 9h1",
+  "ho-so-cong-ty": "M3 21h18M5 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M15 8h3a1 1 0 0 1 1 1v12M9 7h2M9 11h2M9 15h2",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
 };
 

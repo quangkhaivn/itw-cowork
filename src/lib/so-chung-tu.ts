@@ -23,6 +23,7 @@ export const KIEU_SO = {
   lead: { loai: "lead", tienTo: "LD", doDai: 6, theoNam: false },
   coHoi: { loai: "opportunity", tienTo: "CH", doDai: 4, theoNam: true },
   nhaCungCap: { loai: "supplier", tienTo: "NCC", doDai: 4, theoNam: false },
+  baoGia: { loai: "quotation", tienTo: "QT", doDai: 4, theoNam: true },
 } satisfies Record<string, KieuSo>;
 
 /** Năm hiện tại theo giờ Việt Nam (31/12 23:30 UTC đã là năm mới ở Việt Nam). */

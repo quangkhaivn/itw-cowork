@@ -2,6 +2,36 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.5.0 — 20/09/2026 — Phase 4: Báo giá
+
+Căn cứ: prompt triển khai 36 mục, mục 10–14. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 5 (BG-01 → BG-10).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 và 0.4.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **CSDL** (migration `20260920015506_phase4_bao_gia`, chỉ thêm bảng): `quotations`, `quotation_versions`, `quotation_items`, `quotation_approvals`; CHECK cho trạng thái, tiền không âm, số lượng > 0, chiết khấu/VAT 0–100, đã gửi phải có thời điểm gửi, đã quyết duyệt phải có người quyết.
+- **Một báo giá, nhiều phiên bản**: số `QT-2026-0001`, bản hiển thị `QT-2026-0001-V2`. Sửa bản đã gửi thì tạo phiên bản mới, bản cũ chuyển "Đã thay bằng bản mới" và **giữ nguyên để đối chiếu**.
+- **Tính tiền và biên lợi nhuận bằng một hàm thuần** dùng chung cho giao diện, API và bản in: làm tròn từng dòng về đồng rồi cộng (bảng in cộng đúng bằng tổng); doanh thu 0 trả biên `null`, không phải 0%.
+- **Luồng duyệt theo ngưỡng**: biên dưới `bao_gia.nguong_bien_loi_nhuan` (đọc từ Cấu hình, **không viết cứng**) thì phải xin duyệt; **ngưỡng chưa đặt thì mọi báo giá phải duyệt**; người lập không tự duyệt trừ người có phạm vi duyệt toàn công ty; sửa bản đã duyệt thì quay về Nháp.
+- **Gửi khách và chốt**: ghi kênh gửi (email / Zalo / in giấy) và thời điểm — hệ thống chưa tự gửi email; gửi báo giá đẩy cơ hội sang giai đoạn "Báo giá"; chốt Chấp nhận / Từ chối / Đang thương lượng.
+- **Giá vốn và SKU chụp lại trên từng dòng hàng** lúc lập, nên nhà cung cấp đổi giá sau đó không làm đổi con số của báo giá cũ.
+- **Bản in / PDF** (`/bao-gia/<id>/in`): mẫu A4 có phần đầu công ty, người nhận, bảng hàng, tổng tiền, **tiền bằng chữ**, điều khoản và chỗ ký; in hoặc lưu PDF bằng hộp thoại in của trình duyệt (QĐ-21).
+- **Hồ sơ công ty** (Quản trị → Hồ sơ công ty): tên, địa chỉ, mã số thuế, liên hệ, ngân hàng, người ký, điều khoản in cuối chứng từ. **Không điền sẵn gì** — mục nào chưa khai thì bản in để trống kèm nhắc (QĐ-22).
+- **Màn hình**: danh sách báo giá (tóm tắt đang chạy / đã nhận / hàng đợi duyệt, lọc theo trạng thái và người lập), lập báo giá với ô tìm sản phẩm lấy sẵn giá bán + giá vốn theo nguồn nên mua, sửa phiên bản đang soạn, chi tiết có thẻ phiên bản và lịch sử duyệt, bản in, hồ sơ công ty. Trang cơ hội có nút "Lập báo giá" và danh sách báo giá của cơ hội đó.
+- 9 route `/api/v1` mới (`/bao-gia`, `/bao-gia/goi-y-san-pham`, `/bao-gia/[id]`, `/phien-ban`, `/xin-duyet`, `/duyet`, `/gui`, `/chot`, `/ho-so-cong-ty`).
+- Dữ liệu mẫu tenant `demo`: 3 báo giá đi đủ luồng (một qua duyệt rồi gửi, một khách đã chấp nhận, một có phiên bản V2 đang soạn) + hồ sơ công ty mẫu.
+- Kiểm thử: 18 bài đơn vị mới (**91**), `thu-bao-gia` 34 kiểm chứng (tích hợp **246**), `thu-http` thêm 28 kiểm chứng (**139**).
+
+### Sửa
+- **Rò dữ liệu giữa các doanh nghiệp ở phần đầu bản in**: `docHoSoCongTy()` hỏi bảng `tenants` mà không lọc theo tenant. Bảng này cho đọc mọi dòng đang hoạt động (cần cho lúc đăng nhập), nên Postgres trả về **doanh nghiệp bất kỳ** — bản in có thể mang tên và mã số thuế của công ty khác. Nay bắt buộc truyền `tenantId`.
+- **Trang sửa báo giá trắng trang**: Server Component gọi `dinhDangNhapTien()` đặt trong tệp `"use client"` → Next.js ném lỗi lúc dựng trang. Hàm thuần đã chuyển về `src/lib/dinh-dang.ts` (QĐ-23); thêm bài thử HTTP dựng trang sửa để không tái diễn.
+- Nhãn phase ở chân thanh bên và `PHASE_HIEN_TAI` còn dừng ở Phase 1–2, nay đúng Phase 4 (màn hình Cấu hình vì thế không còn báo nhầm "chưa dùng đến" cho ngưỡng biên lợi nhuận).
+
+### Vấn đề đã biết
+- **Chưa chuyển báo giá đã chấp nhận thành đơn hàng** — chưa có bảng đơn hàng, để Phase 5.
+- Chưa gửi email tự động; người dùng gửi rồi ghi nhận lại (Phase 8).
+- Bản in chưa có logo (chưa có chỗ tải tệp ảnh trong hệ thống) và chưa có mẫu song ngữ.
+- Báo giá hết hiệu lực mới **hiển thị** là hết hiệu lực, chưa có tác vụ nền tự chuyển trạng thái (Phase 8).
+
 ## 0.4.0 — 20/09/2026 — Phase 3: Sản phẩm và bảng giá
 
 Căn cứ: prompt triển khai 36 mục, mục 8–9. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 4.

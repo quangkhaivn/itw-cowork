@@ -23,7 +23,9 @@ export type BieuTuong =
   | "nhom"
   | "thuong-hieu"
   | "nha-cung-cap"
-  | "nhap-csv";
+  | "nhap-csv"
+  | "bao-gia"
+  | "ho-so-cong-ty";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -65,6 +67,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     muc: [
       { nhan: "Pipeline", href: "/ban-hang/pipeline", quyen: "sales.view", bieuTuong: "pipeline", tuKhoa: "kanban pipeline giai doan" },
       { nhan: "Cơ hội", href: "/ban-hang/co-hoi", quyen: "sales.view", bieuTuong: "co-hoi", tuKhoa: "opportunity co hoi ban hang" },
+      { nhan: "Báo giá", href: "/ban-hang/bao-gia", quyen: "quotation.view", bieuTuong: "bao-gia", tuKhoa: "quotation bao gia phien ban duyet gui khach" },
     ],
   },
   {
@@ -89,6 +92,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Phòng ban", href: "/quan-tri/phong-ban", quyen: "department.view", bieuTuong: "phong-ban", tuKhoa: "departments to chuc" },
       { nhan: "Dữ liệu gốc", href: "/quan-tri/du-lieu-goc", quyen: "master_data.view", bieuTuong: "du-lieu-goc", tuKhoa: "master data danh muc nguon lead don vi tinh" },
       { nhan: "Cấu hình hệ thống", href: "/quan-tri/cau-hinh", quyen: "setting.view", bieuTuong: "cau-hinh", tuKhoa: "settings nguong bien loi nhuan" },
+      { nhan: "Hồ sơ công ty", href: "/quan-tri/ho-so-cong-ty", quyen: "setting.view", bieuTuong: "ho-so-cong-ty", tuKhoa: "company profile dia chi ma so thue tai khoan nguoi ky ban in" },
       { nhan: "Nhật ký kiểm toán", href: "/quan-tri/nhat-ky-kiem-toan", quyen: "audit_log.view", bieuTuong: "nhat-ky", tuKhoa: "audit log lich su" },
     ],
   },

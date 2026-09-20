@@ -394,6 +394,99 @@ async function main() {
   const timSp = await goi(`/api/v1/tim-kiem?q=${encodeURIComponent(skuThu)}`, { cookie: dnNv.cookie });
   dat("Tìm kiếm toàn cục ra sản phẩm theo SKU", ((timSp.json.ketQua as { loai: string }[]) ?? []).some((k) => k.loai === "san-pham"));
 
+  // --- 7d. Báo giá (Phase 4) ---
+  const cacTrangBg: [string, string][] = [
+    ["/ban-hang/bao-gia", "Báo giá"],
+    ["/ban-hang/bao-gia/moi", "Lập báo giá"],
+    ["/quan-tri/ho-so-cong-ty", "Hồ sơ công ty"],
+  ];
+  for (const [duong, chu] of cacTrangBg) {
+    const r = await goi(duong, { cookie: cookieQT });
+    dat(`Trang ${duong} trả 200 và có nội dung`, r.status === 200 && r.text.includes(chu) && !r.text.includes("Không hiển thị được trang này"), `status ${r.status}`);
+  }
+
+  // Ngưỡng cao → mọi báo giá phải duyệt. Cuối mục trả ngưỡng về chưa đặt.
+  const datNguong = await goi("/api/v1/cau-hinh", { phuongThuc: "PATCH", cookie: cookieQT, than: { giaTri: { "bao_gia.nguong_bien_loi_nhuan": 90 } } });
+  dat("Đặt ngưỡng biên lợi nhuận qua API", datNguong.status === 200);
+
+  const goiYSp = await goi(`/api/v1/bao-gia/goi-y-san-pham?q=${encodeURIComponent(skuThu)}`, { cookie: dnNv.cookie });
+  const dsGoiY = (goiYSp.json as unknown as { sku: string; giaBan: string; giaVon: string }[]) ?? [];
+  dat("Gợi ý sản phẩm cho báo giá trả giá bán và giá vốn theo nguồn nên mua", goiYSp.status === 200 && dsGoiY.some((g) => g.sku === skuThu && g.giaVon === "14500000"), JSON.stringify(dsGoiY[0]));
+
+  const khachNv = nvTaoKh.json.id as string;
+  const taoBg = await goi("/api/v1/bao-gia", {
+    phuongThuc: "POST",
+    cookie: dnNv.cookie,
+    than: {
+      khachHangId: khachNv,
+      hieuLucDen: ngayMai,
+      dong: [{ sanPhamId: idSp, ten: `Laptop thử HTTP ${DAU}`, soLuong: "2", donGia: "18.000.000", vat: 10, giaVon: "14.500.000" }],
+    },
+  });
+  dat("Nhân viên lập được báo giá, số QT-", taoBg.status === 200 && String(taoBg.json.so).startsWith("QT-"), JSON.stringify(taoBg.json));
+  const idBg = taoBg.json.id as string;
+
+  const ctBg = await goi(`/api/v1/bao-gia/${idBg}`, { cookie: dnNv.cookie });
+  const pbBg = (ctBg.json as unknown as { baoGia: { phienBanHienHanh: { tongCong: string; bienLoiNhuan: number; trangThai: string } } }).baoGia.phienBanHienHanh;
+  dat("Tổng tiền và biên lợi nhuận tính đúng (36tr + VAT, biên 19,44%)", pbBg.tongCong === "39600000" && pbBg.bienLoiNhuan === 19.44, JSON.stringify({ t: pbBg.tongCong, b: pbBg.bienLoiNhuan }));
+
+  const guiSom = await goi(`/api/v1/bao-gia/${idBg}/gui`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { kenh: "email" } });
+  dat("Dưới ngưỡng: gửi khách khi chưa duyệt bị 409", guiSom.status === 409 && guiSom.json.ma === "phai-duyet", `status ${guiSom.status}`);
+  const nvTuDuyet = await goi(`/api/v1/bao-gia/${idBg}/duyet`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { quyetDinh: "cho-duyet" } });
+  dat("Nhân viên không có quyền duyệt báo giá", nvTuDuyet.status === 403);
+
+  const xinDuyetBg = await goi(`/api/v1/bao-gia/${idBg}/xin-duyet`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { ghiChu: "Khách quen, xin duyệt" } });
+  dat("Xin duyệt chuyển sang chờ duyệt", xinDuyetBg.status === 200);
+  const hangDoi = await goi("/api/v1/bao-gia?choDuyet=1", { cookie: cookieQT });
+  dat("Hàng đợi duyệt của quản trị có báo giá vừa xin", hangDoi.status === 200 && ((hangDoi.json.dong as { id: string }[]) ?? []).some((b) => b.id === idBg));
+  const duyetBg = await goi(`/api/v1/bao-gia/${idBg}/duyet`, { phuongThuc: "POST", cookie: cookieQT, than: { quyetDinh: "cho-duyet", ghiChu: "Đồng ý" } });
+  dat("Người có quyền duyệt thì duyệt được", duyetBg.status === 200);
+
+  const guiBg = await goi(`/api/v1/bao-gia/${idBg}/gui`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { kenh: "email", ghiChu: "Gửi email" } });
+  dat("Duyệt xong thì gửi khách được", guiBg.status === 200);
+  const suaDaGui = await goi(`/api/v1/bao-gia/${idBg}`, { phuongThuc: "PATCH", cookie: dnNv.cookie, than: { ghiChu: "Sửa lén" } });
+  dat("Bản đã gửi không sửa trực tiếp được (409 da-gui)", suaDaGui.status === 409 && suaDaGui.json.ma === "da-gui", `status ${suaDaGui.status}`);
+  const banMoi = await goi(`/api/v1/bao-gia/${idBg}/phien-ban`, { phuongThuc: "POST", cookie: dnNv.cookie });
+  dat("Tạo phiên bản V2 từ bản đã gửi", banMoi.status === 200 && banMoi.json.phienBan === 2, JSON.stringify(banMoi.json));
+
+  const banIn = await goi(`/bao-gia/${idBg}/in`, { cookie: dnNv.cookie });
+  dat("Bản in báo giá dựng được và có tiền bằng chữ", banIn.status === 200 && banIn.text.includes("BÁO GIÁ") && banIn.text.includes("Bằng chữ"), `status ${banIn.status}`);
+  const trangBg = await goi(`/ban-hang/bao-gia/${idBg}`, { cookie: dnNv.cookie });
+  dat("Trang chi tiết báo giá dựng được", trangBg.status === 200 && trangBg.text.includes(String(taoBg.json.so)));
+  const trangSua = await goi(`/ban-hang/bao-gia/${idBg}/sua`, { cookie: dnNv.cookie });
+  dat("Trang sửa báo giá dựng được bảng hàng (không trắng)", trangSua.status === 200 && trangSua.text.includes("Bảng hàng"), `status ${trangSua.status}`);
+
+  // Ngưỡng thấp → biên đạt ngưỡng, gửi thẳng không cần duyệt.
+  await goi("/api/v1/cau-hinh", { phuongThuc: "PATCH", cookie: cookieQT, than: { giaTri: { "bao_gia.nguong_bien_loi_nhuan": 5 } } });
+  const bgDat = await goi("/api/v1/bao-gia", {
+    phuongThuc: "POST",
+    cookie: dnNv.cookie,
+    than: { khachHangId: khachNv, dong: [{ ten: "Dịch vụ cài đặt", soLuong: "1", donGia: "5.000.000", vat: 10, giaVon: "1.000.000" }] },
+  });
+  const guiThang = await goi(`/api/v1/bao-gia/${bgDat.json.id}/gui`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { kenh: "zalo" } });
+  dat("Biên đạt ngưỡng thì gửi thẳng, không phải duyệt", bgDat.status === 200 && guiThang.status === 200, `tạo ${bgDat.status}, gửi ${guiThang.status}`);
+  const chotBg = await goi(`/api/v1/bao-gia/${bgDat.json.id}/chot`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { ketQua: "ACCEPTED", ghiChu: "Khách đồng ý" } });
+  dat("Ghi kết quả khách chấp nhận", chotBg.status === 200);
+
+  // Phạm vi: báo giá của quản trị, nhân viên không thấy.
+  const bgQt = await goi("/api/v1/bao-gia", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, dong: [{ ten: "Hạng mục của quản trị", soLuong: "1", donGia: "1.000.000", vat: 10 }] },
+  });
+  const nvXemBgQt = await goi(`/api/v1/bao-gia/${bgQt.json.id}`, { cookie: dnNv.cookie });
+  dat("Nhân viên gọi báo giá ngoài phạm vi bị 404", bgQt.status === 200 && nvXemBgQt.status === 404, `status ${nvXemBgQt.status}`);
+
+  // Hồ sơ công ty: chỉ người có quyền cấu hình mới xem và sửa.
+  const nvXemHs = await goi("/api/v1/ho-so-cong-ty", { cookie: dnNv.cookie });
+  dat("Nhân viên không xem được hồ sơ công ty", nvXemHs.status === 403);
+  const suaHs = await goi("/api/v1/ho-so-cong-ty", { phuongThuc: "PATCH", cookie: cookieQT, than: { giaTri: { "cong_ty.dien_thoai": `0900 000 ${DAU.slice(-3)}` } } });
+  dat("Quản trị cập nhật được hồ sơ công ty", suaHs.status === 200 && Number(suaHs.json.soDoi) === 1, JSON.stringify(suaHs.json));
+
+  // Trả ngưỡng về trạng thái chưa đặt để không ảnh hưởng dữ liệu thử của phiên sau.
+  const xoaNguong = await goi("/api/v1/cau-hinh", { phuongThuc: "PATCH", cookie: cookieQT, than: { giaTri: { "bao_gia.nguong_bien_loi_nhuan": null } } });
+  dat("Trả ngưỡng biên lợi nhuận về chưa đặt", xoaNguong.status === 200);
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

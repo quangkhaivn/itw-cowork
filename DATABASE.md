@@ -18,7 +18,7 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 
 ---
 
-## A. Đang có (Phase 1 chạy thật; Phase 2 chờ triển khai)
+## A. Đang có (Phase 1 chạy thật; Phase 2–4 chờ triển khai)
 
 | Bảng | Vai trò | Ghi chú |
 |---|---|---|
@@ -48,8 +48,12 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `supplier_product_prices` | Giá mua theo từng nhà cung cấp | Phase 3. Duy nhất `(tenant_id, product_id, supplier_id)`; CHECK tình trạng hàng, giá ≥ 0 |
 | `price_history` | Lịch sử giá | Phase 3. **Chỉ ghi thêm** (trigger `chan_sua_price_history`); CHECK giá cũ ≠ giá mới |
 | `import_jobs` | Mỗi lần nhập CSV: số dòng tạo/sửa/hỏng và lỗi từng dòng | Phase 3 |
+| `quotations` | Đầu phiếu báo giá | Phase 4. Số `QT-2026-0001`; duy nhất `(tenant_id, number)`; trỏ `current_version_id` |
+| `quotation_versions` | Mỗi bản gửi khách là một phiên bản | Phase 4. Duy nhất `(quotation_id, version_no)`; CHECK trạng thái, tiền ≥ 0, đã gửi thì có `sent_at`, đã chốt thì có `decided_at` |
+| `quotation_items` | Bảng hàng của một phiên bản | Phase 4. CHECK `quantity > 0`, chiết khấu và VAT 0–100; chụp `sku`, `unit_cost`, `supplier_id` lúc lập |
+| `quotation_approvals` | Lịch sử xin duyệt / quyết duyệt | Phase 4. Chụp biên và ngưỡng lúc xin; CHECK đã quyết thì phải có người quyết và thời điểm |
 
-Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn).
+Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ).
 
 Vai kết nối: `cowork_app` (ứng dụng, bị RLS) và chủ sở hữu (migration, seed). Ứng dụng **không bao giờ** chạy bằng chủ sở hữu.
 
@@ -107,11 +111,11 @@ Khác đề xuất: thêm `sku_normalized`/`name_normalized` để chống trùn
 | `price_history` | `product_id`, `price_type` (cost/selling/supplier), `supplier_id`, `old_price`, `new_price`, `changed_by`, `changed_at`, `reason` | Chỉ ghi thêm. Ghi bằng service mỗi lần đổi giá (mục 20: đổi giá phải kiểm toán) |
 | `import_jobs` | `type`, `file_name`, `status`, `total_rows`, `ok_rows`, `error_rows`, `errors jsonb` | Nhập CSV/Excel chạy nền, báo lỗi từng dòng |
 
-### Phase 4 — Báo giá (ưu tiên cao nhất)
+### Phase 4 — Báo giá (ĐÃ LÀM 20/09 — bảng thật ở phần A; bảng dưới là đề xuất gốc 19/09)
 
 | Bảng | Cột chính | Ghi chú |
 |---|---|---|
-| `quotations` | `number` (BG-2026-0001), `customer_id`, `contact_id`, `opportunity_id`, `owner_id`, `current_version_id`, `status` | Đầu phiếu, trỏ tới phiên bản hiện hành |
+| `quotations` | `number` (thực tế dùng `QT-2026-0001`), `customer_id`, `contact_id`, `opportunity_id`, `owner_id`, `current_version_id`, `status` | Đầu phiếu, trỏ tới phiên bản hiện hành |
 | `quotation_versions` | `quotation_id`, `version_no`, `payment_terms`, `delivery_terms`, `warranty_terms`, `valid_until`, `notes`, `subtotal`, `discount_total`, `vat_total`, `total`, `cost_total`, `gross_profit`, `gross_margin`, `status`, `sent_at`, `viewed_at` | **Đóng băng** khi đã gửi: sửa = tạo phiên bản mới. Các cột tổng là ảnh chụp tại thời điểm tính — lưu có chủ đích vì đây là chứng từ đã gửi khách |
 | `quotation_items` | `version_id`, `line_no`, `product_id`, `description`, `quantity`, `unit`, `unit_price`, `discount_pct`, `vat_rate`, `unit_cost`, `supplier_id`, `line_total`, `line_cost` | Giá vốn chụp tại lúc lập để biên lợi nhuận không đổi khi giá nhập đổi sau này |
 | `quotation_approvals` | `version_id`, `required_reason` (margin_below_threshold…), `margin_at_request`, `threshold_at_request`, `requested_by`, `decided_by`, `decision`, `decided_at`, `comment` | Chụp cả ngưỡng tại lúc xin duyệt |

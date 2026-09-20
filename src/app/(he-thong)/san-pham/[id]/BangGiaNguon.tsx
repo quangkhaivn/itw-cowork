@@ -7,7 +7,8 @@ import HopThoai from "@/components/ui/HopThoai";
 import BieuTuong from "@/components/ui/BieuTuong";
 import TrongRong from "@/components/ui/TrongRong";
 import { loiCua, useGoiApi } from "@/components/ui/goi-api";
-import ONhapTien, { dinhDangNhapTien } from "@/components/crm/ONhapTien";
+import ONhapTien from "@/components/crm/ONhapTien";
+import { dinhDangNhapTien } from "@/lib/dinh-dang";
 import { dinhDangNgayGio, dinhDangTien } from "@/lib/dinh-dang";
 import { NHAN_TRANG_THAI_HANG, TRANG_THAI_HANG } from "@/modules/san-pham/chuan-hoa";
 

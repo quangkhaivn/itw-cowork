@@ -6,7 +6,8 @@ import HopThoai from "@/components/ui/HopThoai";
 import { loiCua, useGoiApi } from "@/components/ui/goi-api";
 import ChonKhachHang, { type KhachDaChon } from "@/components/crm/ChonKhachHang";
 import DanhSachTrung, { type UngVienTrung } from "@/components/crm/DanhSachTrung";
-import ONhapTien, { dinhDangNhapTien } from "@/components/crm/ONhapTien";
+import ONhapTien from "@/components/crm/ONhapTien";
+import { dinhDangNhapTien } from "@/lib/dinh-dang";
 
 type LuaChon = Record<string, { ma: string; ten: string }[]>;
 

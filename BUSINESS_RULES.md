@@ -114,10 +114,25 @@ Quyền: sản phẩm, nhóm, thương hiệu dùng `product.*`; nhà cung cấp
 | SP-10 | Ô giá trong CSV: trống hoặc ghi rõ "liên hệ", "—", "N/A" = chưa có giá; nội dung khác mà không đọc được ra số thì **báo lỗi dòng**, không âm thầm coi là không có giá | [SV] hàm thuần · [TH] |
 | SP-11 | Nhập CSV cập nhật sản phẩm cũ **không đổi cách viết SKU** đã có trên hệ thống | [SV] · [TH] |
 
-## 5. Báo giá (Phase 4 — đã chốt từ prompt, chưa triển khai)
+## 5. Báo giá (Phase 4)
 
-- Biên lợi nhuận gộp % = (Doanh thu − Giá vốn) / Doanh thu × 100. Hàm thuần, có bài thử.
-- Dưới ngưỡng `bao_gia.nguong_bien_loi_nhuan` → `PENDING_APPROVAL` → Trưởng phòng KD / Giám đốc duyệt. Ngưỡng chưa đặt → mọi báo giá phải duyệt.
-- Báo giá đã gửi không sửa; sửa = phiên bản mới `QT-2026-0001-V2`.
-- Chấp nhận → chuyển đơn một thao tác, không nhập lại.
-- AI chỉ tạo `DRAFT`.
+Quyền `quotation.*`. **Phạm vi**: theo người lập (`quotations.owner_id`), **cộng** đường "chủ tài khoản khách" — ai thấy khách thì thấy báo giá của khách đó (QĐ-13, giống cơ hội). Ngoài phạm vi trả **404**, không phải 403.
+
+Kiến trúc: `quotations` là đầu phiếu (số `QT-2026-0001`, khách hàng, người lập); mỗi `quotation_versions` là **một bản gửi khách**; `quotation_items` là bảng hàng của bản đó; `quotation_approvals` là lịch sử xin duyệt / quyết duyệt.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| BG-01 | Số báo giá `QT-<năm>-0001` cấp theo năm giờ Việt Nam, nguyên tử, **không tái sử dụng** kể cả khi giao dịch sau đó hỏng. Số hiển thị của một bản là `QT-2026-0001-V2` | [SV] `capSoChungTu` · [CSDL] duy nhất `(tenant_id, number)` |
+| BG-02 | Bản **đã gửi khách** không sửa trực tiếp. Muốn đổi số liệu thì tạo **phiên bản mới**: bản cũ chuyển `SUPERSEDED` và giữ nguyên để đối chiếu, bản mới chép lại toàn bộ dòng hàng | [SV] · [TH] (trang sửa từ chối mở) |
+| BG-03 | Biên lợi nhuận gộp % = (Doanh thu trước thuế − Giá vốn) / Doanh thu trước thuế × 100. Làm tròn **từng dòng** về đồng rồi cộng — để bảng in cộng đúng bằng tổng. Doanh thu bằng 0 → biên là `null`, **không phải 0%** | [SV] hàm thuần có kiểm thử đơn vị |
+| BG-04 | Biên **dưới** ngưỡng `bao_gia.nguong_bien_loi_nhuan` → phải xin duyệt trước khi gửi khách. **Ngưỡng chưa đặt → mọi báo giá phải duyệt** (an toàn hơn tự chọn một con số). Biên chưa tính được cũng phải duyệt | [SV] `canDuyet` + chặn ở `guiKhach` · [TH] |
+| BG-05 | **Người lập không tự duyệt báo giá của mình**, trừ người có phạm vi duyệt `all` (Giám đốc) | [SV] · [TH] |
+| BG-06 | Trạng thái đi một chiều: `DRAFT` → `PENDING_APPROVAL` → `APPROVED` → `SENT` → (`VIEWED` / `NEGOTIATING`) → `ACCEPTED` \| `REJECTED`. Từ chối duyệt hoặc **sửa bản đã duyệt** thì quay về `DRAFT` — vì người duyệt đã duyệt cho con số cũ | [SV] · [CSDL] CHECK danh sách trạng thái |
+| BG-07 | Giá vốn và SKU được **chụp lại trên từng dòng hàng** lúc lập. Nhà cung cấp đổi giá sau đó không làm đổi con số của báo giá cũ | [SV] · [CSDL] |
+| BG-08 | Số lượng > 0 (tối đa 3 số lẻ); đơn giá, giá vốn, các cột tiền không âm; chiết khấu và VAT trong 0–100% | [CSDL] CHECK · [SV] lược đồ · [TH] |
+| BG-09 | Gửi khách **ghi lại thời điểm và kênh gửi** (email, Zalo, in giấy) — hệ thống chưa tự gửi email, người dùng gửi rồi ghi nhận. Gửi báo giá đẩy cơ hội liên quan sang giai đoạn `QUOTATION` | [SV] · [TH] |
+| BG-10 | Điều khoản thanh toán và giao hàng là **Dữ liệu gốc** (`dieu_khoan_thanh_toan`, `dieu_khoan_giao_hang`), không phải chữ gõ tự do — để dùng lại và thống kê được. Đơn vị tính trên dòng hàng cũng lấy từ Dữ liệu gốc `don_vi_tinh` | [SV] `kiemTraMaDuLieuGoc` · [TH] (ô chọn) |
+
+**Bản in (PDF)**: bản in là HTML có `@media print`, người dùng bấm "In / Lưu PDF" của trình duyệt (QĐ-21). Phần đầu lấy từ **Hồ sơ công ty** (Quản trị → Hồ sơ công ty). Mục nào chưa khai thì **để trống kèm nhắc**, hệ thống không tự điền thông tin pháp nhân (mục 5 luật vault).
+
+**Chưa làm ở phase này**: chuyển báo giá đã chấp nhận thành đơn hàng (Phase 5); gửi email tự động; AI soạn `DRAFT` (Phase 9).

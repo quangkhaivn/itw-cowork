@@ -29,31 +29,36 @@ model Tenant {
   createdBy String?  @map("created_by") @db.Uuid
   updatedBy String?  @map("updated_by") @db.Uuid
 
-  settings          TenantSetting[]
-  users             User[]
-  departments       Department[]
-  roles             Role[]
-  staffProfiles     StaffProfile[]
-  userRoles         UserRole[]
-  events            BusinessEvent[]
-  auditLogs         AuditLog[]
-  masterData        MasterDataItem[]
+  settings           TenantSetting[]
+  users              User[]
+  departments        Department[]
+  roles              Role[]
+  staffProfiles      StaffProfile[]
+  userRoles          UserRole[]
+  events             BusinessEvent[]
+  auditLogs          AuditLog[]
+  masterData         MasterDataItem[]
   // Phase 2 — CRM
-  sequences         DocumentSequence[]
-  customers         Customer[]
-  contacts          Contact[]
-  leads             Lead[]
-  interactions      Interaction[]
-  opportunities     Opportunity[]
-  tasks             Task[]
+  sequences          DocumentSequence[]
+  customers          Customer[]
+  contacts           Contact[]
+  leads              Lead[]
+  interactions       Interaction[]
+  opportunities      Opportunity[]
+  tasks              Task[]
   // Phase 3 — Sản phẩm và bảng giá
-  productCategories ProductCategory[]
-  brands            Brand[]
-  suppliers         Supplier[]
-  products          Product[]
-  supplierPrices    SupplierProductPrice[]
-  priceHistory      PriceHistory[]
-  importJobs        ImportJob[]
+  productCategories  ProductCategory[]
+  brands             Brand[]
+  suppliers          Supplier[]
+  products           Product[]
+  supplierPrices     SupplierProductPrice[]
+  priceHistory       PriceHistory[]
+  importJobs         ImportJob[]
+  // Phase 4 — Báo giá
+  quotations         Quotation[]
+  quotationVersions  QuotationVersion[]
+  quotationItems     QuotationItem[]
+  quotationApprovals QuotationApproval[]
 
   @@map("tenants")
 }
@@ -134,6 +139,7 @@ model User {
   ownedInteractions  Interaction[]  @relation("TuongTacCua")
   ownedOpportunities Opportunity[]  @relation("CoHoiPhuTrach")
   ownedTasks         Task[]         @relation("ViecPhuTrach")
+  ownedQuotations    Quotation[]    @relation("BaoGiaPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -383,6 +389,7 @@ model Customer {
   opportunities  Opportunity[]
   tasks          Task[]
   convertedLeads Lead[]        @relation("LeadThanhKhach")
+  quotations     Quotation[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
@@ -419,6 +426,7 @@ model Contact {
   customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   interactions  Interaction[]
   opportunities Opportunity[]
+  quotations    Quotation[]
 
   @@index([tenantId, customerId])
   @@index([tenantId, phoneNormalized])
@@ -545,6 +553,7 @@ model Opportunity {
   interactions Interaction[]
   tasks        Task[]
   fromLeads    Lead[]        @relation("LeadThanhCoHoi")
+  quotations   Quotation[]
 
   @@unique([tenantId, code])
   @@index([tenantId, ownerId, stage])
@@ -676,6 +685,7 @@ model Supplier {
   prices          SupplierProductPrice[]
   priceHistory    PriceHistory[]
   defaultProducts Product[]              @relation("NhaCungCapMacDinh")
+  quotationItems  QuotationItem[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
@@ -721,6 +731,7 @@ model Product {
   defaultSupplier Supplier?              @relation("NhaCungCapMacDinh", fields: [defaultSupplierId], references: [id], onDelete: SetNull)
   supplierPrices  SupplierProductPrice[]
   priceHistory    PriceHistory[]
+  quotationItems  QuotationItem[]
 
   @@unique([tenantId, skuNormalized])
   @@index([tenantId, status])
@@ -813,4 +824,145 @@ model ImportJob {
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@map("import_jobs")
+}
+
+// ===========================================================================
+// Phase 4 — Báo giá (20/09/2026)
+//
+// Mục 10–14 prompt 20/09. Một báo giá (`quotations`) là đầu phiếu; mỗi lần sửa sau khi
+// đã gửi sinh một PHIÊN BẢN mới (`quotation_versions`) — lịch sử không mất.
+// Luật nghiệp vụ: BUSINESS_RULES.md mục 5.
+// ===========================================================================
+
+/// Đầu phiếu báo giá. Số QT-2026-0001, đánh lại theo năm.
+model Quotation {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  number           String   @db.VarChar(30)
+  customerId       String   @map("customer_id") @db.Uuid
+  contactId        String?  @map("contact_id") @db.Uuid
+  opportunityId    String?  @map("opportunity_id") @db.Uuid
+  ownerId          String   @map("owner_id") @db.Uuid
+  /// Phiên bản đang hiệu lực (bản mới nhất).
+  currentVersionId String?  @unique @map("current_version_id") @db.Uuid
+  /// Trạng thái của phiên bản hiện hành, chép lại để lọc danh sách không phải nối bảng.
+  status           String   @default("DRAFT") @db.VarChar(20)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?  @map("created_by") @db.Uuid
+  updatedBy        String?  @map("updated_by") @db.Uuid
+
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer       Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contact        Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunity    Opportunity?       @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  owner          User               @relation("BaoGiaPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  versions       QuotationVersion[] @relation("PhienBanCuaBaoGia")
+  currentVersion QuotationVersion?  @relation("PhienBanHienHanh", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, number])
+  @@index([tenantId, ownerId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+  @@map("quotations")
+}
+
+/// Một phiên bản báo giá: QT-2026-0001-V2. Đã gửi thì đóng băng, sửa = phiên bản mới.
+model QuotationVersion {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  quotationId   String    @map("quotation_id") @db.Uuid
+  versionNo     Int       @map("version_no")
+  /// DRAFT | PENDING_APPROVAL | APPROVED | SENT | VIEWED | NEGOTIATING | ACCEPTED | REJECTED | EXPIRED | SUPERSEDED
+  status        String    @default("DRAFT") @db.VarChar(20)
+  /// Mã dữ liệu gốc dieu_khoan_thanh_toan / dieu_khoan_giao_hang; bảo hành ghi tự do.
+  paymentTerms  String?   @map("payment_terms") @db.VarChar(50)
+  deliveryTerms String?   @map("delivery_terms") @db.VarChar(50)
+  warrantyTerms String?   @map("warranty_terms") @db.Text
+  validUntil    DateTime? @map("valid_until") @db.Date
+  notes         String?   @db.Text
+  /// Ảnh chụp số tiền tại thời điểm tính — giữ nguyên dù giá sản phẩm đổi sau này.
+  subtotal      Decimal   @default(0) @db.Decimal(18, 2)
+  discountTotal Decimal   @default(0) @map("discount_total") @db.Decimal(18, 2)
+  vatTotal      Decimal   @default(0) @map("vat_total") @db.Decimal(18, 2)
+  total         Decimal   @default(0) @db.Decimal(18, 2)
+  costTotal     Decimal   @default(0) @map("cost_total") @db.Decimal(18, 2)
+  grossProfit   Decimal   @default(0) @map("gross_profit") @db.Decimal(18, 2)
+  /// Biên lợi nhuận gộp %, null khi doanh thu bằng 0 (chưa tính được).
+  grossMargin   Decimal?  @map("gross_margin") @db.Decimal(7, 4)
+  sentAt        DateTime? @map("sent_at") @db.Timestamptz(6)
+  decidedAt     DateTime? @map("decided_at") @db.Timestamptz(6)
+  decisionNote  String?   @map("decision_note") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+
+  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quotation  Quotation           @relation("PhienBanCuaBaoGia", fields: [quotationId], references: [id], onDelete: Cascade)
+  laHienHanh Quotation?          @relation("PhienBanHienHanh")
+  items      QuotationItem[]
+  approvals  QuotationApproval[]
+
+  @@unique([quotationId, versionNo])
+  @@index([tenantId, status])
+  @@map("quotation_versions")
+}
+
+/// Dòng hàng của một phiên bản báo giá. Giá vốn chụp tại lúc lập.
+model QuotationItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  versionId   String   @map("version_id") @db.Uuid
+  lineNo      Int      @map("line_no")
+  productId   String?  @map("product_id") @db.Uuid
+  /// Chụp lại SKU và tên tại thời điểm lập — chứng từ đã gửi khách không đổi theo danh mục.
+  sku         String?  @db.VarChar(64)
+  name        String   @db.VarChar(500)
+  description String?  @db.Text
+  quantity    Decimal  @default(1) @db.Decimal(18, 3)
+  unit        String?  @db.VarChar(50)
+  unitPrice   Decimal  @default(0) @map("unit_price") @db.Decimal(18, 2)
+  discountPct Decimal  @default(0) @map("discount_pct") @db.Decimal(7, 4)
+  vatRate     Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
+  unitCost    Decimal  @default(0) @map("unit_cost") @db.Decimal(18, 2)
+  supplierId  String?  @map("supplier_id") @db.Uuid
+  lineTotal   Decimal  @default(0) @map("line_total") @db.Decimal(18, 2)
+  lineCost    Decimal  @default(0) @map("line_cost") @db.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  version  QuotationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  product  Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  supplier Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@unique([versionId, lineNo])
+  @@index([tenantId, productId])
+  @@map("quotation_items")
+}
+
+/// Một lần xin duyệt báo giá dưới ngưỡng biên lợi nhuận. Chụp cả ngưỡng lúc xin.
+model QuotationApproval {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  versionId          String    @map("version_id") @db.Uuid
+  /// margin_below_threshold | threshold_not_set | manual
+  requiredReason     String    @map("required_reason") @db.VarChar(40)
+  marginAtRequest    Decimal?  @map("margin_at_request") @db.Decimal(7, 4)
+  thresholdAtRequest Decimal?  @map("threshold_at_request") @db.Decimal(7, 4)
+  requestedBy        String    @map("requested_by") @db.Uuid
+  requestedAt        DateTime  @default(now()) @map("requested_at") @db.Timestamptz(6)
+  decidedBy          String?   @map("decided_by") @db.Uuid
+  /// cho-duyet | tu-choi
+  decision           String?   @db.VarChar(20)
+  decidedAt          DateTime? @map("decided_at") @db.Timestamptz(6)
+  comment            String?   @db.Text
+
+  tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  version QuotationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, decision])
+  @@index([versionId])
+  @@map("quotation_approvals")
 }

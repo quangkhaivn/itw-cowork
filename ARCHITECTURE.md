@@ -104,6 +104,15 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - `giaChoBaoGia(nc, ids)` là cửa cho Phase 4: trả giá vốn tham chiếu, giá bán, VAT, bảo hành và nguồn nên mua của từng SKU.
 - Nhập CSV chạy trong chính giao dịch của `xuLyApi`: xem trước không ghi gì; khi ghi thật, dòng hỏng bị bỏ qua và cả lần nhập lưu một `import_jobs`.
 
+## 7d. Báo giá (Phase 4)
+
+- Phân hệ: `src/modules/bao-gia` (`tinh-toan.ts` thuần — tính tiền, biên lợi nhuận, luật duyệt, đọc tiền bằng chữ; `luoc-do.ts`; `service.ts`) và `src/modules/ho-so-cong-ty` (thông tin in đầu chứng từ).
+- **Một đầu phiếu, nhiều phiên bản**: `quotations` giữ số và người phụ trách; mỗi `quotation_versions` là một bản gửi khách. Sửa bản đã gửi = tạo phiên bản mới, bản cũ chuyển `SUPERSEDED` (BG-02).
+- Giao diện, API, bản in và (sau này) trợ lý AI **dùng chung một hàm** `tinhBaoGia()` nên con số không bao giờ lệch nhau; làm tròn từng dòng về đồng rồi mới cộng.
+- Ngưỡng duyệt đọc từ Cấu hình `bao_gia.nguong_bien_loi_nhuan`, **không viết cứng**; chưa đặt thì mọi báo giá phải duyệt (BG-04).
+- Phạm vi xem như cơ hội (QĐ-13): người lập, cộng đường chủ tài khoản khách.
+- Bản in là trang riêng ngoài khung ứng dụng (`src/app/(in)/bao-gia/[id]/in`), in bằng trình duyệt (QĐ-21); phần đầu lấy từ Hồ sơ công ty (QĐ-22).
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.
@@ -115,6 +124,8 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 | Chuông thông báo | Chưa có sự kiện nào cần báo cho người dùng; chuông không có gì bên trong là nút chết | Phase 8 |
 | Tùy chọn cột trên bảng | Bảng CRM 5–7 cột vẫn đọc tốt; chưa có yêu cầu thật để ẩn/hiện cột | khi có yêu cầu |
 | Xuất CSV khách hàng | Quyền `customer.export` đã có nhưng chưa có màn hình; bộ xuất CSV dùng chung đã sẵn ở `src/lib/csv.ts` | khi cần |
+| Chuyển báo giá đã chấp nhận thành đơn hàng | Chưa có bảng đơn hàng; làm nửa vời sẽ đẻ dữ liệu mồ côi | Phase 5 |
+| Gửi email báo giá tự động | Chưa có dịch vụ gửi thư và mẫu thư được duyệt; hiện ghi nhận "đã gửi bằng kênh nào" để không mất dấu vết | Phase 8 |
 | Đọc thẳng tệp .xlsx | Excel lưu được CSV UTF-8; thêm thư viện đọc xlsx là thêm phụ thuộc nặng cho một việc người dùng làm được bằng hai cú bấm | khi có yêu cầu thật |
 | Song ngữ Việt–Anh | Chữ giao diện hiện viết thẳng; chuẩn bị bằng cách gom nhãn menu vào một tệp. Tách từ điển khi có yêu cầu thật | khi cần |
 | Lưu tệp (đối tượng) | Chưa phân hệ nào cần đính kèm | Phase 6 (ảnh nghiệm thu) |

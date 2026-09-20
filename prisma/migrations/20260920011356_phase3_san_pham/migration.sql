@@ -314,8 +314,17 @@ ALTER TABLE "import_jobs" ADD CONSTRAINT "import_jobs_status_check"
 ALTER TABLE "import_jobs" ADD CONSTRAINT "import_jobs_so_dong_check"
     CHECK ("total_rows" >= 0 AND "ok_rows" >= 0 AND "error_rows" >= 0 AND "created_rows" >= 0 AND "updated_rows" >= 0);
 
--- SP-08: lịch sử giá chỉ ghi thêm. Dùng lại hàm chan_sua_xoa() của migration nền móng,
--- nên kể cả vai chủ sở hữu cũng không sửa được lịch sử giá.
+-- SP-08: lịch sử giá chỉ ghi thêm — kể cả vai chủ sở hữu cũng không sửa được.
+-- Hàm chan_sua_xoa() vốn được tạo trong prisma/rls.sql (chạy SAU migration), nên ở đây
+-- phải tự khai lại: nếu không, cài trên một cơ sở dữ liệu mới tinh sẽ hỏng ngay ở bước
+-- migrate (phát hiện 20/09 khi Prisma dựng cơ sở dữ liệu bóng). CREATE OR REPLACE nên
+-- chạy lại nhiều lần vẫn an toàn và không đụng các trigger đang dùng nó.
+CREATE OR REPLACE FUNCTION public.chan_sua_xoa() RETURNS trigger AS $CHAN$
+BEGIN
+    RAISE EXCEPTION $tb$Bang % chi duoc ghi them. Khong duoc sua hoac xoa.$tb$, TG_TABLE_NAME
+        USING ERRCODE = $ec$check_violation$ec$;
+END;
+$CHAN$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS chan_sua_price_history ON "price_history";
 CREATE TRIGGER chan_sua_price_history
     BEFORE UPDATE OR DELETE ON "price_history"
