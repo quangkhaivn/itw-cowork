@@ -29,23 +29,31 @@ model Tenant {
   createdBy String?  @map("created_by") @db.Uuid
   updatedBy String?  @map("updated_by") @db.Uuid
 
-  settings      TenantSetting[]
-  users         User[]
-  departments   Department[]
-  roles         Role[]
-  staffProfiles StaffProfile[]
-  userRoles     UserRole[]
-  events        BusinessEvent[]
-  auditLogs     AuditLog[]
-  masterData    MasterDataItem[]
+  settings          TenantSetting[]
+  users             User[]
+  departments       Department[]
+  roles             Role[]
+  staffProfiles     StaffProfile[]
+  userRoles         UserRole[]
+  events            BusinessEvent[]
+  auditLogs         AuditLog[]
+  masterData        MasterDataItem[]
   // Phase 2 — CRM
-  sequences     DocumentSequence[]
-  customers     Customer[]
-  contacts      Contact[]
-  leads         Lead[]
-  interactions  Interaction[]
-  opportunities Opportunity[]
-  tasks         Task[]
+  sequences         DocumentSequence[]
+  customers         Customer[]
+  contacts          Contact[]
+  leads             Lead[]
+  interactions      Interaction[]
+  opportunities     Opportunity[]
+  tasks             Task[]
+  // Phase 3 — Sản phẩm và bảng giá
+  productCategories ProductCategory[]
+  brands            Brand[]
+  suppliers         Supplier[]
+  products          Product[]
+  supplierPrices    SupplierProductPrice[]
+  priceHistory      PriceHistory[]
+  importJobs        ImportJob[]
 
   @@map("tenants")
 }
@@ -577,4 +585,232 @@ model Task {
   @@index([tenantId, opportunityId])
   @@index([tenantId, leadId])
   @@map("tasks")
+}
+
+// ===========================================================================
+// Phase 3 — Sản phẩm và bảng giá (20/09/2026)
+//
+// Mục 8–9 prompt 20/09: Product, Category, Brand, Supplier, SupplierProductPrice,
+// PriceHistory. Một sản phẩm có thể mua từ nhiều nhà cung cấp; lịch sử giá chỉ ghi thêm.
+// Luật nghiệp vụ: BUSINESS_RULES.md mục 5.
+// ===========================================================================
+
+/// Nhóm sản phẩm, lồng nhau qua parent_id (Laptop → Laptop văn phòng…).
+model ProductCategory {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  code                  String   @db.VarChar(50)
+  name                  String   @db.VarChar(255)
+  parentId              String?  @map("parent_id") @db.Uuid
+  /// Nhóm này bắt buộc quản lý số sê-ri (laptop, PC, server, camera…) — dùng từ Phase 5.
+  requiresSerial        Boolean  @default(false) @map("requires_serial")
+  /// Bảo hành mặc định khi tạo sản phẩm mới trong nhóm (tháng).
+  defaultWarrantyMonths Int?     @map("default_warranty_months")
+  /// Thuế suất mặc định (%) khi tạo sản phẩm mới trong nhóm.
+  defaultVatRate        Decimal? @map("default_vat_rate") @db.Decimal(7, 4)
+  sortOrder             Int      @default(0) @map("sort_order")
+  status                String   @default("hoat-dong") @db.VarChar(30)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy             String?  @map("created_by") @db.Uuid
+  updatedBy             String?  @map("updated_by") @db.Uuid
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   ProductCategory?  @relation("NhomCha", fields: [parentId], references: [id], onDelete: SetNull)
+  children ProductCategory[] @relation("NhomCha")
+  products Product[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@map("product_categories")
+}
+
+/// Thương hiệu (Dell, HP, Hikvision…).
+model Brand {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String   @db.VarChar(50)
+  name      String   @db.VarChar(255)
+  website   String?  @db.VarChar(255)
+  note      String?  @db.Text
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, code])
+  @@map("brands")
+}
+
+/// Nhà cung cấp. Mã tự cấp NCC-0001.
+model Supplier {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  code              String   @db.VarChar(30)
+  name              String   @db.VarChar(255)
+  nameNormalized    String   @map("name_normalized") @db.VarChar(255)
+  taxCode           String?  @map("tax_code") @db.VarChar(30)
+  taxCodeNormalized String?  @map("tax_code_normalized") @db.VarChar(20)
+  contactName       String?  @map("contact_name") @db.VarChar(255)
+  phone             String?  @db.VarChar(30)
+  phoneNormalized   String?  @map("phone_normalized") @db.VarChar(20)
+  email             String?  @db.VarChar(255)
+  emailNormalized   String?  @map("email_normalized") @db.VarChar(255)
+  address           String?  @db.Text
+  website           String?  @db.VarChar(255)
+  /// Điều khoản thanh toán (mã dữ liệu gốc dieu_khoan_thanh_toan) và số ngày giao hàng thường lệ.
+  paymentTerms      String?  @map("payment_terms") @db.VarChar(50)
+  leadTimeDays      Int?     @map("lead_time_days")
+  note              String?  @db.Text
+  status            String   @default("hoat-dong") @db.VarChar(30)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?  @map("created_by") @db.Uuid
+  updatedBy         String?  @map("updated_by") @db.Uuid
+
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prices          SupplierProductPrice[]
+  priceHistory    PriceHistory[]
+  defaultProducts Product[]              @relation("NhaCungCapMacDinh")
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, taxCodeNormalized])
+  @@index([tenantId, status])
+  @@index([nameNormalized(ops: raw("gin_trgm_ops"))], type: Gin, map: "suppliers_name_normalized_trgm_idx")
+  @@map("suppliers")
+}
+
+/// Sản phẩm / dịch vụ bán ra. SKU do người dùng đặt, duy nhất trong doanh nghiệp.
+model Product {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  sku               String   @db.VarChar(64)
+  /// SKU viết hoa, bỏ khoảng trắng — khóa so trùng (KH-SKU không phân biệt hoa thường).
+  skuNormalized     String   @map("sku_normalized") @db.VarChar(64)
+  name              String   @db.VarChar(500)
+  nameNormalized    String   @map("name_normalized") @db.VarChar(500)
+  categoryId        String?  @map("category_id") @db.Uuid
+  brandId           String?  @map("brand_id") @db.Uuid
+  model             String?  @db.VarChar(255)
+  description       String?  @db.Text
+  /// Thông số kỹ thuật: cấu trúc khác nhau theo nhóm hàng nên để JSON (khóa → giá trị).
+  specifications    Json?
+  /// Đơn vị tính — mã dữ liệu gốc don_vi_tinh.
+  unit              String?  @db.VarChar(50)
+  /// Giá vốn tham chiếu (giá nhập gần nhất hoặc giá chuẩn). Giá vốn thực của từng lần nhập ở Phase 5.
+  costPrice         Decimal? @map("cost_price") @db.Decimal(18, 2)
+  sellingPrice      Decimal? @map("selling_price") @db.Decimal(18, 2)
+  vatRate           Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
+  warrantyMonths    Int?     @map("warranty_months")
+  requiresSerial    Boolean  @default(false) @map("requires_serial")
+  defaultSupplierId String?  @map("default_supplier_id") @db.Uuid
+  /// hoat-dong | ngung-kinh-doanh
+  status            String   @default("hoat-dong") @db.VarChar(30)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?  @map("created_by") @db.Uuid
+  updatedBy         String?  @map("updated_by") @db.Uuid
+
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category        ProductCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  brand           Brand?                 @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  defaultSupplier Supplier?              @relation("NhaCungCapMacDinh", fields: [defaultSupplierId], references: [id], onDelete: SetNull)
+  supplierPrices  SupplierProductPrice[]
+  priceHistory    PriceHistory[]
+
+  @@unique([tenantId, skuNormalized])
+  @@index([tenantId, status])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, brandId])
+  @@index([nameNormalized(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_name_normalized_trgm_idx")
+  @@index([skuNormalized(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_sku_normalized_trgm_idx")
+  @@map("products")
+}
+
+/// Giá mua của một sản phẩm từ một nhà cung cấp — mỗi cặp một dòng, cập nhật tại chỗ;
+/// mọi lần đổi giá đều ghi thêm một dòng `price_history`.
+model SupplierProductPrice {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  productId     String    @map("product_id") @db.Uuid
+  supplierId    String    @map("supplier_id") @db.Uuid
+  purchasePrice Decimal   @map("purchase_price") @db.Decimal(18, 2)
+  currency      String    @default("VND") @db.VarChar(3)
+  /// con-hang | het-hang | dat-truoc | khong-ro
+  availability  String    @default("khong-ro") @db.VarChar(20)
+  leadTimeDays  Int?      @map("lead_time_days")
+  /// Mã báo giá / tệp giá của nhà cung cấp, để truy ngược.
+  reference     String?   @db.VarChar(255)
+  note          String?   @db.Text
+  validFrom     DateTime? @map("valid_from") @db.Date
+  validTo       DateTime? @map("valid_to") @db.Date
+  status        String    @default("hoat-dong") @db.VarChar(30)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, productId, supplierId])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, productId, purchasePrice])
+  @@map("supplier_product_prices")
+}
+
+/// Lịch sử giá — CHỈ GHI THÊM (trigger chặn sửa/xóa). Không bao giờ đè mất giá cũ.
+model PriceHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  /// cost | selling | supplier
+  priceType  String   @map("price_type") @db.VarChar(20)
+  supplierId String?  @map("supplier_id") @db.Uuid
+  oldPrice   Decimal? @map("old_price") @db.Decimal(18, 2)
+  newPrice   Decimal? @map("new_price") @db.Decimal(18, 2)
+  currency   String   @default("VND") @db.VarChar(3)
+  reason     String?  @db.VarChar(255)
+  /// thu-cong | nhap-csv | he-thong
+  source     String   @default("thu-cong") @db.VarChar(20)
+  changedBy  String?  @map("changed_by") @db.Uuid
+  changedAt  DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, productId, changedAt(sort: Desc)])
+  @@index([tenantId, supplierId, changedAt(sort: Desc)])
+  @@map("price_history")
+}
+
+/// Một lần nhập tệp CSV: kết quả từng dòng để người nhập biết dòng nào hỏng vì sao.
+model ImportJob {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  /// san-pham | gia-nha-cung-cap
+  type        String   @db.VarChar(30)
+  fileName    String   @map("file_name") @db.VarChar(255)
+  /// xem-truoc | da-nhap | that-bai
+  status      String   @default("xem-truoc") @db.VarChar(20)
+  totalRows   Int      @default(0) @map("total_rows")
+  okRows      Int      @default(0) @map("ok_rows")
+  errorRows   Int      @default(0) @map("error_rows")
+  createdRows Int      @default(0) @map("created_rows")
+  updatedRows Int      @default(0) @map("updated_rows")
+  /// [{ dong, loi }] — tối đa 200 dòng lỗi đầu tiên.
+  errors      Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy   String?  @map("created_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("import_jobs")
 }

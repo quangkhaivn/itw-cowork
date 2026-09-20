@@ -37,6 +37,12 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   interaction: "Tương tác",
   opportunity: "Cơ hội",
   task: "Công việc",
+  product: "Sản phẩm",
+  product_category: "Nhóm sản phẩm",
+  brand: "Thương hiệu",
+  supplier: "Nhà cung cấp",
+  supplier_price: "Giá nhà cung cấp",
+  import_job: "Lần nhập tệp",
 };
 
 export const LuocDoLocKiemToan = z.object({

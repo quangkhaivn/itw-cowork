@@ -45,6 +45,27 @@ const PHONG_BAN = [
   { code: "cskh", name: "Chăm sóc khách hàng" },
 ];
 
+/**
+ * 12 nhóm sản phẩm khởi tạo — đúng danh sách mục 9 prompt 20/09 của Giám đốc.
+ * `serial`: nhóm hàng phải quản lý số sê-ri (dùng từ Phase 5). `bh`: bảo hành mặc định (tháng)
+ * — lấy mức phổ thông của ngành, Giám đốc sửa trên màn hình Nhóm sản phẩm khi có chính sách riêng.
+ * Seed chỉ TẠO NHÓM CÒN THIẾU, không đổi tên hay bật lại nhóm đã tắt.
+ */
+const NHOM_SAN_PHAM = [
+  { code: "laptop", name: "Laptop", serial: true, bh: 24 },
+  { code: "desktop", name: "Máy tính để bàn", serial: true, bh: 24 },
+  { code: "linh-kien", name: "Linh kiện máy tính", serial: false, bh: 12 },
+  { code: "server", name: "Máy chủ (Server)", serial: true, bh: 36 },
+  { code: "workstation", name: "Máy trạm (Workstation)", serial: true, bh: 36 },
+  { code: "camera", name: "Camera", serial: true, bh: 24 },
+  { code: "netcam", name: "NetCAM", serial: true, bh: 24 },
+  { code: "mang", name: "Thiết bị mạng", serial: true, bh: 12 },
+  { code: "thiet-bi-van-phong", name: "Thiết bị văn phòng", serial: false, bh: 12 },
+  { code: "microsoft", name: "Microsoft", serial: false, bh: null },
+  { code: "phan-mem", name: "Phần mềm", serial: false, bh: null },
+  { code: "dich-vu", name: "Dịch vụ", serial: false, bh: null },
+];
+
 const TOAN_QUYEN = new Set(["ceo", "admin"]);
 
 export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant: string) {
@@ -88,6 +109,26 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
     });
   }
   console.log(`✓ Phòng ban: ${PHONG_BAN.length}`);
+
+  // ---- 3b. Nhóm sản phẩm (Phase 3) ----
+  let nhomMoi = 0;
+  for (const n of NHOM_SAN_PHAM) {
+    const daCo = await db.productCategory.findUnique({ where: { tenantId_code: { tenantId: tenant.id, code: n.code } }, select: { id: true } });
+    if (daCo) continue;
+    await db.productCategory.create({
+      data: {
+        tenantId: tenant.id,
+        code: n.code,
+        name: n.name,
+        requiresSerial: n.serial,
+        defaultWarrantyMonths: n.bh,
+        defaultVatRate: 10,
+        sortOrder: NHOM_SAN_PHAM.indexOf(n),
+      },
+    });
+    nhomMoi++;
+  }
+  console.log(`✓ Nhóm sản phẩm: ${NHOM_SAN_PHAM.length} (${nhomMoi} nhóm mới)`);
 
   // ---- 4. Vai trò và quyền của vai trò ----
   for (const dn of VAI_TRO) {

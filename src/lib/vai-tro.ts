@@ -37,6 +37,8 @@ export const PHAN_HE = [
   "setting",
   "audit_log",
   "ai",
+  // Phase 3 (20/09/2026): sản phẩm, nhóm sản phẩm, thương hiệu, bảng giá nhà cung cấp.
+  "product",
 ] as const;
 
 // Thêm phân hệ mới: thêm vào CUỐI mảng trên + MO_TA_PHAN_HE, rồi khai quyền cho
@@ -96,6 +98,7 @@ export const MO_TA_PHAN_HE: Record<PhanHe, string> = {
   setting: "Cấu hình",
   audit_log: "Nhật ký kiểm toán",
   ai: "Trợ lý AI",
+  product: "Sản phẩm",
 };
 
 export const MO_TA_HANH_DONG: Record<HanhDongQuyen, string> = {
@@ -156,6 +159,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Quản lý đội bán hàng, duyệt báo giá trong hạn mức.",
     quyen: [
       ...tron(["crm", "sales", "quotation", "customer", "order", "task"], LAM_VIEC),
+      ...tron(["product"], XEM_XUAT),
+      maQuyen("supplier", "view"),
       maQuyen("quotation", "approve"),
       maQuyen("order", "approve"),
       // 20/09: mở lại cơ hội đã đóng (BUSINESS_RULES CH-06). Vai trò đã có trên máy thật được
@@ -172,7 +177,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Chăm sóc lead, tạo báo giá, chốt đơn. Không tự duyệt báo giá của mình.",
     quyen: [
       ...tron(["crm", "sales", "quotation", "customer", "task"], LAM_VIEC),
-      ...tron(["order", "project", "inventory", "dashboard", "alert"], CHI_XEM),
+      ...tron(["product"], XEM_XUAT),
+      ...tron(["order", "project", "inventory", "dashboard", "alert", "supplier"], CHI_XEM),
       maQuyen("ai", "view"),
     ],
   },
@@ -183,6 +189,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Quản lý chiến dịch, ngân sách marketing, nội dung.",
     quyen: [
       ...tron(["marketing", "task"], LAM_VIEC),
+      maQuyen("product", "view"),
       maQuyen("marketing", "approve"),
       ...tron(["crm", "customer", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
@@ -195,7 +202,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Thực thi chiến dịch và nội dung.",
     quyen: [
       ...tron(["marketing", "task"], LAM_VIEC),
-      ...tron(["crm", "dashboard", "alert"], CHI_XEM),
+      ...tron(["crm", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
     ],
   },
@@ -206,6 +213,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Quản lý kỹ thuật viên, phân công, duyệt phiếu dịch vụ.",
     quyen: [
       ...tron(["technical", "service_desk", "project", "task"], LAM_VIEC),
+      maQuyen("product", "view"),
       maQuyen("service_desk", "approve"),
       maQuyen("project", "approve"),
       ...tron(["customer", "inventory", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
@@ -219,7 +227,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Xử lý phiếu dịch vụ và công việc triển khai được giao.",
     quyen: [
       ...tron(["technical", "service_desk", "task"], LAM_VIEC),
-      ...tron(["customer", "project", "inventory", "dashboard", "alert"], CHI_XEM),
+      ...tron(["customer", "project", "inventory", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
     ],
   },
@@ -230,6 +238,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Điều hành dự án, mốc tiến độ, vật tư, nghiệm thu.",
     quyen: [
       ...tron(["project", "task", "technical"], LAM_VIEC),
+      maQuyen("product", "view"),
       maQuyen("project", "approve"),
       ...tron(["customer", "order", "inventory", "purchasing", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
@@ -241,7 +250,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     phamVi: "all",
     description: "Yêu cầu mua, đơn mua, làm việc với nhà cung cấp.",
     quyen: [
-      ...tron(["purchasing", "supplier", "task"], LAM_VIEC),
+      ...tron(["purchasing", "supplier", "product", "task"], LAM_VIEC),
       ...tron(["inventory", "order", "project", "dashboard", "alert"], CHI_XEM),
       maQuyen("ai", "view"),
     ],
@@ -253,7 +262,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Nhập kho, xuất kho, kiểm tồn, số sê-ri.",
     quyen: [
       ...tron(["inventory", "task"], LAM_VIEC),
-      ...tron(["order", "purchasing", "project", "dashboard", "alert"], CHI_XEM),
+      ...tron(["product"], XEM_XUAT),
+      ...tron(["order", "purchasing", "project", "dashboard", "alert", "supplier"], CHI_XEM),
       maQuyen("ai", "view"),
     ],
   },
@@ -264,6 +274,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Công nợ, thu chi, hóa đơn, dòng tiền.",
     quyen: [
       ...tron(["finance", "task"], LAM_VIEC),
+      ...tron(["product"], XEM_XUAT),
+      maQuyen("supplier", "view"),
       maQuyen("finance", "approve"),
       ...tron(["order", "project", "customer", "purchasing", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
@@ -276,7 +288,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     description: "Tiếp nhận yêu cầu, bảo hành, khiếu nại, chăm sóc lại.",
     quyen: [
       ...tron(["service_desk", "customer", "crm", "task"], LAM_VIEC),
-      ...tron(["order", "project", "dashboard", "alert"], CHI_XEM),
+      ...tron(["order", "project", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
     ],
   },
@@ -306,7 +318,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
         [
           "dashboard", "marketing", "crm", "sales", "quotation", "customer", "order",
           "project", "technical", "service_desk", "purchasing", "inventory", "supplier",
-          "finance", "task", "kpi", "report", "alert",
+          "finance", "task", "kpi", "report", "alert", "product",
         ],
         CHI_XEM,
       ),

@@ -5,6 +5,8 @@ import { locTheoPhamVi } from "@/modules/crm/chung";
 import { chuanHoaTen } from "@/modules/crm/chuan-hoa";
 import { NHAN_GIAI_DOAN } from "@/modules/crm/hang-so";
 import { dieuKienXemCoHoi } from "@/modules/co-hoi/service";
+import { chuanHoaTenSanPham } from "@/modules/san-pham/chuan-hoa";
+import { dinhDangTien } from "@/lib/dinh-dang";
 
 /**
  * Tìm kiếm toàn cục (Ctrl/Cmd + K) — mục 29 master prompt.
@@ -230,6 +232,37 @@ NGUON.push(
     },
   },
 );
+
+// --- Phase 3: sản phẩm theo SKU, tên, model. Danh mục dùng chung, không lọc theo người. ---
+NGUON.push({
+  loai: "san-pham",
+  nhanLoai: "Sản phẩm",
+  async tim(nc, q, gioiHan) {
+    if (!coQuyen(nc.hoSo, "product.view")) return [];
+    const ds = await nc.tx.product.findMany({
+      where: {
+        OR: [
+          { sku: { contains: q, mode: "insensitive" } },
+          { name: { contains: q, mode: "insensitive" } },
+          { nameNormalized: { contains: chuanHoaTenSanPham(q) } },
+          { model: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, sku: true, name: true, sellingPrice: true, status: true },
+      take: gioiHan,
+      orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+    });
+    return ds.map((p) => ({
+      loai: "san-pham",
+      nhanLoai: "Sản phẩm",
+      tieuDe: p.name,
+      phu: [p.sku, p.sellingPrice ? dinhDangTien(p.sellingPrice) : "chưa có giá bán", p.status === "hoat-dong" ? null : "ngừng kinh doanh"]
+        .filter(Boolean)
+        .join(" · "),
+      href: `/san-pham/${p.id}`,
+    }));
+  },
+});
 
 export async function timKiemToanCuc(nc: NguCanh, q: string, gioiHanMoiNguon = 6): Promise<KetQuaTimKiem[]> {
   const cau = q.trim();
