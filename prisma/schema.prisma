@@ -86,6 +86,11 @@ model Tenant {
   dailyActionItems   DailyActionItem[]
   maintenanceOrders  MaintenanceContract[]
   renewals           Renewal[]
+  // Phase 9 — Trợ lý AI
+  aiConversations    AiConversation[]
+  aiMessages         AiMessage[]
+  aiToolCalls        AiToolCall[]
+  aiActions          AiAction[]
 
   @@map("tenants")
 }
@@ -177,6 +182,8 @@ model User {
   dailyActionItems   DailyActionItem[]     @relation("ViecHomNayCuaNguoiDung")
   ownedMaintenance   MaintenanceContract[] @relation("BaoTriPhuTrach")
   ownedRenewals      Renewal[]             @relation("GiaHanPhuTrach")
+  // Phase 9
+  aiConversations    AiConversation[]      @relation("HoiThoaiCuaNguoiDung")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1798,4 +1805,113 @@ model Renewal {
   @@unique([tenantId, maintenanceContractId, dueDate])
   @@index([tenantId, status, dueDate])
   @@map("renewals")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9 — Trợ lý AI: hội thoại, tin nhắn, lần gọi công cụ, đề xuất hành động.
+// Thiết kế: AI_ARCHITECTURE.md.
+// ---------------------------------------------------------------------------
+
+/// Một cuộc hội thoại của MỘT người với trợ lý. Không có hội thoại dùng chung.
+model AiConversation {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  title         String   @db.VarChar(300)
+  /// Nhà cung cấp và mô hình đã dùng — ghi lại để đối chiếu khi đổi mô hình.
+  provider      String?  @db.VarChar(50)
+  model         String?  @db.VarChar(100)
+  /// dang-mo | da-dong
+  status        String   @default("dang-mo") @db.VarChar(20)
+  lastMessageAt DateTime @default(now()) @map("last_message_at") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User        @relation("HoiThoaiCuaNguoiDung", fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+  actions  AiAction[]
+
+  @@index([tenantId, userId, lastMessageAt])
+  @@map("ai_conversations")
+}
+
+/// Một lượt trong hội thoại. **Chỉ ghi thêm** (trigger `chan_sua_ai_messages`):
+/// lịch sử hỏi đáp là bằng chứng, không được sửa lại cho đẹp.
+model AiMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  /// nguoi-dung | tro-ly | he-thong
+  role           String   @db.VarChar(20)
+  content        String   @db.Text
+  /// Số vòng mô hình đã chạy để ra lượt này (0 với tin của người dùng).
+  turns          Int      @default(0)
+  /// Token vào/ra do nhà cung cấp báo — để theo dõi chi phí, không để tính tiền.
+  tokensIn       Int?     @map("tokens_in")
+  tokensOut      Int?     @map("tokens_out")
+  /// Lỗi nếu lượt này hỏng (hết hạn mức, mất mạng, vượt trần vòng lặp).
+  error          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  toolCalls    AiToolCall[]
+
+  @@index([tenantId, conversationId, createdAt])
+  @@map("ai_messages")
+}
+
+/// Một lần mô hình gọi công cụ. **Chỉ ghi thêm** — đây là bằng chứng cho luật
+/// "mọi con số phải truy được về một lần gọi công cụ" (AI-02).
+model AiToolCall {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  messageId  String   @map("message_id") @db.Uuid
+  toolName   String   @map("tool_name") @db.VarChar(80)
+  /// Tham số mô hình truyền vào, sau khi đã qua lược đồ Zod.
+  args       Json     @default("{}")
+  /// Kết quả đã rút gọn (cắt bớt để không phình nhật ký).
+  result     String?  @db.Text
+  /// ok | thieu-quyen | tham-so-sai | loi
+  outcome    String   @db.VarChar(20)
+  error      String?  @db.Text
+  durationMs Int      @map("duration_ms")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  message AiMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, toolName, createdAt])
+  @@map("ai_tool_calls")
+}
+
+/// Đề xuất hành động GHI của trợ lý. Trợ lý **không bao giờ** tự chạy: dòng sinh ra ở
+/// trạng thái `de-xuat`, người dùng bấm Đồng ý thì service chạy với **quyền của người
+/// bấm** và dòng chuyển `da-chay` kèm `approved_by` (AI-03).
+model AiAction {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  /// Mã loại hành động, ví dụ tao-nhap-bao-gia | tao-viec.
+  actionType     String    @map("action_type") @db.VarChar(50)
+  /// Câu mô tả để người duyệt đọc là hiểu sẽ xảy ra gì.
+  summary        String    @db.VarChar(500)
+  payload        Json      @default("{}")
+  /// de-xuat | da-chay | tu-choi
+  status         String    @default("de-xuat") @db.VarChar(20)
+  /// Bản ghi sinh ra sau khi chạy (báo giá, việc…).
+  objectType     String?   @map("object_type") @db.VarChar(50)
+  objectId       String?   @map("object_id") @db.Uuid
+  approvedBy     String?   @map("approved_by") @db.Uuid
+  approvedAt     DateTime? @map("approved_at") @db.Timestamptz(6)
+  rejectReason   String?   @map("reject_reason") @db.Text
+  error          String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt])
+  @@map("ai_actions")
 }

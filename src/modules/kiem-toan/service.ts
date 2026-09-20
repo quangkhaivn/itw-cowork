@@ -59,6 +59,9 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   renewal: "Gia hạn",
   automation_rule: "Quy tắc nhắc việc",
   job_run: "Lần chạy nền",
+  ai_conversation: "Hội thoại trợ lý",
+  ai_action: "Đề xuất của trợ lý",
+  ai_tool: "Công cụ trợ lý",
 };
 
 export const LuocDoLocKiemToan = z.object({

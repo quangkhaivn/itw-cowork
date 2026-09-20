@@ -40,7 +40,8 @@ export type BieuTuong =
   | "viec-hom-nay"
   | "tu-dong-hoa"
   | "bao-tri"
-  | "gia-han";
+  | "gia-han"
+  | "tro-ly";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -141,6 +142,10 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
   {
     nhan: "Công việc",
     muc: [{ nhan: "Công việc", href: "/cong-viec", quyen: "task.view", bieuTuong: "cong-viec", tuKhoa: "task viec can lam qua han activity" }],
+  },
+  {
+    nhan: "Trợ lý",
+    muc: [{ nhan: "Trợ lý ITA", href: "/tro-ly", quyen: "ai.view", bieuTuong: "tro-ly", tuKhoa: "ai chatbot tro ly hoi dap ita" }],
   },
   {
     nhan: "Quản trị",

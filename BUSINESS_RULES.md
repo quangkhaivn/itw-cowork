@@ -286,3 +286,22 @@ Bản quét chạy mỗi ngày một lần theo giờ đặt ở Cấu hình, l�
 | GH-04 | Bỏ qua phải ghi lý do; dòng đã xử lý thì không chốt hay bỏ lại | [CSDL] CHECK · [SV] · [TH] |
 
 **Ai xem được lịch gia hạn**: `service_desk.view` **hoặc** `sales.view`. Cố ý kiểm ở service chứ không cấp `service_desk.view` cho vai trò Kinh doanh — cấp như vậy sẽ mở luôn cả hàng đợi phiếu hỗ trợ cho phòng kinh doanh, rộng hơn nhiều so với việc họ cần làm.
+
+## 15. Trợ lý AI (Phase 9)
+
+Quyền `ai.view`. Trợ lý là một **lớp bọc mỏng trên các service sẵn có** — nó không có đường riêng nào vào cơ sở dữ liệu, nên mọi luật của tám phase trước tự động áp cho nó.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| AI-01 | **Trợ lý không có quyền rộng hơn người đang hỏi.** Mọi công cụ chạy với `NguCanh` của người đó; danh sách công cụ gửi cho mô hình cũng đã lọc theo quyền, và còn một lần kiểm nữa ngay trước khi chạy | [SV] hai lớp · [TH] |
+| AI-02 | **Số liệu chỉ đến từ công cụ.** Mỗi con số trong câu trả lời truy được về một dòng `ai_tool_calls` trong cùng cuộc trò chuyện. Lời nhắc hệ thống cấm mô hình nhớ ra hay suy ra số liệu | [SV] · [ĐV] · [TH] |
+| AI-03 | **Trợ lý chỉ ĐỀ XUẤT, không tự chạy.** Hành động ghi sinh một dòng `ai_actions` trạng thái `de-xuat`; người dùng bấm Đồng ý thì service chạy với **quyền của người bấm**. Không có đường nào chuyển sang `da-chay` mà thiếu người duyệt | [CSDL] CHECK `ai_actions_duyet_check` · [SV] · [TH] |
+| AI-04 | Hội thoại là **của riêng người hỏi**. Không ai đọc được hội thoại của người khác, kể cả Giám đốc | [SV] · [TH] |
+| AI-05 | Vòng lặp mô hình ↔ công cụ có **trần**. Chạm trần thì dừng và nói thật là đã dừng giữa chừng, không ghép tạm một câu nghe như đã xong | [SV] hàm thuần · [ĐV] · [TH] |
+| AI-06 | **Chưa cấu hình nhà cung cấp thì từ chối rõ ràng** (HTTP 503 kèm lý do), không sinh câu trả lời và không tạo hội thoại rỗng. Gọi mô hình hỏng cũng nói thẳng là chưa gọi được | [SV] · [TH] |
+| AI-07 | Lịch sử hỏi đáp và từng lần gọi công cụ **chỉ ghi thêm** — đó là bằng chứng cho AI-02 | [CSDL] trigger · [TH] |
+| AI-08 | Công cụ thiếu quyền, sai tham số hoặc không tồn tại đều **không làm sập lượt**: mô hình nhận một câu giải thích kèm lời dặn đừng đoán, và lần gọi hỏng vẫn được ghi | [SV] · [TH] |
+
+Vai trò `ITA — Trợ lý AI` từ Phase 1 vẫn giữ nguyên giới hạn: không bao giờ có `*.approve` hay `*.delete` (bài thử `kiemTraGioiHanAI` chạy trong mọi lần seed).
+
+**Chưa làm ở phase này**: tác nhân nền tự chạy (Follow-up Agent sinh "Việc hôm nay" bằng AI — bộ quy tắc Phase 8 đang làm việc đó bằng luật tường minh), trợ lý gửi tin cho khách, sinh CEO Briefing định kỳ, truy xuất tài liệu (RAG).

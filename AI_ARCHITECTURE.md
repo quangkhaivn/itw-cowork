@@ -1,6 +1,10 @@
 # Kiến trúc AI — TGTH Business Cowork
 
-Cập nhật: 19/09/2026. **Trạng thái: thiết kế.** Chưa có dòng mã AI nào chạy — AI triển khai ở Phase 9, sau khi dữ liệu lõi (khách hàng, sản phẩm, báo giá, đơn hàng) đủ ổn định (mục 40 master prompt).
+Cập nhật: 21/09/2026. **Trạng thái: đã triển khai** (bản 0.10.0, trên máy phát triển).
+Luật nghiệp vụ đã chốt ở `BUSINESS_RULES.md` mục 15 (AI-01 → AI-08); mã ở `src/modules/tro-ly/`.
+**Chưa có khóa API** nên trợ lý báo rõ là chưa dùng được — xem `VD-109`.
+
+Khác thiết kế ban đầu hai điểm, đều ghi ở sổ quyết định: sổ công cụ **không có công cụ ghi** nào ngoài việc đặt đề xuất (QĐ-34); và Follow-up Agent **không dựng bằng AI** mà bằng bộ quy tắc tường minh của Phase 8 — cùng kết quả, dễ kiểm và không tốn tiền mô hình.
 
 Nền móng cho AI **đã có từ Phase 1**:
 - Tài khoản máy `ita@he-thong.noi-bo` với vai trò `ai-assistant`: chỉ đọc + soạn nháp; **không bao giờ** có quyền `approve` hay `delete` — chặn ở định nghĩa, ở seed, ở service Vai trò, và có bài thử.

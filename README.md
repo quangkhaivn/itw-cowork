@@ -3,7 +3,7 @@
 Hệ điều hành vận hành doanh nghiệp (Business Operating System) nội bộ của **Công ty Cổ phần Thế Giới Tin Học (TGTH / ITW)**: CRM, bán hàng, báo giá, đơn hàng, kho, dự án kỹ thuật, chăm sóc khách hàng, tài chính quản trị, tự động hóa và trợ lý AI — trên **một** nguồn dữ liệu.
 
 - Máy chủ thật: <https://thegioitinhoc.io.vn>
-- Trạng thái: **Phase 1 — Nền móng** chạy thật từ 19/09/2026. **Phase 2 → 8** (CRM; sản phẩm và bảng giá; báo giá; đơn hàng và kho; dự án, bảo hành, bàn dịch vụ; tài chính và bảng điều hành; tự động hóa và nhắc việc) xong trên máy phát triển 21/09/2026 (bản 0.9.0), chờ triển khai. Điểm vào cho phiên làm việc mới: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). Luật nghiệp vụ: [`BUSINESS_RULES.md`](BUSINESS_RULES.md).
+- Trạng thái: **Phase 1 — Nền móng** chạy thật từ 19/09/2026. **Phase 2 → 9** (CRM; sản phẩm và bảng giá; báo giá; đơn hàng và kho; dự án, bảo hành, bàn dịch vụ; tài chính và bảng điều hành; tự động hóa và nhắc việc; trợ lý AI) xong trên máy phát triển 21/09/2026 (bản 0.10.0), chờ triển khai. Trợ lý AI cần khóa API mới chạy được. Điểm vào cho phiên làm việc mới: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). Luật nghiệp vụ: [`BUSINESS_RULES.md`](BUSINESS_RULES.md).
 
 > Giao diện, chú thích mã và tài liệu viết bằng tiếng Việt. Tên bảng và cột cơ sở dữ liệu viết bằng tiếng Anh, `snake_case` (quyết định QĐ-02 trong [`docs/quyet-dinh-kien-truc.md`](docs/quyet-dinh-kien-truc.md)).
 

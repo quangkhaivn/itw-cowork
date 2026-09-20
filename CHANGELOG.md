@@ -2,6 +2,27 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.10.0 — 21/09/2026 — Phase 9: Trợ lý AI
+
+Căn cứ: prompt triển khai 36 mục, mục 25–30. Thiết kế: `AI_ARCHITECTURE.md`. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 15 (AI).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.9.0, chờ Giám đốc cho phép. **Chưa có khóa API**: trợ lý báo rõ là chưa dùng được cho tới khi Giám đốc cấp khóa (`VD-109`).
+
+### Thêm
+- **Trợ lý ITA**: khung chat hỏi đáp bằng tiếng Việt về khách hàng, cơ hội, báo giá, tồn kho, công nợ, bảng điều hành.
+- **13 công cụ đọc**, mỗi công cụ là lớp bọc mỏng trên service sẵn có — không công cụ nào tự truy vấn CSDL, nên phạm vi dữ liệu và luật nghiệp vụ của tám phase trước tự động áp cho trợ lý.
+- **Luồng đề xuất**: trợ lý chỉ đặt được một *lời đề nghị* (tạo báo giá nháp, tạo việc). Người dùng bấm Đồng ý thì service mới chạy, và chạy bằng **quyền của người bấm**.
+- **Lớp nhà cung cấp** tách rời: đổi mô hình là đổi biến môi trường (`AI_PROVIDER`, `AI_MODEL`, `ANTHROPIC_API_KEY`). Khóa API không bao giờ nằm trong CSDL hay nhật ký.
+- 4 bảng CSDL (`ai_conversations`, `ai_messages`, `ai_tool_calls`, `ai_actions`), 6 route API, 1 màn hình. Lịch sử hỏi đáp và lần gọi công cụ **chỉ ghi thêm**.
+- Giao diện hiện rõ **trợ lý đã tra bằng công cụ nào** dưới mỗi câu trả lời, để người đọc biết con số lấy từ đâu.
+
+### Quyết định đáng ghi
+- Nhà cung cấp **kịch bản** chỉ dùng trong kiểm thử, cắm qua `datNhaCungCapThu()`; mã sản phẩm luôn đi qua `layNhaCungCap()`. Nhờ vậy 57 kiểm chứng chạy tất định, không gọi mạng, không tốn tiền mô hình (QĐ-33).
+- `automation_rules` của Phase 8 và sổ công cụ của Phase 9 theo cùng một lối: **cấu trúc nằm trong mã, chỉ công tắc và ngưỡng nằm trong CSDL**.
+
+### Kiểm thử
+- 220 bài đơn vị, 514 bài tích hợp (thêm `thu:tro-ly` 57 bài), 278 bài HTTP đầu-cuối — tất cả đạt.
+- Diễn tập cài mới trên CSDL rỗng: 10 migration chạy sạch, RLS phủ đủ mọi bảng có `tenant_id`.
+
 ## 0.9.0 — 21/09/2026 — Phase 8: Tự động hóa, Việc hôm nay, bảo trì và gia hạn
 
 Căn cứ: prompt triển khai 36 mục, mục 21–22. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 13 (TD), mục 14 (BT/GH).

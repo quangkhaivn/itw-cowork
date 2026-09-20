@@ -146,6 +146,15 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - `worker/index.ts` quét **từng doanh nghiệp trong một giao dịch riêng**: một doanh nghiệp hỏng không kéo theo doanh nghiệp khác, và lần chạy hỏng vẫn nằm lại trong `job_runs` kèm lỗi.
 - Thông báo dùng chung một hàm `taoThongBao(tx, tenantId, …)` nhận `tx` chứ không nhận `NguCanh`, vì worker nền cũng gọi nó mà không có người dùng nào đứng sau.
 
+## 7i. Trợ lý AI (Phase 9)
+
+- Phân hệ: `src/modules/tro-ly`. `nha-cung-cap.ts` (giao diện + cài đặt Anthropic + đọc cấu hình), `cong-cu.ts` (sổ công cụ đọc), `de-xuat.ts` (công cụ ghi duy nhất + luồng duyệt), `service.ts` (vòng lặp), `tinh-toan.ts` (phần thuần).
+- **Công cụ là lớp bọc mỏng trên service**, không có công cụ nào tự truy vấn CSDL. Đây là lý do trợ lý không cần một hệ phân quyền riêng: nó dùng lại đúng hệ đang có.
+- **Hai lớp kiểm quyền**: danh sách công cụ gửi cho mô hình đã lọc theo quyền người hỏi, và mỗi công cụ còn bị `batBuocQuyen` một lần nữa ngay trước khi chạy. Lớp thứ hai để một lỗi ở lớp thứ nhất không thành lỗ hổng.
+- **Trợ lý không ghi dữ liệu nghiệp vụ.** Công cụ ghi duy nhất là `de_xuat_hanh_dong`, và nó chỉ ghi được một dòng `ai_actions` trạng thái đề xuất. Chốt cuối nằm ở CHECK trong CSDL, không chỉ ở mã.
+- **Đổi mô hình là đổi cấu hình**: `AI_PROVIDER`, `AI_MODEL`, khóa API trong biến môi trường. Chưa cấu hình thì hệ thống nói thẳng, không có chế độ "trả lời tạm".
+- Kiểm thử cắm **nhà cung cấp kịch bản** qua `datNhaCungCapThu()` nên vòng lặp, kiểm quyền và luồng duyệt kiểm được tất định, không gọi mạng (QĐ-33).
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

@@ -712,3 +712,42 @@ table.bang-in .mo-ta-in { color: #555; font-size: 12px; margin-top: 2px; white-s
   .viec-hom-nay > li { flex-wrap: wrap; }
   .viec-hom-nay .tac-vu { width: 100%; }
 }
+
+/* --------------------------------------------------------------------------
+ * Phase 9 — Trợ lý ITA
+ * ------------------------------------------------------------------------ */
+
+.khung-chat { padding: 16px; max-height: 58vh; overflow-y: auto; }
+.chat-trong { color: var(--chu-mo); font-size: 13.5px; }
+.chat-trong ul { padding-left: 18px; margin: 8px 0; }
+.chat-trong li { margin-bottom: 4px; }
+
+.ds-chat { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.ds-chat > li { display: flex; flex-direction: column; gap: 3px; max-width: 86%; }
+.ds-chat > li.cua-toi { align-self: flex-end; align-items: flex-end; }
+.ds-chat .bong { padding: 10px 13px; border-radius: 12px; background: var(--nen-nhat); border: 1px solid var(--vien-nhat); }
+.ds-chat .cua-toi .bong { background: var(--chinh); color: #fff; border-color: transparent; }
+.ds-chat .noi-dung { white-space: pre-wrap; font-size: 14px; line-height: 1.55; }
+.ds-chat .dau-vet { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--vien-nhat); font-size: 11.5px; color: var(--chu-mo); }
+.ds-chat .gio { font-size: 11px; color: var(--chu-nhat); }
+
+.chan-chat { padding: 14px 16px; border-top: 1px solid var(--vien-nhat); }
+.chan-chat .hang-nhap { display: flex; gap: 8px; }
+.chan-chat input { flex: 1 1 auto; }
+
+.ds-de-xuat { list-style: none; margin: 0; padding: 0; }
+.ds-de-xuat > li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; }
+.ds-de-xuat > li + li { border-top: 1px solid var(--vien-nhat); }
+.ds-de-xuat > li.mo { opacity: .6; }
+.ds-de-xuat .tac-vu { display: flex; gap: 8px; flex-shrink: 0; }
+
+.ds-hoi-thoai { list-style: none; margin: 0; padding: 0; }
+.ds-hoi-thoai > li + li { border-top: 1px solid var(--vien-nhat); }
+.ds-hoi-thoai a { display: block; padding: 8px 0; color: inherit; text-decoration: none; }
+.ds-hoi-thoai a:hover .tieu-de { text-decoration: underline; }
+.ds-hoi-thoai .tieu-de { display: block; font-size: 13px; font-weight: 600; }
+.ds-hoi-thoai > li.dang-chon .tieu-de { color: var(--chinh); }
+
+@media (max-width: 900px) {
+  .ds-chat > li { max-width: 100%; }
+}

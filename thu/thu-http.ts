@@ -972,6 +972,70 @@ async function main() {
   const nvTrangVhn = await goi("/viec-hom-nay", { cookie: dnNv.cookie });
   dat("Ai đăng nhập cũng mở được Việc hôm nay của mình", nvTrangVhn.status === 200, `status ${nvTrangVhn.status}`);
 
+  // --- 7i. Trợ lý ITA (Phase 9) ---
+  console.log("\n[7i] Trợ lý ITA");
+
+  const troLy = await goi("/api/v1/tro-ly", { cookie: cookieQT });
+  const troLyJson = troLy.json as unknown as {
+    trangThai: { daCauHinh: boolean; lyDo: string; soCongCuKhaDung: number; congCu: { ten: string }[] };
+    hoiThoai: unknown[];
+  };
+  dat("Đọc được tình trạng trợ lý", troLy.status === 200 && Array.isArray(troLyJson.trangThai.congCu));
+  dat(
+    "Giám đốc được mời nhiều công cụ",
+    troLyJson.trangThai.soCongCuKhaDung >= 8,
+    String(troLyJson.trangThai.soCongCuKhaDung),
+  );
+
+  const nvTroLy = await goi("/api/v1/tro-ly", { cookie: dnNv.cookie });
+  const nvTroLyJson = nvTroLy.json as unknown as { trangThai: { soCongCuKhaDung: number } };
+  dat(
+    "AI-01: nhân viên được mời ÍT công cụ hơn giám đốc",
+    nvTroLy.status === 200 && nvTroLyJson.trangThai.soCongCuKhaDung < troLyJson.trangThai.soCongCuKhaDung,
+    `${nvTroLyJson.trangThai?.soCongCuKhaDung} < ${troLyJson.trangThai.soCongCuKhaDung}`,
+  );
+
+  // Máy chủ thử không có khóa API nên trợ lý phải TỪ CHỐI, không được bịa câu trả lời.
+  const hoiKhiChuaCauHinh = await goi("/api/v1/tro-ly/hoi", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { cauHoi: "Khách nào đang nợ quá hạn nhiều nhất?" },
+  });
+  if (troLyJson.trangThai.daCauHinh) {
+    dat("Trợ lý đã cấu hình: trả lời được", hoiKhiChuaCauHinh.status === 200, `status ${hoiKhiChuaCauHinh.status}`);
+  } else {
+    dat(
+      "AI-06: chưa cấu hình thì trả 503 kèm lý do, KHÔNG bịa câu trả lời",
+      hoiKhiChuaCauHinh.status === 503 && hoiKhiChuaCauHinh.json.ma === "ai-chua-cau-hinh",
+      `status ${hoiKhiChuaCauHinh.status} ${JSON.stringify(hoiKhiChuaCauHinh.json).slice(0, 160)}`,
+    );
+    dat(
+      "AI-06: thông báo nói rõ thiếu gì để người quản trị biết đường sửa",
+      String(hoiKhiChuaCauHinh.json.thongBao ?? "").includes("ANTHROPIC_API_KEY"),
+      String(hoiKhiChuaCauHinh.json.thongBao ?? ""),
+    );
+  }
+
+  const hoiRong = await goi("/api/v1/tro-ly/hoi", { phuongThuc: "POST", cookie: cookieQT, than: { cauHoi: "" } });
+  dat("Câu hỏi rỗng bị 400", hoiRong.status === 400, `status ${hoiRong.status}`);
+
+  const hoiThoaiLa = await goi("/api/v1/tro-ly/hoi-thoai/00000000-0000-4000-8000-000000000000", { cookie: cookieQT });
+  dat("Hội thoại không tồn tại trả 404", hoiThoaiLa.status === 404, `status ${hoiThoaiLa.status}`);
+
+  const duyetLa = await goi("/api/v1/tro-ly/de-xuat/00000000-0000-4000-8000-000000000000/duyet", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: {},
+  });
+  dat("Duyệt một đề xuất không tồn tại trả 404", duyetLa.status === 404, `status ${duyetLa.status}`);
+
+  const trangTroLy = await goi("/tro-ly", { cookie: cookieQT });
+  dat("Trang Trợ lý dựng được", trangTroLy.status === 200 && trangTroLy.text.includes("Trợ lý ITA"), `status ${trangTroLy.status}`);
+  dat(
+    "Trang nói thật về tình trạng cấu hình thay vì để ô chat chết",
+    trangTroLy.text.includes(troLyJson.trangThai.daCauHinh ? "Sẵn sàng" : "Chưa cấu hình"),
+  );
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

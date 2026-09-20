@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 21/09/2026 (sau Phase 8).
+> Cập nhật lần cuối: 21/09/2026 (sau Phase 9).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -18,7 +18,7 @@ Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt
 | 6 | Dự án, phiếu hỗ trợ, bảo hành, bảo trì, gia hạn | P2 | **Xong trên máy phát triển** 20/09 (bản 0.7.0) — chưa triển khai. Bảo trì định kỳ và gia hạn để Phase 8 |
 | 7 | Tài chính quản trị (hóa đơn, công nợ, thu tiền) + Bảng điều hành CEO | P1/P2 | **Xong trên máy phát triển** 20/09 (bản 0.8.0) — chưa triển khai. Phần chi và công nợ phải trả để sau |
 | 8 | Tự động hóa, "Việc hôm nay", nhắc việc, chuông thông báo, bảo trì định kỳ / gia hạn | P2 | **Xong trên máy phát triển** 21/09 (bản 0.9.0) — chưa triển khai |
-| 9 | AI | P3 | Chỉ có thiết kế (`AI_ARCHITECTURE.md`) — **việc kế tiếp** |
+| 9 | AI | P3 | **Xong trên máy phát triển** 21/09 (bản 0.10.0) — chưa triển khai, và **chưa có khóa API** (`VD-109`) |
 
 Thứ tự ưu tiên khi thiếu thời gian (mục 34 prompt 20/09): Auth+RBAC → Customer → Product → Price → Opportunity → Quotation → Order → Dashboard → Task → Inventory → Project → Support → Finance → Automation → AI. **Không hy sinh P0 để làm AI sớm.**
 
@@ -141,9 +141,20 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - **Cần Giám đốc**: đặt **giờ quét hằng ngày** (`tu_dong.gio_quet_hang_ngay`) — chưa đặt thì máy **không tự quét**, chỉ chạy được bằng nút Chạy quét ngay (`VD-108`). Các ngưỡng nhắc việc khác nằm trong `VD-104`, `VD-106`, `VD-107`.
 - **Chưa làm có chủ đích**: gửi nhắc ra ngoài (email, Zalo), nhắc theo giờ trong ngày, quy tắc do người dùng tự định nghĩa.
 
-## 5. Phase 9 — việc kế tiếp
+## 4h. Phase 9 — Trợ lý AI (xong trên máy phát triển)
 
-AI (mục 25–30 prompt 20/09): trợ lý bán hàng, tác nhân báo giá, tác nhân nhắc việc, tác nhân Giám đốc. Thiết kế đầy đủ ở `AI_ARCHITECTURE.md`; điểm nối đã sẵn: mọi nghiệp vụ nằm ở `src/modules/<phân hệ>/service.ts` nhận `NguCanh`, nên công cụ AI gọi lại đúng các hàm đó với **quyền của người đang hỏi**. Vai trò `ITA — Trợ lý AI` đã có từ Phase 1 và bị chặn mọi quyền `.approve`/`.delete`, có bài thử. Bộ nhắc việc của Phase 8 chính là chỗ Follow-up Agent cắm vào.
+- [x] CSDL 4 bảng + CHECK + 2 trigger chỉ-ghi-thêm · [x] lớp nhà cung cấp + sổ 13 công cụ + vòng lặp + luồng đề xuất · [x] 6 route · [x] màn hình Trợ lý · [x] kiểm thử (220 đơn vị, 514 tích hợp, 278 HTTP) · [x] diễn tập cài mới · [x] soát giao diện
+- [ ] **Cần khóa API** `ANTHROPIC_API_KEY` trên máy chủ (`VD-109`). Chưa có thì màn hình Trợ lý nói rõ là chưa dùng được — hệ thống cố ý không trả lời thay vì bịa.
+- [ ] Triển khai máy thật (cùng đợt với 0.3.0 → 0.10.0 — `VD-101`)
+- **Chưa làm có chủ đích**: tác nhân nền tự chạy bằng AI (bộ quy tắc Phase 8 đang làm việc đó bằng luật tường minh, dễ kiểm hơn), trợ lý gửi tin cho khách, CEO Briefing định kỳ, truy xuất tài liệu (RAG).
+
+## 5. Sau Phase 9 — việc còn lại
+
+Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc phase nào, xếp theo thứ tự nên làm:
+
+1. **Triển khai 0.3.0 → 0.10.0 lên máy thật** (`VD-101`) — đang chờ Giám đốc cho phép. Đây là việc chặn mọi thứ khác: tám phase đã xong vẫn chưa ai dùng được.
+2. **Khai dữ liệu nền và các ngưỡng** (`VD-104` → `VD-109`): hồ sơ công ty, kho và tồn đầu kỳ, ngưỡng biên lợi nhuận, ngưỡng SLA, số ngày công nợ, giờ quét nhắc việc, khóa API.
+3. **Phần cố ý để lại**: mua hàng (đề nghị mua → đơn mua → nhận hàng), phiếu chi và công nợ phải trả, trả hàng / đổi máy, tệp đính kèm, gửi nhắc ra ngoài qua email hoặc Zalo.
 
 ## 6. Câu hỏi chờ Giám đốc
 
@@ -160,6 +171,7 @@ AI (mục 25–30 prompt 20/09): trợ lý bán hàng, tác nhân báo giá, tá
 | Q8 | Nhân viên Kinh doanh có được tự tạo và xác nhận đơn hàng không? | Theo mục 19 đặc tả: **không** — chỉ xem; Trưởng phòng KD tạo, xác nhận, hủy. Đổi được ngay trên màn hình Vai trò | Không chặn kỹ thuật, nhưng đổi nhịp làm việc của phòng kinh doanh |
 | Q10 | Doanh thu trên bảng điều hành tính theo **hóa đơn đã phát hành** — có đúng cách Giám đốc vẫn nhìn con số không? | Đang lấy mốc hóa đơn phát hành (QĐ-29). Nếu Giám đốc quen nhìn theo đơn đã xác nhận hoặc theo tiền thực thu thì đổi được, nhưng phải chọn **một** mốc duy nhất | Không chặn; đổi mốc thì mọi con số lịch sử đổi theo |
 | Q11 | Bản quét nhắc việc nên chạy lúc mấy giờ sáng? | Chưa đặt → máy **không tự quét**, chỉ chạy được bằng tay ở màn hình Tự động hóa. Gợi ý 7 giờ, trước giờ làm | Chặn việc nhắc tự động chạy hằng ngày (`VD-108`) |
+| Q12 | Có cấp khóa API mô hình AI cho máy chủ không, và ngân sách mỗi tháng bao nhiêu? | Chưa có khóa → màn hình Trợ lý nói rõ là chưa dùng được; không có chế độ trả lời tạm | Chặn toàn bộ Phase 9 chạy thật (`VD-109`) |
 
 ## 7. Known issues
 
