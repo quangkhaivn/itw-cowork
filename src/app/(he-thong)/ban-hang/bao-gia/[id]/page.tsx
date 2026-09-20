@@ -103,6 +103,11 @@ export default async function TrangChiTietBaoGia({ params, searchParams }: { par
           <Link href={`/ban-hang/bao-gia/${bg.id}`}>Về bản hiện hành</Link>
         </div>
       )}
+      {ct.donHang && (
+        <div className="hop-thong-bao tot" role="status">
+          Báo giá này đã thành đơn hàng <Link href={`/ban-hang/don-hang/${ct.donHang.id}`}>{ct.donHang.so}</Link>.
+        </div>
+      )}
       {ct.quyen.tuDuyetBiChan && !xemBanCu && (
         <div className="hop-thong-bao canh-bao" role="status">
           Bạn là người lập báo giá này nên không tự duyệt được. Chuyển cho cấp trên duyệt (BG-05).

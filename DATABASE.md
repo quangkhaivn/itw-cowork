@@ -18,7 +18,7 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 
 ---
 
-## A. Đang có (Phase 1 chạy thật; Phase 2–4 chờ triển khai)
+## A. Đang có (Phase 1 chạy thật; Phase 2–5 chờ triển khai)
 
 | Bảng | Vai trò | Ghi chú |
 |---|---|---|
@@ -52,8 +52,15 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `quotation_versions` | Mỗi bản gửi khách là một phiên bản | Phase 4. Duy nhất `(quotation_id, version_no)`; CHECK trạng thái, tiền ≥ 0, đã gửi thì có `sent_at`, đã chốt thì có `decided_at` |
 | `quotation_items` | Bảng hàng của một phiên bản | Phase 4. CHECK `quantity > 0`, chiết khấu và VAT 0–100; chụp `sku`, `unit_cost`, `supplier_id` lúc lập |
 | `quotation_approvals` | Lịch sử xin duyệt / quyết duyệt | Phase 4. Chụp biên và ngưỡng lúc xin; CHECK đã quyết thì phải có người quyết và thời điểm |
+| `warehouses` | Kho hàng | Phase 5. Duy nhất `(tenant_id, code)`; một kho đánh dấu mặc định |
+| `sales_orders` | Đơn hàng bán | Phase 5. Số `DH-2026-0001`; giữ `quotation_version_id` để truy ngược; CHECK trạng thái, tiền ≥ 0, đã xác nhận / đã hủy phải có người và thời điểm |
+| `sales_order_items` | Dòng hàng của đơn | Phase 5. CHECK `delivered_qty <= quantity`; giữ `quotation_item_id` |
+| `inventory_balances` | Số dư tồn theo (kho, sản phẩm) | Phase 5. Duy nhất `(tenant_id, warehouse_id, product_id)`; CHECK không âm và `reserved <= on_hand` |
+| `inventory_transactions` | Sổ cái kho | Phase 5. **Chỉ ghi thêm** (trigger `chan_sua_inventory_transactions`); ghi cả số dư sau giao dịch để đối soát |
+| `deliveries`, `delivery_items` | Phiếu xuất giao hàng | Phase 5. Số `XK-2026-0001`; ghi sổ kho ngay khi lập |
+| `serial_numbers` | Số sê-ri từng máy | Phase 5. Duy nhất `(tenant_id, product_id, serial)`; CHECK còn trong kho thì phải biết kho nào, đã bán thì phải gắn dòng đơn |
 
-Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ).
+Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_thien` (bổ sung — chỉ thêm cột/bảng/ràng buộc, không xóa gì; kèm gán phạm vi mặc định cho quyền đã có và đổi tên hai vai trò dựng sẵn nếu chưa bị sửa tay), `20260919171944_phase2_crm` (chỉ thêm bảng + `CREATE EXTENSION pg_trgm` + CHECK; kèm cấp bù `sales.approve` cho vai trò Trưởng phòng Kinh doanh — một lần, không cấp lại nếu Giám đốc gỡ), `20260920011356_phase3_san_pham` (chỉ thêm 7 bảng + CHECK + trigger lịch sử giá; kèm cấp bù `supplier.view` cho 4 vai trò dựng sẵn), `20260920015506_phase4_bao_gia` (chỉ thêm 4 bảng báo giá + CHECK; không đụng bảng cũ), `20260920103433_phase5_don_hang_kho` (thêm 8 bảng đơn hàng/kho + 2 cột trên `products` + CHECK + trigger sổ cái; kèm cấp bù quyền kho cho vai trò Thủ kho).
 
 Vai kết nối: `cowork_app` (ứng dụng, bị RLS) và chủ sở hữu (migration, seed). Ứng dụng **không bao giờ** chạy bằng chủ sở hữu.
 
@@ -122,7 +129,7 @@ Khác đề xuất: thêm `sku_normalized`/`name_normalized` để chống trùn
 
 Trạng thái: Draft → Pending Approval → Approved → Sent → Viewed → Negotiating → Accepted / Rejected / Expired. Biên lợi nhuận tính bằng **một hàm thuần** `tinhBaoGia(dong[])` có kiểm thử đơn vị; ngưỡng đọc từ `bao_gia.nguong_bien_loi_nhuan` (chưa đặt → mọi báo giá phải duyệt).
 
-### Phase 5 — Đơn hàng, kho, mua hàng
+### Phase 5 — Đơn hàng, kho, mua hàng (ĐÃ LÀM 20/09 trừ phần mua hàng — bảng thật ở phần A)
 
 | Bảng | Ghi chú |
 |---|---|

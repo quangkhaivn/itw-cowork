@@ -487,6 +487,121 @@ async function main() {
   const xoaNguong = await goi("/api/v1/cau-hinh", { phuongThuc: "PATCH", cookie: cookieQT, than: { giaTri: { "bao_gia.nguong_bien_loi_nhuan": null } } });
   dat("Trả ngưỡng biên lợi nhuận về chưa đặt", xoaNguong.status === 200);
 
+  // --- 7e. Đơn hàng và kho (Phase 5) ---
+  const cacTrangKho: [string, string][] = [
+    ["/kho", "Tồn kho"],
+    ["/kho/danh-sach", "Danh sách kho"],
+    ["/kho/nhap", "Nhập kho"],
+    ["/kho/the-kho", "Thẻ kho"],
+    ["/kho/serial", "Số sê-ri"],
+    ["/ban-hang/don-hang", "Đơn hàng"],
+    ["/ban-hang/don-hang/moi", "Tạo đơn hàng"],
+  ];
+  for (const [duong, chu] of cacTrangKho) {
+    const r = await goi(duong, { cookie: cookieQT });
+    dat(`Trang ${duong} trả 200 và có nội dung`, r.status === 200 && r.text.includes(chu) && !r.text.includes("Không hiển thị được trang này"), `status ${r.status}`);
+  }
+
+  const taoKho = await goi("/api/v1/kho", { phuongThuc: "POST", cookie: cookieQT, than: { ma: `kho-${DAU}`, ten: `Kho thử HTTP ${DAU}`, macDinh: true } });
+  dat("Tạo kho qua API, mã tự viết hoa", taoKho.status === 200 && String(taoKho.json.ma) === `KHO-${DAU}`.toUpperCase(), JSON.stringify(taoKho.json));
+  const idKho = taoKho.json.id as string;
+
+  const nhapKho = await goi("/api/v1/kho/nhap", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khoId: idKho, lyDo: "Nhập thử qua HTTP", dong: [{ sanPhamId: idSp, soLuong: "5", giaVon: "14.500.000", serial: [`SN-HTTP-${DAU}-1`, `SN-HTTP-${DAU}-2`, `SN-HTTP-${DAU}-3`, `SN-HTTP-${DAU}-4`, `SN-HTTP-${DAU}-5`] }] },
+  });
+  dat("Nhập kho 5 máy có sê-ri", nhapKho.status === 200 && (nhapKho.json.dong as { tonSau: number }[])[0].tonSau === 5, JSON.stringify(nhapKho.json));
+  const tonSauNhap = await goi(`/api/v1/kho/ton?kho=${idKho}`, { cookie: cookieQT });
+  const dongTon = ((tonSauNhap.json.dong as { sanPham: { id: string }; tonKho: number; conBanDuoc: number }[]) ?? []).find((d) => d.sanPham.id === idSp);
+  dat("Tồn kho đọc ra đúng 5, còn bán được 5", dongTon?.tonKho === 5 && dongTon?.conBanDuoc === 5, JSON.stringify(dongTon));
+
+  const thieuSerial = await goi("/api/v1/kho/nhap", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khoId: idKho, lyDo: "Thiếu sê-ri", dong: [{ sanPhamId: idSp, soLuong: "2", serial: [`SN-HTTP-${DAU}-9`] }] },
+  });
+  dat("KHO-05: nhập thiếu sê-ri trả 400 kèm mã lỗi", thieuSerial.status === 400 && thieuSerial.json.ma === "thieu-serial", `status ${thieuSerial.status}`);
+
+  const dieuChinh = await goi("/api/v1/kho/dieu-chinh", { phuongThuc: "POST", cookie: cookieQT, than: { khoId: idKho, sanPhamId: idSp, chieu: "giam", soLuong: "1", lyDo: "Kiểm kê thiếu 1 máy" } });
+  dat("Điều chỉnh giảm còn 4", dieuChinh.status === 200 && (dieuChinh.json.sau as { onHand: number }).onHand === 4, JSON.stringify(dieuChinh.json));
+  const dieuChinhQua = await goi("/api/v1/kho/dieu-chinh", { phuongThuc: "POST", cookie: cookieQT, than: { khoId: idKho, sanPhamId: idSp, chieu: "giam", soLuong: "99", lyDo: "Thử vượt tồn" } });
+  dat("KHO-02: điều chỉnh vượt tồn trả 409", dieuChinhQua.status === 409 && dieuChinhQua.json.ma === "ton-khong-du", `status ${dieuChinhQua.status}`);
+
+  // Đơn hàng từ báo giá đã chốt (bgDat ở mục 7d đã ở trạng thái Khách chấp nhận).
+  const taoDon = await goi("/api/v1/don-hang/tu-bao-gia", { phuongThuc: "POST", cookie: cookieQT, than: { baoGiaId: bgDat.json.id } });
+  dat("DH-01: tạo đơn từ báo giá đã chốt, số DH-", taoDon.status === 200 && String(taoDon.json.so).startsWith("DH-"), JSON.stringify(taoDon.json));
+  const idDon = taoDon.json.id as string;
+  const taoLai = await goi("/api/v1/don-hang/tu-bao-gia", { phuongThuc: "POST", cookie: cookieQT, than: { baoGiaId: bgDat.json.id } });
+  dat("Gọi lại không sinh đơn thứ hai", taoLai.status === 200 && taoLai.json.id === idDon && taoLai.json.daCoTruoc === true);
+
+  const donThuong = await goi("/api/v1/don-hang", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khachHangId: idKh, dong: [{ sanPhamId: idSp, ten: `Laptop thử HTTP ${DAU}`, soLuong: "2", donViTinh: "cai", donGia: "18.000.000", vat: 10, giaVon: "14.500.000" }] },
+  });
+  dat("Tạo đơn thủ công qua API", donThuong.status === 200 && String(donThuong.json.so).startsWith("DH-"), JSON.stringify(donThuong.json));
+  const idDon2 = donThuong.json.id as string;
+
+  const xacNhan = await goi(`/api/v1/don-hang/${idDon2}/xac-nhan`, { phuongThuc: "POST", cookie: cookieQT, than: { khoId: idKho } });
+  dat("DH-04: xác nhận đơn và giữ hàng", xacNhan.status === 200 && xacNhan.json.trangThai === "CONFIRMED", JSON.stringify(xacNhan.json));
+  const tonSauGiu = await goi(`/api/v1/kho/ton?kho=${idKho}`, { cookie: cookieQT });
+  const dongGiu = ((tonSauGiu.json.dong as { sanPham: { id: string }; giuCho: number; conBanDuoc: number }[]) ?? []).find((d) => d.sanPham.id === idSp);
+  dat("Giữ chỗ 2, còn bán được 2", dongGiu?.giuCho === 2 && dongGiu?.conBanDuoc === 2, JSON.stringify(dongGiu));
+
+  const suaDaXacNhan = await goi(`/api/v1/don-hang/${idDon2}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { ghiChu: "Sửa lén" } });
+  dat("DH-03: đơn đã xác nhận không sửa được (409)", suaDaXacNhan.status === 409 && suaDaXacNhan.json.ma === "da-xac-nhan", `status ${suaDaXacNhan.status}`);
+
+  const ctDon = await goi(`/api/v1/don-hang/${idDon2}`, { cookie: cookieQT });
+  const dongDon = ((ctDon.json as unknown as { don: { dong: { id: string; sanPhamId: string }[] } }).don.dong ?? []).find((d) => d.sanPhamId === idSp)!;
+  const xuatQua = await goi(`/api/v1/don-hang/${idDon2}/phieu-xuat`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khoId: idKho, dong: [{ dongDonId: dongDon.id, soLuong: "5", serial: [`SN-HTTP-${DAU}-1`] }] },
+  });
+  dat("DH-05: xuất quá số lượng đặt bị 409", xuatQua.status === 409 && xuatQua.json.ma === "xuat-qua-so-luong", `status ${xuatQua.status}`);
+
+  const xuat1 = await goi(`/api/v1/don-hang/${idDon2}/phieu-xuat`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khoId: idKho, nguoiNhan: "Anh Thử", dong: [{ dongDonId: dongDon.id, soLuong: "1", serial: [`SN-HTTP-${DAU}-1`] }] },
+  });
+  dat("Xuất 1 máy: đơn sang Giao một phần", xuat1.status === 200 && xuat1.json.trangThaiDon === "PARTIALLY_DELIVERED", JSON.stringify(xuat1.json));
+  const xuat2 = await goi(`/api/v1/don-hang/${idDon2}/phieu-xuat`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { khoId: idKho, dong: [{ dongDonId: dongDon.id, soLuong: "1", serial: [`SN-HTTP-${DAU}-2`] }] },
+  });
+  dat("Xuất nốt: đơn sang Đã giao đủ", xuat2.status === 200 && xuat2.json.trangThaiDon === "DELIVERED", JSON.stringify(xuat2.json));
+  const serialDaBan = await goi(`/api/v1/kho/serial?q=SN-HTTP-${DAU}-1&trangThai=da-ban`, { cookie: cookieQT });
+  dat("Sê-ri đã xuất chuyển sang Đã bán và gắn đơn", Number(serialDaBan.json.tong) === 1 && Boolean((serialDaBan.json.dong as { donHang: unknown }[])[0]?.donHang));
+
+  const huyDaGiao = await goi(`/api/v1/don-hang/${idDon2}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "Thử hủy" } });
+  dat("DH-07: đơn đã giao đủ thì không hủy (409)", huyDaGiao.status === 409 && huyDaGiao.json.ma === "da-giao-du", `status ${huyDaGiao.status}`);
+
+  const huyDon = await goi(`/api/v1/don-hang/${idDon}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "Dọn dữ liệu thử HTTP" } });
+  dat("Hủy đơn chưa xác nhận được, có ghi lý do", huyDon.status === 200 && huyDon.json.trangThai === "CANCELLED");
+  const huyThieuLyDo = await goi(`/api/v1/don-hang/${idDon2}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "" } });
+  dat("Hủy đơn không ghi lý do bị 400", huyThieuLyDo.status === 400, `status ${huyThieuLyDo.status}`);
+
+  const doiSoat = await goi("/api/v1/kho/doi-soat", { cookie: cookieQT });
+  dat("KHO-01: sổ cái khớp số dư trên mọi cặp (kho, sản phẩm)", doiSoat.status === 200 && ((doiSoat.json.lech as unknown[]) ?? []).length === 0, JSON.stringify(doiSoat.json));
+  const theKhoHttp = await goi(`/api/v1/kho/the-kho?kho=${idKho}`, { cookie: cookieQT });
+  dat("Thẻ kho ghi đủ các loại giao dịch", theKhoHttp.status === 200 && ["nhap", "dieu-chinh", "giu-cho", "xuat"].every((l) => ((theKhoHttp.json.dong as { loai: string }[]) ?? []).some((d) => d.loai === l)), JSON.stringify(((theKhoHttp.json.dong as { loai: string }[]) ?? []).map((d) => d.loai)));
+
+  const trangDon = await goi(`/ban-hang/don-hang/${idDon2}`, { cookie: cookieQT });
+  dat("Trang chi tiết đơn dựng được", trangDon.status === 200 && trangDon.text.includes(String(donThuong.json.so)), `status ${trangDon.status}`);
+
+  // Phân quyền: nhân viên kinh doanh chỉ xem, không tạo đơn, không đụng kho.
+  const nvXemDon = await goi("/api/v1/don-hang", { cookie: dnNv.cookie });
+  dat("Nhân viên kinh doanh xem được danh sách đơn", nvXemDon.status === 200);
+  const nvTaoDon = await goi("/api/v1/don-hang", { phuongThuc: "POST", cookie: dnNv.cookie, than: { khachHangId: khachNv, dong: [] } });
+  dat("Nhân viên kinh doanh KHÔNG tạo được đơn (theo mục 19 đặc tả)", nvTaoDon.status === 403, `status ${nvTaoDon.status}`);
+  const nvNhapKho = await goi("/api/v1/kho/nhap", { phuongThuc: "POST", cookie: dnNv.cookie, than: { khoId: idKho, lyDo: "Thử", dong: [{ sanPhamId: idSp, soLuong: "1" }] } });
+  dat("Nhân viên kinh doanh không nhập kho được", nvNhapKho.status === 403);
+  const nvXacNhan = await goi(`/api/v1/don-hang/${idDon2}/xac-nhan`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { khoId: idKho } });
+  dat("Nhân viên kinh doanh không xác nhận được đơn", nvXacNhan.status === 403);
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

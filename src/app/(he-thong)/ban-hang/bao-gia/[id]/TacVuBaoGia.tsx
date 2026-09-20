@@ -13,7 +13,7 @@ import { useGoiApi } from "@/components/ui/goi-api";
  * mắt — người dùng gọi thẳng API vẫn bị chặn ở service (mục 34 prompt).
  */
 
-type Viec = "xin-duyet" | "duyet" | "gui" | "chot" | "ban-moi" | null;
+type Viec = "xin-duyet" | "duyet" | "gui" | "chot" | "ban-moi" | "tao-don" | null;
 
 export default function TacVuBaoGia({
   baoGiaId,
@@ -22,7 +22,7 @@ export default function TacVuBaoGia({
   lyDoCanDuyet,
 }: {
   baoGiaId: string;
-  quyen: { sua: boolean; taoBanMoi: boolean; xinDuyet: boolean; duyet: boolean; tuDuyetBiChan: boolean; gui: boolean; chot: boolean };
+  quyen: { sua: boolean; taoBanMoi: boolean; xinDuyet: boolean; duyet: boolean; tuDuyetBiChan: boolean; gui: boolean; chot: boolean; taoDon: boolean };
   /** Bản hiện hành có dưới ngưỡng biên lợi nhuận không (để nhắc trước khi bấm). */
   canDuyet: boolean;
   lyDoCanDuyet: string | null;
@@ -50,11 +50,14 @@ export default function TacVuBaoGia({
       : viec === "gui" ? await goi(`${duong}/gui`, "POST", { kenh, ghiChu })
       : viec === "chot" ? await goi(`${duong}/chot`, "POST", { ketQua, ghiChu })
       : viec === "ban-moi" ? await goi(`${duong}/phien-ban`, "POST")
+      : viec === "tao-don" ? await goi<{ id: string }>("/api/v1/don-hang/tu-bao-gia", "POST", { baoGiaId })
       : null;
     if (!kq) return;
     hop.current?.close();
+    const viecCu = viec;
     datViec(null);
-    if (viec === "ban-moi") router.push(`/ban-hang/bao-gia/${baoGiaId}/sua`);
+    if (viecCu === "ban-moi") router.push(`/ban-hang/bao-gia/${baoGiaId}/sua`);
+    else if (viecCu === "tao-don") router.push(`/ban-hang/don-hang/${(kq as { id: string }).id}?moTao=1`);
     else router.refresh();
   }
 
@@ -63,6 +66,7 @@ export default function TacVuBaoGia({
     : viec === "duyet" ? "Duyệt báo giá"
     : viec === "gui" ? "Ghi nhận đã gửi khách"
     : viec === "chot" ? "Khách trả lời thế nào?"
+    : viec === "tao-don" ? "Chuyển báo giá thành đơn hàng"
     : "Tạo phiên bản mới";
 
   return (
@@ -88,6 +92,11 @@ export default function TacVuBaoGia({
             Ghi kết quả
           </button>
         )}
+        {quyen.taoDon && (
+          <button type="button" className="nut chinh" onClick={() => mo("tao-don")}>
+            Tạo đơn hàng
+          </button>
+        )}
         {quyen.taoBanMoi && (
           <button type="button" className="nut" onClick={() => mo("ban-moi")}>
             Tạo phiên bản mới
@@ -108,6 +117,11 @@ export default function TacVuBaoGia({
               {lyDoCanDuyet === "threshold_not_set"
                 ? "Hệ thống chưa đặt ngưỡng biên lợi nhuận, nên mọi báo giá đều phải qua duyệt. Giám đốc đặt ngưỡng ở Quản trị → Cấu hình hệ thống."
                 : "Báo giá đang dưới ngưỡng biên lợi nhuận. Ghi rõ lý do để người duyệt quyết nhanh."}
+            </p>
+          )}
+          {viec === "tao-don" && (
+            <p className="goi-y" style={{ marginTop: 0 }}>
+              Đơn hàng mới sẽ chép nguyên bảng hàng và số tiền của bản báo giá khách đã chấp nhận — không phải nhập lại. Sau đó xác nhận đơn để giữ hàng trong kho.
             </p>
           )}
           {viec === "ban-moi" && (
@@ -140,7 +154,7 @@ export default function TacVuBaoGia({
             </div>
           )}
 
-          {viec !== "ban-moi" && (
+          {viec !== "ban-moi" && viec !== "tao-don" && (
             <div className="truong">
               <label htmlFor="bg-ghichu">Ghi chú</label>
               <textarea id="bg-ghichu" rows={3} value={ghiChu} onChange={(e) => datGhiChu(e.target.value)} placeholder={viec === "chot" ? "Khách nói gì, cần làm gì tiếp" : "Không bắt buộc"} />
@@ -162,7 +176,7 @@ export default function TacVuBaoGia({
             </>
           ) : (
             <button type="button" className="nut chinh" onClick={() => chay()} disabled={dangGui}>
-              {dangGui ? "Đang lưu…" : viec === "gui" ? "Đã gửi khách" : viec === "ban-moi" ? "Tạo bản mới" : "Xác nhận"}
+              {dangGui ? "Đang lưu…" : viec === "gui" ? "Đã gửi khách" : viec === "ban-moi" ? "Tạo bản mới" : viec === "tao-don" ? "Tạo đơn hàng" : "Xác nhận"}
             </button>
           )}
         </div>

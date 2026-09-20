@@ -27,7 +27,7 @@ export interface MucCauHinh {
   dungTuPhase: number;
 }
 
-export const PHASE_HIEN_TAI = 4;
+export const PHASE_HIEN_TAI = 5;
 
 export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
   {

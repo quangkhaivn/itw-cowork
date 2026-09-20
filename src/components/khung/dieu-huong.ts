@@ -25,7 +25,12 @@ export type BieuTuong =
   | "nha-cung-cap"
   | "nhap-csv"
   | "bao-gia"
-  | "ho-so-cong-ty";
+  | "ho-so-cong-ty"
+  | "don-hang"
+  | "ton-kho"
+  | "nhap-kho"
+  | "the-kho"
+  | "serial";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -68,6 +73,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Pipeline", href: "/ban-hang/pipeline", quyen: "sales.view", bieuTuong: "pipeline", tuKhoa: "kanban pipeline giai doan" },
       { nhan: "Cơ hội", href: "/ban-hang/co-hoi", quyen: "sales.view", bieuTuong: "co-hoi", tuKhoa: "opportunity co hoi ban hang" },
       { nhan: "Báo giá", href: "/ban-hang/bao-gia", quyen: "quotation.view", bieuTuong: "bao-gia", tuKhoa: "quotation bao gia phien ban duyet gui khach" },
+      { nhan: "Đơn hàng", href: "/ban-hang/don-hang", quyen: "order.view", bieuTuong: "don-hang", tuKhoa: "sales order don hang xac nhan giao hang" },
     ],
   },
   {
@@ -78,6 +84,16 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Thương hiệu", href: "/san-pham/thuong-hieu", quyen: "product.view", bieuTuong: "thuong-hieu", tuKhoa: "brand hang san xuat" },
       { nhan: "Nhà cung cấp", href: "/san-pham/nha-cung-cap", quyen: "supplier.view", bieuTuong: "nha-cung-cap", tuKhoa: "supplier nguon hang ncc" },
       { nhan: "Nhập CSV", href: "/san-pham/nhap-csv", quyen: "product.update", bieuTuong: "nhap-csv", tuKhoa: "import excel bang gia nhap lieu" },
+    ],
+  },
+  {
+    nhan: "Kho",
+    muc: [
+      { nhan: "Tồn kho", href: "/kho", quyen: "inventory.view", bieuTuong: "ton-kho", tuKhoa: "inventory ton kho con bao nhieu giu cho" },
+      { nhan: "Nhập kho", href: "/kho/nhap", quyen: "inventory.create", bieuTuong: "nhap-kho", tuKhoa: "nhap hang vao kho receipt" },
+      { nhan: "Thẻ kho", href: "/kho/the-kho", quyen: "inventory.view", bieuTuong: "the-kho", tuKhoa: "so cai kho lich su nhap xuat" },
+      { nhan: "Số sê-ri", href: "/kho/serial", quyen: "inventory.view", bieuTuong: "serial", tuKhoa: "serial imei so may bao hanh" },
+      { nhan: "Danh sách kho", href: "/kho/danh-sach", quyen: "inventory.view", bieuTuong: "nha-cung-cap", tuKhoa: "warehouse kho chi nhanh" },
     ],
   },
   {

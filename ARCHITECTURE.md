@@ -113,6 +113,14 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Phạm vi xem như cơ hội (QĐ-13): người lập, cộng đường chủ tài khoản khách.
 - Bản in là trang riêng ngoài khung ứng dụng (`src/app/(in)/bao-gia/[id]/in`), in bằng trình duyệt (QĐ-21); phần đầu lấy từ Hồ sơ công ty (QĐ-22).
 
+## 7e. Đơn hàng và kho (Phase 5)
+
+- Phân hệ: `src/modules/don-hang` và `src/modules/kho`; phần thuần ở `don-hang/tinh-toan.ts` (trạng thái, tiến độ giao) và `kho/tinh-toan.ts` (chiều tác động của từng loại giao dịch, chặn số dư âm).
+- **Một cửa duy nhất đụng tồn kho**: `ghiSoKho()`. Hàm này khóa dòng số dư bằng `SELECT … FOR UPDATE`, tính số dư mới bằng hàm thuần, chặn nếu âm, rồi ghi **cùng lúc** dòng sổ cái và số dư mới. Không chỗ nào trong hệ thống tự cộng trừ tồn kho theo cách riêng.
+- Đơn hàng đụng kho ở đúng ba chỗ: xác nhận (giữ chỗ), hủy (nhả giữ chỗ), xuất hàng (trừ tồn + nhả phần giữ chỗ tương ứng). Mọi dòng sổ cái của một đơn đều mang `ref_type = 'don-hang'` và `ref_id` là id đơn, nên phần còn giữ chỗ của đơn luôn tính đúng bằng một phép cộng.
+- Tiền của đơn dùng lại `tinhBaoGia()` của Phase 4 — một cách tính cho cả báo giá và đơn (DH-08).
+- `doiSoatKho()` so tổng sổ cái với số dư từng cặp (kho, sản phẩm); bài thử tích hợp chạy hàm này sau mọi nghiệp vụ.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.
@@ -124,7 +132,9 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 | Chuông thông báo | Chưa có sự kiện nào cần báo cho người dùng; chuông không có gì bên trong là nút chết | Phase 8 |
 | Tùy chọn cột trên bảng | Bảng CRM 5–7 cột vẫn đọc tốt; chưa có yêu cầu thật để ẩn/hiện cột | khi có yêu cầu |
 | Xuất CSV khách hàng | Quyền `customer.export` đã có nhưng chưa có màn hình; bộ xuất CSV dùng chung đã sẵn ở `src/lib/csv.ts` | khi cần |
-| Chuyển báo giá đã chấp nhận thành đơn hàng | Chưa có bảng đơn hàng; làm nửa vời sẽ đẻ dữ liệu mồ côi | Phase 5 |
+| Mua hàng (đề nghị mua, đơn mua, nhận hàng) | Nhập kho hiện ghi thẳng kèm nguồn hàng; làm mua hàng tử tế cần luồng duyệt riêng và đối chiếu công nợ nhà cung cấp | Phase 5b / 7 |
+| Chuyển kho nội bộ | Chưa có nhu cầu thật; hiện làm được bằng hai lần điều chỉnh có lý do | khi có yêu cầu |
+| Trả hàng, bảo hành theo sê-ri | Sê-ri đã ghi đủ vết để làm sau; nghiệp vụ trả hàng đi kèm công nợ | Phase 6 |
 | Gửi email báo giá tự động | Chưa có dịch vụ gửi thư và mẫu thư được duyệt; hiện ghi nhận "đã gửi bằng kênh nào" để không mất dấu vết | Phase 8 |
 | Đọc thẳng tệp .xlsx | Excel lưu được CSV UTF-8; thêm thư viện đọc xlsx là thêm phụ thuộc nặng cho một việc người dùng làm được bằng hai cú bấm | khi có yêu cầu thật |
 | Song ngữ Việt–Anh | Chữ giao diện hiện viết thẳng; chuẩn bị bằng cách gom nhãn menu vào một tệp. Tách từ điển khi có yêu cầu thật | khi cần |

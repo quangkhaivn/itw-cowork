@@ -31,6 +31,12 @@ const DUONG_VE: Record<string, string> = {
   // Phase 4 — báo giá
   "bao-gia": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h4M9 9h1",
   "ho-so-cong-ty": "M3 21h18M5 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M15 8h3a1 1 0 0 1 1 1v12M9 7h2M9 11h2M9 15h2",
+  // Phase 5 — đơn hàng và kho
+  "don-hang": "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0",
+  "ton-kho": "M3 9h18v12H3zM3 9l2-5h14l2 5M9 13h6",
+  "nhap-kho": "M12 3v10m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2",
+  "the-kho": "M4 3h16v18H4zM8 7h8M8 11h8M8 15h5",
+  serial: "M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
 };
 

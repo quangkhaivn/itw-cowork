@@ -2,6 +2,33 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.6.0 — 20/09/2026 — Phase 5: Đơn hàng và kho
+
+Căn cứ: prompt triển khai 36 mục, mục 15–16. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 6 (DH-01 → DH-09) và mục 7 (KHO-01 → KHO-08).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.5.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **CSDL** (migration `20260920103433_phase5_don_hang_kho`, chỉ thêm bảng và cột): `warehouses`, `sales_orders`, `sales_order_items`, `inventory_balances`, `inventory_transactions`, `deliveries`, `delivery_items`, `serial_numbers`; hai cột mới trên `products` (`min_stock`, `quan_ly_ton`); 20 ràng buộc CHECK; **trigger chặn sửa/xóa sổ cái kho**; cấp bù quyền kho cho vai trò Thủ kho đã có trên máy thật.
+- **Báo giá đã chốt → đơn hàng bằng một nút**: dòng hàng và số tiền chép sang (giữ liên kết truy ngược từng dòng), bấm lại không sinh đơn thứ hai. Trang báo giá chỉ luôn đơn đã sinh.
+- **Đơn hàng**: số `DH-2026-0001`, sửa khi còn nháp, xác nhận (giữ hàng trong kho), hủy có lý do (nhả hàng), xuất hàng nhiều lần; trạng thái giao **tính từ dữ liệu** nên không có đơn "đã giao đủ" mà còn hàng chưa xuất.
+- **Kho**: nhiều kho, nhập kho kèm nguồn hàng, điều chỉnh sau kiểm kê (bắt buộc lý do), **thẻ kho chỉ-ghi-thêm** ghi cả số dư sau từng giao dịch, đối soát sổ cái với số dư.
+- **Giữ chỗ hàng**: hàng còn bán được = tồn kho − phần đang giữ cho đơn đã xác nhận; xác nhận đơn khi hàng không đủ bị chặn kèm con số thật.
+- **Số sê-ri**: nhập kho khai đủ sê-ri cho hàng quản lý theo máy, xuất phải đúng sê-ri đang ở kho đó; tra cứu sê-ri ra ngay đơn và khách đã mua.
+- **Mức tồn tối thiểu** cho từng sản phẩm, sinh cảnh báo "sắp hết" / "hết hàng" ngay trên màn hình Tồn kho.
+- **Màn hình**: Đơn hàng (danh sách, chi tiết, tạo, sửa), Kho (tồn kho, nhập kho, thẻ kho, số sê-ri, danh sách kho). 15 route `/api/v1` mới.
+- Dữ liệu mẫu tenant `demo`: 2 kho, 4 mặt hàng có tồn (kèm sê-ri), 1 đơn hàng đã xác nhận và giao một phần.
+- Kiểm thử: 22 bài đơn vị mới (**113**), `thu-don-hang` 53 kiểm chứng (tích hợp **299**), `thu-http` thêm 33 kiểm chứng (**169**); diễn tập **cài mới** toàn bộ migration trên CSDL trống: 39 bảng, 81 CHECK, 4 trigger chỉ-ghi-thêm, RLS không sót bảng.
+
+### Sửa
+- Gợi ý sản phẩm (`/api/v1/bao-gia/goi-y-san-pham`) nay dùng chung cho lập báo giá, lập đơn và nhập kho — trước đó chỉ người có quyền tạo báo giá mới tra được hàng.
+- Nhãn phase ở chân thanh bên và `PHASE_HIEN_TAI` cập nhật sang Phase 5.
+
+### Vấn đề đã biết
+- **Chưa có mua hàng** (`purchase_requests`, `purchase_orders`): nhập kho hiện ghi thẳng kèm nguồn hàng dạng chữ. Mua hàng theo đề nghị — đặt hàng — nhận hàng để phase sau.
+- Chưa có chuyển kho nội bộ và trả hàng/bảo hành (Phase 6).
+- Giá vốn trên dòng đơn là **giá chụp lúc lập**, chưa phải giá vốn bình quân theo lô nhập (Phase 7).
+- Theo mục 19 đặc tả, **Nhân viên Kinh doanh chỉ xem đơn**; tạo và xác nhận đơn là của Trưởng phòng. Giám đốc có thể đổi ngay trên màn hình Vai trò (câu hỏi Q8).
+
 ## 0.5.0 — 20/09/2026 — Phase 4: Báo giá
 
 Căn cứ: prompt triển khai 36 mục, mục 10–14. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 5 (BG-01 → BG-10).

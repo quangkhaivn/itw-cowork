@@ -2,7 +2,7 @@ import type { ClientTenant } from "./db";
 import { MUI_GIO } from "./dinh-dang";
 
 /**
- * Cấp số chứng từ: KH-000001, LD-000001, CH-2026-0001, (Phase 4) QT-2026-0001…
+ * Cấp số chứng từ: KH-000001, LD-000001, CH-2026-0001, QT-2026-0001, DH-2026-0001, XK-2026-0001…
  *
  * Một câu `INSERT … ON CONFLICT DO UPDATE … RETURNING` — PostgreSQL khóa dòng bộ đếm
  * trong suốt giao dịch, nên hai người tạo cùng lúc nhận hai số khác nhau; giao dịch nào
@@ -24,6 +24,8 @@ export const KIEU_SO = {
   coHoi: { loai: "opportunity", tienTo: "CH", doDai: 4, theoNam: true },
   nhaCungCap: { loai: "supplier", tienTo: "NCC", doDai: 4, theoNam: false },
   baoGia: { loai: "quotation", tienTo: "QT", doDai: 4, theoNam: true },
+  donHang: { loai: "sales_order", tienTo: "DH", doDai: 4, theoNam: true },
+  phieuXuat: { loai: "delivery", tienTo: "XK", doDai: 4, theoNam: true },
 } satisfies Record<string, KieuSo>;
 
 /** Năm hiện tại theo giờ Việt Nam (31/12 23:30 UTC đã là năm mới ở Việt Nam). */

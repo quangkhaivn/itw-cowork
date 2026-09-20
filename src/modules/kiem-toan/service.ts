@@ -44,6 +44,11 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   supplier_price: "Giá nhà cung cấp",
   import_job: "Lần nhập tệp",
   quotation: "Báo giá",
+  sales_order: "Đơn hàng",
+  delivery: "Phiếu xuất kho",
+  warehouse: "Kho",
+  inventory: "Tồn kho",
+  serial_number: "Số sê-ri",
 };
 
 export const LuocDoLocKiemToan = z.object({

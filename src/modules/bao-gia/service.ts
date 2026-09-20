@@ -221,12 +221,19 @@ export async function chiTietBaoGia(nc: NguCanh, id: string) {
     select: { id: true, fullName: true },
   });
   const nguong = await docCauHinh(nc.tx, "bao_gia.nguong_bien_loi_nhuan");
+  // Đơn đã sinh từ báo giá này (Phase 5) — để không ai bấm tạo đơn lần thứ hai.
+  const donHang = await nc.tx.salesOrder.findFirst({
+    where: { quotationId: id, status: { not: "CANCELLED" } },
+    select: { id: true, number: true, status: true },
+    orderBy: { createdAt: "desc" },
+  });
   const duocSua = coQuyen(nc.hoSo, "quotation.update") && (await trongPhamVi(nc, "quotation.update", q.ownerId));
   const pb = q.currentVersion ? phienBanRa(q.currentVersion, homNay) : null;
   const tuDuyet = coQuyen(nc.hoSo, "quotation.approve") && q.ownerId === nc.hoSo.userId && nc.hoSo.phamVi.get("quotation.approve") !== "all";
 
   return {
     baoGia: chuyenDoi(q, homNay),
+    donHang: donHang ? { id: donHang.id, so: donHang.number, trangThai: donHang.status } : null,
     cacPhienBan: cacPhienBan.map((v) => ({
       id: v.id,
       phienBan: v.versionNo,
@@ -246,6 +253,7 @@ export async function chiTietBaoGia(nc: NguCanh, id: string) {
       tuDuyetBiChan: tuDuyet,
       gui: duocSua && (pb?.trangThai === "APPROVED" || (pb?.trangThai === "DRAFT" && !canDuyet(pb.bienLoiNhuan, nguong).can)),
       chot: duocSua && pb !== null && ["SENT", "VIEWED", "NEGOTIATING"].includes(pb.trangThai),
+      taoDon: coQuyen(nc.hoSo, "order.create") && pb?.trangThai === "ACCEPTED" && donHang === null,
     },
   };
 }
@@ -625,7 +633,10 @@ export async function chotBaoGia(nc: NguCanh, id: string, d: { ketQua: "ACCEPTED
 
 /** Danh sách sản phẩm để thêm vào báo giá: giá bán, VAT, và giá vốn theo nguồn nên mua. */
 export async function goiYSanPham(nc: NguCanh, q: string) {
-  batBuocQuyen(nc.hoSo, "quotation.create");
+  // Dùng chung cho lập báo giá, lập đơn hàng và nhập kho — ai làm được một trong ba việc đó thì tra được hàng.
+  if (!coQuyen(nc.hoSo, "quotation.create") && !coQuyen(nc.hoSo, "order.create") && !coQuyen(nc.hoSo, "inventory.create")) {
+    batBuocQuyen(nc.hoSo, "quotation.create");
+  }
   if (!coQuyen(nc.hoSo, "product.view")) return [];
   const cau = q.trim();
   const ds = await nc.tx.product.findMany({

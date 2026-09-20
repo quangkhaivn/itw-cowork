@@ -136,3 +136,40 @@ Kiến trúc: `quotations` là đầu phiếu (số `QT-2026-0001`, khách hàng
 **Bản in (PDF)**: bản in là HTML có `@media print`, người dùng bấm "In / Lưu PDF" của trình duyệt (QĐ-21). Phần đầu lấy từ **Hồ sơ công ty** (Quản trị → Hồ sơ công ty). Mục nào chưa khai thì **để trống kèm nhắc**, hệ thống không tự điền thông tin pháp nhân (mục 5 luật vault).
 
 **Chưa làm ở phase này**: chuyển báo giá đã chấp nhận thành đơn hàng (Phase 5); gửi email tự động; AI soạn `DRAFT` (Phase 9).
+
+## 6. Đơn hàng (Phase 5)
+
+Quyền `order.*`. **Phạm vi** như báo giá: theo người phụ trách đơn, cộng đường "chủ tài khoản khách" (QĐ-13). Ngoài phạm vi trả **404**.
+
+Theo mục 19 đặc tả vai trò: **Nhân viên Kinh doanh chỉ XEM đơn**; tạo, sửa, xác nhận, hủy đơn là việc của Trưởng phòng Kinh doanh trở lên (`order.create`, `order.approve`). Nếu Giám đốc muốn nhân viên tự tạo đơn thì cấp thêm quyền ở màn hình Vai trò — không phải sửa mã (câu hỏi Q8 trong `IMPLEMENTATION_PLAN.md`).
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| DH-01 | Đơn sinh từ **một phiên bản báo giá khách đã chấp nhận** bằng một thao tác: dòng hàng và số tiền **chép** sang, giữ `quotation_item_id` để truy ngược. Báo giá chưa chốt thì chưa tạo đơn được; bấm lại lần nữa **không** sinh đơn thứ hai | [SV] · [TH] |
+| DH-02 | Số đơn `DH-<năm>-0001` cấp theo năm giờ Việt Nam, nguyên tử, không trùng, không tái sử dụng | [SV] `capSoChungTu` · [CSDL] duy nhất `(tenant_id, number)` |
+| DH-03 | Chỉ sửa được dòng hàng khi đơn còn **Nháp**. Đơn đã xác nhận là cam kết với khách và đã giữ hàng trong kho — muốn đổi thì hủy rồi lập đơn mới | [SV] · [TH] (trang sửa từ chối mở) |
+| DH-04 | Xác nhận đơn thì **giữ chỗ** hàng trong kho được chọn, cho từng dòng có gắn sản phẩm **có theo dõi tồn**. Hàng không đủ thì chặn và nói rõ đang có bao nhiêu. Dịch vụ, công lắp đặt (`quan_ly_ton = false`) không giữ chỗ | [SV] · [CSDL] CHECK `reserved <= on_hand` |
+| DH-05 | Xuất hàng không bao giờ vượt phần **còn phải giao** của dòng đó | [CSDL] CHECK `delivered_qty <= quantity` · [SV] · [TH] |
+| DH-06 | Trạng thái giao hàng **tính từ dữ liệu**, không do người dùng chọn: chưa giao gì → Đã xác nhận; giao một phần → Giao một phần; đủ mọi dòng → Đã giao đủ (ghi thời điểm hoàn thành) | [SV] hàm thuần `tienDoGiao()` có kiểm thử |
+| DH-07 | Hủy đơn **phải ghi lý do** và nhả toàn bộ phần còn giữ chỗ. Đơn đã giao đủ thì không hủy (hàng đã ra khỏi kho — trả hàng là nghiệp vụ của phase sau) | [CSDL] CHECK · [SV] · [TH] |
+| DH-08 | Tiền của đơn tính bằng **đúng hàm** `tinhBaoGia()` của Phase 4, nên số tiền chuyển từ báo giá sang đơn khớp đến từng đồng | [SV] hàm thuần dùng chung |
+| DH-09 | Điều khoản thanh toán / giao hàng và đơn vị tính lấy từ **Dữ liệu gốc**, như báo giá (BG-10) | [SV] `kiemTraMaDuLieuGoc` · [TH] |
+
+## 7. Kho (Phase 5)
+
+Quyền `inventory.*`, **không có phạm vi theo người** — kho là tài sản dùng chung (như QĐ-18). Thủ kho giữ quyền nhập, xuất, điều chỉnh; kinh doanh và kế toán chỉ xem.
+
+Hai bảng đi cùng nhau: `inventory_balances` là **số dư hiện tại**, `inventory_transactions` là **sổ cái chỉ ghi thêm**. Mọi thay đổi đều đi qua đúng một hàm `ghiSoKho()`.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| KHO-01 | Sổ cái kho **chỉ ghi thêm**: không sửa, không xóa, kể cả bằng vai chủ sở hữu. Mỗi dòng ghi cả số dư sau giao dịch để đối soát | [CSDL] trigger `chan_sua_inventory_transactions` · [TH] |
+| KHO-02 | Tồn kho và phần giữ chỗ **không bao giờ âm**, và không giữ chỗ nhiều hơn hàng đang có | [CSDL] CHECK · [SV] hàm thuần `soDuSau()` · [TH] |
+| KHO-03 | Điều chỉnh tồn sau kiểm kê **bắt buộc ghi lý do**; lý do vào thẳng thẻ kho và không xóa được | [SV] lược đồ · [TH] |
+| KHO-04 | Số dư luôn cộng đúng bằng tổng sổ cái. Hai người thao tác cùng lúc trên một mặt hàng phải **xếp hàng** (`SELECT … FOR UPDATE` trên dòng số dư) | [SV] · [TH] hàm `doiSoatKho()` |
+| KHO-05 | Hàng quản lý theo sê-ri: nhập kho phải khai **đủ số sê-ri**; xuất phải chọn đúng sê-ri **đang ở kho đó**; sê-ri đã bán không xuất lại được. Sê-ri là duy nhất theo (doanh nghiệp, sản phẩm) | [CSDL] duy nhất + CHECK · [SV] · [TH] |
+| KHO-06 | Hàng còn bán được = tồn kho − phần giữ chỗ. Đây là con số dùng để chặn xác nhận đơn, không phải tồn kho thô | [SV] hàm thuần `conBanDuoc()` |
+| KHO-07 | Không ngừng hoạt động một kho khi kho đó **còn hàng** — nếu không, hàng biến mất khỏi mọi màn hình trong khi sổ sách vẫn còn | [SV] · [TH] |
+| KHO-08 | Mức tồn tối thiểu (tùy chọn) sinh cảnh báo "sắp hết"; hết sạch thì cảnh báo "hết hàng" dù chưa đặt mức | [SV] hàm thuần `mucTon()` · [CSDL] CHECK không âm |
+
+**Chưa làm ở phase này**: mua hàng (`purchase_requests`, `purchase_orders`) — nhập kho hiện ghi thẳng kèm nguồn hàng; chuyển kho nội bộ; trả hàng và bảo hành (Phase 6); giá vốn bình quân theo lô (Phase 7 tài chính).

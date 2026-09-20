@@ -59,6 +59,15 @@ model Tenant {
   quotationVersions  QuotationVersion[]
   quotationItems     QuotationItem[]
   quotationApprovals QuotationApproval[]
+  // Phase 5 — Đơn hàng và kho
+  warehouses         Warehouse[]
+  salesOrders        SalesOrder[]
+  salesOrderItems    SalesOrderItem[]
+  inventoryBalances  InventoryBalance[]
+  inventoryTxns      InventoryTransaction[]
+  deliveries         Delivery[]
+  deliveryItems      DeliveryItem[]
+  serialNumbers      SerialNumber[]
 
   @@map("tenants")
 }
@@ -140,6 +149,7 @@ model User {
   ownedOpportunities Opportunity[]  @relation("CoHoiPhuTrach")
   ownedTasks         Task[]         @relation("ViecPhuTrach")
   ownedQuotations    Quotation[]    @relation("BaoGiaPhuTrach")
+  ownedSalesOrders   SalesOrder[]   @relation("DonHangPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -390,6 +400,7 @@ model Customer {
   tasks          Task[]
   convertedLeads Lead[]        @relation("LeadThanhKhach")
   quotations     Quotation[]
+  salesOrders    SalesOrder[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
@@ -427,6 +438,7 @@ model Contact {
   interactions  Interaction[]
   opportunities Opportunity[]
   quotations    Quotation[]
+  salesOrders   SalesOrder[]
 
   @@index([tenantId, customerId])
   @@index([tenantId, phoneNormalized])
@@ -554,6 +566,7 @@ model Opportunity {
   tasks        Task[]
   fromLeads    Lead[]        @relation("LeadThanhCoHoi")
   quotations   Quotation[]
+  salesOrders  SalesOrder[]
 
   @@unique([tenantId, code])
   @@index([tenantId, ownerId, stage])
@@ -717,6 +730,10 @@ model Product {
   vatRate           Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
   warrantyMonths    Int?     @map("warranty_months")
   requiresSerial    Boolean  @default(false) @map("requires_serial")
+  /// Có theo dõi tồn kho không. Dịch vụ, phần mềm, công lắp đặt thì tắt (Phase 5).
+  quanLyTon         Boolean  @default(true) @map("quan_ly_ton")
+  /// Mức tồn tối thiểu để cảnh báo sắp hết hàng (Phase 5). Bỏ trống = không cảnh báo.
+  minStock          Decimal? @map("min_stock") @db.Decimal(18, 3)
   defaultSupplierId String?  @map("default_supplier_id") @db.Uuid
   /// hoat-dong | ngung-kinh-doanh
   status            String   @default("hoat-dong") @db.VarChar(30)
@@ -732,6 +749,11 @@ model Product {
   supplierPrices  SupplierProductPrice[]
   priceHistory    PriceHistory[]
   quotationItems  QuotationItem[]
+  salesOrderItems SalesOrderItem[]
+  balances        InventoryBalance[]
+  inventoryTxns   InventoryTransaction[]
+  deliveryItems   DeliveryItem[]
+  serials         SerialNumber[]
 
   @@unique([tenantId, skuNormalized])
   @@index([tenantId, status])
@@ -859,6 +881,7 @@ model Quotation {
   owner          User               @relation("BaoGiaPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
   versions       QuotationVersion[] @relation("PhienBanCuaBaoGia")
   currentVersion QuotationVersion?  @relation("PhienBanHienHanh", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  salesOrders    SalesOrder[]
 
   @@unique([tenantId, number])
   @@index([tenantId, ownerId, status])
@@ -898,11 +921,12 @@ model QuotationVersion {
   createdBy     String?   @map("created_by") @db.Uuid
   updatedBy     String?   @map("updated_by") @db.Uuid
 
-  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  quotation  Quotation           @relation("PhienBanCuaBaoGia", fields: [quotationId], references: [id], onDelete: Cascade)
-  laHienHanh Quotation?          @relation("PhienBanHienHanh")
-  items      QuotationItem[]
-  approvals  QuotationApproval[]
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quotation   Quotation           @relation("PhienBanCuaBaoGia", fields: [quotationId], references: [id], onDelete: Cascade)
+  laHienHanh  Quotation?          @relation("PhienBanHienHanh")
+  items       QuotationItem[]
+  approvals   QuotationApproval[]
+  salesOrders SalesOrder[]
 
   @@unique([quotationId, versionNo])
   @@index([tenantId, status])
@@ -932,10 +956,11 @@ model QuotationItem {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  version  QuotationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  product  Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
-  supplier Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  version    QuotationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  product    Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  supplier   Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  orderItems SalesOrderItem[]
 
   @@unique([versionId, lineNo])
   @@index([tenantId, productId])
@@ -965,4 +990,261 @@ model QuotationApproval {
   @@index([tenantId, decision])
   @@index([versionId])
   @@map("quotation_approvals")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Đơn hàng và kho (mục 15–16 prompt 20/09)
+//
+// Đơn hàng sinh từ một phiên bản báo giá KHÁCH ĐÃ CHẤP NHẬN: dòng hàng được CHÉP
+// sang, không tham chiếu, vì đơn là chứng từ riêng — báo giá sửa sau cũng không
+// được làm đổi đơn. Vẫn giữ `quotation_item_id` để truy ngược.
+//
+// Kho: `inventory_balances` là số dư hiện tại, `inventory_transactions` là sổ cái
+// CHỈ GHI THÊM. Hai thứ luôn đi cùng một giao dịch CSDL, nên số dư luôn cộng đúng
+// bằng tổng sổ cái (có bài thử đối soát).
+// ---------------------------------------------------------------------------
+
+/// Kho hàng. Doanh nghiệp có thể có nhiều kho; một kho được đánh dấu mặc định.
+model Warehouse {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String   @db.VarChar(30)
+  name      String   @db.VarChar(255)
+  address   String?  @db.Text
+  note      String?  @db.Text
+  isDefault Boolean  @default(false) @map("is_default")
+  status    String   @default("hoat-dong") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant       Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  balances     InventoryBalance[]
+  transactions InventoryTransaction[]
+  serials      SerialNumber[]
+  deliveries   Delivery[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@map("warehouses")
+}
+
+/// Đơn hàng bán. Số DH-2026-0001.
+model SalesOrder {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  number             String    @db.VarChar(30)
+  customerId         String    @map("customer_id") @db.Uuid
+  contactId          String?   @map("contact_id") @db.Uuid
+  quotationId        String?   @map("quotation_id") @db.Uuid
+  quotationVersionId String?   @map("quotation_version_id") @db.Uuid
+  opportunityId      String?   @map("opportunity_id") @db.Uuid
+  ownerId            String    @map("owner_id") @db.Uuid
+  /// DRAFT | CONFIRMED | PARTIALLY_DELIVERED | DELIVERED | CANCELLED
+  status             String    @default("DRAFT") @db.VarChar(20)
+  orderDate          DateTime  @default(now()) @map("order_date") @db.Date
+  expectedDate       DateTime? @map("expected_date") @db.Date
+  deliveryAddress    String?   @map("delivery_address") @db.Text
+  /// Mã dữ liệu gốc dieu_khoan_thanh_toan / dieu_khoan_giao_hang.
+  paymentTerms       String?   @map("payment_terms") @db.VarChar(50)
+  deliveryTerms      String?   @map("delivery_terms") @db.VarChar(50)
+  notes              String?   @db.Text
+  /// Ảnh chụp số tiền của đơn — tính lại mỗi lần sửa dòng hàng lúc còn nháp.
+  subtotal           Decimal   @default(0) @db.Decimal(18, 2)
+  discountTotal      Decimal   @default(0) @map("discount_total") @db.Decimal(18, 2)
+  vatTotal           Decimal   @default(0) @map("vat_total") @db.Decimal(18, 2)
+  total              Decimal   @default(0) @db.Decimal(18, 2)
+  costTotal          Decimal   @default(0) @map("cost_total") @db.Decimal(18, 2)
+  grossProfit        Decimal   @default(0) @map("gross_profit") @db.Decimal(18, 2)
+  grossMargin        Decimal?  @map("gross_margin") @db.Decimal(7, 4)
+  confirmedAt        DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  confirmedBy        String?   @map("confirmed_by") @db.Uuid
+  completedAt        DateTime? @map("completed_at") @db.Timestamptz(6)
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledBy        String?   @map("cancelled_by") @db.Uuid
+  cancelReason       String?   @map("cancel_reason") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy          String?   @map("created_by") @db.Uuid
+  updatedBy          String?   @map("updated_by") @db.Uuid
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contact          Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  quotation        Quotation?        @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+  quotationVersion QuotationVersion? @relation(fields: [quotationVersionId], references: [id], onDelete: SetNull)
+  opportunity      Opportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  owner            User              @relation("DonHangPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  items            SalesOrderItem[]
+  deliveries       Delivery[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, ownerId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+  @@map("sales_orders")
+}
+
+/// Dòng hàng của đơn. `deliveredQty` cộng dồn theo từng phiếu xuất.
+model SalesOrderItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  orderId         String   @map("order_id") @db.Uuid
+  lineNo          Int      @map("line_no")
+  productId       String?  @map("product_id") @db.Uuid
+  /// Dòng báo giá đã sinh ra dòng này — để truy ngược, không để đọc số tiền.
+  quotationItemId String?  @map("quotation_item_id") @db.Uuid
+  sku             String?  @db.VarChar(64)
+  name            String   @db.VarChar(500)
+  description     String?  @db.Text
+  quantity        Decimal  @default(1) @db.Decimal(18, 3)
+  deliveredQty    Decimal  @default(0) @map("delivered_qty") @db.Decimal(18, 3)
+  unit            String?  @db.VarChar(50)
+  unitPrice       Decimal  @default(0) @map("unit_price") @db.Decimal(18, 2)
+  discountPct     Decimal  @default(0) @map("discount_pct") @db.Decimal(7, 4)
+  vatRate         Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
+  unitCost        Decimal  @default(0) @map("unit_cost") @db.Decimal(18, 2)
+  lineTotal       Decimal  @default(0) @map("line_total") @db.Decimal(18, 2)
+  lineCost        Decimal  @default(0) @map("line_cost") @db.Decimal(18, 2)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order         SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  quotationItem QuotationItem? @relation(fields: [quotationItemId], references: [id], onDelete: SetNull)
+  deliveryItems DeliveryItem[]
+  serials       SerialNumber[]
+
+  @@unique([orderId, lineNo])
+  @@index([tenantId, productId])
+  @@map("sales_order_items")
+}
+
+/// Số dư tồn của một sản phẩm trong một kho. Hàng bán được = onHand − reserved (tính ở service).
+model InventoryBalance {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  onHand      Decimal  @default(0) @map("on_hand") @db.Decimal(18, 3)
+  /// Đã giữ chỗ cho đơn đã xác nhận: còn trong kho nhưng không bán cho người khác được.
+  reserved    Decimal  @default(0) @db.Decimal(18, 3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, warehouseId, productId])
+  @@index([tenantId, productId])
+  @@map("inventory_balances")
+}
+
+/// Sổ cái kho — CHỈ GHI THÊM (trigger chặn sửa/xóa). Mỗi dòng ghi rõ tác động lên số dư.
+model InventoryTransaction {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  warehouseId   String   @map("warehouse_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  /// nhap | xuat | giu-cho | nha-giu-cho | dieu-chinh
+  type          String   @db.VarChar(20)
+  /// Luôn dương; chiều tác động nằm ở hai cột delta.
+  quantity      Decimal  @db.Decimal(18, 3)
+  onHandDelta   Decimal  @default(0) @map("on_hand_delta") @db.Decimal(18, 3)
+  reservedDelta Decimal  @default(0) @map("reserved_delta") @db.Decimal(18, 3)
+  /// Số dư thực tế sau giao dịch — để đối soát sổ cái với số dư.
+  onHandAfter   Decimal  @map("on_hand_after") @db.Decimal(18, 3)
+  reservedAfter Decimal  @map("reserved_after") @db.Decimal(18, 3)
+  unitCost      Decimal? @map("unit_cost") @db.Decimal(18, 2)
+  /// don-hang | phieu-xuat | dieu-chinh | nhap-kho
+  refType       String?  @map("ref_type") @db.VarChar(30)
+  refId         String?  @map("ref_id") @db.Uuid
+  refNumber     String?  @map("ref_number") @db.VarChar(30)
+  reason        String?  @db.VarChar(100)
+  note          String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String?  @map("created_by") @db.Uuid
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, productId, createdAt])
+  @@index([tenantId, warehouseId, createdAt])
+  @@index([tenantId, refType, refId])
+  @@map("inventory_transactions")
+}
+
+/// Phiếu xuất giao hàng cho một đơn. Ghi sổ kho ngay khi lập (không có bước nháp).
+model Delivery {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  number       String   @db.VarChar(30)
+  orderId      String   @map("order_id") @db.Uuid
+  warehouseId  String   @map("warehouse_id") @db.Uuid
+  deliveredAt  DateTime @default(now()) @map("delivered_at") @db.Timestamptz(6)
+  receiverName String?  @map("receiver_name") @db.VarChar(255)
+  note         String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy    String?  @map("created_by") @db.Uuid
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order     SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  warehouse Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  items     DeliveryItem[]
+  serials   SerialNumber[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, orderId])
+  @@map("deliveries")
+}
+
+/// Dòng của phiếu xuất: xuất bao nhiêu cho dòng nào của đơn.
+model DeliveryItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  deliveryId  String   @map("delivery_id") @db.Uuid
+  orderItemId String   @map("order_item_id") @db.Uuid
+  productId   String?  @map("product_id") @db.Uuid
+  quantity    Decimal  @db.Decimal(18, 3)
+  note        String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  delivery  Delivery       @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  orderItem SalesOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  product   Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, deliveryId])
+  @@map("delivery_items")
+}
+
+/// Số sê-ri của hàng quản lý theo máy. Duy nhất theo (tenant, sản phẩm, sê-ri).
+model SerialNumber {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  productId        String   @map("product_id") @db.Uuid
+  serial           String   @db.VarChar(100)
+  warehouseId      String?  @map("warehouse_id") @db.Uuid
+  /// trong-kho | da-ban | tra-lai
+  status           String   @default("trong-kho") @db.VarChar(20)
+  salesOrderItemId String?  @map("sales_order_item_id") @db.Uuid
+  deliveryId       String?  @map("delivery_id") @db.Uuid
+  note             String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?  @map("created_by") @db.Uuid
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse      Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  salesOrderItem SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
+  delivery       Delivery?       @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, productId, serial])
+  @@index([tenantId, status])
+  @@index([tenantId, warehouseId])
+  @@map("serial_numbers")
 }

@@ -83,6 +83,7 @@ async function main() {
   await seedCrmMau(tenant.id, idTheoEmail);
   await seedSanPhamMau(tenant.id, idTheoEmail);
   await seedBaoGiaMau(tenant.id, idTheoEmail);
+  await seedKhoDonHangMau(tenant.id, idTheoEmail);
 
   console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
   console.log("  Thử phạm vi dữ liệu: đăng nhập tp.kinhdoanh@demo.test (thấy nhóm), kd1@demo.test (chỉ thấy mình).");
@@ -378,6 +379,90 @@ async function seedBaoGiaMau(tenantId: string, id: Map<string, string>) {
   if (chHanhPhuc) await voi("kd2@demo.test", (nc) => ch.doiGiaiDoan(nc, chHanhPhuc, { giaiDoan: "WON" }));
 
   console.log("✓ Báo giá mẫu: 3 báo giá (1 qua duyệt, 1 đã chốt, 1 có phiên bản V2), hồ sơ công ty mẫu");
+}
+
+/**
+ * Kho và đơn hàng mẫu (Phase 5) — tạo QUA SERVICE, đi đúng luồng: khai kho → nhập hàng →
+ * chuyển báo giá đã chốt thành đơn → xác nhận (giữ chỗ) → xuất một phần.
+ * Mọi con số là số minh họa của tenant `demo`.
+ */
+async function seedKhoDonHangMau(tenantId: string, id: Map<string, string>) {
+  if ((await db.warehouse.count({ where: { tenantId } })) > 0) {
+    console.log("✓ Kho mẫu đã có — bỏ qua");
+    return;
+  }
+  const { voiTenant } = await import("../../src/lib/db");
+  const { taoNguCanh } = await import("../../src/lib/api");
+  const { layHoSoQuyen } = await import("../../src/lib/phan-quyen");
+  const kho = await import("../../src/modules/kho/service");
+  const dh = await import("../../src/modules/don-hang/service");
+  const { LuocDoNhapKho, LuocDoTaoKho } = await import("../../src/modules/kho/luoc-do");
+  const { LuocDoTaoPhieuXuat } = await import("../../src/modules/don-hang/luoc-do");
+  type NC = Parameters<typeof kho.taoKho>[0];
+
+  const voi = <T>(email: string, viec: (nc: NC) => Promise<T>) =>
+    voiTenant(tenantId, async (tx) => {
+      const q = await layHoSoQuyen(tx, id.get(email)!);
+      if (!q) throw new Error(`Không đọc được quyền của ${email}`);
+      return viec(taoNguCanh(tx, tenantId, q, null, "seed-mau"));
+    });
+
+  const QT = "quantri@demo.test";
+  const KHO = "kho@demo.test";
+  const TP = "tp.kinhdoanh@demo.test";
+
+  const khoChinh = await voi(QT, (nc) =>
+    kho.taoKho(nc, LuocDoTaoKho.parse({ ma: "kho-chinh", ten: "Kho chính (mẫu)", diaChi: "Số 1 Đường Mẫu, TP. Hồ Chí Minh", macDinh: true })),
+  );
+  await voi(QT, (nc) => kho.taoKho(nc, LuocDoTaoKho.parse({ ma: "kho-ky-thuat", ten: "Kho kỹ thuật mang đi lắp (mẫu)" })));
+
+  const sp = new Map(
+    (await db.product.findMany({ where: { tenantId }, select: { id: true, sku: true, requiresSerial: true } })).map((p) => [p.sku, p] as const),
+  );
+  const laptop = sp.get("LAP-DELL-3420")!;
+  const pc = sp.get("PC-VP-I5")!;
+  const camera = sp.get("CAM-HIK-2MP")!;
+  const switch24 = sp.get("SW-24P")!;
+
+  const serial = (tien: string, soLuong: number) => Array.from({ length: soLuong }, (_, i) => `${tien}${String(i + 1).padStart(3, "0")}`);
+  await voi(KHO, (nc) =>
+    kho.nhapKho(nc, LuocDoNhapKho.parse({
+      khoId: khoChinh.id,
+      lyDo: "Nhập mua của An Phát theo hóa đơn mẫu",
+      dong: [
+        { sanPhamId: laptop.id, soLuong: "6", giaVon: "15.200.000", serial: serial("DEMO-LAP-", 6) },
+        { sanPhamId: pc.id, soLuong: "10", giaVon: "9.800.000", serial: serial("DEMO-PC-", 10) },
+        { sanPhamId: camera.id, soLuong: "40", giaVon: "765.000", serial: serial("DEMO-CAM-", 40) },
+        { sanPhamId: switch24.id, soLuong: "4", giaVon: "2.100.000", serial: switch24.requiresSerial ? serial("DEMO-SW-", 4) : [] },
+      ],
+    })),
+  );
+
+  // Mức tồn tối thiểu để màn hình Tồn kho có cảnh báo thật.
+  await voi(KHO, (nc) => kho.datMucTonToiThieu(nc, switch24.id, "6"));
+  await voi(KHO, (nc) => kho.datMucTonToiThieu(nc, camera.id, "20"));
+  await voi(KHO, (nc) => kho.dieuChinhTon(nc, { khoId: khoChinh.id, sanPhamId: camera.id, chieu: "giam", soLuong: "1", lyDo: "Kiểm kê tháng 9: thiếu 1 cái", ghiChu: null }));
+
+  // Báo giá mẫu đã được khách chấp nhận (seedBaoGiaMau) → chuyển thành đơn.
+  const bgDaChot = await db.quotation.findFirst({ where: { tenantId, status: "ACCEPTED" }, select: { id: true } });
+  if (bgDaChot) {
+    const don = await voi(TP, (nc) => dh.taoDonTuBaoGia(nc, bgDaChot.id));
+    await voi(TP, (nc) => dh.xacNhanDon(nc, don.id, { khoId: khoChinh.id, ghiChu: "Giữ hàng chờ lịch lắp" }));
+    const ct = await voi(TP, (nc) => dh.chiTietDonHang(nc, don.id));
+    const dongCamera = ct.don.dong.find((d) => d.sanPhamId === camera.id);
+    if (dongCamera) {
+      await voi(KHO, (nc) =>
+        dh.taoPhieuXuat(nc, don.id, LuocDoTaoPhieuXuat.parse({
+          khoId: khoChinh.id,
+          nguoiNhan: "Anh Mẫu — quản lý cửa hàng",
+          ghiChu: "Giao trước 12 camera cho 6 cửa hàng đầu",
+          dong: [{ dongDonId: dongCamera.id, soLuong: "12", serial: serial("DEMO-CAM-", 12) }],
+        })),
+      );
+    }
+  }
+
+  console.log("✓ Kho mẫu: 2 kho, 4 mặt hàng có tồn, 1 đơn hàng đã xác nhận và giao một phần");
 }
 
 main()
