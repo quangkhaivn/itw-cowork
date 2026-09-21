@@ -2,6 +2,32 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.13.0 — 21/09/2026 — Trả hàng và đổi máy
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 18 (TH).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.12.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **Phiếu khách trả hàng** (`TH-2026-0001`): lập từ đơn đã giao (điền sẵn phần còn trả được) hoặc lập lẻ. Vòng đời Nháp → Đã nhận lại hàng → Đã chốt tiền, hoặc Đã hủy.
+- **Đổi máy trong bảo hành**: máy cũ về kho hoặc để riêng, máy mới xuất đi, sê-ri đổi trạng thái — và **bảo hành chuyển sang máy mới mà giữ nguyên mốc hết hạn**. Phiếu đổi máy có giá trị 0, không phát sinh tiền.
+- **Phiếu trả hàng nhà cung cấp** (`TM-2026-0001`): đối xứng hoàn toàn, chỉ đổi chiều hàng và chiều nợ.
+- **Giảm trừ công nợ hai chiều**: giá trị hàng trả trừ thẳng vào hóa đơn còn nợ. Tiền không đi qua quỹ, nên phiếu thu và phiếu chi giữ nguyên — màn hình nói rõ đâu là tiền về, đâu là nợ xóa bằng hàng.
+- **Hàng lỗi không tự quay lại kệ bán**: hàng còn tốt mặc định cộng lại tồn, hàng lỗi mặc định không; muốn vẫn nhập lại thì phải ghi rõ vì sao.
+- 6 bảng CSDL + 1 cột trên `serial_numbers`, 12 route API, 6 màn hình, và nút *Khách trả hàng* / *Trả hàng nhà cung cấp* trên trang đơn bán và đơn mua.
+
+### Sửa
+- `congNo()` tách **tiền đã thu** khỏi **phần giảm trừ bằng hàng** thay vì cộng gộp, để màn hình không nói nhầm là khách đã trả tiền. Tham số thứ tư đổi thành một đối tượng tùy chọn; mọi chỗ tính nợ (hóa đơn bán, hóa đơn mua, bảng điều hành, nhắc việc) cùng đi qua đường này.
+- Thêm `yeuCauMotTrongCacQuyen()` cho trang cần nhiều vai trò cùng nhìn, thay vì nới quyền của từng vai.
+
+### Quyết định đáng ghi
+- **Đổi máy không làm mới đồng hồ bảo hành** (QĐ-40): bảo hành thuộc về lần mua, không thuộc về cái máy. Tính lại từ ngày đổi là tự ý cam kết thêm với khách mà không ai duyệt.
+- **Hàng đi trước, tiền chốt sau** (QĐ-41): hai bước, hai quyền khác nhau. Gộp một bước thì chỉ Giám đốc bấm được, vì không vai trò dựng sẵn nào cầm cả quyền kho lẫn quyền duyệt tài chính.
+
+### Kiểm thử
+- 264 bài đơn vị, 702 bài tích hợp (thêm `thu:tra-hang` 73 bài), 382 bài HTTP đầu-cuối — tất cả đạt.
+- Diễn tập cài mới trên CSDL rỗng: 13 migration chạy sạch, RLS phủ đủ mọi bảng có `tenant_id`.
+- Đối soát kho chạy lại sau mỗi lần trả hàng hai chiều và vẫn khớp.
+
 ## 0.12.0 — 21/09/2026 — Công nợ phải trả
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 17 (CT).

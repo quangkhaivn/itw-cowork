@@ -46,7 +46,9 @@ export type BieuTuong =
   | "don-mua"
   | "hoa-don-mua"
   | "cong-no-tra"
-  | "phieu-chi";
+  | "phieu-chi"
+  | "khach-tra"
+  | "tra-ncc";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -128,6 +130,13 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     muc: [
       { nhan: "Đề nghị mua", href: "/mua-hang/de-nghi", quyen: "purchasing.view", bieuTuong: "de-nghi-mua", tuKhoa: "purchase request de nghi mua duyet chi" },
       { nhan: "Đơn mua", href: "/mua-hang/don-mua", quyen: "purchasing.view", bieuTuong: "don-mua", tuKhoa: "purchase order don mua nhan hang nha cung cap" },
+    ],
+  },
+  {
+    nhan: "Trả hàng",
+    muc: [
+      { nhan: "Khách trả hàng", href: "/tra-hang/khach-tra", quyen: ["order.view", "service_desk.view", "finance.view"], bieuTuong: "khach-tra", tuKhoa: "return tra hang doi may khach hoan hang giam tru" },
+      { nhan: "Trả nhà cung cấp", href: "/tra-hang/tra-ncc", quyen: ["purchasing.view", "finance.view"], bieuTuong: "tra-ncc", tuKhoa: "purchase return tra hang ncc giam tru cong no phai tra" },
     ],
   },
   {

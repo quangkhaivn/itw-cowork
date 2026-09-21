@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 21/09/2026 (sau Công nợ phải trả).
+> Cập nhật lần cuối: 21/09/2026 (sau Trả hàng và đổi máy).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -161,13 +161,20 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - **Không cần Giám đốc đặt thêm ngưỡng nào**: hạn thanh toán đọc từ hóa đơn nhà cung cấp (QĐ-38).
 - **Chưa làm có chủ đích**: trả hàng cho nhà cung cấp và giảm trừ công nợ, bù trừ công nợ hai chiều, dự báo dòng tiền.
 
+## 4k. Trả hàng và đổi máy (xong trên máy phát triển)
+
+- [x] CSDL 6 bảng + 24 CHECK + 1 cột trên `serial_numbers` · [x] service + 12 route · [x] 6 màn hình · [x] kiểm thử (264 đơn vị, 702 tích hợp, 382 HTTP) · [x] diễn tập cài mới 13 migration · [x] soát giao diện
+- [ ] Triển khai máy thật (cùng đợt với 0.3.0 → 0.13.0 — `VD-101`)
+- **Không cần Giám đốc đặt thêm ngưỡng nào.** Một chính sách đã chốt thay Giám đốc và cần xác nhận lại: đổi máy giữ nguyên mốc hết hạn bảo hành (QĐ-40) — câu hỏi Q13.
+- **Chưa làm có chủ đích**: hoàn tiền mặt cho khách, đòi lại tiền từ nhà cung cấp, chênh lệch giá khi đổi sang máy khác model.
+
 ## 5. Sau Phase 9 — việc còn lại
 
 Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc phase nào, xếp theo thứ tự nên làm:
 
 1. **Triển khai 0.3.0 → 0.10.0 lên máy thật** (`VD-101`) — đang chờ Giám đốc cho phép. Đây là việc chặn mọi thứ khác: tám phase đã xong vẫn chưa ai dùng được.
 2. **Khai dữ liệu nền và các ngưỡng** (`VD-104` → `VD-109`): hồ sơ công ty, kho và tồn đầu kỳ, ngưỡng biên lợi nhuận, ngưỡng SLA, số ngày công nợ, giờ quét nhắc việc, khóa API.
-3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0, mục 4i) và ~~công nợ phải trả~~ (0.12.0, mục 4j) **đã làm 21/09**. Còn: trả hàng / đổi máy và giảm trừ công nợ, tệp đính kèm, gửi nhắc ra ngoài qua email hoặc Zalo, chuyển kho nội bộ, bù trừ công nợ hai chiều, dự báo dòng tiền.
+3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0, mục 4i), ~~công nợ phải trả~~ (0.12.0, mục 4j) và ~~trả hàng / đổi máy~~ (0.13.0, mục 4k) **đã làm 21/09**. Còn: tệp đính kèm, gửi nhắc ra ngoài qua email hoặc Zalo, chuyển kho nội bộ, hoàn tiền mặt cho khách, bù trừ công nợ hai chiều, dự báo dòng tiền.
 
 ## 6. Câu hỏi chờ Giám đốc
 
@@ -185,6 +192,7 @@ Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc 
 | Q10 | Doanh thu trên bảng điều hành tính theo **hóa đơn đã phát hành** — có đúng cách Giám đốc vẫn nhìn con số không? | Đang lấy mốc hóa đơn phát hành (QĐ-29). Nếu Giám đốc quen nhìn theo đơn đã xác nhận hoặc theo tiền thực thu thì đổi được, nhưng phải chọn **một** mốc duy nhất | Không chặn; đổi mốc thì mọi con số lịch sử đổi theo |
 | Q11 | Bản quét nhắc việc nên chạy lúc mấy giờ sáng? | Chưa đặt → máy **không tự quét**, chỉ chạy được bằng tay ở màn hình Tự động hóa. Gợi ý 7 giờ, trước giờ làm | Chặn việc nhắc tự động chạy hằng ngày (`VD-108`) |
 | Q12 | Có cấp khóa API mô hình AI cho máy chủ không, và ngân sách mỗi tháng bao nhiêu? | Chưa có khóa → màn hình Trợ lý nói rõ là chưa dùng được; không có chế độ trả lời tạm | Chặn toàn bộ Phase 9 chạy thật (`VD-109`) |
+| Q13 | Đổi máy trong bảo hành thì bảo hành của máy mới tính thế nào? | Hệ thống đang **giữ nguyên mốc hết hạn** của lần mua, không tính lại từ ngày đổi (QĐ-40) — chọn cách không tự ý cam kết thêm với khách. Nếu chính sách của công ty là tính lại 12 tháng từ ngày đổi thì phải nói rõ, vì đó là nghĩa vụ mới | Không chặn; đang chạy theo cách hẹp hơn, đổi được bất cứ lúc nào |
 
 ## 7. Known issues
 

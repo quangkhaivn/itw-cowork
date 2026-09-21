@@ -4,7 +4,7 @@ import DauTrang from "@/components/ui/DauTrang";
 import TrongRong from "@/components/ui/TrongRong";
 import { taoNguCanh } from "@/lib/api";
 import { LoiKhongTimThay } from "@/lib/loi";
-import { coQuyen } from "@/lib/phan-quyen";
+import { coMotTrongCacQuyen, coQuyen } from "@/lib/phan-quyen";
 import { dinhDangNgay, dinhDangNgayGio, dinhDangPhanTram, dinhDangSo, dinhDangTien } from "@/lib/dinh-dang";
 import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { banDoTenDuLieuGoc } from "@/modules/crm/chung";
@@ -75,6 +75,11 @@ export default async function TrangChiTietDon({ params, searchParams }: { params
             {coQuyen(nd.hoSo, "project.create") && don.trangThai !== "DRAFT" && don.trangThai !== "CANCELLED" && (
               <Link className="nut" href={`/du-an/moi?donHang=${don.id}`}>
                 Mở dự án triển khai
+              </Link>
+            )}
+            {coMotTrongCacQuyen(nd.hoSo, ["order.update", "service_desk.update"]) && don.tienDo.tongDaGiao > 0 && (
+              <Link className="nut" href={`/tra-hang/khach-tra/moi?don=${don.id}`}>
+                Khách trả hàng
               </Link>
             )}
             {ct.quyen.sua && (

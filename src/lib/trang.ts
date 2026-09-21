@@ -57,6 +57,27 @@ export async function yeuCauQuyen(maQuyen: string): Promise<NguoiDungHienTai> {
   return nd;
 }
 
+/**
+ * Bắt có **một trong** các quyền. Dùng cho màn hình mà nhiều vai trò cùng cần nhìn
+ * nhưng không vai nào nên được cấp thêm quyền rộng hơn việc của mình — ví dụ phiếu
+ * khách trả hàng: kinh doanh, chăm sóc khách hàng và kế toán đều phải thấy (QĐ-31).
+ */
+export async function yeuCauMotTrongCacQuyen(maQuyens: string[]): Promise<NguoiDungHienTai> {
+  const nd = await yeuCauDangNhap();
+  if (maQuyens.some((m) => coQuyen(nd.hoSo, m))) return nd;
+  const h = await headers();
+  const ma = maQuyens.join(" hoặc ");
+  await voiTenant(nd.phien.tenantId, (tx) =>
+    ghiTuChoiQuyen(
+      tx,
+      { userId: nd.hoSo.userId, email: nd.hoSo.email, vaiTro: nd.hoSo.vaiTro.map((v) => v.code) },
+      new LoiThieuQuyen(ma, { objectType: "trang" }),
+      { ipAddress: layIpKhach(h), userAgent: h.get("user-agent") },
+    ),
+  ).catch(() => {});
+  redirect(`/khong-co-quyen?quyen=${encodeURIComponent(ma)}`);
+}
+
 /** Đọc dữ liệu cho trang trong ngữ cảnh tenant của người đang đăng nhập. */
 export function docDuLieu<T>(nd: NguoiDungHienTai, congViec: (tx: ClientTenant) => Promise<T>): Promise<T> {
   return voiTenant(nd.phien.tenantId, congViec);

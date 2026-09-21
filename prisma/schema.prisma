@@ -29,80 +29,87 @@ model Tenant {
   createdBy String?  @map("created_by") @db.Uuid
   updatedBy String?  @map("updated_by") @db.Uuid
 
-  settings           TenantSetting[]
-  users              User[]
-  departments        Department[]
-  roles              Role[]
-  staffProfiles      StaffProfile[]
-  userRoles          UserRole[]
-  events             BusinessEvent[]
-  auditLogs          AuditLog[]
-  masterData         MasterDataItem[]
+  settings             TenantSetting[]
+  users                User[]
+  departments          Department[]
+  roles                Role[]
+  staffProfiles        StaffProfile[]
+  userRoles            UserRole[]
+  events               BusinessEvent[]
+  auditLogs            AuditLog[]
+  masterData           MasterDataItem[]
   // Phase 2 — CRM
-  sequences          DocumentSequence[]
-  customers          Customer[]
-  contacts           Contact[]
-  leads              Lead[]
-  interactions       Interaction[]
-  opportunities      Opportunity[]
-  tasks              Task[]
+  sequences            DocumentSequence[]
+  customers            Customer[]
+  contacts             Contact[]
+  leads                Lead[]
+  interactions         Interaction[]
+  opportunities        Opportunity[]
+  tasks                Task[]
   // Phase 3 — Sản phẩm và bảng giá
-  productCategories  ProductCategory[]
-  brands             Brand[]
-  suppliers          Supplier[]
-  products           Product[]
-  supplierPrices     SupplierProductPrice[]
-  priceHistory       PriceHistory[]
-  importJobs         ImportJob[]
+  productCategories    ProductCategory[]
+  brands               Brand[]
+  suppliers            Supplier[]
+  products             Product[]
+  supplierPrices       SupplierProductPrice[]
+  priceHistory         PriceHistory[]
+  importJobs           ImportJob[]
   // Phase 4 — Báo giá
-  quotations         Quotation[]
-  quotationVersions  QuotationVersion[]
-  quotationItems     QuotationItem[]
-  quotationApprovals QuotationApproval[]
+  quotations           Quotation[]
+  quotationVersions    QuotationVersion[]
+  quotationItems       QuotationItem[]
+  quotationApprovals   QuotationApproval[]
   // Phase 5 — Đơn hàng và kho
-  warehouses         Warehouse[]
-  salesOrders        SalesOrder[]
-  salesOrderItems    SalesOrderItem[]
-  inventoryBalances  InventoryBalance[]
-  inventoryTxns      InventoryTransaction[]
-  deliveries         Delivery[]
-  deliveryItems      DeliveryItem[]
-  serialNumbers      SerialNumber[]
+  warehouses           Warehouse[]
+  salesOrders          SalesOrder[]
+  salesOrderItems      SalesOrderItem[]
+  inventoryBalances    InventoryBalance[]
+  inventoryTxns        InventoryTransaction[]
+  deliveries           Delivery[]
+  deliveryItems        DeliveryItem[]
+  serialNumbers        SerialNumber[]
   // Phase 6 — Dự án, bảo hành, phiếu hỗ trợ
-  warranties         Warranty[]
-  projects           Project[]
-  projectMilestones  ProjectMilestone[]
-  supportTickets     SupportTicket[]
-  ticketEvents       SupportTicketEvent[]
+  warranties           Warranty[]
+  projects             Project[]
+  projectMilestones    ProjectMilestone[]
+  supportTickets       SupportTicket[]
+  ticketEvents         SupportTicketEvent[]
   // Phase 7 — Tài chính
-  invoices           Invoice[]
-  invoiceItems       InvoiceItem[]
-  payments           Payment[]
-  paymentAllocations PaymentAllocation[]
+  invoices             Invoice[]
+  invoiceItems         InvoiceItem[]
+  payments             Payment[]
+  paymentAllocations   PaymentAllocation[]
   // Phase 8 — Tự động hóa
-  notifications      Notification[]
-  automationRules    AutomationRule[]
-  jobRuns            JobRun[]
-  dailyActionItems   DailyActionItem[]
-  maintenanceOrders  MaintenanceContract[]
-  renewals           Renewal[]
+  notifications        Notification[]
+  automationRules      AutomationRule[]
+  jobRuns              JobRun[]
+  dailyActionItems     DailyActionItem[]
+  maintenanceOrders    MaintenanceContract[]
+  renewals             Renewal[]
   // Phase 9 — Trợ lý AI
-  aiConversations    AiConversation[]
-  aiMessages         AiMessage[]
-  aiToolCalls        AiToolCall[]
-  aiActions          AiAction[]
+  aiConversations      AiConversation[]
+  aiMessages           AiMessage[]
+  aiToolCalls          AiToolCall[]
+  aiActions            AiAction[]
   // Mua hàng (phần để lại từ Phase 5)
-  purchaseRequests   PurchaseRequest[]
-  purchaseReqItems   PurchaseRequestItem[]
-  purchaseOrders     PurchaseOrder[]
-  purchaseOrderItems PurchaseOrderItem[]
-  goodsReceipts      GoodsReceipt[]
-  goodsReceiptItems  GoodsReceiptItem[]
+  purchaseRequests     PurchaseRequest[]
+  purchaseReqItems     PurchaseRequestItem[]
+  purchaseOrders       PurchaseOrder[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  goodsReceipts        GoodsReceipt[]
+  goodsReceiptItems    GoodsReceiptItem[]
   // Công nợ phải trả
-  supplierBills      SupplierBill[]
-  supplierBillItems  SupplierBillItem[]
-  supplierPayments   SupplierPayment[]
-  supplierPayAllocs  SupplierPaymentAllocation[]
+  supplierBills        SupplierBill[]
+  supplierBillItems    SupplierBillItem[]
+  supplierPayments     SupplierPayment[]
+  supplierPayAllocs    SupplierPaymentAllocation[]
+  // Trả hàng và đổi máy
+  salesReturns         SalesReturn[]
+  salesReturnItems     SalesReturnItem[]
+  salesReturnAllocs    SalesReturnAllocation[]
+  purchaseReturns      PurchaseReturn[]
+  purchaseReturnItems  PurchaseReturnItem[]
+  purchaseReturnAllocs PurchaseReturnAllocation[]
 
   @@map("tenants")
 }
@@ -172,34 +179,36 @@ model User {
   createdBy          String?   @map("created_by") @db.Uuid
   updatedBy          String?   @map("updated_by") @db.Uuid
 
-  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staffProfile        StaffProfile?         @relation("HoSoCuaNguoiDung")
-  userRoles           UserRole[]
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile         StaffProfile?         @relation("HoSoCuaNguoiDung")
+  userRoles            UserRole[]
   /// Những người nhận người này làm quản lý trực tiếp.
-  reports             StaffProfile[]        @relation("QuanLyTrucTiep")
+  reports              StaffProfile[]        @relation("QuanLyTrucTiep")
   // Phase 2 — người phụ trách
-  ownedCustomers      Customer[]            @relation("KhachPhuTrach")
-  ownedLeads          Lead[]                @relation("LeadPhuTrach")
-  ownedInteractions   Interaction[]         @relation("TuongTacCua")
-  ownedOpportunities  Opportunity[]         @relation("CoHoiPhuTrach")
-  ownedTasks          Task[]                @relation("ViecPhuTrach")
-  ownedQuotations     Quotation[]           @relation("BaoGiaPhuTrach")
-  ownedSalesOrders    SalesOrder[]          @relation("DonHangPhuTrach")
-  managedProjects     Project[]             @relation("DuAnPhuTrach")
-  ownedTickets        SupportTicket[]       @relation("PhieuHoTroTiepNhan")
-  assignedTickets     SupportTicket[]       @relation("PhieuHoTroXuLy")
-  ownedInvoices       Invoice[]             @relation("HoaDonPhuTrach")
+  ownedCustomers       Customer[]            @relation("KhachPhuTrach")
+  ownedLeads           Lead[]                @relation("LeadPhuTrach")
+  ownedInteractions    Interaction[]         @relation("TuongTacCua")
+  ownedOpportunities   Opportunity[]         @relation("CoHoiPhuTrach")
+  ownedTasks           Task[]                @relation("ViecPhuTrach")
+  ownedQuotations      Quotation[]           @relation("BaoGiaPhuTrach")
+  ownedSalesOrders     SalesOrder[]          @relation("DonHangPhuTrach")
+  managedProjects      Project[]             @relation("DuAnPhuTrach")
+  ownedTickets         SupportTicket[]       @relation("PhieuHoTroTiepNhan")
+  assignedTickets      SupportTicket[]       @relation("PhieuHoTroXuLy")
+  ownedInvoices        Invoice[]             @relation("HoaDonPhuTrach")
   // Phase 8
-  notifications       Notification[]        @relation("ThongBaoCuaNguoiDung")
-  dailyActionItems    DailyActionItem[]     @relation("ViecHomNayCuaNguoiDung")
-  ownedMaintenance    MaintenanceContract[] @relation("BaoTriPhuTrach")
-  ownedRenewals       Renewal[]             @relation("GiaHanPhuTrach")
+  notifications        Notification[]        @relation("ThongBaoCuaNguoiDung")
+  dailyActionItems     DailyActionItem[]     @relation("ViecHomNayCuaNguoiDung")
+  ownedMaintenance     MaintenanceContract[] @relation("BaoTriPhuTrach")
+  ownedRenewals        Renewal[]             @relation("GiaHanPhuTrach")
   // Phase 9
-  aiConversations     AiConversation[]      @relation("HoiThoaiCuaNguoiDung")
+  aiConversations      AiConversation[]      @relation("HoiThoaiCuaNguoiDung")
   // Mua hàng
-  purchaseRequests    PurchaseRequest[]     @relation("DeNghiMuaCua")
-  ownedPurchaseOrders PurchaseOrder[]       @relation("DonMuaPhuTrach")
-  ownedSupplierBills  SupplierBill[]        @relation("HoaDonMuaPhuTrach")
+  purchaseRequests     PurchaseRequest[]     @relation("DeNghiMuaCua")
+  ownedPurchaseOrders  PurchaseOrder[]       @relation("DonMuaPhuTrach")
+  ownedSupplierBills   SupplierBill[]        @relation("HoaDonMuaPhuTrach")
+  ownedSalesReturns    SalesReturn[]         @relation("TraHangBanPhuTrach")
+  ownedPurchaseReturns PurchaseReturn[]      @relation("TraHangMuaPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -458,6 +467,7 @@ model Customer {
   payments             Payment[]
   maintenanceContracts MaintenanceContract[]
   renewals             Renewal[]
+  salesReturns         SalesReturn[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
@@ -768,6 +778,7 @@ model Supplier {
 
   supplierBills    SupplierBill[]
   supplierPayments SupplierPayment[]
+  purchaseReturns  PurchaseReturn[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
@@ -829,7 +840,10 @@ model Product {
   purchaseRequestItems PurchaseRequestItem[]
   purchaseOrderItems   PurchaseOrderItem[]
 
-  supplierBillItems SupplierBillItem[]
+  supplierBillItems       SupplierBillItem[]
+  salesReturnItems        SalesReturnItem[]    @relation("TraHangBanSanPham")
+  salesReturnReplacements SalesReturnItem[]    @relation("TraHangBanHangThayThe")
+  purchaseReturnItems     PurchaseReturnItem[] @relation("TraHangMuaSanPham")
 
   @@unique([tenantId, skuNormalized])
   @@index([tenantId, status])
@@ -1101,8 +1115,10 @@ model Warehouse {
   serials      SerialNumber[]
   deliveries   Delivery[]
 
-  purchaseOrders PurchaseOrder[]
-  goodsReceipts  GoodsReceipt[]
+  purchaseOrders  PurchaseOrder[]
+  goodsReceipts   GoodsReceipt[]
+  salesReturns    SalesReturn[]
+  purchaseReturns PurchaseReturn[]
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -1163,6 +1179,7 @@ model SalesOrder {
   invoices         Invoice[]
 
   purchaseRequests PurchaseRequest[]
+  salesReturns     SalesReturn[]
 
   @@unique([tenantId, number])
   @@index([tenantId, ownerId, status])
@@ -1195,14 +1212,15 @@ model SalesOrderItem {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  order         SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product       Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
-  quotationItem QuotationItem? @relation(fields: [quotationItemId], references: [id], onDelete: SetNull)
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order         SalesOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  quotationItem QuotationItem?    @relation(fields: [quotationItemId], references: [id], onDelete: SetNull)
   deliveryItems DeliveryItem[]
   serials       SerialNumber[]
   warranties    Warranty[]
   invoiceItems  InvoiceItem[]
+  returnItems   SalesReturnItem[]
 
   @@unique([orderId, lineNo])
   @@index([tenantId, productId])
@@ -1277,12 +1295,13 @@ model Delivery {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy    String?  @map("created_by") @db.Uuid
 
-  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  order      SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  warehouse  Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-  items      DeliveryItem[]
-  serials    SerialNumber[]
-  warranties Warranty[]
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order        SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  items        DeliveryItem[]
+  serials      SerialNumber[]
+  warranties   Warranty[]
+  salesReturns SalesReturn[]
 
   @@unique([tenantId, number])
   @@index([tenantId, orderId])
@@ -1311,27 +1330,30 @@ model DeliveryItem {
 
 /// Số sê-ri của hàng quản lý theo máy. Duy nhất theo (tenant, sản phẩm, sê-ri).
 model SerialNumber {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @map("tenant_id") @db.Uuid
-  productId        String   @map("product_id") @db.Uuid
-  serial           String   @db.VarChar(100)
-  warehouseId      String?  @map("warehouse_id") @db.Uuid
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  productId         String   @map("product_id") @db.Uuid
+  serial            String   @db.VarChar(100)
+  warehouseId       String?  @map("warehouse_id") @db.Uuid
   /// trong-kho | da-ban | tra-lai
-  status           String   @default("trong-kho") @db.VarChar(20)
-  salesOrderItemId String?  @map("sales_order_item_id") @db.Uuid
-  deliveryId       String?  @map("delivery_id") @db.Uuid
-  note             String?  @db.Text
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy        String?  @map("created_by") @db.Uuid
+  status            String   @default("trong-kho") @db.VarChar(20)
+  salesOrderItemId  String?  @map("sales_order_item_id") @db.Uuid
+  deliveryId        String?  @map("delivery_id") @db.Uuid
+  /// Dòng phiếu trả hàng đã nhận lại máy này (TH-05).
+  salesReturnItemId String?  @map("sales_return_item_id") @db.Uuid
+  note              String?  @db.Text
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?  @map("created_by") @db.Uuid
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product        Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
-  warehouse      Warehouse?      @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
-  salesOrderItem SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
-  delivery       Delivery?       @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
-  warranty       Warranty?
-  tickets        SupportTicket[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse       Warehouse?       @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  salesOrderItem  SalesOrderItem?  @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
+  delivery        Delivery?        @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  salesReturnItem SalesReturnItem? @relation(fields: [salesReturnItemId], references: [id], onDelete: SetNull)
+  warranty        Warranty?
+  tickets         SupportTicket[]
 
   @@unique([tenantId, productId, serial])
   @@index([tenantId, status])
@@ -1561,13 +1583,14 @@ model Invoice {
   createdBy     String?   @map("created_by") @db.Uuid
   updatedBy     String?   @map("updated_by") @db.Uuid
 
-  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer    Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  salesOrder  SalesOrder?         @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
-  project     Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  owner       User                @relation("HoaDonPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
-  items       InvoiceItem[]
-  allocations PaymentAllocation[]
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer          Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesOrder        SalesOrder?             @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  project           Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  owner             User                    @relation("HoaDonPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  items             InvoiceItem[]
+  allocations       PaymentAllocation[]
+  returnAllocations SalesReturnAllocation[]
 
   @@unique([tenantId, number])
   @@index([tenantId, status, dueDate])
@@ -2058,6 +2081,7 @@ model PurchaseOrder {
   receipts  GoodsReceipt[]
 
   supplierBills SupplierBill[]
+  returns       PurchaseReturn[]
 
   @@unique([tenantId, number])
   @@index([tenantId, status, expectedDate])
@@ -2091,6 +2115,7 @@ model PurchaseOrderItem {
   receiptItems  GoodsReceiptItem[]
 
   supplierBillItems SupplierBillItem[]
+  returnItems       PurchaseReturnItem[]
 
   @@unique([purchaseOrderId, lineNo])
   @@index([tenantId, productId])
@@ -2175,12 +2200,13 @@ model SupplierBill {
   createdBy       String?   @map("created_by") @db.Uuid
   updatedBy       String?   @map("updated_by") @db.Uuid
 
-  tenant        Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supplier      Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  purchaseOrder PurchaseOrder?              @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
-  owner         User                        @relation("HoaDonMuaPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
-  items         SupplierBillItem[]
-  allocations   SupplierPaymentAllocation[]
+  tenant            Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier          Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrder     PurchaseOrder?              @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  owner             User                        @relation("HoaDonMuaPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  items             SupplierBillItem[]
+  allocations       SupplierPaymentAllocation[]
+  returnAllocations PurchaseReturnAllocation[]
 
   @@unique([tenantId, number])
   @@index([tenantId, status, dueDate])
@@ -2261,4 +2287,203 @@ model SupplierPaymentAllocation {
   @@unique([paymentId, billId])
   @@index([tenantId, billId])
   @@map("supplier_payment_allocations")
+}
+
+// ---------------------------------------------------------------------------
+// Trả hàng và đổi máy.
+// Hai chiều đối xứng: khách trả cho mình (`sales_returns`) và mình trả nhà cung cấp
+// (`purchase_returns`). Cả hai đi qua ĐÚNG hàm ghi sổ kho của bán hàng và mua hàng,
+// rồi chốt tiền bằng cách **giảm trừ** hóa đơn — không lưu công nợ thành cột (QĐ-09).
+// ---------------------------------------------------------------------------
+
+/// Phiếu khách trả hàng, hoặc đổi máy trong bảo hành. Số TH-2026-0001.
+model SalesReturn {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  number       String    @db.VarChar(30)
+  customerId   String    @map("customer_id") @db.Uuid
+  salesOrderId String?   @map("sales_order_id") @db.Uuid
+  deliveryId   String?   @map("delivery_id") @db.Uuid
+  /// Kho nhận hàng trả về; với đổi máy cũng là kho xuất hàng thay thế.
+  warehouseId  String    @map("warehouse_id") @db.Uuid
+  ownerId      String    @map("owner_id") @db.Uuid
+  /// tra-hang | doi-may — đổi máy không phát sinh tiền (TH-08).
+  kind         String    @default("tra-hang") @db.VarChar(20)
+  /// DRAFT | CONFIRMED (hàng đã vào kho) | SETTLED (tiền đã chốt) | CANCELLED
+  status       String    @default("DRAFT") @db.VarChar(20)
+  returnDate   DateTime  @map("return_date") @db.Date
+  reason       String    @db.Text
+  notes        String?   @db.Text
+  subtotal     Decimal   @default(0) @db.Decimal(18, 2)
+  vatTotal     Decimal   @default(0) @map("vat_total") @db.Decimal(18, 2)
+  total        Decimal   @default(0) @db.Decimal(18, 2)
+  confirmedAt  DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  confirmedBy  String?   @map("confirmed_by") @db.Uuid
+  settledAt    DateTime? @map("settled_at") @db.Timestamptz(6)
+  settledBy    String?   @map("settled_by") @db.Uuid
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?   @map("cancel_reason") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+  updatedBy    String?   @map("updated_by") @db.Uuid
+
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesOrder  SalesOrder?             @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  delivery    Delivery?               @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  warehouse   Warehouse               @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  owner       User                    @relation("TraHangBanPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  items       SalesReturnItem[]
+  allocations SalesReturnAllocation[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, returnDate])
+  @@index([tenantId, customerId])
+  @@map("sales_returns")
+}
+
+/// Dòng hàng khách trả. Giữ liên kết tới dòng đơn gốc để đối chiếu đã bán bao nhiêu.
+model SalesReturnItem {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @map("tenant_id") @db.Uuid
+  returnId             String   @map("return_id") @db.Uuid
+  lineNo               Int      @map("line_no")
+  orderItemId          String?  @map("order_item_id") @db.Uuid
+  productId            String?  @map("product_id") @db.Uuid
+  sku                  String?  @db.VarChar(64)
+  name                 String   @db.VarChar(500)
+  quantity             Decimal  @default(1) @db.Decimal(18, 3)
+  unit                 String?  @db.VarChar(50)
+  unitPrice            Decimal  @default(0) @map("unit_price") @db.Decimal(18, 2)
+  vatRate              Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
+  lineTotal            Decimal  @default(0) @map("line_total") @db.Decimal(18, 2)
+  /// con-tot | loi — hàng lỗi mặc định KHÔNG nhập lại kho đang bán (TH-06).
+  condition            String   @default("con-tot") @db.VarChar(20)
+  /// Có cộng lại vào tồn kho hay không. Hàng lỗi mà vẫn nhập lại thì phải ghi chú.
+  restock              Boolean  @default(true)
+  /// Đổi máy: mặt hàng giao thay thế. Trả hàng thường thì để trống.
+  replacementProductId String?  @map("replacement_product_id") @db.Uuid
+  note                 String?  @db.Text
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant             Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesReturn        SalesReturn     @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItem          SalesOrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  product            Product?        @relation("TraHangBanSanPham", fields: [productId], references: [id], onDelete: SetNull)
+  replacementProduct Product?        @relation("TraHangBanHangThayThe", fields: [replacementProductId], references: [id], onDelete: SetNull)
+  serials            SerialNumber[]
+
+  @@unique([returnId, lineNo])
+  @@index([tenantId, productId])
+  @@index([tenantId, orderItemId])
+  @@map("sales_return_items")
+}
+
+/// Giảm trừ một phiếu trả hàng vào một hóa đơn bán ra. Tổng giảm trừ ≤ giá trị phiếu.
+model SalesReturnAllocation {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  returnId  String   @map("return_id") @db.Uuid
+  invoiceId String   @map("invoice_id") @db.Uuid
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesReturn SalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([returnId, invoiceId])
+  @@index([tenantId, invoiceId])
+  @@map("sales_return_allocations")
+}
+
+/// Phiếu trả hàng cho nhà cung cấp. Số TM-2026-0001.
+model PurchaseReturn {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  number          String    @db.VarChar(30)
+  supplierId      String    @map("supplier_id") @db.Uuid
+  purchaseOrderId String?   @map("purchase_order_id") @db.Uuid
+  /// Kho xuất hàng trả đi.
+  warehouseId     String    @map("warehouse_id") @db.Uuid
+  ownerId         String    @map("owner_id") @db.Uuid
+  /// DRAFT | CONFIRMED (hàng đã ra khỏi kho) | SETTLED (đã giảm trừ công nợ) | CANCELLED
+  status          String    @default("DRAFT") @db.VarChar(20)
+  returnDate      DateTime  @map("return_date") @db.Date
+  reason          String    @db.Text
+  notes           String?   @db.Text
+  subtotal        Decimal   @default(0) @db.Decimal(18, 2)
+  vatTotal        Decimal   @default(0) @map("vat_total") @db.Decimal(18, 2)
+  total           Decimal   @default(0) @db.Decimal(18, 2)
+  confirmedAt     DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  confirmedBy     String?   @map("confirmed_by") @db.Uuid
+  settledAt       DateTime? @map("settled_at") @db.Timestamptz(6)
+  settledBy       String?   @map("settled_by") @db.Uuid
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason    String?   @map("cancel_reason") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.Uuid
+  updatedBy       String?   @map("updated_by") @db.Uuid
+
+  tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier      Supplier                   @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrder PurchaseOrder?             @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  warehouse     Warehouse                  @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  owner         User                       @relation("TraHangMuaPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  items         PurchaseReturnItem[]
+  allocations   PurchaseReturnAllocation[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, returnDate])
+  @@index([tenantId, supplierId])
+  @@map("purchase_returns")
+}
+
+/// Dòng hàng trả nhà cung cấp. Giữ liên kết tới dòng đơn mua để đối chiếu đã nhận bao nhiêu.
+model PurchaseReturnItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  returnId    String   @map("return_id") @db.Uuid
+  lineNo      Int      @map("line_no")
+  orderItemId String?  @map("order_item_id") @db.Uuid
+  productId   String?  @map("product_id") @db.Uuid
+  sku         String?  @db.VarChar(64)
+  name        String   @db.VarChar(500)
+  quantity    Decimal  @default(1) @db.Decimal(18, 3)
+  unit        String?  @db.VarChar(50)
+  unitPrice   Decimal  @default(0) @map("unit_price") @db.Decimal(18, 2)
+  vatRate     Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
+  lineTotal   Decimal  @default(0) @map("line_total") @db.Decimal(18, 2)
+  note        String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseReturn PurchaseReturn     @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItem      PurchaseOrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  product        Product?           @relation("TraHangMuaSanPham", fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([returnId, lineNo])
+  @@index([tenantId, productId])
+  @@index([tenantId, orderItemId])
+  @@map("purchase_return_items")
+}
+
+/// Giảm trừ một phiếu trả hàng mua vào một hóa đơn nhà cung cấp.
+model PurchaseReturnAllocation {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  returnId  String   @map("return_id") @db.Uuid
+  billId    String   @map("bill_id") @db.Uuid
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseReturn PurchaseReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  bill           SupplierBill   @relation(fields: [billId], references: [id], onDelete: Restrict)
+
+  @@unique([returnId, billId])
+  @@index([tenantId, billId])
+  @@map("purchase_return_allocations")
 }

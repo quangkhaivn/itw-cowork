@@ -171,6 +171,15 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - **Hạn thanh toán bắt buộc nhập** khi ghi nhận: nó in trên hóa đơn nhà cung cấp. Đây là chỗ khác hóa đơn bán ra — bên bán mình tự đặt hạn theo chính sách, bên mua thì đọc hạn từ chứng từ nhận được (QĐ-38).
 - Dòng hóa đơn giữ `order_item_id`, nên màn hình đối chiếu được ba con số: **đặt** (đơn mua), **nhận** (sổ kho), **đòi** (hóa đơn) — và cảnh báo khi lệch, trước lúc ghi nhận.
 
+## 7l. Trả hàng và đổi máy
+
+- Phân hệ: `src/modules/tra-hang`. Phần thuần chỉ giữ vòng đời, số lượng trả tối đa và kiểm phân bổ giảm trừ; **tiền** dùng lại `tinhDonMua()`, **nợ** dùng lại `congNo()`, **kho** dùng lại `ghiSoKho()`. Không có công thức nào của riêng phần này.
+- Hai chiều (khách trả / trả nhà cung cấp) dùng **chung một bộ trạng thái** `DRAFT → CONFIRMED → SETTLED`, chỉ khác nhãn hiển thị: "Đã nhận lại hàng" với chiều bán, "Đã trả hàng đi" với chiều mua. Một vòng đời thì một chỗ để hiểu sai.
+- Hai bước cố ý tách: **hàng qua kho** cần `inventory.update`, **chốt tiền** cần `finance.approve` (QĐ-41). Gộp lại thì chỉ Giám đốc bấm được, vì không vai trò dựng sẵn nào cầm cả hai.
+- Màn hình khách trả hàng cần **ba vai trò** cùng nhìn (kinh doanh, chăm sóc khách hàng, kế toán), nên kiểm "một trong các quyền" ở service và `yeuCauMotTrongCacQuyen()` ở trang — thay vì cấp cho ai đó một quyền rộng hơn việc của họ (cùng lý lẽ QĐ-31).
+- Sê-ri khai lúc lập phiếu **chưa** đụng bảng `serial_numbers`; mới chỉ là ý định, ghi kèm dòng phiếu. Chỉ bước xác nhận mới kiểm chặt và đổi trạng thái sê-ri — vì trước đó hàng chưa thật sự nằm trong tay mình (TH-04, TH-05).
+- `congNo()` trả `daThu` và `daGiamTru` **tách nhau**. Cộng gộp thì màn hình nói nhầm là khách đã trả tiền, trong khi thực tế nợ được xóa bằng hàng (QĐ-42).
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

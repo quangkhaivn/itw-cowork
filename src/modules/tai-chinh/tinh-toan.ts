@@ -46,6 +46,8 @@ export function dong(x: number | string | null | undefined): number {
 export interface CongNoHoaDon {
   tong: number;
   daThu: number;
+  /** Phần bị giảm trừ bởi hàng trả lại — tiền không đi qua quỹ nhưng nợ vẫn giảm (TH-07). */
+  daGiamTru: number;
   conNo: number;
   tinhTrang: TinhTrangThu;
 }
@@ -56,22 +58,30 @@ export interface CongNoHoaDon {
  * `trangThaiTinh` là trạng thái mà hóa đơn bắt đầu sinh nợ: "ISSUED" với hóa đơn bán ra
  * (đã phát hành), "RECORDED" với hóa đơn nhà cung cấp (đã ghi nhận). Cùng một công thức
  * cho cả hai chiều nợ — không có hàm thứ hai để lệch nhau.
+ *
+ * `daGiamTru` là phần hàng trả lại đã trừ vào hóa đơn này. Tách riêng khỏi `daThu` để
+ * màn hình nói đúng sự thật: tiền về quỹ và nợ bị xóa bằng hàng là hai chuyện khác nhau.
  */
 export function congNo(
   trangThai: string,
   tong: number | string,
   daThu: number | string,
-  trangThaiTinh = "ISSUED",
+  tuyChon: { trangThaiTinh?: string; daGiamTru?: number | string } = {},
 ): CongNoHoaDon {
   const t = dong(tong);
   const thu = dong(daThu);
-  if (trangThai !== trangThaiTinh) return { tong: t, daThu: thu, conNo: 0, tinhTrang: "khong-tinh" };
-  const con = Math.max(0, t - thu);
+  const giam = dong(tuyChon.daGiamTru ?? 0);
+  if (trangThai !== (tuyChon.trangThaiTinh ?? "ISSUED")) {
+    return { tong: t, daThu: thu, daGiamTru: giam, conNo: 0, tinhTrang: "khong-tinh" };
+  }
+  const daBu = thu + giam;
+  const con = Math.max(0, t - daBu);
   return {
     tong: t,
     daThu: thu,
+    daGiamTru: giam,
     conNo: con,
-    tinhTrang: con === 0 ? "da-thu-du" : thu > 0 ? "thu-mot-phan" : "chua-thu",
+    tinhTrang: con === 0 ? "da-thu-du" : daBu > 0 ? "thu-mot-phan" : "chua-thu",
   };
 }
 

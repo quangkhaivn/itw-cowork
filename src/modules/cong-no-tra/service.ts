@@ -66,6 +66,12 @@ const CHON = {
       payment: { select: { id: true, number: true, paidAt: true, method: true, status: true } },
     },
   },
+  returnAllocations: {
+    select: {
+      amount: true,
+      purchaseReturn: { select: { id: true, number: true, status: true, returnDate: true } },
+    },
+  },
 } satisfies Prisma.SupplierBillSelect;
 
 type BanGhi = Prisma.SupplierBillGetPayload<{ select: typeof CHON }>;
@@ -74,9 +80,14 @@ function daTraCua(hd: { allocations: { amount: Prisma.Decimal; payment: { status
   return hd.allocations.filter((a) => a.payment.status === "hoat-dong").reduce((s, a) => s + Number(a.amount), 0);
 }
 
+/** Phần nợ phải trả đã bị xóa bằng hàng trả lại nhà cung cấp (TH-07). */
+function daGiamTruCua(hd: { returnAllocations: { amount: Prisma.Decimal; purchaseReturn: { status: string } }[] }): number {
+  return hd.returnAllocations.filter((a) => a.purchaseReturn.status === "SETTLED").reduce((s, a) => s + Number(a.amount), 0);
+}
+
 function hoaDonRa(hd: BanGhi, homNay: string) {
   const daTra = daTraCua(hd);
-  const cn = congNo(hd.status, hd.total.toString(), daTra, TRANG_THAI_TINH_NO);
+  const cn = congNo(hd.status, hd.total.toString(), daTra, { trangThaiTinh: TRANG_THAI_TINH_NO, daGiamTru: daGiamTruCua(hd) });
   const han = dateVeNgay(hd.dueDate) || null;
   const quaHan = hd.status === TRANG_THAI_TINH_NO && cn.conNo > 0 ? soNgayQuaHan(han, homNay) : 0;
   return {
@@ -92,6 +103,7 @@ function hoaDonRa(hd: BanGhi, homNay: string) {
     tongVat: hd.vatTotal.toString(),
     tongCong: hd.total.toString(),
     daTra: cn.daThu,
+    daGiamTru: cn.daGiamTru,
     conNo: cn.conNo,
     tinhTrangTra: cn.tinhTrang,
     soNgayQuaHan: quaHan,
@@ -125,6 +137,13 @@ function hoaDonRa(hd: BanGhi, homNay: string) {
       ngayChi: a.payment.paidAt,
       phuongThuc: a.payment.method,
       trangThai: a.payment.status,
+      soTien: a.amount.toString(),
+    })),
+    traHang: hd.returnAllocations.map((a) => ({
+      id: a.purchaseReturn.id,
+      so: a.purchaseReturn.number,
+      ngayTra: a.purchaseReturn.returnDate,
+      trangThai: a.purchaseReturn.status,
       soTien: a.amount.toString(),
     })),
     taoLuc: hd.createdAt,
@@ -215,12 +234,12 @@ export async function congNoTheoNhaCungCap(nc: NguCanh) {
     select: {
       id: true, number: true, total: true, dueDate: true, status: true,
       supplier: { select: { id: true, code: true, name: true } },
-      allocations: { select: { amount: true, payment: { select: { status: true } } } },
+      allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, purchaseReturn: { select: { status: true } } } },
     },
   });
 
   const chiTiet = ds.map((hd) => {
-    const cn = congNo(hd.status, hd.total.toString(), daTraCua(hd), TRANG_THAI_TINH_NO);
+    const cn = congNo(hd.status, hd.total.toString(), daTraCua(hd), { trangThaiTinh: TRANG_THAI_TINH_NO, daGiamTru: daGiamTruCua(hd) });
     return {
       nhaCungCap: hd.supplier,
       conNo: cn.conNo,
@@ -261,13 +280,13 @@ export async function hoaDonConNoCua(nc: NguCanh, nhaCungCapId: string) {
     where: { AND: [await dieuKienXemHoaDonMua(nc), { supplierId: nhaCungCapId, status: TRANG_THAI_TINH_NO }] },
     select: {
       id: true, number: true, supplierDocNo: true, total: true, dueDate: true, status: true,
-      allocations: { select: { amount: true, payment: { select: { status: true } } } },
+      allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, purchaseReturn: { select: { status: true } } } },
     },
     orderBy: { dueDate: "asc" },
   });
   return ds
     .map((hd) => {
-      const cn = congNo(hd.status, hd.total.toString(), daTraCua(hd), TRANG_THAI_TINH_NO);
+      const cn = congNo(hd.status, hd.total.toString(), daTraCua(hd), { trangThaiTinh: TRANG_THAI_TINH_NO, daGiamTru: daGiamTruCua(hd) });
       return {
         id: hd.id,
         so: hd.number,
@@ -564,7 +583,7 @@ export async function chiTien(nc: NguCanh, d: DuLieuChiTien) {
     where: { AND: [{ id: { in: ids } }, await dieuKienXemHoaDonMua(nc)] },
     select: {
       id: true, number: true, supplierId: true, status: true, total: true,
-      allocations: { select: { amount: true, payment: { select: { status: true } } } },
+      allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, purchaseReturn: { select: { status: true } } } },
     },
   });
   if (hoaDon.length !== new Set(ids).size) throw new LoiKhongTimThay("Hóa đơn nhà cung cấp");
@@ -575,7 +594,7 @@ export async function chiTien(nc: NguCanh, d: DuLieuChiTien) {
     if (hd.status !== TRANG_THAI_TINH_NO) {
       throw new LoiNghiepVu(`Hóa đơn ${hd.number} chưa ghi nhận hoặc đã hủy — chưa chi tiền được.`, 409, "hoa-don-chua-ghi-nhan");
     }
-    const cn = congNo(hd.status, hd.total.toString(), daTraCua(hd), TRANG_THAI_TINH_NO);
+    const cn = congNo(hd.status, hd.total.toString(), daTraCua(hd), { trangThaiTinh: TRANG_THAI_TINH_NO, daGiamTru: daGiamTruCua(hd) });
     if (dong(pb.soTien) > cn.conNo) {
       throw new LoiNghiepVu(
         `Hóa đơn ${hd.number} chỉ còn nợ ${cn.conNo.toLocaleString("vi-VN")} ₫, không chi được ${dong(pb.soTien).toLocaleString("vi-VN")} ₫.`,
@@ -619,7 +638,7 @@ export async function chiTien(nc: NguCanh, d: DuLieuChiTien) {
   // Hóa đơn nào vừa trả đủ thì ghi một sự kiện riêng.
   for (const pb of d.phanBo) {
     const hd = hoaDon.find((x) => x.id === pb.hoaDonId)!;
-    const cn = congNo(hd.status, hd.total.toString(), daTraCua(hd) + dong(pb.soTien), TRANG_THAI_TINH_NO);
+    const cn = congNo(hd.status, hd.total.toString(), daTraCua(hd) + dong(pb.soTien), { trangThaiTinh: TRANG_THAI_TINH_NO, daGiamTru: daGiamTruCua(hd) });
     if (cn.conNo === 0) {
       await nc.suKien({
         eventType: SU_KIEN.SUPPLIER_BILL_PAID,

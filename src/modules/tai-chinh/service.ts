@@ -38,6 +38,7 @@ const CHON = {
   owner: { select: { id: true, fullName: true } },
   items: { select: CHON_DONG, orderBy: { lineNo: "asc" } },
   allocations: { select: { id: true, amount: true, payment: { select: { id: true, number: true, status: true, receivedAt: true, method: true } } } },
+  returnAllocations: { select: { id: true, amount: true, salesReturn: { select: { id: true, number: true, status: true, returnDate: true, kind: true } } } },
 } satisfies Prisma.InvoiceSelect;
 
 type BanGhi = Prisma.InvoiceGetPayload<{ select: typeof CHON }>;
@@ -46,9 +47,17 @@ function daThuCua(hd: { allocations: { amount: Prisma.Decimal; payment: { status
   return hd.allocations.filter((a) => a.payment.status === "hoat-dong").reduce((s, a) => s + Number(a.amount), 0);
 }
 
+/**
+ * Phần nợ đã bị xóa bằng hàng khách trả lại (TH-07). Chỉ tính phiếu đã chốt tiền;
+ * phiếu còn nháp hoặc đã hủy chưa đụng tới công nợ.
+ */
+function daGiamTruCua(hd: { returnAllocations: { amount: Prisma.Decimal; salesReturn: { status: string } }[] }): number {
+  return hd.returnAllocations.filter((a) => a.salesReturn.status === "SETTLED").reduce((s, a) => s + Number(a.amount), 0);
+}
+
 function hoaDonRa(hd: BanGhi, homNay: string) {
   const daThu = daThuCua(hd);
-  const cn = congNo(hd.status, hd.total.toString(), daThu);
+  const cn = congNo(hd.status, hd.total.toString(), daThu, { daGiamTru: daGiamTruCua(hd) });
   const han = dateVeNgay(hd.dueDate) || null;
   const quaHan = hd.status === "ISSUED" && cn.conNo > 0 ? soNgayQuaHan(han, homNay) : 0;
   return {
@@ -65,6 +74,7 @@ function hoaDonRa(hd: BanGhi, homNay: string) {
     tongCong: hd.total.toString(),
     tongGiaVon: hd.costTotal.toString(),
     daThu: cn.daThu,
+    daGiamTru: cn.daGiamTru,
     conNo: cn.conNo,
     tinhTrangThu: cn.tinhTrang,
     soNgayQuaHan: quaHan,
@@ -96,6 +106,14 @@ function hoaDonRa(hd: BanGhi, homNay: string) {
       phuongThuc: a.payment.method,
       ngayThu: a.payment.receivedAt,
       trangThai: a.payment.status,
+    })),
+    traHang: hd.returnAllocations.map((a) => ({
+      id: a.salesReturn.id,
+      so: a.salesReturn.number,
+      loai: a.salesReturn.kind,
+      ngayTra: a.salesReturn.returnDate,
+      trangThai: a.salesReturn.status,
+      soTien: Number(a.amount),
     })),
     taoLuc: hd.createdAt,
     suaLuc: hd.updatedAt,
@@ -146,13 +164,13 @@ export async function danhSachHoaDon(nc: NguCanh, boLoc: BoLocHoaDon) {
     nc.tx.invoice.findMany({ where, select: CHON, orderBy: [{ createdAt: "desc" }], skip: (boLoc.trang - 1) * boLoc.coTrang, take: boLoc.coTrang }),
     nc.tx.invoice.findMany({
       where: { AND: [await dieuKienXemHoaDon(nc), { status: "ISSUED" }] },
-      select: { total: true, dueDate: true, status: true, allocations: { select: { amount: true, payment: { select: { status: true } } } } },
+      select: { total: true, dueDate: true, status: true, allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, salesReturn: { select: { status: true } } } } },
     }),
   ]);
 
   const dong2 = ds.map((hd) => hoaDonRa(hd, homNay)).filter((hd) => (boLoc.trangThai === "" ? hd.conNo > 0 : true));
   const congNoTatCa = tatCa.map((hd) => {
-    const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd));
+    const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd), { daGiamTru: daGiamTruCua(hd) });
     return { conNo: cn.conNo, soNgayQuaHan: soNgayQuaHan(dateVeNgay(hd.dueDate) || null, homNay) };
   });
 
@@ -190,7 +208,7 @@ export async function congNoTheoKhach(nc: NguCanh) {
     select: {
       id: true, number: true, total: true, dueDate: true, status: true,
       customer: { select: { id: true, code: true, name: true } },
-      allocations: { select: { amount: true, payment: { select: { status: true } } } },
+      allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, salesReturn: { select: { status: true } } } },
     },
     orderBy: { dueDate: "asc" },
   });
@@ -198,7 +216,7 @@ export async function congNoTheoKhach(nc: NguCanh) {
   const theoKhach = new Map<string, { khachHang: { id: string; ma: string; ten: string }; conNo: number; quaHan: number; soHoaDon: number; quaHanLauNhat: number }>();
   const chiTiet: { conNo: number; soNgayQuaHan: number }[] = [];
   for (const hd of ds) {
-    const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd));
+    const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd), { daGiamTru: daGiamTruCua(hd) });
     if (cn.conNo <= 0) continue;
     const ngay = soNgayQuaHan(dateVeNgay(hd.dueDate) || null, homNay);
     chiTiet.push({ conNo: cn.conNo, soNgayQuaHan: ngay });
@@ -284,12 +302,12 @@ export async function hoaDonConNo(nc: NguCanh, khachHangId: string) {
   const homNay = homNayVN();
   const ds = await nc.tx.invoice.findMany({
     where: { AND: [await dieuKienXemHoaDon(nc), { customerId: khachHangId, status: "ISSUED" }] },
-    select: { id: true, number: true, total: true, dueDate: true, status: true, allocations: { select: { amount: true, payment: { select: { status: true } } } } },
+    select: { id: true, number: true, total: true, dueDate: true, status: true, allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, salesReturn: { select: { status: true } } } } },
     orderBy: { dueDate: "asc" },
   });
   return ds
     .map((hd) => {
-      const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd));
+      const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd), { daGiamTru: daGiamTruCua(hd) });
       return {
         id: hd.id,
         so: hd.number,
@@ -483,7 +501,7 @@ export async function thuTien(nc: NguCanh, d: DuLieuThuTien) {
   const ids = d.phanBo.map((p) => p.hoaDonId);
   const hoaDon = await nc.tx.invoice.findMany({
     where: { AND: [{ id: { in: ids } }, await dieuKienXemHoaDon(nc)] },
-    select: { id: true, number: true, customerId: true, ownerId: true, status: true, total: true, allocations: { select: { amount: true, payment: { select: { status: true } } } } },
+    select: { id: true, number: true, customerId: true, ownerId: true, status: true, total: true, allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, salesReturn: { select: { status: true } } } } },
   });
   if (hoaDon.length !== new Set(ids).size) throw new LoiKhongTimThay("Hóa đơn");
 
@@ -491,7 +509,7 @@ export async function thuTien(nc: NguCanh, d: DuLieuThuTien) {
     const hd = hoaDon.find((x) => x.id === pb.hoaDonId)!;
     if (hd.customerId !== khach.id) throw new LoiDinhDang("phanBo", `Hóa đơn ${hd.number} thuộc khách khác.`);
     if (hd.status !== "ISSUED") throw new LoiNghiepVu(`Hóa đơn ${hd.number} chưa phát hành hoặc đã hủy — chưa thu tiền được.`, 409, "hoa-don-chua-phat-hanh");
-    const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd));
+    const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd), { daGiamTru: daGiamTruCua(hd) });
     if (dong(pb.soTien) > cn.conNo) {
       throw new LoiNghiepVu(
         `Hóa đơn ${hd.number} chỉ còn nợ ${cn.conNo.toLocaleString("vi-VN")} ₫, không thu được ${dong(pb.soTien).toLocaleString("vi-VN")} ₫.`,
@@ -523,7 +541,7 @@ export async function thuTien(nc: NguCanh, d: DuLieuThuTien) {
   // Hóa đơn nào vừa thu đủ thì ghi một sự kiện riêng — để Phase 8 bắt được mà nhắc việc.
   for (const pb of d.phanBo) {
     const hd = hoaDon.find((x) => x.id === pb.hoaDonId)!;
-    const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd) + dong(pb.soTien));
+    const cn = congNo(hd.status, hd.total.toString(), daThuCua(hd) + dong(pb.soTien), { daGiamTru: daGiamTruCua(hd) });
     if (cn.conNo === 0) {
       await nc.suKien({ eventType: SU_KIEN.INVOICE_PAID, objectType: "invoice", objectId: hd.id, payload: { so: hd.number, tongCong: cn.tong } });
       if (hd.ownerId !== nc.hoSo.userId) {

@@ -25,7 +25,7 @@ describe("Danh mục tài chính", () => {
 
 describe("Công nợ của một hóa đơn", () => {
   it("chưa thu, thu một phần, thu đủ", () => {
-    assert.deepEqual(congNo("ISSUED", 10_000_000, 0), { tong: 10_000_000, daThu: 0, conNo: 10_000_000, tinhTrang: "chua-thu" });
+    assert.deepEqual(congNo("ISSUED", 10_000_000, 0), { tong: 10_000_000, daThu: 0, daGiamTru: 0, conNo: 10_000_000, tinhTrang: "chua-thu" });
     assert.equal(congNo("ISSUED", 10_000_000, 4_000_000).tinhTrang, "thu-mot-phan");
     assert.equal(congNo("ISSUED", 10_000_000, 10_000_000).tinhTrang, "da-thu-du");
   });
@@ -36,6 +36,20 @@ describe("Công nợ của một hóa đơn", () => {
   });
   it("thu dư (do làm tròn hay ghi nhầm) không làm công nợ âm", () => {
     assert.equal(congNo("ISSUED", 10_000_000, 10_000_500).conNo, 0);
+  });
+  it("hàng trả lại giảm nợ mà KHÔNG làm tăng tiền đã thu (TH-07)", () => {
+    const cn = congNo("ISSUED", 10_000_000, 2_000_000, { daGiamTru: 3_000_000 });
+    assert.equal(cn.daThu, 2_000_000);
+    assert.equal(cn.daGiamTru, 3_000_000);
+    assert.equal(cn.conNo, 5_000_000);
+    assert.equal(cn.tinhTrang, "thu-mot-phan");
+  });
+  it("giảm trừ đủ phần còn lại thì hóa đơn hết nợ", () => {
+    assert.equal(congNo("ISSUED", 10_000_000, 0, { daGiamTru: 10_000_000 }).tinhTrang, "da-thu-du");
+  });
+  it("hóa đơn nhà cung cấp dùng chung công thức, chỉ khác trạng thái bắt đầu tính nợ", () => {
+    assert.equal(congNo("RECORDED", 5_000_000, 0, { trangThaiTinh: "RECORDED" }).conNo, 5_000_000);
+    assert.equal(congNo("RECORDED", 5_000_000, 0).tinhTrang, "khong-tinh");
   });
   it("làm tròn về đồng trước khi so — không để lẻ 0,4 đồng làm hóa đơn không bao giờ đủ", () => {
     assert.equal(congNo("ISSUED", "10000000.4", "10000000").tinhTrang, "da-thu-du");

@@ -349,3 +349,41 @@ Quyền `finance.*`, như công nợ phải thu. Đối xứng với mục 11 v�
 Số tiền trên hóa đơn nhà cung cấp tính bằng đúng `tinhDonMua()` mà đơn mua dùng, nên hai chứng từ không ra hai con số cho cùng một dòng hàng.
 
 **Chưa làm ở phần này**: trả hàng cho nhà cung cấp và giảm trừ công nợ, bù trừ công nợ hai chiều với khách vừa mua vừa bán, dự báo dòng tiền.
+
+## 18. Trả hàng và đổi máy
+
+Hai chiều đối xứng — khách trả cho mình, và mình trả nhà cung cấp — đi chung **một vòng đời**:
+
+```
+Nháp → Đã qua kho → Đã chốt tiền
+```
+
+Hàng đi trước (quyền `inventory.update`), tiền chốt sau (quyền `finance.approve`). Hai bước cố ý tách rời: ở cửa hàng, người nhận hàng và người chốt tiền là hai người khác nhau, và hàng về kho **không** đồng nghĩa với việc đã thỏa thuận xong số tiền (QĐ-41).
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| TH-01 | Số phiếu `TH-<năm>-0001` (khách trả) và `TM-<năm>-0001` (trả nhà cung cấp), cấp nguyên tử. Lập từ một **đơn** để đối chiếu, hoặc lập lẻ khi không có đơn | [SV] · [CSDL] duy nhất · [TH] |
+| TH-02 | **Mọi phiếu phải ghi rõ vì sao trả.** Không có lý do thì không có phiếu | [CSDL] CHECK · [SV] lược đồ · [TH] |
+| TH-03 | Không trả quá phần **đã thật sự giao** (chiều bán) hoặc **đã thật sự nhận** (chiều mua), trừ đi phần đã trả bằng các phiếu trước. Phiếu đã hủy không tính | [SV] · [TH] |
+| TH-04 | **Xác nhận** là lúc hàng thật sự đi qua kho: hàng còn dùng được cộng lại tồn, máy đổi được xuất ra, sê-ri đổi trạng thái. Xác nhận rồi thì khóa sửa và khóa hủy | [CSDL] CHECK · [SV] · [TH] |
+| TH-05 | Sê-ri khách trả phải là **máy mình đã bán ra** (đang ở trạng thái `da-ban`). Nhập lại kho thì về `trong-kho`, không nhập lại thì sang `tra-lai` và không thuộc kho nào | [CSDL] CHECK vị trí sê-ri · [SV] · [TH] |
+| TH-06 | Hàng còn tốt mặc định cộng lại tồn; **hàng lỗi mặc định KHÔNG**. Muốn vẫn nhập lại hàng lỗi thì phải ghi rõ vì sao — nếu không, hàng hỏng nằm trên kệ bán mà không ai biết | [CSDL] CHECK · [SV] · [TH] |
+| TH-07 | Chốt tiền bằng cách **giảm trừ công nợ**: tổng giảm trừ không vượt giá trị phiếu, và từng hóa đơn không nhận quá phần còn nợ. Giảm trừ **không** làm tăng "tiền đã thu"/"tiền đã chi" — nợ xóa bằng hàng và tiền về quỹ là hai chuyện (QĐ-42) | [CSDL] CHECK · [SV] hàm thuần dùng chung · [ĐV] · [TH] |
+| TH-08 | **Đổi máy là đổi ngang, giá trị phiếu = 0.** Chênh lệch giá phải đi bằng chứng từ khác, không giấu trong phiếu đổi máy. Mỗi dòng đổi máy phải khai mặt hàng giao thay thế | [CSDL] CHECK · [SV] · [TH] |
+| TH-09 | **Chỉ hủy được phiếu còn nháp.** Hàng đã qua kho thì phải xử bằng chứng từ ngược hoặc điều chỉnh tồn kèm lý do — cùng lý lẽ với phiếu nhận hàng (QĐ-36) | [SV] · [TH] |
+| TH-10 | Đổi máy **không làm mới đồng hồ bảo hành**: phiếu bảo hành chuyển sang sê-ri máy mới nhưng giữ nguyên ngày bắt đầu và ngày hết hạn, kèm ghi chú truy ngược (QĐ-40) | [SV] · [TH] |
+
+Hàng đi qua **đúng** `ghiSoKho()` mà bán hàng và mua hàng dùng, nên `doiSoatKho()` vẫn khớp sau mỗi phiếu. Tiền đi qua **đúng** `congNo()` của tài chính, nên hai chiều nợ không lệch cách tính.
+
+**Ai làm gì** — không mở thêm mã quyền nào:
+
+| Việc | Quyền |
+|---|---|
+| Xem phiếu khách trả | `order.view` **hoặc** `service_desk.view` **hoặc** `finance.view` |
+| Lập / sửa / hủy phiếu khách trả | `order.update` **hoặc** `service_desk.update` |
+| Xem phiếu trả nhà cung cấp | `purchasing.view` **hoặc** `finance.view` |
+| Lập / sửa / hủy phiếu trả nhà cung cấp | `purchasing.update` |
+| Xác nhận hàng đi qua kho | `inventory.update` |
+| Chốt tiền (giảm trừ công nợ) | `finance.approve` |
+
+**Chưa làm ở phần này**: hoàn tiền mặt cho khách khi không còn hóa đơn nào để giảm trừ, đòi lại tiền từ nhà cung cấp khi không còn hóa đơn nợ, chênh lệch giá khi đổi máy khác model, phiếu bảo hành cho chính cái máy đổi mới (bảo hành cũ được chuyển sang, không sinh phiếu mới).

@@ -70,6 +70,11 @@ export default async function TrangChiTietDonMua({
             {coQuyen(nd.hoSo, "finance.create") && o.trangThai !== "DRAFT" && o.trangThai !== "CANCELLED" && (
               <GhiHoaDonNhaCungCap donMuaId={o.id} />
             )}
+            {coQuyen(nd.hoSo, "purchasing.update") && o.tienDo.tongDaNhan > 0 && (
+              <Link className="nut" href={`/tra-hang/tra-ncc/moi?don=${o.id}`}>
+                Trả hàng nhà cung cấp
+              </Link>
+            )}
             <TacVuDonMua
               id={o.id}
               so={o.so}

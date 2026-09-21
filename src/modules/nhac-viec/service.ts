@@ -202,13 +202,14 @@ async function quetCongNoQuaHan(tx: ClientTenant, homNay: string, nguong: number
     select: {
       id: true, number: true, ownerId: true, total: true, dueDate: true, status: true,
       customer: { select: { name: true } },
-      allocations: { select: { amount: true, payment: { select: { status: true } } } },
+      allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, salesReturn: { select: { status: true } } } },
     },
   });
   const ra: ViecMoi[] = [];
   for (const hd of ds) {
     const daThu = hd.allocations.filter((a) => a.payment.status === "hoat-dong").reduce((s, a) => s + Number(a.amount), 0);
-    const cn = congNo(hd.status, hd.total.toString(), daThu);
+    const daGiamTru = hd.returnAllocations.filter((a) => a.salesReturn.status === "SETTLED").reduce((s, a) => s + Number(a.amount), 0);
+    const cn = congNo(hd.status, hd.total.toString(), daThu, { daGiamTru });
     if (cn.conNo <= 0) continue;
     const ngayHan = dateVeNgay(hd.dueDate);
     ra.push({

@@ -62,7 +62,7 @@ export async function bangDieuKhien(nc: NguCanh) {
       }),
       nc.tx.invoice.findMany({
         where: { AND: [dieuKien, { status: "ISSUED" }] },
-        select: { total: true, dueDate: true, status: true, allocations: { select: { amount: true, payment: { select: { status: true } } } } },
+        select: { total: true, dueDate: true, status: true, allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, salesReturn: { select: { status: true } } } } },
       }),
       docCauHinh(nc.tx, "tai_chinh.canh_bao_qua_han_ngay"),
     ]);
@@ -82,7 +82,8 @@ export async function bangDieuKhien(nc: NguCanh) {
 
     const chiTiet = conNoDs.map((hd) => {
       const daThu = hd.allocations.filter((a) => a.payment.status === "hoat-dong").reduce((s, a) => s + Number(a.amount), 0);
-      const cn = congNo(hd.status, hd.total.toString(), daThu);
+      const daGiamTru = hd.returnAllocations.filter((a) => a.salesReturn.status === "SETTLED").reduce((s, a) => s + Number(a.amount), 0);
+      const cn = congNo(hd.status, hd.total.toString(), daThu, { daGiamTru });
       return { conNo: cn.conNo, soNgayQuaHan: soNgayQuaHan(dateVeNgay(hd.dueDate) || null, homNay) };
     });
     congNoKhoi = { ...tongHopTuoiNo(chiTiet), nguongCanhBao };
