@@ -133,8 +133,14 @@ for i in $(seq 1 60); do
   if [ "$i" -eq 60 ]; then echo "❌ /khoe không trả 200 sau 60s — xem: docker compose logs app nginx"; exit 1; fi
 done
 
+PHIEN_BAN=$(node -p "require('./package.json').version" 2>/dev/null || echo "khong ro")
+MA_BAN_DUNG=$(docker compose exec -T app cat .next/BUILD_ID 2>/dev/null || echo "khong doc duoc")
+
 echo ""
-echo "=== Xong. Kiểm tra: ==="
+echo "=== Xong. Đang chạy bản $PHIEN_BAN (mã bản dựng $MA_BAN_DUNG) ==="
+echo "Xem lại bất cứ lúc nào: Quản trị → Cấu hình, hoặc GET /api/v1/phien-ban sau khi đăng nhập."
+echo ""
+echo "=== Kiểm tra: ==="
 docker compose ps
 echo ""
 echo "Sức khỏe: curl -s http://127.0.0.1:8080/khoe"

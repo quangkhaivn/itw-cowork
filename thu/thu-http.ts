@@ -1655,6 +1655,34 @@ async function main() {
   const trangCkMoi = await goi("/kho/chuyen-kho/moi", { cookie: cookieQT });
   dat("Trang lập phiếu chuyển kho dựng được", trangCkMoi.status === 200 && trangCkMoi.text.includes("Từ kho nào sang kho nào"), `status ${trangCkMoi.status}`);
 
+  // --- 7n. Phiên bản đang chạy ---
+  console.log("\n[7n] Phiên bản đang chạy");
+
+  const pbChuaDn = await goi("/api/v1/phien-ban");
+  dat("Chưa đăng nhập thì không xem được phiên bản máy chủ", pbChuaDn.status === 401, `status ${pbChuaDn.status}`);
+
+  const pbHienTai = await goi("/api/v1/phien-ban", { cookie: cookieQT });
+  const pbJson = pbHienTai.json as unknown as { so: string; maBanDung: string | null; dungLuc: string | null };
+  dat("Đăng nhập rồi thì đọc được số phiên bản", pbHienTai.status === 200 && /^\d+\.\d+\.\d+$/.test(pbJson.so), JSON.stringify(pbJson));
+  dat("Có mã bản dựng và thời điểm dựng", Boolean(pbJson.maBanDung) && Boolean(pbJson.dungLuc), JSON.stringify(pbJson));
+
+  const pbGhi = await goi("/api/v1/phien-ban", { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  dat("Không ghi được vào đường dẫn phiên bản", pbGhi.status === 405 || pbGhi.status === 403, `status ${pbGhi.status}`);
+
+  const khoeCongKhai = await goi("/api/khoe");
+  dat(
+    "Trang sức khỏe công khai KHÔNG lộ phiên bản",
+    khoeCongKhai.status === 200 && !JSON.stringify(khoeCongKhai.json).includes(pbJson.so),
+    khoeCongKhai.text,
+  );
+
+  const trangCauHinh = await goi("/quan-tri/cau-hinh", { cookie: cookieQT });
+  dat(
+    "Màn hình Cấu hình hiện phiên bản đang chạy",
+    trangCauHinh.status === 200 && trangCauHinh.text.includes(pbJson.so) && trangCauHinh.text.includes("Mã bản dựng"),
+    `status ${trangCauHinh.status}`,
+  );
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

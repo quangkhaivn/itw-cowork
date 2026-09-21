@@ -2,6 +2,25 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.14.1 — 21/09/2026 — Hiện phiên bản đang chạy
+
+**Chưa triển khai lên máy thật.**
+
+### Thêm
+- **Máy chủ nói được nó đang chạy bản nào**: số phiên bản, **mã bản dựng** và thời điểm dựng, hiện ở *Quản trị → Cấu hình* và ở `GET /api/v1/phien-ban`.
+- `trien-khai.sh` in phiên bản và mã bản dựng ở dòng cuối, ngay sau khi triển khai xong.
+
+### Vì sao
+Ngày 21/09 mất gần một buổi chỉ vì không ai trả lời được câu "máy thật đang chạy bản nào". Dò từ ngoài không ra: proxy đẩy **mọi** đường dẫn chưa đăng nhập về `/dang-nhap`, kể cả đường không tồn tại, nên mã 307 không chứng minh được route nào có thật; `/api/khoe` thì không trả phiên bản.
+
+**Mã bản dựng** mới là thứ trả lời đúng câu hỏi: nó đổi mỗi lần dựng lại, nên nói được *mã đang chạy có đúng là mã vừa gửi lên không*. Hai bản dựng khác nhau vẫn có thể cùng số phiên bản.
+
+### Quyết định đáng ghi
+- Đường dẫn phiên bản **có đăng nhập**, khác `/api/khoe` mở công khai. Phiên bản không phải bí mật, nhưng đây là phần mềm nội bộ — không có lý do gì để người chưa đăng nhập biết máy chủ đang chạy bản nào. Đọc ở máy chủ bằng `node:fs`, không nhúng vào gói JavaScript gửi xuống trình duyệt.
+
+### Kiểm thử
+- Thêm 6 bài HTTP (tổng 414), trong đó có một bài canh đúng điều trên: `/api/khoe` công khai **không** được chứa số phiên bản.
+
 ## 0.14.0 — 21/09/2026 — Chuyển kho nội bộ
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 19 (CK).

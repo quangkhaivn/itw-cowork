@@ -39,6 +39,7 @@ Internet ─▶ nginx máy chủ (:443, Let's Encrypt, /etc/nginx/conf.d/cowork.
    6. seed nền móng (không đè chỉnh sửa của người dùng)
    7. khởi động toàn bộ
 4. Kiểm: `curl -s http://127.0.0.1:8080/khoe` → `{"ok":true,...}`; mở trang đăng nhập qua HTTPS; xem `docker compose logs app --tail 50`.
+5. **Xác nhận đúng bản vừa gửi lên**: dòng cuối của `trien-khai.sh` in số phiên bản và **mã bản dựng**. Xem lại bất cứ lúc nào ở *Quản trị → Cấu hình*, hoặc `GET /api/v1/phien-ban` sau khi đăng nhập. Mã bản dựng đổi mỗi lần dựng, nên nó — chứ không phải số phiên bản — mới nói được mã đang chạy có đúng là mã vừa gửi không.
 
 Script chạy lại nhiều lần được. Hỏng ở bước nào thì sửa nguyên nhân rồi chạy lại từ đầu.
 
@@ -104,7 +105,7 @@ docker compose up -d
 - **Gắn một tệp cấu hình vào container giữ inode cũ** — thay tệp bằng `tar`/`scp` thì container không thấy. `docker-compose.yml` nay gắn cả thư mục `nginx/`.
 - **`./trien-khai.sh: Permission denied` (21/09):** Git trên Windows không theo dõi bit thực thi, nên tệp được commit ở chế độ 644; `git archive` giữ nguyên chế độ đó và `tar` giải nén ra tệp không chạy được. Đã sửa bằng `git update-index --chmod=+x trien-khai.sh`. **Thêm tệp `.sh` mới thì kiểm `git ls-files -s -- '*.sh'` phải thấy `100755`.**
 - **Đưa lệnh cho máy trạm Windows:** người dùng chạy PowerShell 5.1 — không có `&&` (dùng `;`), và **`git archive | ssh` qua đường ống PowerShell làm hỏng tệp tar** vì byte bị chuyển thành văn bản. Dùng `git archive -o <tệp>` rồi `scp` (`scp` dùng `-P` hoa, `ssh` dùng `-p` thường).
-- **Không dò được máy thật đang chạy bản nào từ bên ngoài:** proxy đẩy mọi đường dẫn chưa đăng nhập về `/dang-nhap`, kể cả đường không tồn tại, nên mã 307 không chứng minh route có thật; `/api/khoe` không trả phiên bản.
+- **Không dò được máy thật đang chạy bản nào từ bên ngoài:** proxy đẩy mọi đường dẫn chưa đăng nhập về `/dang-nhap`, kể cả đường không tồn tại, nên mã 307 không chứng minh route có thật; `/api/khoe` cố ý không trả phiên bản. **Từ bản 0.14.1** có `GET /api/v1/phien-ban` (phải đăng nhập) và khối phiên bản ở *Quản trị → Cấu hình*.
 - **Kiểm tệp sao lưu:** không dùng `pg_restore --list | grep -q` dưới `set -o pipefail` — grep thoát sớm làm pg_restore nhận SIGPIPE, báo hỏng ngẫu nhiên. Ghi mục lục ra tệp rồi mới tìm.
 
 ## Không có Docker (máy trạm Windows)
