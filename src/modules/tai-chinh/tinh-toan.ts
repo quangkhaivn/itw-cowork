@@ -50,11 +50,22 @@ export interface CongNoHoaDon {
   tinhTrang: TinhTrangThu;
 }
 
-/** Công nợ của một hóa đơn. Hóa đơn nháp hoặc đã hủy thì không tính vào công nợ. */
-export function congNo(trangThai: string, tong: number | string, daThu: number | string): CongNoHoaDon {
+/**
+ * Công nợ của một hóa đơn. Hóa đơn nháp hoặc đã hủy thì không tính vào công nợ.
+ *
+ * `trangThaiTinh` là trạng thái mà hóa đơn bắt đầu sinh nợ: "ISSUED" với hóa đơn bán ra
+ * (đã phát hành), "RECORDED" với hóa đơn nhà cung cấp (đã ghi nhận). Cùng một công thức
+ * cho cả hai chiều nợ — không có hàm thứ hai để lệch nhau.
+ */
+export function congNo(
+  trangThai: string,
+  tong: number | string,
+  daThu: number | string,
+  trangThaiTinh = "ISSUED",
+): CongNoHoaDon {
   const t = dong(tong);
   const thu = dong(daThu);
-  if (trangThai !== "ISSUED") return { tong: t, daThu: thu, conNo: 0, tinhTrang: "khong-tinh" };
+  if (trangThai !== trangThaiTinh) return { tong: t, daThu: thu, conNo: 0, tinhTrang: "khong-tinh" };
   const con = Math.max(0, t - thu);
   return {
     tong: t,

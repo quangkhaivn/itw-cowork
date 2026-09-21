@@ -163,6 +163,14 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Trạng thái đơn tính lại từ dữ liệu thật của các dòng sau mỗi lần nhận, không tin cờ đang lưu — cùng cách Phase 5 làm với phiếu xuất.
 - `tinhDonMua()` cố ý **không** tính giá vốn: với đơn mua thì đơn giá chính là giá vốn, nên không có biên lợi nhuận để tính.
 
+## 7k. Công nợ phải trả
+
+- Phân hệ: `src/modules/cong-no-tra`. **Không có phần thuần riêng**: nó dùng lại `congNo()`, `nhomTuoiNo()`, `tongHopTuoiNo()` của `tai-chinh/tinh-toan.ts` và `tinhDonMua()` của `mua-hang/tinh-toan.ts`.
+- `congNo()` nhận thêm tham số **trạng thái bắt đầu tính nợ** ("ISSUED" cho hóa đơn bán ra, "RECORDED" cho hóa đơn nhà cung cấp) thay vì nhân đôi công thức. Một chỗ sửa, hai chiều nợ cùng đúng.
+- Nợ phải trả **không lưu**: còn nợ = hóa đơn đã ghi nhận − phân bổ của phiếu chi còn hiệu lực, tính lúc đọc (QĐ-09). Hủy phiếu chi chỉ đổi trạng thái nên nợ tự quay lại, không cần bút toán đảo.
+- **Hạn thanh toán bắt buộc nhập** khi ghi nhận: nó in trên hóa đơn nhà cung cấp. Đây là chỗ khác hóa đơn bán ra — bên bán mình tự đặt hạn theo chính sách, bên mua thì đọc hạn từ chứng từ nhận được (QĐ-38).
+- Dòng hóa đơn giữ `order_item_id`, nên màn hình đối chiếu được ba con số: **đặt** (đơn mua), **nhận** (sổ kho), **đòi** (hóa đơn) — và cảnh báo khi lệch, trước lúc ghi nhận.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

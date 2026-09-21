@@ -43,7 +43,10 @@ export type BieuTuong =
   | "gia-han"
   | "tro-ly"
   | "de-nghi-mua"
-  | "don-mua";
+  | "don-mua"
+  | "hoa-don-mua"
+  | "cong-no-tra"
+  | "phieu-chi";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -146,6 +149,9 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Hóa đơn", href: "/tai-chinh/hoa-don", quyen: "finance.view", bieuTuong: "hoa-don", tuKhoa: "invoice hoa don phat hanh vat" },
       { nhan: "Công nợ", href: "/tai-chinh/cong-no", quyen: "finance.view", bieuTuong: "cong-no", tuKhoa: "cong no phai thu tuoi no qua han receivable" },
       { nhan: "Phiếu thu", href: "/tai-chinh/phieu-thu", quyen: "finance.view", bieuTuong: "phieu-thu", tuKhoa: "payment thu tien chuyen khoan tien mat" },
+      { nhan: "Hóa đơn nhà cung cấp", href: "/tai-chinh/hoa-don-mua", quyen: "finance.view", bieuTuong: "hoa-don-mua", tuKhoa: "supplier bill hoa don mua phai tra" },
+      { nhan: "Công nợ phải trả", href: "/tai-chinh/cong-no-tra", quyen: "finance.view", bieuTuong: "cong-no-tra", tuKhoa: "payable cong no phai tra no nha cung cap" },
+      { nhan: "Phiếu chi", href: "/tai-chinh/phieu-chi", quyen: "finance.view", bieuTuong: "phieu-chi", tuKhoa: "chi tien tra nha cung cap payment out" },
     ],
   },
   {

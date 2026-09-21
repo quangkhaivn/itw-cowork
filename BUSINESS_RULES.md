@@ -327,3 +327,25 @@ Quyền `purchasing.*`; phạm vi theo người đề nghị (đề nghị mua) 
 **Gợi ý mua từ đơn bán**: mở một đơn bán đã xác nhận rồi bấm *Đề nghị mua*, hệ thống liệt kê đúng những dòng kho không đủ hàng để giao và điền sẵn số lượng còn thiếu.
 
 **Chưa làm ở phần này**: hóa đơn nhà cung cấp và công nợ phải trả (`supplier_bills`, `supplier_payments`), trả hàng cho nhà cung cấp, cập nhật giá vốn danh mục theo giá mua thực tế, chuyển kho nội bộ.
+
+## 17. Công nợ phải trả — hóa đơn nhà cung cấp và phiếu chi
+
+Quyền `finance.*`, như công nợ phải thu. Đối xứng với mục 11 và **dùng chung đúng những hàm thuần đó** — `congNo()`, `nhomTuoiNo()`, `tongHopTuoiNo()` — nên hai chiều nợ không bao giờ tính theo hai kiểu khác nhau.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| CT-01 | Số hóa đơn `HM-<năm>-0001`, số phiếu chi `PC-<năm>-0001`, cấp nguyên tử. Hóa đơn lập từ **đơn mua đã gửi nhà cung cấp** (chép nguyên dòng, giữ liên kết từng dòng) hoặc lập tay cho khoản lẻ | [SV] · [CSDL] duy nhất · [TH] |
+| CT-02 | **Một đơn mua chỉ có một hóa đơn còn hiệu lực.** Gọi lập lần hai trả về đúng hóa đơn cũ (`daCoTruoc: true`) | [SV] · [TH] |
+| CT-03 | Hóa đơn sinh ra ở trạng thái Nháp và **chưa tính nợ phải trả**. Ghi nhận mới chốt số tiền, ngày hóa đơn, hạn thanh toán và người ghi nhận | [CSDL] CHECK · [SV] · [TH] |
+| CT-04 | **Hạn thanh toán bắt buộc nhập** khi ghi nhận — nó in trên hóa đơn nhà cung cấp gửi tới, không phải con số hệ thống tự suy ra. Hạn không được trước ngày hóa đơn; không ghi nhận cho ngày ở tương lai | [CSDL] CHECK · [SV] lược đồ · [TH] |
+| CT-05 | Một phiếu chi trừ được cho nhiều hóa đơn. **Tổng phân bổ phải đúng bằng số tiền chi**, và từng hóa đơn không nhận quá phần còn nợ. Chỉ chi cho hóa đơn **đã ghi nhận** của **đúng nhà cung cấp** đó | [CSDL] CHECK (số tiền > 0) · [SV] · [TH] |
+| CT-06 | **Nợ phải trả không lưu thành cột.** Còn nợ = hóa đơn đã ghi nhận − tổng phân bổ của phiếu chi còn hiệu lực (QĐ-09) | [SV] hàm thuần dùng chung · [TH] |
+| CT-07 | Tuổi nợ chia năm nhóm y như phải thu: trong hạn, 1–30, 31–60, 61–90, trên 90 ngày | [SV] hàm thuần dùng chung · [ĐV] · [TH] |
+| CT-08 | Hủy hóa đơn phải ghi lý do, và **chỉ hủy được khi chưa chi đồng nào** | [CSDL] CHECK · [SV] · [TH] |
+| CT-09 | Hủy phiếu chi phải ghi lý do. Phiếu **không bị xóa**, chỉ đổi trạng thái; nợ của hóa đơn quay lại đúng như trước khi chi | [CSDL] CHECK · [SV] · [TH] |
+
+**Đối chiếu ba chiều**: màn hình hóa đơn hiện cạnh nhau *đơn mua đặt bao nhiêu*, *kho đã nhận bao nhiêu*, *hóa đơn đòi bao nhiêu*, và cảnh báo ngay khi lệch — kiểm trước lúc ghi nhận, vì ghi nhận rồi là khóa.
+
+Số tiền trên hóa đơn nhà cung cấp tính bằng đúng `tinhDonMua()` mà đơn mua dùng, nên hai chứng từ không ra hai con số cho cùng một dòng hàng.
+
+**Chưa làm ở phần này**: trả hàng cho nhà cung cấp và giảm trừ công nợ, bù trừ công nợ hai chiều với khách vừa mua vừa bán, dự báo dòng tiền.

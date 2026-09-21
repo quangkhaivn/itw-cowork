@@ -65,6 +65,8 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   purchase_request: "Đề nghị mua",
   purchase_order: "Đơn mua",
   goods_receipt: "Phiếu nhận hàng",
+  supplier_bill: "Hóa đơn nhà cung cấp",
+  supplier_payment: "Phiếu chi",
 };
 
 export const LuocDoLocKiemToan = z.object({

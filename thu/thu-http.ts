@@ -1200,6 +1200,124 @@ async function main() {
   const trangDmMoi = await goi("/mua-hang/don-mua/moi", { cookie: cookieQT });
   dat("Trang lập đơn mua dựng được", trangDmMoi.status === 200 && trangDmMoi.text.includes("Hàng đặt mua"), `status ${trangDmMoi.status}`);
 
+  // --- 7k. Công nợ phải trả: hóa đơn nhà cung cấp và phiếu chi ---
+  console.log("\n[7k] Công nợ phải trả");
+
+  const taoHm = await goi("/api/v1/hoa-don-mua", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { donMuaId: idDm, soHoaDonNcc: `AA/25E-${DAU}` },
+  });
+  dat("CT-01: lập hóa đơn nhà cung cấp, số HM-", taoHm.status === 200 && String(taoHm.json.so).startsWith("HM-"), JSON.stringify(taoHm.json));
+  const idHm = taoHm.json.id as string;
+
+  const taoHmLai = await goi("/api/v1/hoa-don-mua", { phuongThuc: "POST", cookie: cookieQT, than: { donMuaId: idDm } });
+  dat("CT-02: một đơn mua chỉ có một hóa đơn còn hiệu lực", taoHmLai.status === 200 && taoHmLai.json.id === idHm && taoHmLai.json.daCoTruoc === true, JSON.stringify(taoHmLai.json));
+
+  const ctHm = await goi(`/api/v1/hoa-don-mua/${idHm}`, { cookie: cookieQT });
+  const hmJson = ctHm.json as unknown as {
+    hoaDon: { trangThai: string; tongCong: string; conNo: number; tinhTrangTra: string; dong: { daNhan: string | null; lechVoiNhan: number | null }[] };
+    quyen: { ghiNhan: boolean; chiTien: boolean };
+  };
+  dat("Hóa đơn chép đúng số tiền của đơn mua (7,2tr + VAT)", hmJson.hoaDon.tongCong === "7920000", hmJson.hoaDon.tongCong);
+  dat("CT-03: hóa đơn nháp CHƯA tính vào nợ phải trả", hmJson.hoaDon.conNo === 0 && hmJson.hoaDon.tinhTrangTra === "khong-tinh");
+  dat("Đối chiếu ba chiều: hóa đơn biết đã nhận bao nhiêu", hmJson.hoaDon.dong[0].daNhan === "6" && hmJson.hoaDon.dong[0].lechVoiNhan === 0, JSON.stringify(hmJson.hoaDon.dong[0]));
+  dat("Chưa ghi nhận thì chưa chi tiền được", hmJson.quyen.chiTien === false);
+
+  const chiSom = await goi("/api/v1/phieu-chi", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { nhaCungCapId: idNccMh, phuongThuc: "chuyen-khoan", soTien: "1.000.000", phanBo: [{ hoaDonId: idHm, soTien: "1.000.000" }] },
+  });
+  dat("Chi tiền cho hóa đơn chưa ghi nhận bị 409", chiSom.status === 409 && chiSom.json.ma === "hoa-don-chua-ghi-nhan", `status ${chiSom.status}`);
+
+  const ghiThieuHan = await goi(`/api/v1/hoa-don-mua/${idHm}/ghi-nhan`, { phuongThuc: "POST", cookie: cookieQT, than: { ngayHoaDon: homNayVN() } });
+  dat("CT-04: ghi nhận mà không có hạn thanh toán bị 400", ghiThieuHan.status === 400, `status ${ghiThieuHan.status}`);
+
+  const hanSaiHm = await goi(`/api/v1/hoa-don-mua/${idHm}/ghi-nhan`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { ngayHoaDon: congNgay(homNayVN(), -5), hanThanhToan: congNgay(homNayVN(), -10) },
+  });
+  dat("Hạn trước ngày hóa đơn bị 400", hanSaiHm.status === 400, `status ${hanSaiHm.status}`);
+
+  const ghiNhanHm = await goi(`/api/v1/hoa-don-mua/${idHm}/ghi-nhan`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { ngayHoaDon: congNgay(homNayVN(), -20), hanThanhToan: congNgay(homNayVN(), -3) },
+  });
+  dat("CT-03: ghi nhận hóa đơn", ghiNhanHm.status === 200 && ghiNhanHm.json.trangThai === "RECORDED", JSON.stringify(ghiNhanHm.json));
+
+  const ctHm2 = await goi(`/api/v1/hoa-don-mua/${idHm}`, { cookie: cookieQT });
+  const hm2 = ctHm2.json as unknown as { hoaDon: { conNo: number; soNgayQuaHan: number; nhomTuoiNo: string } };
+  dat("Ghi nhận rồi thì nợ phải trả bằng tổng hóa đơn", hm2.hoaDon.conNo === 7_920_000, String(hm2.hoaDon.conNo));
+  dat("CT-07: quá hạn 3 ngày, nhóm tuổi nợ 1–30", hm2.hoaDon.soNgayQuaHan === 3 && hm2.hoaDon.nhomTuoiNo === "1-30", JSON.stringify(hm2.hoaDon));
+
+  const conNoNcc = await goi(`/api/v1/cong-no-tra/${idNccMh}`, { cookie: cookieQT });
+  const dsConNoNcc = conNoNcc.json as unknown as { id: string; conNo: number }[];
+  dat("Hóa đơn hiện trong danh sách còn nợ của nhà cung cấp", Array.isArray(dsConNoNcc) && dsConNoNcc.some((x) => x.id === idHm));
+
+  const chiQua = await goi("/api/v1/phieu-chi", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { nhaCungCapId: idNccMh, phuongThuc: "chuyen-khoan", soTien: "9.000.000", phanBo: [{ hoaDonId: idHm, soTien: "9.000.000" }] },
+  });
+  dat("CT-05: chi quá phần còn nợ bị 409", chiQua.status === 409 && chiQua.json.ma === "chi-vuot-cong-no", `status ${chiQua.status}`);
+
+  const chiLech = await goi("/api/v1/phieu-chi", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { nhaCungCapId: idNccMh, phuongThuc: "tien-mat", soTien: "1.000.000", phanBo: [{ hoaDonId: idHm, soTien: "600.000" }] },
+  });
+  dat("CT-05: tổng phân bổ lệch số tiền chi bị chặn", chiLech.status === 400 || chiLech.status === 409, `status ${chiLech.status}`);
+
+  const chiMotPhan = await goi("/api/v1/phieu-chi", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: {
+      nhaCungCapId: idNccMh,
+      phuongThuc: "chuyen-khoan",
+      soTien: "3.000.000",
+      thamChieu: `UNC ${DAU}`,
+      phanBo: [{ hoaDonId: idHm, soTien: "3.000.000" }],
+    },
+  });
+  dat("CT-05: chi một phần, số phiếu PC-", chiMotPhan.status === 200 && String(chiMotPhan.json.so).startsWith("PC-"), JSON.stringify(chiMotPhan.json));
+  const idPc = chiMotPhan.json.id as string;
+
+  const ctHm3 = await goi(`/api/v1/hoa-don-mua/${idHm}`, { cookie: cookieQT });
+  const hm3 = ctHm3.json as unknown as { hoaDon: { daTra: number; conNo: number; tinhTrangTra: string } };
+  dat("CT-06: nợ trừ đúng phần đã chi", hm3.hoaDon.daTra === 3_000_000 && hm3.hoaDon.conNo === 4_920_000 && hm3.hoaDon.tinhTrangTra === "thu-mot-phan", JSON.stringify(hm3.hoaDon));
+
+  const huyHmKhiDaChi = await goi(`/api/v1/hoa-don-mua/${idHm}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "Thử hủy" } });
+  dat("CT-08: hóa đơn đã chi tiền thì không hủy được", huyHmKhiDaChi.status === 409 && huyHmKhiDaChi.json.ma === "da-co-tien-chi", `status ${huyHmKhiDaChi.status}`);
+
+  const cnTra = await goi("/api/v1/cong-no-tra", { cookie: cookieQT });
+  const cnTraJson = cnTra.json as unknown as { tomTat: { tongConNo: number; tongQuaHan: number }; nhaCungCap: { nhaCungCap: { id: string } }[] };
+  dat("Bảng công nợ phải trả gom đúng nhà cung cấp", cnTra.status === 200 && cnTraJson.nhaCungCap.some((n) => n.nhaCungCap.id === idNccMh), JSON.stringify(cnTraJson.tomTat));
+  dat("Toàn bộ nợ đang quá hạn", cnTraJson.tomTat.tongQuaHan >= 4_920_000, JSON.stringify(cnTraJson.tomTat));
+
+  const huyPcThieuLyDo = await goi(`/api/v1/phieu-chi/${idPc}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "" } });
+  dat("CT-09: hủy phiếu chi phải ghi lý do", huyPcThieuLyDo.status === 400, `status ${huyPcThieuLyDo.status}`);
+  const huyPc = await goi(`/api/v1/phieu-chi/${idPc}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "Chuyển nhầm số tài khoản" } });
+  dat("CT-09: hủy phiếu chi", huyPc.status === 200, JSON.stringify(huyPc.json));
+
+  const ctHm4 = await goi(`/api/v1/hoa-don-mua/${idHm}`, { cookie: cookieQT });
+  const hm4 = ctHm4.json as unknown as { hoaDon: { daTra: number; conNo: number } };
+  dat("CT-09: hủy phiếu chi thì nợ quay lại như trước", hm4.hoaDon.daTra === 0 && hm4.hoaDon.conNo === 7_920_000, JSON.stringify(hm4.hoaDon));
+
+  const nvXemHm = await goi("/api/v1/hoa-don-mua", { cookie: dnNv.cookie });
+  dat("Nhân viên kinh doanh không xem được hóa đơn nhà cung cấp", nvXemHm.status === 403, `status ${nvXemHm.status}`);
+
+  const trangHm = await goi("/tai-chinh/hoa-don-mua?trangThai=tat-ca", { cookie: cookieQT });
+  dat("Trang Hóa đơn nhà cung cấp dựng được", trangHm.status === 200 && trangHm.text.includes(String(taoHm.json.so)), `status ${trangHm.status}`);
+  const trangHmCt = await goi(`/tai-chinh/hoa-don-mua/${idHm}`, { cookie: cookieQT });
+  dat("Trang chi tiết hóa đơn nhà cung cấp dựng được", trangHmCt.status === 200 && trangHmCt.text.includes("Nội dung hóa đơn"), `status ${trangHmCt.status}`);
+  const trangCnTra = await goi("/tai-chinh/cong-no-tra", { cookie: cookieQT });
+  dat("Trang Công nợ phải trả dựng được", trangCnTra.status === 200 && trangCnTra.text.includes("Tuổi nợ"), `status ${trangCnTra.status}`);
+  const trangPc = await goi("/tai-chinh/phieu-chi", { cookie: cookieQT });
+  dat("Trang Phiếu chi dựng được", trangPc.status === 200 && trangPc.text.includes(String(chiMotPhan.json.so)), `status ${trangPc.status}`);
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

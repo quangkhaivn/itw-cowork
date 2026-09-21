@@ -2,6 +2,28 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.12.0 — 21/09/2026 — Công nợ phải trả
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 17 (CT).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.11.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **Hóa đơn nhà cung cấp** (`HM-2026-0001`): lập từ đơn mua đã gửi (chép dòng, giữ liên kết tới dòng đơn) hoặc nhập tay cho khoản lẻ. Vòng đời Nháp → Đã ghi nhận → (Đã hủy).
+- **Phiếu chi** (`PC-2026-0001`): một phiếu trừ cho nhiều hóa đơn; hủy phiếu giữ lại bản ghi kèm lý do và trả nợ về đúng như trước.
+- **Công nợ phải trả** theo nhà cung cấp kèm bảng tuổi nợ — **dùng chung đúng hàm tính** của công nợ phải thu, nên hai chiều nợ không lệch cách tính.
+- **Đối chiếu ba chiều** ngay trên hóa đơn: đơn mua đặt bao nhiêu, kho đã nhận bao nhiêu, hóa đơn đòi bao nhiêu — cảnh báo khi lệch, trước lúc ghi nhận.
+- 4 bảng CSDL, 8 route API, 4 màn hình (hóa đơn nhà cung cấp: danh sách / chi tiết; công nợ phải trả; phiếu chi), nút *Ghi hóa đơn nhà cung cấp* trên trang đơn mua.
+
+### Sửa
+- `congNo()` nhận thêm tham số trạng thái tính nợ thay vì gắn cứng "ISSUED", để hóa đơn nhà cung cấp ("RECORDED") dùng lại đúng công thức đó. Không viết hàm thứ hai để hai chiều nợ trôi khỏi nhau.
+
+### Quyết định đáng ghi
+- **Hạn thanh toán bắt buộc nhập**, không suy từ ngưỡng nào của hệ thống: hạn do nhà cung cấp ghi trên hóa đơn. Cũng nhờ vậy phần này không mở thêm một mục chờ Giám đốc đặt ngưỡng (QĐ-38).
+
+### Kiểm thử
+- 241 bài đơn vị, 629 bài tích hợp (thêm `thu:cong-no-tra` 47 bài), 342 bài HTTP đầu-cuối — tất cả đạt.
+- Diễn tập cài mới trên CSDL rỗng: 12 migration chạy sạch, RLS phủ đủ mọi bảng có `tenant_id`.
+
 ## 0.11.0 — 21/09/2026 — Mua hàng (phần để lại từ Phase 5)
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 16 (MH).

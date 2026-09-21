@@ -98,6 +98,11 @@ model Tenant {
   purchaseOrderItems PurchaseOrderItem[]
   goodsReceipts      GoodsReceipt[]
   goodsReceiptItems  GoodsReceiptItem[]
+  // Công nợ phải trả
+  supplierBills      SupplierBill[]
+  supplierBillItems  SupplierBillItem[]
+  supplierPayments   SupplierPayment[]
+  supplierPayAllocs  SupplierPaymentAllocation[]
 
   @@map("tenants")
 }
@@ -194,6 +199,7 @@ model User {
   // Mua hàng
   purchaseRequests    PurchaseRequest[]     @relation("DeNghiMuaCua")
   ownedPurchaseOrders PurchaseOrder[]       @relation("DonMuaPhuTrach")
+  ownedSupplierBills  SupplierBill[]        @relation("HoaDonMuaPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -760,6 +766,9 @@ model Supplier {
   purchaseRequestItems PurchaseRequestItem[]
   purchaseOrders       PurchaseOrder[]
 
+  supplierBills    SupplierBill[]
+  supplierPayments SupplierPayment[]
+
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
   @@index([tenantId, status])
@@ -819,6 +828,8 @@ model Product {
 
   purchaseRequestItems PurchaseRequestItem[]
   purchaseOrderItems   PurchaseOrderItem[]
+
+  supplierBillItems SupplierBillItem[]
 
   @@unique([tenantId, skuNormalized])
   @@index([tenantId, status])
@@ -2046,6 +2057,8 @@ model PurchaseOrder {
   items     PurchaseOrderItem[]
   receipts  GoodsReceipt[]
 
+  supplierBills SupplierBill[]
+
   @@unique([tenantId, number])
   @@index([tenantId, status, expectedDate])
   @@index([tenantId, supplierId])
@@ -2076,6 +2089,8 @@ model PurchaseOrderItem {
   requestItem   PurchaseRequestItem? @relation(fields: [requestItemId], references: [id], onDelete: SetNull)
   product       Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
   receiptItems  GoodsReceiptItem[]
+
+  supplierBillItems SupplierBillItem[]
 
   @@unique([purchaseOrderId, lineNo])
   @@index([tenantId, productId])
@@ -2124,4 +2139,126 @@ model GoodsReceiptItem {
 
   @@index([tenantId, orderItemId])
   @@map("goods_receipt_items")
+}
+
+// ---------------------------------------------------------------------------
+// Công nợ phải trả: hóa đơn nhà cung cấp và phiếu chi.
+// Đối xứng với Phase 7 (hóa đơn bán ra và phiếu thu), và cũng KHÔNG lưu công nợ thành
+// cột — còn phải trả = hóa đơn đã ghi nhận trừ tiền đã chi (QĐ-09).
+// ---------------------------------------------------------------------------
+
+/// Hóa đơn nhà cung cấp gửi cho mình. Số HM-2026-0001 (số nội bộ, khác số của nhà cung cấp).
+model SupplierBill {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  number          String    @db.VarChar(30)
+  supplierId      String    @map("supplier_id") @db.Uuid
+  purchaseOrderId String?   @map("purchase_order_id") @db.Uuid
+  ownerId         String    @map("owner_id") @db.Uuid
+  /// DRAFT | RECORDED | CANCELLED — "đã trả đủ hay chưa" TÍNH từ phân bổ, không lưu.
+  status          String    @default("DRAFT") @db.VarChar(20)
+  /// Số hóa đơn do nhà cung cấp phát hành — để đối chiếu và tra thuế.
+  supplierDocNo   String?   @map("supplier_doc_no") @db.VarChar(100)
+  billDate        DateTime? @map("bill_date") @db.Date
+  dueDate         DateTime? @map("due_date") @db.Date
+  notes           String?   @db.Text
+  subtotal        Decimal   @default(0) @db.Decimal(18, 2)
+  discountTotal   Decimal   @default(0) @map("discount_total") @db.Decimal(18, 2)
+  vatTotal        Decimal   @default(0) @map("vat_total") @db.Decimal(18, 2)
+  total           Decimal   @default(0) @db.Decimal(18, 2)
+  recordedAt      DateTime? @map("recorded_at") @db.Timestamptz(6)
+  recordedBy      String?   @map("recorded_by") @db.Uuid
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason    String?   @map("cancel_reason") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.Uuid
+  updatedBy       String?   @map("updated_by") @db.Uuid
+
+  tenant        Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier      Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrder PurchaseOrder?              @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  owner         User                        @relation("HoaDonMuaPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  items         SupplierBillItem[]
+  allocations   SupplierPaymentAllocation[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, dueDate])
+  @@index([tenantId, supplierId])
+  @@map("supplier_bills")
+}
+
+/// Dòng hóa đơn nhà cung cấp — chép từ dòng đơn mua lúc lập, giữ liên kết để truy ngược.
+model SupplierBillItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  billId      String   @map("bill_id") @db.Uuid
+  lineNo      Int      @map("line_no")
+  orderItemId String?  @map("order_item_id") @db.Uuid
+  productId   String?  @map("product_id") @db.Uuid
+  sku         String?  @db.VarChar(64)
+  name        String   @db.VarChar(500)
+  quantity    Decimal  @default(1) @db.Decimal(18, 3)
+  unit        String?  @db.VarChar(50)
+  unitPrice   Decimal  @default(0) @map("unit_price") @db.Decimal(18, 2)
+  discountPct Decimal  @default(0) @map("discount_pct") @db.Decimal(7, 4)
+  vatRate     Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
+  lineTotal   Decimal  @default(0) @map("line_total") @db.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bill      SupplierBill       @relation(fields: [billId], references: [id], onDelete: Cascade)
+  orderItem PurchaseOrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  product   Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([billId, lineNo])
+  @@index([tenantId, productId])
+  @@map("supplier_bill_items")
+}
+
+/// Phiếu chi trả nhà cung cấp. Số PC-2026-0001. Một phiếu trừ được nhiều hóa đơn.
+model SupplierPayment {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  number       String    @db.VarChar(30)
+  supplierId   String    @map("supplier_id") @db.Uuid
+  /// tien-mat | chuyen-khoan | the | bu-tru
+  method       String    @db.VarChar(20)
+  amount       Decimal   @db.Decimal(18, 2)
+  paidAt       DateTime  @map("paid_at") @db.Date
+  reference    String?   @db.VarChar(255)
+  note         String?   @db.Text
+  /// hoat-dong | huy — hủy thì giữ lại bản ghi kèm lý do, không xóa.
+  status       String    @default("hoat-dong") @db.VarChar(20)
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?   @map("cancel_reason") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+
+  tenant      Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier    Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  allocations SupplierPaymentAllocation[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, supplierId, paidAt])
+  @@map("supplier_payments")
+}
+
+/// Phân bổ một phiếu chi cho một hóa đơn nhà cung cấp. Tổng phân bổ = số tiền đã chi.
+model SupplierPaymentAllocation {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  paymentId String   @map("payment_id") @db.Uuid
+  billId    String   @map("bill_id") @db.Uuid
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payment SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill    SupplierBill    @relation(fields: [billId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, billId])
+  @@index([tenantId, billId])
+  @@map("supplier_payment_allocations")
 }

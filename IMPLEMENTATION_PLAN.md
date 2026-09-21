@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 21/09/2026 (sau Mua hàng).
+> Cập nhật lần cuối: 21/09/2026 (sau Công nợ phải trả).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -16,7 +16,7 @@ Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt
 | 4 | Báo giá: phiên bản, biên lợi nhuận, duyệt theo ngưỡng, bản in PDF, hồ sơ công ty | P0 | **Xong trên máy phát triển** 20/09 (bản 0.5.0) — chưa triển khai. Chuyển đơn để Phase 5 |
 | 5 | Đơn hàng, kho, serial, mua hàng | P1 | **Xong trên máy phát triển**: đơn hàng và kho 20/09 (0.6.0), mua hàng 21/09 (0.11.0) — chưa triển khai |
 | 6 | Dự án, phiếu hỗ trợ, bảo hành, bảo trì, gia hạn | P2 | **Xong trên máy phát triển** 20/09 (bản 0.7.0) — chưa triển khai. Bảo trì định kỳ và gia hạn để Phase 8 |
-| 7 | Tài chính quản trị (hóa đơn, công nợ, thu tiền) + Bảng điều hành CEO | P1/P2 | **Xong trên máy phát triển** 20/09 (bản 0.8.0) — chưa triển khai. Phần chi và công nợ phải trả để sau |
+| 7 | Tài chính quản trị (hóa đơn, công nợ hai chiều, thu chi) + Bảng điều hành CEO | P1/P2 | **Xong trên máy phát triển**: phải thu 20/09 (0.8.0), phải trả 21/09 (0.12.0) — chưa triển khai |
 | 8 | Tự động hóa, "Việc hôm nay", nhắc việc, chuông thông báo, bảo trì định kỳ / gia hạn | P2 | **Xong trên máy phát triển** 21/09 (bản 0.9.0) — chưa triển khai |
 | 9 | AI | P3 | **Xong trên máy phát triển** 21/09 (bản 0.10.0) — chưa triển khai, và **chưa có khóa API** (`VD-109`) |
 
@@ -154,13 +154,20 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - [ ] Triển khai máy thật (cùng đợt với 0.3.0 → 0.11.0 — `VD-101`)
 - **Chưa làm có chủ đích**: hóa đơn nhà cung cấp và công nợ phải trả, trả hàng cho nhà cung cấp, cập nhật giá vốn danh mục theo giá mua thực tế, chuyển kho nội bộ.
 
+## 4j. Công nợ phải trả (xong trên máy phát triển)
+
+- [x] CSDL 4 bảng + CHECK · [x] service + 8 route · [x] 4 màn hình · [x] kiểm thử (241 đơn vị, 629 tích hợp, 342 HTTP) · [x] diễn tập cài mới · [x] soát giao diện
+- [ ] Triển khai máy thật (cùng đợt với 0.3.0 → 0.12.0 — `VD-101`)
+- **Không cần Giám đốc đặt thêm ngưỡng nào**: hạn thanh toán đọc từ hóa đơn nhà cung cấp (QĐ-38).
+- **Chưa làm có chủ đích**: trả hàng cho nhà cung cấp và giảm trừ công nợ, bù trừ công nợ hai chiều, dự báo dòng tiền.
+
 ## 5. Sau Phase 9 — việc còn lại
 
 Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc phase nào, xếp theo thứ tự nên làm:
 
 1. **Triển khai 0.3.0 → 0.10.0 lên máy thật** (`VD-101`) — đang chờ Giám đốc cho phép. Đây là việc chặn mọi thứ khác: tám phase đã xong vẫn chưa ai dùng được.
 2. **Khai dữ liệu nền và các ngưỡng** (`VD-104` → `VD-109`): hồ sơ công ty, kho và tồn đầu kỳ, ngưỡng biên lợi nhuận, ngưỡng SLA, số ngày công nợ, giờ quét nhắc việc, khóa API.
-3. **Phần cố ý để lại** — ~~mua hàng~~ **đã làm 21/09** (bản 0.11.0, xem mục 4i). Còn: phiếu chi và công nợ phải trả nhà cung cấp, trả hàng / đổi máy, tệp đính kèm, gửi nhắc ra ngoài qua email hoặc Zalo, chuyển kho nội bộ.
+3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0, mục 4i) và ~~công nợ phải trả~~ (0.12.0, mục 4j) **đã làm 21/09**. Còn: trả hàng / đổi máy và giảm trừ công nợ, tệp đính kèm, gửi nhắc ra ngoài qua email hoặc Zalo, chuyển kho nội bộ, bù trừ công nợ hai chiều, dự báo dòng tiền.
 
 ## 6. Câu hỏi chờ Giám đốc
 

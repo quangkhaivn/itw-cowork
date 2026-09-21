@@ -56,6 +56,10 @@ const DUONG_VE: Record<string, string> = {
   // Mua hàng
   "de-nghi-mua": "M9 2h6a2 2 0 0 1 2 2v1h2a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2V4a2 2 0 0 1 2-2zM9 13h6M9 17h4",
   "don-mua": "M3 3h2l2.4 12h10.2L20 7H6M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2M18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2",
+  // Công nợ phải trả
+  "hoa-don-mua": "M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM14 2v6h6M8 17h8M8 13l3 3 5-5",
+  "cong-no-tra": "M3 5h18v14H3zM3 10h18M7 15h4M17 13l-3 3 3 3",
+  "phieu-chi": "M12 1v22M7 17.5c0 1.9 2.2 3 5 3s5-1.1 5-3-2.2-3-5-3-5-1.1-5-3 2.2-3 5-3 5 1.1 5 3",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
 };
 

@@ -4,11 +4,13 @@ import DauTrang from "@/components/ui/DauTrang";
 import TrongRong from "@/components/ui/TrongRong";
 import { taoNguCanh } from "@/lib/api";
 import { LoiKhongTimThay } from "@/lib/loi";
+import { coQuyen } from "@/lib/phan-quyen";
 import { dinhDangNgay, dinhDangPhanTram, dinhDangTien } from "@/lib/dinh-dang";
 import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { banDoTenDuLieuGoc, homNayVN } from "@/modules/crm/chung";
 import { chiTietDonMua } from "@/modules/mua-hang/service";
 import { LOP_TRANG_THAI_DON_MUA, NHAN_TRANG_THAI_DON_MUA } from "@/modules/mua-hang/tinh-toan";
+import GhiHoaDonNhaCungCap from "./GhiHoaDonNhaCungCap";
 import TacVuDonMua from "./TacVuDonMua";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +66,9 @@ export default async function TrangChiTietDonMua({
               <Link className="nut" href={`/mua-hang/don-mua/${o.id}/sua`}>
                 Sửa
               </Link>
+            )}
+            {coQuyen(nd.hoSo, "finance.create") && o.trangThai !== "DRAFT" && o.trangThai !== "CANCELLED" && (
+              <GhiHoaDonNhaCungCap donMuaId={o.id} />
             )}
             <TacVuDonMua
               id={o.id}
