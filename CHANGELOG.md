@@ -2,6 +2,26 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.14.0 — 21/09/2026 — Chuyển kho nội bộ
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 19 (CK).
+**Chưa triển khai lên máy thật** — đợt trước (0.3.0 → 0.13.0) đã lên ngày 21/09.
+
+### Thêm
+- **Phiếu chuyển kho** (`CK-2026-0001`): điều hàng giữa hai kho. Vòng đời Nháp → Đang trên đường → Đã nhận, hoặc Đã hủy.
+- **Hàng đang trên đường được nói thẳng**: xuất khỏi kho nguồn thì tồn nguồn giảm ngay, tồn đích chưa tăng, và màn hình ghi rõ đang có bao nhiêu hàng chưa tới nơi. Không cho tồn nhảy tức thì giữa hai kho.
+- **Nhận thiếu phải ghi lý do**, kể cả nhận 0. Phiếu giữ lại số xuất, số nhận và lý do chênh lệch.
+- **Sê-ri có trạng thái `dang-chuyen`**: máy đang trên đường không thuộc kho nào — nói nó còn ở kho nguồn hay đã ở kho đích đều là nói sai.
+- 2 bảng CSDL + 1 cột trên `serial_numbers`, 5 route API, 3 màn hình.
+
+### Quyết định đáng ghi
+- **Hai bước thay vì một** (QĐ-43): gộp lại thì khi hàng thiếu lúc tới nơi không còn chỗ nào để ghi, và tồn hai kho cùng đúng ở một thời điểm mà thực tế hàng đang nằm trên xe.
+
+### Kiểm thử
+- 285 bài đơn vị, 742 bài tích hợp (thêm `thu:chuyen-kho` 40 bài), 408 bài HTTP đầu-cuối — tất cả đạt.
+- Diễn tập cài mới trên CSDL rỗng: 14 migration chạy sạch, RLS phủ đủ mọi bảng có `tenant_id`.
+- Đối soát kho chạy lại khi hàng đang trên đường và sau khi nhận thiếu — vẫn khớp.
+
 ## 0.13.0 — 21/09/2026 — Trả hàng và đổi máy
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 18 (TH).

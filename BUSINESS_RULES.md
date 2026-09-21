@@ -387,3 +387,28 @@ Hàng đi qua **đúng** `ghiSoKho()` mà bán hàng và mua hàng dùng, nên `
 | Chốt tiền (giảm trừ công nợ) | `finance.approve` |
 
 **Chưa làm ở phần này**: hoàn tiền mặt cho khách khi không còn hóa đơn nào để giảm trừ, đòi lại tiền từ nhà cung cấp khi không còn hóa đơn nợ, chênh lệch giá khi đổi máy khác model, phiếu bảo hành cho chính cái máy đổi mới (bảo hành cũ được chuyển sang, không sinh phiếu mới).
+
+## 19. Chuyển kho nội bộ
+
+Điều hàng giữa hai kho. Quyền `inventory.create` để lập phiếu, `inventory.update` để xuất và nhận — không có mã quyền mới.
+
+Vòng đời **hai bước**, vì hàng đi xe giữa hai kho:
+
+```
+Nháp → Đang trên đường → Đã nhận
+```
+
+Giữa hai bước hàng **không thuộc kho nào**. Đó là sự thật, và màn hình nói thẳng như vậy thay vì cho tồn nhảy tức thì từ kho này sang kho kia. Gộp một bước thì khi hàng thiếu lúc tới nơi sẽ không còn chỗ nào để ghi (QĐ-43).
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| CK-01 | Số phiếu `CK-<năm>-0001`, cấp nguyên tử. **Kho nhận phải khác kho xuất** — chuyển vào chính nó chỉ sinh hai bút toán triệt tiêu nhau mà không ai hiểu vì sao | [CSDL] CHECK · [SV] · [TH] |
+| CK-02 | **Mọi phiếu phải ghi rõ vì sao chuyển.** Kho đóng cửa thì không nhận hàng vào được | [CSDL] CHECK · [SV] · [TH] |
+| CK-03 | **Xuất** là lúc hàng thật sự rời kho nguồn: tồn nguồn giảm ngay, tồn đích **chưa** tăng. Xuất rồi thì khóa sửa và khóa hủy | [CSDL] CHECK · [SV] · [TH] |
+| CK-04 | **Nhận** không quá số đã xuất. Nhận thiếu — kể cả nhận 0 — thì **bắt buộc ghi lý do**: hàng đã rời kho nguồn mà không tới kho đích thì phải có người trả lời câu hỏi "đi đâu". Bỏ trống phần khai nghĩa là nhận đủ | [CSDL] CHECK · [SV] hàm thuần · [ĐV] · [TH] |
+| CK-05 | Sê-ri phải đang nằm ở **đúng kho nguồn**. Lúc xuất chuyển sang trạng thái `dang-chuyen` và **không thuộc kho nào**; nhận đủ thì về kho đích. Nhận thiếu thì sê-ri giữ nguyên `dang-chuyen` để còn truy được | [CSDL] CHECK vị trí sê-ri · [SV] · [TH] |
+| CK-06 | **Chỉ hủy được phiếu còn nháp.** Hàng đã rời kho thì phải nhận về kho đích rồi lập phiếu chuyển ngược, hoặc điều chỉnh tồn kèm lý do — cùng lý lẽ QĐ-36 và TH-09 | [SV] · [TH] |
+
+Hàng đi qua **đúng** `ghiSoKho()` mà bán hàng, mua hàng và trả hàng dùng, nên `doiSoatKho()` vẫn khớp — kể cả khi hàng đang trên đường, và kể cả khi nhận thiếu (sổ ghi một bút toán xuất và một bút toán nhập nhỏ hơn; số dư vẫn cộng đúng bằng sổ cái).
+
+**Chưa làm ở phần này**: phiếu chuyển kho in ra giấy cho lái xe cầm, và tự động ghi hao hụt phần thiếu vào một tài khoản chi phí.

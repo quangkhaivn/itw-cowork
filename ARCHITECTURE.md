@@ -180,6 +180,14 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Sê-ri khai lúc lập phiếu **chưa** đụng bảng `serial_numbers`; mới chỉ là ý định, ghi kèm dòng phiếu. Chỉ bước xác nhận mới kiểm chặt và đổi trạng thái sê-ri — vì trước đó hàng chưa thật sự nằm trong tay mình (TH-04, TH-05).
 - `congNo()` trả `daThu` và `daGiamTru` **tách nhau**. Cộng gộp thì màn hình nói nhầm là khách đã trả tiền, trong khi thực tế nợ được xóa bằng hàng (QĐ-42).
 
+## 7m. Chuyển kho nội bộ
+
+- Phân hệ: `src/modules/chuyen-kho`. Phần thuần giữ vòng đời, tổng kết xuất/nhận và luật "thiếu thì phải có lý do"; hàng đi qua **đúng** `ghiSoKho()` như mọi phân hệ khác.
+- **Hai bước, và giữa hai bước hàng không thuộc kho nào** (QĐ-43). Hệ quả cố ý: tồn tổng của công ty thấp hơn thực tế đúng bằng số đang trên đường. Màn hình danh sách nêu con số đó ngay ô đầu tiên, và trang chi tiết nói rõ khi phiếu đang ở `IN_TRANSIT`.
+- **Không dựng kho ảo "đang chuyển"** để giữ cho tồn tổng không đổi. Kho ảo là một cái kho không có thật trong danh sách kho của Giám đốc, và mọi báo cáo sau này phải nhớ loại nó ra.
+- Sê-ri có thêm trạng thái `dang-chuyen` với ràng buộc `warehouse_id IS NULL`. Nới CHECK cũ thay vì lách bằng cách gán sẵn kho đích lúc xuất — gán sẵn nghĩa là CSDL nói máy đã ở kho đích trong khi nó đang trên xe.
+- Nhận thiếu **không** sinh bút toán bù. Sổ kho đã ghi một bút toán xuất và một bút toán nhập nhỏ hơn, nên số dư vẫn cộng đúng bằng sổ cái; cái hệ thống đòi là **lý do**, không phải một con số cân đối giả.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

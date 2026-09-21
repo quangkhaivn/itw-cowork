@@ -110,6 +110,9 @@ model Tenant {
   purchaseReturns      PurchaseReturn[]
   purchaseReturnItems  PurchaseReturnItem[]
   purchaseReturnAllocs PurchaseReturnAllocation[]
+  // Chuyển kho nội bộ
+  stockTransfers       StockTransfer[]
+  stockTransferItems   StockTransferItem[]
 
   @@map("tenants")
 }
@@ -209,6 +212,7 @@ model User {
   ownedSupplierBills   SupplierBill[]        @relation("HoaDonMuaPhuTrach")
   ownedSalesReturns    SalesReturn[]         @relation("TraHangBanPhuTrach")
   ownedPurchaseReturns PurchaseReturn[]      @relation("TraHangMuaPhuTrach")
+  ownedStockTransfers  StockTransfer[]       @relation("ChuyenKhoPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -844,6 +848,7 @@ model Product {
   salesReturnItems        SalesReturnItem[]    @relation("TraHangBanSanPham")
   salesReturnReplacements SalesReturnItem[]    @relation("TraHangBanHangThayThe")
   purchaseReturnItems     PurchaseReturnItem[] @relation("TraHangMuaSanPham")
+  stockTransferItems      StockTransferItem[]  @relation("ChuyenKhoSanPham")
 
   @@unique([tenantId, skuNormalized])
   @@index([tenantId, status])
@@ -1119,6 +1124,8 @@ model Warehouse {
   goodsReceipts   GoodsReceipt[]
   salesReturns    SalesReturn[]
   purchaseReturns PurchaseReturn[]
+  chuyenKhoDi     StockTransfer[]  @relation("ChuyenKhoNguon")
+  chuyenKhoDen    StockTransfer[]  @relation("ChuyenKhoDich")
 
   @@unique([tenantId, code])
   @@index([tenantId, status])
@@ -1330,30 +1337,33 @@ model DeliveryItem {
 
 /// Số sê-ri của hàng quản lý theo máy. Duy nhất theo (tenant, sản phẩm, sê-ri).
 model SerialNumber {
-  id                String   @id @default(uuid()) @db.Uuid
-  tenantId          String   @map("tenant_id") @db.Uuid
-  productId         String   @map("product_id") @db.Uuid
-  serial            String   @db.VarChar(100)
-  warehouseId       String?  @map("warehouse_id") @db.Uuid
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  productId           String   @map("product_id") @db.Uuid
+  serial              String   @db.VarChar(100)
+  warehouseId         String?  @map("warehouse_id") @db.Uuid
   /// trong-kho | da-ban | tra-lai
-  status            String   @default("trong-kho") @db.VarChar(20)
-  salesOrderItemId  String?  @map("sales_order_item_id") @db.Uuid
-  deliveryId        String?  @map("delivery_id") @db.Uuid
+  status              String   @default("trong-kho") @db.VarChar(20)
+  salesOrderItemId    String?  @map("sales_order_item_id") @db.Uuid
+  deliveryId          String?  @map("delivery_id") @db.Uuid
   /// Dòng phiếu trả hàng đã nhận lại máy này (TH-05).
-  salesReturnItemId String?  @map("sales_return_item_id") @db.Uuid
-  note              String?  @db.Text
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy         String?  @map("created_by") @db.Uuid
+  salesReturnItemId   String?  @map("sales_return_item_id") @db.Uuid
+  /// Dòng phiếu chuyển kho đang mang máy này đi (CK-05).
+  stockTransferItemId String?  @map("stock_transfer_item_id") @db.Uuid
+  note                String?  @db.Text
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?  @map("created_by") @db.Uuid
 
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
-  warehouse       Warehouse?       @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
-  salesOrderItem  SalesOrderItem?  @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
-  delivery        Delivery?        @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
-  salesReturnItem SalesReturnItem? @relation(fields: [salesReturnItemId], references: [id], onDelete: SetNull)
-  warranty        Warranty?
-  tickets         SupportTicket[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse         Warehouse?         @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  salesOrderItem    SalesOrderItem?    @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
+  delivery          Delivery?          @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  salesReturnItem   SalesReturnItem?   @relation(fields: [salesReturnItemId], references: [id], onDelete: SetNull)
+  stockTransferItem StockTransferItem? @relation(fields: [stockTransferItemId], references: [id], onDelete: SetNull)
+  warranty          Warranty?
+  tickets           SupportTicket[]
 
   @@unique([tenantId, productId, serial])
   @@index([tenantId, status])
@@ -2486,4 +2496,72 @@ model PurchaseReturnAllocation {
   @@unique([returnId, billId])
   @@index([tenantId, billId])
   @@map("purchase_return_allocations")
+}
+
+// ---------------------------------------------------------------------------
+// Chuyển kho nội bộ.
+// Hai bước vì hàng đi xe giữa hai kho: xuất khỏi kho nguồn trước, nhận vào kho
+// đích sau. Giữa hai bước hàng KHÔNG nằm ở kho nào — đó là sự thật, và màn hình
+// nói thẳng "đang trên đường" thay vì cho tồn nhảy tức thì từ kho này sang kho kia.
+// ---------------------------------------------------------------------------
+
+/// Phiếu chuyển kho nội bộ. Số CK-2026-0001.
+model StockTransfer {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  number          String    @db.VarChar(30)
+  fromWarehouseId String    @map("from_warehouse_id") @db.Uuid
+  toWarehouseId   String    @map("to_warehouse_id") @db.Uuid
+  ownerId         String    @map("owner_id") @db.Uuid
+  /// DRAFT | IN_TRANSIT (đã xuất, đang trên đường) | RECEIVED (đã nhận đủ hoặc nhận kèm chênh lệch) | CANCELLED
+  status          String    @default("DRAFT") @db.VarChar(20)
+  transferDate    DateTime  @map("transfer_date") @db.Date
+  reason          String    @db.Text
+  notes           String?   @db.Text
+  shippedAt       DateTime? @map("shipped_at") @db.Timestamptz(6)
+  shippedBy       String?   @map("shipped_by") @db.Uuid
+  receivedAt      DateTime? @map("received_at") @db.Timestamptz(6)
+  receivedBy      String?   @map("received_by") @db.Uuid
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason    String?   @map("cancel_reason") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.Uuid
+  updatedBy       String?   @map("updated_by") @db.Uuid
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromWarehouse Warehouse           @relation("ChuyenKhoNguon", fields: [fromWarehouseId], references: [id], onDelete: Restrict)
+  toWarehouse   Warehouse           @relation("ChuyenKhoDich", fields: [toWarehouseId], references: [id], onDelete: Restrict)
+  owner         User                @relation("ChuyenKhoPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  items         StockTransferItem[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, transferDate])
+  @@index([tenantId, fromWarehouseId])
+  @@map("stock_transfers")
+}
+
+/// Dòng hàng chuyển kho. `receivedQty` nhỏ hơn `quantity` nghĩa là thiếu dọc đường — phải ghi lý do.
+model StockTransferItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  transferId  String   @map("transfer_id") @db.Uuid
+  lineNo      Int      @map("line_no")
+  productId   String   @map("product_id") @db.Uuid
+  sku         String?  @db.VarChar(64)
+  name        String   @db.VarChar(500)
+  quantity    Decimal  @db.Decimal(18, 3)
+  receivedQty Decimal  @default(0) @map("received_qty") @db.Decimal(18, 3)
+  unit        String?  @db.VarChar(50)
+  note        String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transfer StockTransfer  @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product  Product        @relation("ChuyenKhoSanPham", fields: [productId], references: [id], onDelete: Restrict)
+  serials  SerialNumber[]
+
+  @@unique([transferId, lineNo])
+  @@index([tenantId, productId])
+  @@map("stock_transfer_items")
 }

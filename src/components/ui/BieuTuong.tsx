@@ -62,6 +62,7 @@ const DUONG_VE: Record<string, string> = {
   "phieu-chi": "M12 1v22M7 17.5c0 1.9 2.2 3 5 3s5-1.1 5-3-2.2-3-5-3-5-1.1-5-3 2.2-3 5-3 5 1.1 5 3",
   "khach-tra": "M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4",
   "tra-ncc": "m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h4",
+  "chuyen-kho": "M4 7h13l-3-3M20 17H7l3 3",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
 };
 

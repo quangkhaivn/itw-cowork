@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 21/09/2026 (sau khi 0.13.0 lên máy thật).
+> Cập nhật lần cuối: 21/09/2026 (sau Chuyển kho nội bộ).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -168,13 +168,20 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - **Không cần Giám đốc đặt thêm ngưỡng nào.** Một chính sách đã chốt thay Giám đốc và cần xác nhận lại: đổi máy giữ nguyên mốc hết hạn bảo hành (QĐ-40) — câu hỏi Q13.
 - **Chưa làm có chủ đích**: hoàn tiền mặt cho khách, đòi lại tiền từ nhà cung cấp, chênh lệch giá khi đổi sang máy khác model.
 
+## 4l. Chuyển kho nội bộ (xong trên máy phát triển)
+
+- [x] CSDL 2 bảng + 9 CHECK + cột sê-ri · [x] service + 5 route · [x] 3 màn hình · [x] kiểm thử (285 đơn vị, 742 tích hợp, 408 HTTP) · [x] diễn tập cài mới 14 migration · [x] soát giao diện
+- [ ] Triển khai máy thật (bản 0.14.0 — đợt trước đã lên 21/09)
+- **Chỉ dùng được khi có từ hai kho trở lên.** Màn hình lập phiếu nói thẳng điều đó nếu mới khai một kho — liên quan `VD-105`.
+- **Chưa làm có chủ đích**: phiếu in ra giấy cho lái xe, và tự ghi hao hụt phần thiếu vào tài khoản chi phí.
+
 ## 5. Sau Phase 9 — việc còn lại
 
 Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc phase nào, xếp theo thứ tự nên làm:
 
 1. **Triển khai 0.3.0 → 0.10.0 lên máy thật** (`VD-101`) — đang chờ Giám đốc cho phép. Đây là việc chặn mọi thứ khác: tám phase đã xong vẫn chưa ai dùng được.
 2. **Khai dữ liệu nền và các ngưỡng** (`VD-104` → `VD-109`): hồ sơ công ty, kho và tồn đầu kỳ, ngưỡng biên lợi nhuận, ngưỡng SLA, số ngày công nợ, giờ quét nhắc việc, khóa API.
-3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0, mục 4i), ~~công nợ phải trả~~ (0.12.0, mục 4j) và ~~trả hàng / đổi máy~~ (0.13.0, mục 4k) **đã làm 21/09**. Còn: tệp đính kèm, gửi nhắc ra ngoài qua email hoặc Zalo, chuyển kho nội bộ, hoàn tiền mặt cho khách, bù trừ công nợ hai chiều, dự báo dòng tiền.
+3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0), ~~công nợ phải trả~~ (0.12.0), ~~trả hàng / đổi máy~~ (0.13.0) và ~~chuyển kho nội bộ~~ (0.14.0) **đã làm 21/09**. Còn: tệp đính kèm, gửi nhắc ra ngoài qua email hoặc Zalo, hoàn tiền mặt cho khách, bù trừ công nợ hai chiều, dự báo dòng tiền.
 
 ## 6. Câu hỏi chờ Giám đốc
 

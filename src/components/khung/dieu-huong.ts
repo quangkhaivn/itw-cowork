@@ -48,7 +48,8 @@ export type BieuTuong =
   | "cong-no-tra"
   | "phieu-chi"
   | "khach-tra"
-  | "tra-ncc";
+  | "tra-ncc"
+  | "chuyen-kho";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -122,6 +123,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Nhập kho", href: "/kho/nhap", quyen: "inventory.create", bieuTuong: "nhap-kho", tuKhoa: "nhap hang vao kho receipt" },
       { nhan: "Thẻ kho", href: "/kho/the-kho", quyen: "inventory.view", bieuTuong: "the-kho", tuKhoa: "so cai kho lich su nhap xuat" },
       { nhan: "Số sê-ri", href: "/kho/serial", quyen: "inventory.view", bieuTuong: "serial", tuKhoa: "serial imei so may bao hanh" },
+      { nhan: "Chuyển kho nội bộ", href: "/kho/chuyen-kho", quyen: "inventory.view", bieuTuong: "chuyen-kho", tuKhoa: "transfer chuyen kho noi bo dieu hang giua kho" },
       { nhan: "Danh sách kho", href: "/kho/danh-sach", quyen: "inventory.view", bieuTuong: "nha-cung-cap", tuKhoa: "warehouse kho chi nhanh" },
     ],
   },
