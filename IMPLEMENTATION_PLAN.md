@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 21/09/2026 (sau Trả hàng và đổi máy).
+> Cập nhật lần cuối: 21/09/2026 (sau khi 0.13.0 lên máy thật).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -164,7 +164,7 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 ## 4k. Trả hàng và đổi máy (xong trên máy phát triển)
 
 - [x] CSDL 6 bảng + 24 CHECK + 1 cột trên `serial_numbers` · [x] service + 12 route · [x] 6 màn hình · [x] kiểm thử (264 đơn vị, 702 tích hợp, 382 HTTP) · [x] diễn tập cài mới 13 migration · [x] soát giao diện
-- [ ] Triển khai máy thật (cùng đợt với 0.3.0 → 0.13.0 — `VD-101`)
+- [x] **Triển khai máy thật 21/09/2026** (đợt 0.3.0 → 0.13.0, 13 migration — `VD-101` đã đóng)
 - **Không cần Giám đốc đặt thêm ngưỡng nào.** Một chính sách đã chốt thay Giám đốc và cần xác nhận lại: đổi máy giữ nguyên mốc hết hạn bảo hành (QĐ-40) — câu hỏi Q13.
 - **Chưa làm có chủ đích**: hoàn tiền mặt cho khách, đòi lại tiền từ nhà cung cấp, chênh lệch giá khi đổi sang máy khác model.
 

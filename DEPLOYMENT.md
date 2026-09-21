@@ -102,6 +102,9 @@ docker compose up -d
 - Mạng từ Việt Nam ra npm hay đứt: Dockerfile đã nới thời gian chờ và thử lại 3 vòng.
 - **502 sau khi triển khai (19/09):** container `app` tạo lại đổi IP, `worker` lấy mất IP cũ, nginx vẫn gửi vào IP cũ. Đã sửa: nginx phân giải lại tên `app` qua DNS Docker mỗi 10 giây (`resolver 127.0.0.11` + biến trong `proxy_pass`); `trien-khai.sh` kiểm cú pháp, nạp lại nginx và chờ `/khoe` trả 200 mới báo xong.
 - **Gắn một tệp cấu hình vào container giữ inode cũ** — thay tệp bằng `tar`/`scp` thì container không thấy. `docker-compose.yml` nay gắn cả thư mục `nginx/`.
+- **`./trien-khai.sh: Permission denied` (21/09):** Git trên Windows không theo dõi bit thực thi, nên tệp được commit ở chế độ 644; `git archive` giữ nguyên chế độ đó và `tar` giải nén ra tệp không chạy được. Đã sửa bằng `git update-index --chmod=+x trien-khai.sh`. **Thêm tệp `.sh` mới thì kiểm `git ls-files -s -- '*.sh'` phải thấy `100755`.**
+- **Đưa lệnh cho máy trạm Windows:** người dùng chạy PowerShell 5.1 — không có `&&` (dùng `;`), và **`git archive | ssh` qua đường ống PowerShell làm hỏng tệp tar** vì byte bị chuyển thành văn bản. Dùng `git archive -o <tệp>` rồi `scp` (`scp` dùng `-P` hoa, `ssh` dùng `-p` thường).
+- **Không dò được máy thật đang chạy bản nào từ bên ngoài:** proxy đẩy mọi đường dẫn chưa đăng nhập về `/dang-nhap`, kể cả đường không tồn tại, nên mã 307 không chứng minh route có thật; `/api/khoe` không trả phiên bản.
 - **Kiểm tệp sao lưu:** không dùng `pg_restore --list | grep -q` dưới `set -o pipefail` — grep thoát sớm làm pg_restore nhận SIGPIPE, báo hỏng ngẫu nhiên. Ghi mục lục ra tệp rồi mới tìm.
 
 ## Không có Docker (máy trạm Windows)

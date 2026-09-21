@@ -5,7 +5,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 ## 0.13.0 — 21/09/2026 — Trả hàng và đổi máy
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 18 (TH).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.12.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **Phiếu khách trả hàng** (`TH-2026-0001`): lập từ đơn đã giao (điền sẵn phần còn trả được) hoặc lập lẻ. Vòng đời Nháp → Đã nhận lại hàng → Đã chốt tiền, hoặc Đã hủy.
@@ -31,7 +31,7 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 18 (TH).
 ## 0.12.0 — 21/09/2026 — Công nợ phải trả
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 17 (CT).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.11.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **Hóa đơn nhà cung cấp** (`HM-2026-0001`): lập từ đơn mua đã gửi (chép dòng, giữ liên kết tới dòng đơn) hoặc nhập tay cho khoản lẻ. Vòng đời Nháp → Đã ghi nhận → (Đã hủy).
@@ -53,7 +53,7 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 17 (CT).
 ## 0.11.0 — 21/09/2026 — Mua hàng (phần để lại từ Phase 5)
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 16 (MH).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.10.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **Đề nghị mua** (`DN-2026-0001`): ai cần gì, vì sao, cần trước ngày nào. Vòng đời Nháp → Chờ duyệt → Đã duyệt → Đã đặt hàng, hoặc Bị từ chối / Đã hủy. Người đề nghị không tự duyệt.
@@ -78,7 +78,7 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 16 (MH).
 ## 0.10.0 — 21/09/2026 — Phase 9: Trợ lý AI
 
 Căn cứ: prompt triển khai 36 mục, mục 25–30. Thiết kế: `AI_ARCHITECTURE.md`. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 15 (AI).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.9.0, chờ Giám đốc cho phép. **Chưa có khóa API**: trợ lý báo rõ là chưa dùng được cho tới khi Giám đốc cấp khóa (`VD-109`).
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`). **Chưa có khóa API**: trợ lý báo rõ là chưa dùng được cho tới khi Giám đốc cấp khóa (`VD-109`).
 
 ### Thêm
 - **Trợ lý ITA**: khung chat hỏi đáp bằng tiếng Việt về khách hàng, cơ hội, báo giá, tồn kho, công nợ, bảng điều hành.
@@ -99,7 +99,7 @@ Căn cứ: prompt triển khai 36 mục, mục 25–30. Thiết kế: `AI_ARCHIT
 ## 0.9.0 — 21/09/2026 — Phase 8: Tự động hóa, Việc hôm nay, bảo trì và gia hạn
 
 Căn cứ: prompt triển khai 36 mục, mục 21–22. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 13 (TD), mục 14 (BT/GH).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.8.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **Bản quét nhắc việc**: 8 quy tắc (báo giá chờ phản hồi, cơ hội im lặng, việc quá hạn, hóa đơn quá hạn, phiếu hỗ trợ trễ cam kết, bảo hành sắp hết, bảo trì tới kỳ, khách lâu chưa mua lại). Quy tắc thiếu ngưỡng thì **không quét** và nói rõ thiếu gì.
@@ -125,7 +125,7 @@ Căn cứ: prompt triển khai 36 mục, mục 21–22. Luật nghiệp vụ: `B
 ## 0.8.0 — 20/09/2026 — Phase 7: Tài chính và Bảng điều hành
 
 Căn cứ: prompt triển khai 36 mục, mục 6 và mục 20. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 11 (TC), mục 12 (BDK).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.7.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **Hóa đơn**: lập từ đơn hàng đã xác nhận (chép dòng, giữ liên kết tới dòng đơn) hoặc lập tay cho khoản lẻ; vòng đời Nháp → Đã phát hành → (Đã hủy). Số `HD-<năm>-0001` cấp nguyên tử. Màn hình danh sách, chi tiết, lập mới.
@@ -145,7 +145,7 @@ Căn cứ: prompt triển khai 36 mục, mục 6 và mục 20. Luật nghiệp v
 ## 0.7.0 — 20/09/2026 — Phase 6: Dự án, bảo hành, bàn dịch vụ
 
 Căn cứ: prompt triển khai 36 mục, mục 17–18. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 8 (BH), mục 9 (HT), mục 10 (DU).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.6.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **CSDL** (migration `20260920140406_phase6_du_an_bao_hanh_ho_tro`, chỉ thêm bảng và cột): `warranties`, `projects`, `project_milestones`, `support_tickets`, `support_ticket_events`; cột `project_id` trên `tasks`; 17 ràng buộc CHECK; **trigger chặn sửa/xóa diễn biến phiếu**; cấp bù `order.view` cho CSKH và kỹ thuật để tra được máy đã bán.
@@ -170,7 +170,7 @@ Căn cứ: prompt triển khai 36 mục, mục 17–18. Luật nghiệp vụ: `B
 ## 0.6.0 — 20/09/2026 — Phase 5: Đơn hàng và kho
 
 Căn cứ: prompt triển khai 36 mục, mục 15–16. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 6 (DH-01 → DH-09) và mục 7 (KHO-01 → KHO-08).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.5.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **CSDL** (migration `20260920103433_phase5_don_hang_kho`, chỉ thêm bảng và cột): `warehouses`, `sales_orders`, `sales_order_items`, `inventory_balances`, `inventory_transactions`, `deliveries`, `delivery_items`, `serial_numbers`; hai cột mới trên `products` (`min_stock`, `quan_ly_ton`); 20 ràng buộc CHECK; **trigger chặn sửa/xóa sổ cái kho**; cấp bù quyền kho cho vai trò Thủ kho đã có trên máy thật.
@@ -197,7 +197,7 @@ Căn cứ: prompt triển khai 36 mục, mục 15–16. Luật nghiệp vụ: `B
 ## 0.5.0 — 20/09/2026 — Phase 4: Báo giá
 
 Căn cứ: prompt triển khai 36 mục, mục 10–14. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 5 (BG-01 → BG-10).
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 và 0.4.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **CSDL** (migration `20260920015506_phase4_bao_gia`, chỉ thêm bảng): `quotations`, `quotation_versions`, `quotation_items`, `quotation_approvals`; CHECK cho trạng thái, tiền không âm, số lượng > 0, chiết khấu/VAT 0–100, đã gửi phải có thời điểm gửi, đã quyết duyệt phải có người quyết.
@@ -227,7 +227,7 @@ Căn cứ: prompt triển khai 36 mục, mục 10–14. Luật nghiệp vụ: `B
 ## 0.4.0 — 20/09/2026 — Phase 3: Sản phẩm và bảng giá
 
 Căn cứ: prompt triển khai 36 mục, mục 8–9. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 4.
-**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0, chờ Giám đốc cho phép.
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`).
 
 ### Thêm
 - **CSDL** (migration `20260920011356_phase3_san_pham`, chỉ thêm bảng): `product_categories`, `brands`, `suppliers`, `products`, `supplier_product_prices`, `price_history`, `import_jobs`; 20 ràng buộc CHECK; **trigger chặn sửa/xóa `price_history`**.
