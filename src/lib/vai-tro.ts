@@ -166,6 +166,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 20/09: mở lại cơ hội đã đóng (BUSINESS_RULES CH-06). Vai trò đã có trên máy thật được
       // cấp bù bằng migration phase2_crm, vì seed không cấp lại mã quyền cũ (QĐ-10).
       maQuyen("sales", "approve"),
+      // 20/09 (Phase 7): theo được tiền về của nhóm mình. Doanh nghiệp đã có trên máy thật
+      // được cấp bù bằng migration phase7_tai_chinh (QĐ-10).
+      maQuyen("finance", "view"),
+      maQuyen("finance", "export"),
       ...tron(["dashboard", "kpi", "report", "alert", "project"], XEM_XUAT),
       maQuyen("ai", "view"),
     ],
@@ -277,6 +281,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["product"], XEM_XUAT),
       maQuyen("supplier", "view"),
       maQuyen("finance", "approve"),
+      // 21/09 (Mua hàng): duyệt đề nghị mua — duyệt chi tiền là việc của tài chính.
+      // Doanh nghiệp đã có trên máy thật được cấp bù bằng migration mua_hang (QĐ-10).
+      maQuyen("purchasing", "approve"),
       ...tron(["order", "project", "customer", "purchasing", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
     ],

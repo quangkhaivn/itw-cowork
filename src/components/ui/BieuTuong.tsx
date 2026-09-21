@@ -53,6 +53,9 @@ const DUONG_VE: Record<string, string> = {
   "gia-han": "M3 12a9 9 0 1 0 3-6.7M3 4v5h5",
   // Phase 9 — trợ lý AI
   "tro-ly": "M12 8V4H8M4 8h16v12H4zM2 14h2M20 14h2M9 13v2M15 13v2",
+  // Mua hàng
+  "de-nghi-mua": "M9 2h6a2 2 0 0 1 2 2v1h2a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2V4a2 2 0 0 1 2-2zM9 13h6M9 17h4",
+  "don-mua": "M3 3h2l2.4 12h10.2L20 7H6M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2M18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
 };
 

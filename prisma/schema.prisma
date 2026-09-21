@@ -91,6 +91,13 @@ model Tenant {
   aiMessages         AiMessage[]
   aiToolCalls        AiToolCall[]
   aiActions          AiAction[]
+  // Mua hàng (phần để lại từ Phase 5)
+  purchaseRequests   PurchaseRequest[]
+  purchaseReqItems   PurchaseRequestItem[]
+  purchaseOrders     PurchaseOrder[]
+  purchaseOrderItems PurchaseOrderItem[]
+  goodsReceipts      GoodsReceipt[]
+  goodsReceiptItems  GoodsReceiptItem[]
 
   @@map("tenants")
 }
@@ -160,30 +167,33 @@ model User {
   createdBy          String?   @map("created_by") @db.Uuid
   updatedBy          String?   @map("updated_by") @db.Uuid
 
-  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staffProfile       StaffProfile?         @relation("HoSoCuaNguoiDung")
-  userRoles          UserRole[]
+  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile        StaffProfile?         @relation("HoSoCuaNguoiDung")
+  userRoles           UserRole[]
   /// Những người nhận người này làm quản lý trực tiếp.
-  reports            StaffProfile[]        @relation("QuanLyTrucTiep")
+  reports             StaffProfile[]        @relation("QuanLyTrucTiep")
   // Phase 2 — người phụ trách
-  ownedCustomers     Customer[]            @relation("KhachPhuTrach")
-  ownedLeads         Lead[]                @relation("LeadPhuTrach")
-  ownedInteractions  Interaction[]         @relation("TuongTacCua")
-  ownedOpportunities Opportunity[]         @relation("CoHoiPhuTrach")
-  ownedTasks         Task[]                @relation("ViecPhuTrach")
-  ownedQuotations    Quotation[]           @relation("BaoGiaPhuTrach")
-  ownedSalesOrders   SalesOrder[]          @relation("DonHangPhuTrach")
-  managedProjects    Project[]             @relation("DuAnPhuTrach")
-  ownedTickets       SupportTicket[]       @relation("PhieuHoTroTiepNhan")
-  assignedTickets    SupportTicket[]       @relation("PhieuHoTroXuLy")
-  ownedInvoices      Invoice[]             @relation("HoaDonPhuTrach")
+  ownedCustomers      Customer[]            @relation("KhachPhuTrach")
+  ownedLeads          Lead[]                @relation("LeadPhuTrach")
+  ownedInteractions   Interaction[]         @relation("TuongTacCua")
+  ownedOpportunities  Opportunity[]         @relation("CoHoiPhuTrach")
+  ownedTasks          Task[]                @relation("ViecPhuTrach")
+  ownedQuotations     Quotation[]           @relation("BaoGiaPhuTrach")
+  ownedSalesOrders    SalesOrder[]          @relation("DonHangPhuTrach")
+  managedProjects     Project[]             @relation("DuAnPhuTrach")
+  ownedTickets        SupportTicket[]       @relation("PhieuHoTroTiepNhan")
+  assignedTickets     SupportTicket[]       @relation("PhieuHoTroXuLy")
+  ownedInvoices       Invoice[]             @relation("HoaDonPhuTrach")
   // Phase 8
-  notifications      Notification[]        @relation("ThongBaoCuaNguoiDung")
-  dailyActionItems   DailyActionItem[]     @relation("ViecHomNayCuaNguoiDung")
-  ownedMaintenance   MaintenanceContract[] @relation("BaoTriPhuTrach")
-  ownedRenewals      Renewal[]             @relation("GiaHanPhuTrach")
+  notifications       Notification[]        @relation("ThongBaoCuaNguoiDung")
+  dailyActionItems    DailyActionItem[]     @relation("ViecHomNayCuaNguoiDung")
+  ownedMaintenance    MaintenanceContract[] @relation("BaoTriPhuTrach")
+  ownedRenewals       Renewal[]             @relation("GiaHanPhuTrach")
   // Phase 9
-  aiConversations    AiConversation[]      @relation("HoiThoaiCuaNguoiDung")
+  aiConversations     AiConversation[]      @relation("HoiThoaiCuaNguoiDung")
+  // Mua hàng
+  purchaseRequests    PurchaseRequest[]     @relation("DeNghiMuaCua")
+  ownedPurchaseOrders PurchaseOrder[]       @relation("DonMuaPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -747,6 +757,9 @@ model Supplier {
   defaultProducts Product[]              @relation("NhaCungCapMacDinh")
   quotationItems  QuotationItem[]
 
+  purchaseRequestItems PurchaseRequestItem[]
+  purchaseOrders       PurchaseOrder[]
+
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
   @@index([tenantId, status])
@@ -803,6 +816,9 @@ model Product {
   serials         SerialNumber[]
   warranties      Warranty[]
   invoiceItems    InvoiceItem[]
+
+  purchaseRequestItems PurchaseRequestItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
 
   @@unique([tenantId, skuNormalized])
   @@index([tenantId, status])
@@ -1074,6 +1090,9 @@ model Warehouse {
   serials      SerialNumber[]
   deliveries   Delivery[]
 
+  purchaseOrders PurchaseOrder[]
+  goodsReceipts  GoodsReceipt[]
+
   @@unique([tenantId, code])
   @@index([tenantId, status])
   @@map("warehouses")
@@ -1131,6 +1150,8 @@ model SalesOrder {
   projects         Project[]
   tickets          SupportTicket[]
   invoices         Invoice[]
+
+  purchaseRequests PurchaseRequest[]
 
   @@unique([tenantId, number])
   @@index([tenantId, ownerId, status])
@@ -1914,4 +1935,193 @@ model AiAction {
 
   @@index([tenantId, status, createdAt])
   @@map("ai_actions")
+}
+
+// ---------------------------------------------------------------------------
+// Mua hàng (phần để lại từ Phase 5): đề nghị mua → đơn mua → nhận hàng vào kho.
+// Khép vòng tồn kho: hàng vào kho bằng ĐÚNG hàm ghiSoKho() mà Phase 5 dùng, nên số dư
+// và sổ cái không bao giờ lệch nhau.
+// ---------------------------------------------------------------------------
+
+/// Đề nghị mua hàng. Số DN-2026-0001. Sinh khi đơn bán thiếu hàng, hoặc lập tay.
+model PurchaseRequest {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  number       String    @db.VarChar(30)
+  /// Đề nghị vì đơn bán này thiếu hàng (nếu có).
+  salesOrderId String?   @map("sales_order_id") @db.Uuid
+  requesterId  String    @map("requester_id") @db.Uuid
+  /// DRAFT | PENDING_APPROVAL | APPROVED | ORDERED | REJECTED | CANCELLED
+  status       String    @default("DRAFT") @db.VarChar(20)
+  needByDate   DateTime? @map("need_by_date") @db.Date
+  reason       String?   @db.Text
+  note         String?   @db.Text
+  approvedBy   String?   @map("approved_by") @db.Uuid
+  approvedAt   DateTime? @map("approved_at") @db.Timestamptz(6)
+  decisionNote String?   @map("decision_note") @db.Text
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?   @map("cancel_reason") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+  updatedBy    String?   @map("updated_by") @db.Uuid
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesOrder SalesOrder?           @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  requester  User                  @relation("DeNghiMuaCua", fields: [requesterId], references: [id], onDelete: Restrict)
+  items      PurchaseRequestItem[]
+  orders     PurchaseOrder[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  requestId      String   @map("request_id") @db.Uuid
+  lineNo         Int      @map("line_no")
+  productId      String?  @map("product_id") @db.Uuid
+  /// Chụp lại tên lúc đề nghị — danh mục đổi sau không làm đổi chứng từ.
+  name           String   @db.VarChar(500)
+  sku            String?  @db.VarChar(64)
+  quantity       Decimal  @db.Decimal(18, 3)
+  unit           String?  @db.VarChar(50)
+  /// Giá mua dự kiến, để người duyệt biết đề nghị này tốn bao nhiêu.
+  estimatedPrice Decimal  @default(0) @map("estimated_price") @db.Decimal(18, 2)
+  /// Nhà cung cấp gợi ý (từ bảng giá nhà cung cấp).
+  supplierId     String?  @map("supplier_id") @db.Uuid
+  note           String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  request            PurchaseRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  product            Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseOrderItems PurchaseOrderItem[]
+
+  @@unique([requestId, lineNo])
+  @@index([tenantId, productId])
+  @@map("purchase_request_items")
+}
+
+/// Đơn mua gửi nhà cung cấp. Số DM-2026-0001.
+model PurchaseOrder {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  number        String    @db.VarChar(30)
+  supplierId    String    @map("supplier_id") @db.Uuid
+  requestId     String?   @map("request_id") @db.Uuid
+  ownerId       String    @map("owner_id") @db.Uuid
+  /// Kho sẽ nhận hàng về.
+  warehouseId   String    @map("warehouse_id") @db.Uuid
+  /// DRAFT | SENT | CONFIRMED | PARTIALLY_RECEIVED | RECEIVED | CANCELLED
+  status        String    @default("DRAFT") @db.VarChar(20)
+  orderDate     DateTime  @default(now()) @map("order_date") @db.Date
+  expectedDate  DateTime? @map("expected_date") @db.Date
+  /// Mã dữ liệu gốc dieu_khoan_thanh_toan (chép từ nhà cung cấp lúc lập).
+  paymentTerms  String?   @map("payment_terms") @db.VarChar(50)
+  notes         String?   @db.Text
+  /// Ảnh chụp số tiền — tính lại mỗi lần sửa dòng hàng lúc còn nháp.
+  subtotal      Decimal   @default(0) @db.Decimal(18, 2)
+  discountTotal Decimal   @default(0) @map("discount_total") @db.Decimal(18, 2)
+  vatTotal      Decimal   @default(0) @map("vat_total") @db.Decimal(18, 2)
+  total         Decimal   @default(0) @db.Decimal(18, 2)
+  sentAt        DateTime? @map("sent_at") @db.Timestamptz(6)
+  confirmedAt   DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz(6)
+  cancelledAt   DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason  String?   @map("cancel_reason") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?   @map("created_by") @db.Uuid
+  updatedBy     String?   @map("updated_by") @db.Uuid
+
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier  Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  request   PurchaseRequest?    @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  owner     User                @relation("DonMuaPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  warehouse Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  items     PurchaseOrderItem[]
+  receipts  GoodsReceipt[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, expectedDate])
+  @@index([tenantId, supplierId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  purchaseOrderId String   @map("purchase_order_id") @db.Uuid
+  lineNo          Int      @map("line_no")
+  requestItemId   String?  @map("request_item_id") @db.Uuid
+  productId       String?  @map("product_id") @db.Uuid
+  sku             String?  @db.VarChar(64)
+  name            String   @db.VarChar(500)
+  quantity        Decimal  @db.Decimal(18, 3)
+  unit            String?  @db.VarChar(50)
+  unitPrice       Decimal  @default(0) @map("unit_price") @db.Decimal(18, 2)
+  discountPct     Decimal  @default(0) @map("discount_pct") @db.Decimal(7, 4)
+  vatRate         Decimal  @default(10) @map("vat_rate") @db.Decimal(7, 4)
+  lineTotal       Decimal  @default(0) @map("line_total") @db.Decimal(18, 2)
+  /// Đã nhận bao nhiêu — cộng dồn từ các phiếu nhận, không nhập tay.
+  receivedQty     Decimal  @default(0) @map("received_qty") @db.Decimal(18, 3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  requestItem   PurchaseRequestItem? @relation(fields: [requestItemId], references: [id], onDelete: SetNull)
+  product       Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+  receiptItems  GoodsReceiptItem[]
+
+  @@unique([purchaseOrderId, lineNo])
+  @@index([tenantId, productId])
+  @@map("purchase_order_items")
+}
+
+/// Phiếu nhận hàng từ nhà cung cấp. Số NK-2026-0001. Nhận nhiều lần cho một đơn mua.
+/// **Không có đường hủy**: ghi sai thì điều chỉnh tồn có lý do (KHO-03), để sổ cái kho
+/// luôn là sổ chỉ ghi thêm.
+model GoodsReceipt {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  number          String   @db.VarChar(30)
+  purchaseOrderId String   @map("purchase_order_id") @db.Uuid
+  warehouseId     String   @map("warehouse_id") @db.Uuid
+  receivedAt      DateTime @default(now()) @map("received_at") @db.Date
+  /// Số hóa đơn / phiếu giao của nhà cung cấp, để đối chiếu sau này.
+  supplierDocNo   String?  @map("supplier_doc_no") @db.VarChar(100)
+  note            String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy       String?  @map("created_by") @db.Uuid
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  items         GoodsReceiptItem[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, purchaseOrderId])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  receiptId   String   @map("receipt_id") @db.Uuid
+  orderItemId String   @map("order_item_id") @db.Uuid
+  quantity    Decimal  @db.Decimal(18, 3)
+  /// Giá vốn ghi vào sổ kho cho lần nhận này.
+  unitCost    Decimal  @default(0) @map("unit_cost") @db.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  receipt   GoodsReceipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  orderItem PurchaseOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, orderItemId])
+  @@map("goods_receipt_items")
 }

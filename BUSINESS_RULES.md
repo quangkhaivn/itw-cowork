@@ -305,3 +305,25 @@ Quyền `ai.view`. Trợ lý là một **lớp bọc mỏng trên các service s
 Vai trò `ITA — Trợ lý AI` từ Phase 1 vẫn giữ nguyên giới hạn: không bao giờ có `*.approve` hay `*.delete` (bài thử `kiemTraGioiHanAI` chạy trong mọi lần seed).
 
 **Chưa làm ở phase này**: tác nhân nền tự chạy (Follow-up Agent sinh "Việc hôm nay" bằng AI — bộ quy tắc Phase 8 đang làm việc đó bằng luật tường minh), trợ lý gửi tin cho khách, sinh CEO Briefing định kỳ, truy xuất tài liệu (RAG).
+
+## 16. Mua hàng (phần để lại từ Phase 5)
+
+Quyền `purchasing.*`; phạm vi theo người đề nghị (đề nghị mua) và người phụ trách (đơn mua). Ba chứng từ nối nhau: **đề nghị mua** (ai cần gì, vì sao) → **đơn mua** (đặt ai, giá bao nhiêu) → **nhận hàng** (hàng thật vào kho).
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| MH-01 | Số chứng từ cấp nguyên tử: `DN-<năm>-0001` (đề nghị), `DM-<năm>-0001` (đơn mua), `NK-<năm>-0001` (phiếu nhận) | [SV] · [CSDL] duy nhất `(tenant_id, number)` · [TH] |
+| MH-02 | Đề nghị phải **được duyệt** mới đặt hàng được. **Người đề nghị không tự duyệt** đề nghị của mình, trừ khi có quyền duyệt phạm vi toàn công ty. Từ chối phải ghi lý do | [CSDL] CHECK · [SV] · [TH] |
+| MH-03 | Đơn mua lập từ đề nghị **đã duyệt**, hoặc lập thẳng khi đã biết mua gì của ai. Lập từ đề nghị thì đề nghị chuyển sang Đã đặt hàng | [SV] · [TH] |
+| MH-04 | Đơn mua **gửi nhà cung cấp rồi thì khóa dòng hàng**. Muốn đổi thì hủy đơn và lập đơn khác — chứng từ đã gửi ra ngoài không sửa lén | [SV] · [TH] |
+| MH-05 | Nhận hàng **không vượt phần còn lại** của từng dòng. Chốt cuối là CHECK `received_qty <= quantity` ở tầng CSDL | [CSDL] CHECK · [SV] · [TH] |
+| MH-06 | **Hàng vào kho bằng đúng `ghiSoKho()`** mà bán hàng dùng để xuất — số dư và sổ cái cập nhật trong cùng một giao dịch, nên `doiSoatKho()` vẫn đúng sau khi có mua hàng. Hàng theo sê-ri phải khai đủ sê-ri, và sê-ri kiểm **trước** khi đụng tồn | [SV] dùng lại hàm Phase 5 · [TH] đối soát kho sau mỗi lần nhận |
+| MH-07 | Trạng thái đơn tính lại **từ dữ liệu thật của các dòng** sau mỗi lần nhận, không tin cờ đang lưu: nhận đủ → Đã nhận đủ, nhận dở → Nhận một phần | [SV] hàm thuần `tienDoNhan()` · [ĐV] · [TH] |
+| MH-08 | Hủy đơn mua phải ghi lý do, và **chỉ hủy được khi chưa nhận đồng nào**. Đã nhận rồi thì hàng ở trong kho — muốn trả thì điều chỉnh tồn có lý do (KHO-03) | [CSDL] CHECK · [SV] · [TH] |
+| MH-09 | **Phiếu nhận hàng không có đường hủy.** Ghi sai thì điều chỉnh tồn kèm lý do, để sổ cái kho luôn là sổ chỉ ghi thêm | [SV] không có hàm hủy · [TH] |
+
+**Ai duyệt đề nghị mua**: Giám đốc, Quản trị, và **Kế toán – Tài chính** — duyệt chi tiền là việc của tài chính. Vai trò Mua hàng cố ý **không** tự duyệt đề nghị của chính mình.
+
+**Gợi ý mua từ đơn bán**: mở một đơn bán đã xác nhận rồi bấm *Đề nghị mua*, hệ thống liệt kê đúng những dòng kho không đủ hàng để giao và điền sẵn số lượng còn thiếu.
+
+**Chưa làm ở phần này**: hóa đơn nhà cung cấp và công nợ phải trả (`supplier_bills`, `supplier_payments`), trả hàng cho nhà cung cấp, cập nhật giá vốn danh mục theo giá mua thực tế, chuyển kho nội bộ.

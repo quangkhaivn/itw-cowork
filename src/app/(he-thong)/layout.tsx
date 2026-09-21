@@ -15,6 +15,8 @@ const TAO_NHANH = [
   { nhan: "Phiếu hỗ trợ", href: "/dich-vu/ho-tro/moi", quyen: "service_desk.create" },
   { nhan: "Hóa đơn", href: "/tai-chinh/hoa-don/moi", quyen: "finance.create" },
   { nhan: "Hợp đồng bảo trì", href: "/dich-vu/bao-tri/moi", quyen: "service_desk.create" },
+  { nhan: "Đề nghị mua", href: "/mua-hang/de-nghi/moi", quyen: "purchasing.create" },
+  { nhan: "Đơn mua", href: "/mua-hang/don-mua/moi", quyen: "purchasing.create" },
   { nhan: "Dự án", href: "/du-an/moi", quyen: "project.create" },
   { nhan: "Công việc", href: "/cong-viec?tao=1", quyen: "task.create" },
   { nhan: "Sản phẩm", href: "/san-pham/moi", quyen: "product.create" },

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useRef } from "react";
+import OTimSanPham, { type GoiYSanPham } from "@/components/san-pham/OTimSanPham";
 import { dinhDangNhapTien } from "@/lib/dinh-dang";
 import { dinhDangTien } from "@/lib/dinh-dang";
 import { tinhBaoGia } from "@/modules/bao-gia/tinh-toan";
@@ -28,17 +29,7 @@ export interface DongNhap {
   nhaCungCapId: string | null;
 }
 
-interface GoiY {
-  id: string;
-  sku: string;
-  ten: string;
-  donViTinh: string | null;
-  giaBan: string;
-  giaVon: string;
-  nhaCungCapId: string | null;
-  vat: string;
-  baoHanhThang: number | null;
-}
+type GoiY = GoiYSanPham;
 
 let dem = 0;
 export function dongTrong(): DongNhap {
@@ -77,80 +68,6 @@ export function dongVeApi(d: DongNhap) {
     giaVon: d.giaVon || "0",
     nhaCungCapId: d.nhaCungCapId,
   };
-}
-
-function OTim({ khiChon }: { khiChon: (g: GoiY) => void }) {
-  const id = useId();
-  const [q, datQ] = useState("");
-  const [ketQua, datKetQua] = useState<{ cau: string; ds: GoiY[] }>({ cau: "", ds: [] });
-  const [dangTim, datDangTim] = useState(false);
-  const [loi, datLoi] = useState<string | null>(null);
-  const cau = q.trim();
-
-  // Kết quả gắn với câu đã tìm, nên gõ tiếp là danh sách cũ tự biến mất — không cần xóa trong effect.
-  const ds = ketQua.cau === cau ? ketQua.ds : [];
-
-  useEffect(() => {
-    if (cau.length < 2) return;
-    const huy = new AbortController();
-    const hen = setTimeout(async () => {
-      datDangTim(true);
-      try {
-        const r = await fetch(`/api/v1/bao-gia/goi-y-san-pham?q=${encodeURIComponent(cau)}`, { signal: huy.signal });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.thongBao ?? "Không tìm được sản phẩm");
-        datKetQua({ cau, ds: Array.isArray(d) ? d : [] });
-        datLoi(null);
-      } catch (e) {
-        if ((e as Error).name !== "AbortError") datLoi((e as Error).message);
-      } finally {
-        datDangTim(false);
-      }
-    }, 250);
-    return () => {
-      clearTimeout(hen);
-      huy.abort();
-    };
-  }, [cau]);
-
-  return (
-    <div className="o-chon-khach">
-      <label className="chi-doc-man-hinh" htmlFor={id}>
-        Tìm sản phẩm để thêm vào báo giá
-      </label>
-      <input
-        id={id}
-        type="search"
-        autoComplete="off"
-        value={q}
-        onChange={(e) => datQ(e.target.value)}
-        placeholder="Gõ mã SKU hoặc tên sản phẩm để thêm hàng…"
-      />
-      {loi && <div className="loi-truong">{loi}</div>}
-      {cau.length >= 2 && (
-        <ul className="goi-y-khach">
-          {dangTim && ds.length === 0 && <li className="goi-y">Đang tìm…</li>}
-          {!dangTim && ds.length === 0 && <li className="goi-y">Không có sản phẩm khớp. Gõ tay tên hàng ở bảng dưới cũng được.</li>}
-          {ds.map((g) => (
-            <li key={g.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  khiChon(g);
-                  datQ("");
-                }}
-              >
-                <strong>{g.ten}</strong>
-                <div className="dong-phu">
-                  {g.sku} · Giá bán {dinhDangTien(g.giaBan)} · Giá vốn {dinhDangTien(g.giaVon)}
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
 }
 
 export default function BangDongBaoGia({
@@ -197,7 +114,11 @@ export default function BangDongBaoGia({
   return (
     <div className="phan-form">
       <h3>Bảng hàng</h3>
-      <OTim khiChon={them} />
+      <OTimSanPham
+        khiChon={them}
+        nhan="Tìm sản phẩm để thêm vào báo giá"
+        moTaGoiY={(g) => `${g.sku} · Giá bán ${dinhDangTien(g.giaBan)} · Giá vốn ${dinhDangTien(g.giaVon)}`}
+      />
 
       {dong.length === 0 ? (
         <p className="goi-y">Chưa có dòng hàng nào. Tìm sản phẩm ở ô trên, hoặc bấm “Thêm dòng trống” để gõ tay.</p>

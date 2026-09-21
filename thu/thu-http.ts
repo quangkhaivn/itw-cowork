@@ -1036,6 +1036,170 @@ async function main() {
     trangTroLy.text.includes(troLyJson.trangThai.daCauHinh ? "Sẵn sàng" : "Chưa cấu hình"),
   );
 
+  // --- 7j. Mua hàng: đề nghị → đơn mua → nhận hàng (phần để lại từ Phase 5) ---
+  console.log("\n[7j] Mua hàng");
+
+  const taoDn = await goi("/api/v1/de-nghi-mua", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: {
+      lyDo: `Bổ sung tồn kho HTTP ${DAU}`,
+      ngayCan: congNgay(homNayVN(), 14),
+      dong: [{ sanPhamId: idSp, ten: `Hàng thử HTTP ${DAU}`, soLuong: "6", giaDuKien: "1.200.000" }],
+    },
+  });
+  dat("MH-01: lập đề nghị mua, số DN-", taoDn.status === 200 && String(taoDn.json.so).startsWith("DN-"), JSON.stringify(taoDn.json));
+  const idDn = taoDn.json.id as string;
+
+  const dnRong = await goi("/api/v1/de-nghi-mua", { phuongThuc: "POST", cookie: cookieQT, than: { dong: [] } });
+  dat("Đề nghị không có dòng nào bị 400", dnRong.status === 400, `status ${dnRong.status}`);
+
+  const ctDn = await goi(`/api/v1/de-nghi-mua/${idDn}`, { cookie: cookieQT });
+  const dnJson = ctDn.json as unknown as {
+    deNghi: { trangThai: string; tongDuKien: number; dong: { id: string }[] };
+    quyen: { xinDuyet: boolean; duyet: boolean; taoDonMua: boolean };
+  };
+  dat("Đề nghị ở trạng thái Nháp, tổng dự kiến đúng (6 × 1,2tr)", dnJson.deNghi.trangThai === "DRAFT" && dnJson.deNghi.tongDuKien === 7_200_000, String(dnJson.deNghi.tongDuKien));
+  dat("Chưa duyệt thì chưa cho tạo đơn mua", dnJson.quyen.taoDonMua === false);
+
+  const duyetSom = await goi(`/api/v1/de-nghi-mua/${idDn}/duyet`, { phuongThuc: "POST", cookie: cookieQT, than: { quyetDinh: "cho-duyet" } });
+  dat("MH-02: chưa gửi duyệt thì không duyệt được (409)", duyetSom.status === 409 && duyetSom.json.ma === "sai-trang-thai", `status ${duyetSom.status}`);
+
+  const xinDuyet = await goi(`/api/v1/de-nghi-mua/${idDn}/xin-duyet`, { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  dat("Gửi duyệt được", xinDuyet.status === 200 && xinDuyet.json.trangThai === "PENDING_APPROVAL");
+
+  const suaSauGui = await goi(`/api/v1/de-nghi-mua/${idDn}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { lyDo: "sửa lén" } });
+  dat("Đề nghị chờ duyệt thì khóa sửa (409)", suaSauGui.status === 409, `status ${suaSauGui.status}`);
+
+  const tuChoiThieuLyDo = await goi(`/api/v1/de-nghi-mua/${idDn}/duyet`, { phuongThuc: "POST", cookie: cookieQT, than: { quyetDinh: "tu-choi" } });
+  dat("MH-02: từ chối mà không ghi lý do bị 400", tuChoiThieuLyDo.status === 400, `status ${tuChoiThieuLyDo.status}`);
+
+  const nvDuyet = await goi(`/api/v1/de-nghi-mua/${idDn}/duyet`, { phuongThuc: "POST", cookie: dnNv.cookie, than: { quyetDinh: "cho-duyet" } });
+  dat("Nhân viên kinh doanh không duyệt được đề nghị mua", nvDuyet.status === 403, `status ${nvDuyet.status}`);
+
+  const duyetDn = await goi(`/api/v1/de-nghi-mua/${idDn}/duyet`, { phuongThuc: "POST", cookie: cookieQT, than: { quyetDinh: "cho-duyet", ghiChu: "Đồng ý" } });
+  dat("MH-02: duyệt đề nghị", duyetDn.status === 200 && duyetDn.json.trangThai === "APPROVED", JSON.stringify(duyetDn.json));
+
+  // --- Đơn mua ---
+  const dsNcc = await goi("/api/v1/nha-cung-cap?trangThai=hoat-dong", { cookie: cookieQT });
+  const idNccMh = ((dsNcc.json.dong as { id: string }[]) ?? [])[0]?.id;
+  dat("Có nhà cung cấp để đặt hàng", Boolean(idNccMh), `status ${dsNcc.status}`);
+
+  const taoDm = await goi("/api/v1/don-mua", {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: {
+      nhaCungCapId: idNccMh,
+      khoId: idKho,
+      deNghiId: idDn,
+      ngayHenGiao: congNgay(homNayVN(), 7),
+      dong: [{ sanPhamId: idSp, ten: `Hàng thử HTTP ${DAU}`, soLuong: "6", donGia: "1.200.000", vat: 10 }],
+    },
+  });
+  dat("MH-01: lập đơn mua, số DM-", taoDm.status === 200 && String(taoDm.json.so).startsWith("DM-"), JSON.stringify(taoDm.json));
+  const idDm = taoDm.json.id as string;
+
+  const ctDm = await goi(`/api/v1/don-mua/${idDm}`, { cookie: cookieQT });
+  const dmJson = ctDm.json as unknown as {
+    donMua: { trangThai: string; tongCong: string; dong: { id: string; conPhaiNhan: number }[]; tienDo: { tongDat: number } };
+    quyen: { gui: boolean; nhanHang: boolean };
+  };
+  dat("Tổng tiền đơn mua đúng (7,2tr + 10% VAT)", dmJson.donMua.tongCong === "7920000", dmJson.donMua.tongCong);
+  dat("Đơn mua ở trạng thái Nháp, chưa nhận hàng được", dmJson.donMua.trangThai === "DRAFT" && dmJson.quyen.nhanHang === false);
+  const dongDm = dmJson.donMua.dong[0].id;
+
+  const ctDnSau = await goi(`/api/v1/de-nghi-mua/${idDn}`, { cookie: cookieQT });
+  dat("Đề nghị chuyển sang Đã đặt hàng", (ctDnSau.json as unknown as { deNghi: { trangThai: string } }).deNghi.trangThai === "ORDERED");
+
+  const nhanSom = await goi(`/api/v1/don-mua/${idDm}/nhan-hang`, { phuongThuc: "POST", cookie: cookieQT, than: { dong: [{ dongDonId: dongDm, soLuong: "1" }] } });
+  dat("Chưa gửi nhà cung cấp thì chưa nhận hàng được (409)", nhanSom.status === 409, `status ${nhanSom.status}`);
+
+  const guiDm = await goi(`/api/v1/don-mua/${idDm}/gui`, { phuongThuc: "POST", cookie: cookieQT, than: {} });
+  dat("Gửi đơn mua cho nhà cung cấp", guiDm.status === 200 && guiDm.json.trangThai === "SENT");
+
+  const suaDmSauGui = await goi(`/api/v1/don-mua/${idDm}`, {
+    phuongThuc: "PATCH",
+    cookie: cookieQT,
+    than: { dong: [{ ten: "Sửa lén", soLuong: "1", donGia: "1" }] },
+  });
+  dat("MH-04: đơn đã gửi thì khóa dòng hàng (409)", suaDmSauGui.status === 409, `status ${suaDmSauGui.status}`);
+
+  const nhanQua = await goi(`/api/v1/don-mua/${idDm}/nhan-hang`, { phuongThuc: "POST", cookie: cookieQT, than: { dong: [{ dongDonId: dongDm, soLuong: "99" }] } });
+  dat("MH-05: nhận quá số đặt bị 409", nhanQua.status === 409 && nhanQua.json.ma === "nhan-qua-so-luong", `status ${nhanQua.status}`);
+
+  const thieuSerialMh = await goi(`/api/v1/don-mua/${idDm}/nhan-hang`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { dong: [{ dongDonId: dongDm, soLuong: "4" }] },
+  });
+  dat("MH-06: hàng theo sê-ri mà thiếu sê-ri bị 400", thieuSerialMh.status === 400 && thieuSerialMh.json.ma === "thieu-serial", `status ${thieuSerialMh.status}`);
+
+  const tonTruoc = await goi(`/api/v1/kho/ton?q=${encodeURIComponent(skuThu)}`, { cookie: cookieQT });
+  const conTruoc = (((tonTruoc.json.dong as { tonKho: number }[]) ?? [])[0]?.tonKho) ?? 0;
+
+  const nhan1 = await goi(`/api/v1/don-mua/${idDm}/nhan-hang`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: {
+      soChungTuNcc: `HD-NCC-${DAU}`,
+      dong: [{ dongDonId: dongDm, soLuong: "4", serial: [`MUA-${DAU}-1`, `MUA-${DAU}-2`, `MUA-${DAU}-3`, `MUA-${DAU}-4`] }],
+    },
+  });
+  dat("MH-01: phiếu nhận có số NK-", nhan1.status === 200 && String(nhan1.json.so).startsWith("NK-"), JSON.stringify(nhan1.json));
+  dat("MH-07: nhận một phần thì đơn chuyển PARTIALLY_RECEIVED", nhan1.json.trangThaiDon === "PARTIALLY_RECEIVED", String(nhan1.json.trangThaiDon));
+
+  const tonSau = await goi(`/api/v1/kho/ton?q=${encodeURIComponent(skuThu)}`, { cookie: cookieQT });
+  const conSau = (((tonSau.json.dong as { tonKho: number }[]) ?? [])[0]?.tonKho) ?? 0;
+  dat("MH-06: hàng nhận vào cộng thẳng vào tồn kho", conSau === conTruoc + 4, `${conTruoc} → ${conSau}`);
+
+  const huySauNhan = await goi(`/api/v1/don-mua/${idDm}/huy`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "Thử hủy" } });
+  dat("MH-08: đơn đã nhận một phần thì không hủy (409)", huySauNhan.status === 409 && huySauNhan.json.ma === "da-nhan-hang", `status ${huySauNhan.status}`);
+
+  const nhan2 = await goi(`/api/v1/don-mua/${idDm}/nhan-hang`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { dong: [{ dongDonId: dongDm, soLuong: "2", serial: [`MUA-${DAU}-5`, `MUA-${DAU}-6`] }] },
+  });
+  dat("MH-07: nhận nốt thì đơn chuyển RECEIVED", nhan2.status === 200 && nhan2.json.trangThaiDon === "RECEIVED", String(nhan2.json.trangThaiDon));
+
+  const nhanThem = await goi(`/api/v1/don-mua/${idDm}/nhan-hang`, {
+    phuongThuc: "POST",
+    cookie: cookieQT,
+    than: { dong: [{ dongDonId: dongDm, soLuong: "1", serial: [`MUA-${DAU}-7`] }] },
+  });
+  dat("Đơn đã nhận đủ thì không nhận thêm (409)", nhanThem.status === 409, `status ${nhanThem.status}`);
+
+  const goiY = await goi(`/api/v1/mua-hang/goi-y/${idDon2}`, { cookie: cookieQT });
+  dat("Đọc được gợi ý mua cho đơn bán", goiY.status === 200 && Array.isArray((goiY.json as unknown as { thieu: unknown[] }).thieu), `status ${goiY.status}`);
+
+  const nvXemMh = await goi("/api/v1/don-mua", { cookie: dnNv.cookie });
+  dat("Nhân viên kinh doanh không xem được đơn mua", nvXemMh.status === 403, `status ${nvXemMh.status}`);
+
+  const trangDnMh = await goi("/mua-hang/de-nghi?trangThai=tat-ca", { cookie: cookieQT });
+  dat("Trang Đề nghị mua dựng được", trangDnMh.status === 200 && trangDnMh.text.includes(String(taoDn.json.so)), `status ${trangDnMh.status}`);
+  const trangDnLoc = await goi("/mua-hang/de-nghi", { cookie: cookieQT });
+  dat(
+    "Danh sách mặc định ẩn đề nghị đã chuyển thành đơn mua",
+    trangDnLoc.status === 200 && !trangDnLoc.text.includes(String(taoDn.json.so)),
+    `status ${trangDnLoc.status}`,
+  );
+  const trangDnMhCt = await goi(`/mua-hang/de-nghi/${idDn}`, { cookie: cookieQT });
+  dat("Trang chi tiết đề nghị dựng được", trangDnMhCt.status === 200 && trangDnMhCt.text.includes("Hàng đề nghị mua"), `status ${trangDnMhCt.status}`);
+  const trangDnMhMoi = await goi(`/mua-hang/de-nghi/moi?donBan=${idDon2}`, { cookie: cookieQT });
+  dat("Trang lập đề nghị dựng được", trangDnMhMoi.status === 200 && trangDnMhMoi.text.includes("Hàng cần mua"), `status ${trangDnMhMoi.status}`);
+  const trangDm = await goi("/mua-hang/don-mua?trangThai=tat-ca", { cookie: cookieQT });
+  dat("Trang Đơn mua dựng được", trangDm.status === 200 && trangDm.text.includes(String(taoDm.json.so)), `status ${trangDm.status}`);
+  const trangDmLoc = await goi("/mua-hang/don-mua", { cookie: cookieQT });
+  dat(
+    "Danh sách mặc định ẩn đơn mua đã nhận đủ",
+    trangDmLoc.status === 200 && !trangDmLoc.text.includes(String(taoDm.json.so)),
+    `status ${trangDmLoc.status}`,
+  );
+  const trangDmCt = await goi(`/mua-hang/don-mua/${idDm}`, { cookie: cookieQT });
+  dat("Trang chi tiết đơn mua dựng được", trangDmCt.status === 200 && trangDmCt.text.includes("Phiếu nhận hàng"), `status ${trangDmCt.status}`);
+  const trangDmMoi = await goi("/mua-hang/don-mua/moi", { cookie: cookieQT });
+  dat("Trang lập đơn mua dựng được", trangDmMoi.status === 200 && trangDmMoi.text.includes("Hàng đặt mua"), `status ${trangDmMoi.status}`);
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

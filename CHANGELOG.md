@@ -2,6 +2,31 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.11.0 — 21/09/2026 — Mua hàng (phần để lại từ Phase 5)
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 16 (MH).
+**Chưa triển khai lên máy thật** — cùng đợt với 0.3.0 → 0.10.0, chờ Giám đốc cho phép.
+
+### Thêm
+- **Đề nghị mua** (`DN-2026-0001`): ai cần gì, vì sao, cần trước ngày nào. Vòng đời Nháp → Chờ duyệt → Đã duyệt → Đã đặt hàng, hoặc Bị từ chối / Đã hủy. Người đề nghị không tự duyệt.
+- **Đơn mua** (`DM-2026-0001`): đặt nhà cung cấp, chọn kho nhận, chốt giá và VAT. Gửi đi rồi thì khóa dòng hàng.
+- **Nhận hàng** (`NK-2026-0001`): nhận nhiều lần cho một đơn; hàng vào kho bằng **đúng `ghiSoKho()`** mà bán hàng dùng để xuất, nên tồn kho và sổ cái không bao giờ lệch. Hàng theo sê-ri phải khai đủ sê-ri.
+- **Gợi ý mua từ đơn bán thiếu hàng**: mở đơn bán, bấm *Đề nghị mua*, hệ thống điền sẵn đúng phần kho không đủ để giao.
+- 6 bảng CSDL, 12 route API, 6 màn hình (đề nghị: danh sách / chi tiết / lập mới; đơn mua: danh sách / chi tiết / lập mới).
+- Ô tìm sản phẩm tách thành component dùng chung `OTimSanPham`; bảng hàng báo giá dùng lại nó thay vì giữ bản sao riêng.
+
+### Sửa
+- **Định nghĩa vai trò không khớp migration.** Cấp bù quyền trong migration chỉ chạm doanh nghiệp **đang có**; doanh nghiệp tạo mới lấy quyền từ `src/lib/vai-tro.ts`. Phase 7 cấp `finance.view`/`finance.export` cho Trưởng phòng Kinh doanh bằng migration mà quên sửa định nghĩa, nên tenant mới thiếu quyền đó. Nay sửa cả hai chỗ, và bài thử kiểm chứng hai chỗ khớp nhau.
+
+### Quyết định đáng ghi
+- Quyền duyệt đề nghị mua giao cho **Kế toán – Tài chính**, không phải Trưởng phòng Kinh doanh: duyệt chi tiền là việc của tài chính, và vai trò Kế toán vốn đã có `purchasing.view` nên cấp thêm `approve` mới thành một bộ dùng được (QĐ-35).
+- **Phiếu nhận hàng không có đường hủy** — ghi sai thì điều chỉnh tồn kèm lý do, giữ sổ cái kho là sổ chỉ ghi thêm (QĐ-36).
+
+### Kiểm thử
+- 241 bài đơn vị, 582 bài tích hợp (thêm `thu:mua-hang` 68 bài), 314 bài HTTP đầu-cuối — tất cả đạt.
+- Diễn tập cài mới trên CSDL rỗng: 11 migration chạy sạch, RLS phủ đủ mọi bảng có `tenant_id`.
+- Đối soát kho chạy lại sau mỗi lần nhận hàng và vẫn khớp — chứng minh mua hàng không phá bất biến tồn kho của Phase 5.
+
 ## 0.10.0 — 21/09/2026 — Phase 9: Trợ lý AI
 
 Căn cứ: prompt triển khai 36 mục, mục 25–30. Thiết kế: `AI_ARCHITECTURE.md`. Luật nghiệp vụ: `BUSINESS_RULES.md` mục 15 (AI).

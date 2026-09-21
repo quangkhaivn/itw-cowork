@@ -30,6 +30,9 @@ export const KIEU_SO = {
   phieuHoTro: { loai: "support_ticket", tienTo: "HT", doDai: 4, theoNam: true },
   hoaDon: { loai: "invoice", tienTo: "HD", doDai: 4, theoNam: true },
   phieuThu: { loai: "payment", tienTo: "PT", doDai: 4, theoNam: true },
+  deNghiMua: { loai: "purchase_request", tienTo: "DN", doDai: 4, theoNam: true },
+  donMua: { loai: "purchase_order", tienTo: "DM", doDai: 4, theoNam: true },
+  nhanHang: { loai: "goods_receipt", tienTo: "NK", doDai: 4, theoNam: true },
 } satisfies Record<string, KieuSo>;
 
 /** Năm hiện tại theo giờ Việt Nam (31/12 23:30 UTC đã là năm mới ở Việt Nam). */

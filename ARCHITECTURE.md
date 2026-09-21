@@ -155,6 +155,14 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - **Đổi mô hình là đổi cấu hình**: `AI_PROVIDER`, `AI_MODEL`, khóa API trong biến môi trường. Chưa cấu hình thì hệ thống nói thẳng, không có chế độ "trả lời tạm".
 - Kiểm thử cắm **nhà cung cấp kịch bản** qua `datNhaCungCapThu()` nên vòng lặp, kiểm quyền và luồng duyệt kiểm được tất định, không gọi mạng (QĐ-33).
 
+## 7j. Mua hàng (phần để lại từ Phase 5)
+
+- Phân hệ: `src/modules/mua-hang`. Phần thuần ở `tinh-toan.ts`: vòng đời chứng từ, `tienDoNhan()`, `tinhDonMua()`, `soLuongCanMua()`.
+- **Không có đường ghi tồn riêng cho mua hàng.** Nhận hàng gọi đúng `ghiSoKho()` của Phase 5, với `ref_type = 'don-mua'`. Nhờ vậy `doiSoatKho()` — bất biến "số dư == tổng sổ cái" — vẫn đúng sau khi có mua hàng, và bài thử kiểm lại điều đó sau **mỗi** lần nhận.
+- **Kiểm hết rồi mới ghi**: cả phiếu nhận được kiểm (số lượng còn lại, đủ sê-ri, sê-ri không trùng) trước khi ghi bất cứ dòng nào. Một dòng sai thì không có phiếu nào được tạo.
+- Trạng thái đơn tính lại từ dữ liệu thật của các dòng sau mỗi lần nhận, không tin cờ đang lưu — cùng cách Phase 5 làm với phiếu xuất.
+- `tinhDonMua()` cố ý **không** tính giá vốn: với đơn mua thì đơn giá chính là giá vốn, nên không có biên lợi nhuận để tính.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

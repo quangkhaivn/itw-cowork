@@ -62,6 +62,9 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   ai_conversation: "Hội thoại trợ lý",
   ai_action: "Đề xuất của trợ lý",
   ai_tool: "Công cụ trợ lý",
+  purchase_request: "Đề nghị mua",
+  purchase_order: "Đơn mua",
+  goods_receipt: "Phiếu nhận hàng",
 };
 
 export const LuocDoLocKiemToan = z.object({
