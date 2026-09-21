@@ -250,7 +250,7 @@ Căn cứ: prompt triển khai 36 mục, mục 8–9. Luật nghiệp vụ: `BUS
 ## 0.3.0 — 20/09/2026 — Phase 2: CRM
 
 Căn cứ: prompt triển khai 36 mục của Giám đốc ngày 20/09/2026 (mục 7, 23–25). Luật nghiệp vụ: `BUSINESS_RULES.md` mục 3.
-**Chưa triển khai lên máy thật** — xem "Vấn đề đã biết".
+**Đã triển khai lên `thegioitinhoc.io.vn` ngày 21/09/2026**, cùng đợt 0.3.0 → 0.13.0 (`VD-101`). Xem thêm "Vấn đề đã biết".
 
 ### Thêm
 - **CSDL** (migration `20260919171944_phase2_crm`, chỉ thêm bảng): `customers`, `contacts`, `leads`, `interactions`, `opportunities`, `tasks`, `document_sequences`; extension `pg_trgm`; 20 ràng buộc CHECK cho luật nghiệp vụ.
