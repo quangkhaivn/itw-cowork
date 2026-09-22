@@ -12,6 +12,7 @@ import { chiTietDonHang } from "@/modules/don-hang/service";
 import { LOP_TRANG_THAI_DON, NHAN_TRANG_THAI_DON } from "@/modules/don-hang/tinh-toan";
 import { danhSachKho } from "@/modules/kho/service";
 import TacVuDonHang from "./TacVuDonHang";
+import KhungDinhKem from "@/components/dinh-kem/KhungDinhKem";
 
 export const dynamic = "force-dynamic";
 
@@ -312,6 +313,8 @@ export default async function TrangChiTietDon({ params, searchParams }: { params
           )}
         </div>
       </div>
+
+      <KhungDinhKem loai="sales_order" doiTuongId={don.id} moTa="Hợp đồng, đơn đặt hàng khách gửi, biên bản nghiệm thu." />
     </>
   );
 }

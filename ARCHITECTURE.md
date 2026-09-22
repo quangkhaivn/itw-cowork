@@ -188,6 +188,15 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Sê-ri có thêm trạng thái `dang-chuyen` với ràng buộc `warehouse_id IS NULL`. Nới CHECK cũ thay vì lách bằng cách gán sẵn kho đích lúc xuất — gán sẵn nghĩa là CSDL nói máy đã ở kho đích trong khi nó đang trên xe.
 - Nhận thiếu **không** sinh bút toán bù. Sổ kho đã ghi một bút toán xuất và một bút toán nhập nhỏ hơn, nên số dư vẫn cộng đúng bằng sổ cái; cái hệ thống đòi là **lý do**, không phải một con số cân đối giả.
 
+## 7n. Tệp đính kèm
+
+- Phân hệ: `src/modules/dinh-kem`. Ba tệp tách rõ: `tinh-toan.ts` (thuần — danh sách trắng, nhận dạng byte, làm sạch tên, sinh đường dẫn), `kho-tep.ts` (đọc/ghi đĩa, chỉ chạy ở máy chủ), `quyen.ts` (mượn quyền của chứng từ chủ), `service.ts` (ráp lại).
+- **Không có mã quyền riêng** (QĐ-44). `quyen.ts` map từng loại chứng từ sang mã quyền xem/sửa của chính chứng từ đó, rồi gọi lại đúng `dieuKienXem*()` của phân hệ chủ để kiểm phạm vi — không viết lại logic phạm vi lần hai.
+- **Nhận dạng tệp theo nội dung, không theo đuôi hay Content-Type** (QĐ-45): đây là chỗ duy nhất hệ thống nhận byte thô từ người dùng và ghi lên đĩa máy chủ, nên không tin bất cứ điều gì phía gửi tự khai.
+- Ghi đĩa **trước**, ghi bản ghi CSDL **sau** trong cùng luồng xử lý (không phải cùng giao dịch DB — ổ đĩa không tham gia transaction). Ghi đĩa hỏng thì giao dịch CSDL chưa chạy, không có bản ghi mồ côi; CSDL hỏng sau đó thì chỉ còn rác trên đĩa, không phải bản ghi trỏ vào khoảng không.
+- Tên tệp trên đĩa là **id do hệ thống sinh**, không phải tên người dùng đặt — chặn cả `../` lẫn tên trùng nhau. Hai lớp chặn đường dẫn thoát thư mục: kiểm khuôn dạng (`duongDanHopLe`) và kiểm `path.resolve` nằm trong thư mục gốc.
+- Nội dung **không** vào CSDL, để `pg_dump` không phải kéo theo ảnh chụp hóa đơn; `scripts/sao-luu.sh` đóng gói riêng thư mục đĩa cùng hạn giữ.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

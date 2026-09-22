@@ -9,6 +9,7 @@ import { docDuLieu, layMot, yeuCauMotTrongCacQuyen, type ThamSoTrang } from "@/l
 import { chiTietTraHangMua } from "@/modules/tra-hang/service";
 import { LOP_TRANG_THAI_TRA_HANG, NHAN_TRANG_THAI_TRA_MUA } from "@/modules/tra-hang/tinh-toan";
 import TacVuTraHangMua from "./TacVuTraHangMua";
+import KhungDinhKem from "@/components/dinh-kem/KhungDinhKem";
 
 export const dynamic = "force-dynamic";
 
@@ -192,6 +193,8 @@ export default async function TrangChiTietTraNcc({
           </div>
         )}
       </section>
+
+      <KhungDinhKem loai="purchase_return" doiTuongId={p.id} moTa="Biên bản gửi trả, vận đơn nhà xe, thư trả lời của nhà cung cấp." />
     </>
   );
 }

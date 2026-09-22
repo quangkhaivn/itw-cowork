@@ -8,6 +8,7 @@ import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { chiTietChuyenKho } from "@/modules/chuyen-kho/service";
 import { LOP_TRANG_THAI_CHUYEN_KHO, NHAN_TRANG_THAI_CHUYEN_KHO } from "@/modules/chuyen-kho/tinh-toan";
 import TacVuChuyenKho from "./TacVuChuyenKho";
+import KhungDinhKem from "@/components/dinh-kem/KhungDinhKem";
 
 export const dynamic = "force-dynamic";
 
@@ -169,6 +170,8 @@ export default async function TrangChiTietChuyenKho({
           </table>
         </div>
       </section>
+
+      <KhungDinhKem loai="stock_transfer" doiTuongId={p.id} moTa="Biên bản giao nhận giữa hai kho, vận đơn nhà xe, ảnh thùng hàng." />
     </>
   );
 }

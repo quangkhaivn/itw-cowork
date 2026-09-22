@@ -14,6 +14,7 @@ import {
   NHAN_TRANG_THAI_TRA_BAN,
 } from "@/modules/tra-hang/tinh-toan";
 import TacVuTraHangBan from "./TacVuTraHangBan";
+import KhungDinhKem from "@/components/dinh-kem/KhungDinhKem";
 
 export const dynamic = "force-dynamic";
 
@@ -231,6 +232,8 @@ export default async function TrangChiTietKhachTra({
           )}
         </section>
       )}
+
+      <KhungDinhKem loai="sales_return" doiTuongId={p.id} moTa="Biên bản nhận lại hàng, ảnh tình trạng máy, giấy tờ khách ký." />
     </>
   );
 }

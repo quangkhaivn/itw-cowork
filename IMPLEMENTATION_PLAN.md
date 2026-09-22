@@ -1,7 +1,7 @@
 # Kế hoạch triển khai — TGTH Business Cowork
 
 > Tệp này là **điểm vào** cho mọi phiên làm việc sau. Đọc tệp này trước, rồi `CHANGELOG.md`, rồi tài liệu chuyên đề.
-> Cập nhật lần cuối: 21/09/2026 (sau Chuyển kho nội bộ).
+> Cập nhật lần cuối: 22/09/2026 (sau Tệp đính kèm).
 
 Căn cứ: master prompt "TGTH Business Cowork Platform" (19/09/2026) và prompt triển khai 36 mục (20/09/2026) của Giám đốc. Hai văn bản nói cùng một lộ trình; khi khác chi tiết, bản 20/09 thắng.
 
@@ -175,13 +175,21 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - **Chỉ dùng được khi có từ hai kho trở lên.** Màn hình lập phiếu nói thẳng điều đó nếu mới khai một kho — liên quan `VD-105`.
 - **Chưa làm có chủ đích**: phiếu in ra giấy cho lái xe, và tự ghi hao hụt phần thiếu vào tài khoản chi phí.
 
+## 4m. Tệp đính kèm (xong trên máy phát triển)
+
+- [x] CSDL 1 bảng + 6 CHECK · [x] service + 4 route · [x] 1 component dùng chung, gắn vào 5 loại trang · [x] kiểm thử (309 đơn vị, 772 tích hợp, 434 HTTP) · [x] diễn tập cài mới 15 migration · [x] soát giao diện
+- [ ] Triển khai máy thật (bản 0.15.0 — đợt trước đã lên 21/09, gồm 0.3.0 → 0.13.0)
+- **Không cần Giám đốc đặt ngưỡng nào.** Trần 20 MB/tệp và 20 tệp/chứng từ là trần kỹ thuật, không phải chính sách.
+- Nhân tiện thêm màn hình *Quản trị → Cấu hình* hiện **phiên bản và mã bản dựng đang chạy** (bản 0.14.1), để lần triển khai sau không phải đoán máy thật đang chạy gì.
+- **Chưa làm có chủ đích**: xem trước ảnh/PDF ngay trong trang (hiện chỉ tải về), giới hạn dung lượng theo gói dịch vụ.
+
 ## 5. Sau Phase 9 — việc còn lại
 
 Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc phase nào, xếp theo thứ tự nên làm:
 
-1. **Triển khai 0.3.0 → 0.10.0 lên máy thật** (`VD-101`) — đang chờ Giám đốc cho phép. Đây là việc chặn mọi thứ khác: tám phase đã xong vẫn chưa ai dùng được.
-2. **Khai dữ liệu nền và các ngưỡng** (`VD-104` → `VD-109`): hồ sơ công ty, kho và tồn đầu kỳ, ngưỡng biên lợi nhuận, ngưỡng SLA, số ngày công nợ, giờ quét nhắc việc, khóa API.
-3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0), ~~công nợ phải trả~~ (0.12.0), ~~trả hàng / đổi máy~~ (0.13.0) và ~~chuyển kho nội bộ~~ (0.14.0) **đã làm 21/09**. Còn: tệp đính kèm, gửi nhắc ra ngoài qua email hoặc Zalo, hoàn tiền mặt cho khách, bù trừ công nợ hai chiều, dự báo dòng tiền.
+1. ~~Triển khai 0.3.0 → 0.13.0 lên máy thật~~ **đã xong 21/09/2026** (`VD-101` đóng). Máy thật đang chạy 0.13.0; bản 0.14.0 (chuyển kho) và 0.15.0 (tệp đính kèm) còn trên máy phát triển, chưa triển khai đợt tiếp theo.
+2. **Khai dữ liệu nền và các ngưỡng** (`VD-104` → `VD-109`) — nay **chặn thật**, không còn là việc chờ song song: màn hình đã có trên máy thật mà ngưỡng chưa đặt, nên một số tính năng báo "chưa đặt ngưỡng" thay vì chạy.
+3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0), ~~công nợ phải trả~~ (0.12.0), ~~trả hàng / đổi máy~~ (0.13.0), ~~chuyển kho nội bộ~~ (0.14.0) và ~~tệp đính kèm~~ (0.15.0) **đã làm**. Còn: gửi nhắc ra ngoài qua email hoặc Zalo, hoàn tiền mặt cho khách, bù trừ công nợ hai chiều, dự báo dòng tiền, nơi cất sao lưu ngoài máy chủ.
 
 ## 6. Câu hỏi chờ Giám đốc
 

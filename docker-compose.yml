@@ -50,6 +50,9 @@ services:
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
+    volumes:
+      # Tệp đính kèm nằm ngoài ảnh Docker để sống qua mỗi lần triển khai lại.
+      - ./data/dinh-kem:/app/data/dinh-kem
     expose:
       - "3000"
     networks: [cowork]

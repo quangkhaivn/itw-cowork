@@ -10,6 +10,7 @@ import { homNayVN } from "@/modules/crm/chung";
 import { chiTietHoaDonMua, NHAN_TINH_TRANG_TRA, NHAN_TRANG_THAI_HOA_DON_MUA } from "@/modules/cong-no-tra/service";
 import { NHAN_PHUONG_THUC_THU } from "@/modules/tai-chinh/tinh-toan";
 import TacVuHoaDonMua from "./TacVuHoaDonMua";
+import KhungDinhKem from "@/components/dinh-kem/KhungDinhKem";
 
 export const dynamic = "force-dynamic";
 
@@ -214,6 +215,8 @@ export default async function TrangChiTietHoaDonMua({
           </table>
         )}
       </section>
+
+      <KhungDinhKem loai="supplier_bill" doiTuongId={hd.id} moTa="Bản chụp hóa đơn nhà cung cấp gửi tới, biên bản đối chiếu, chứng từ vận chuyển." />
     </>
   );
 }

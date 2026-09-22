@@ -2,6 +2,26 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.15.0 — 22/09/2026 — Tệp đính kèm
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 20 (DK).
+**Chưa triển khai lên máy thật.**
+
+### Thêm
+- **Đính tệp vào chứng từ**: hóa đơn nhà cung cấp, phiếu khách trả hàng, phiếu trả nhà cung cấp, phiếu chuyển kho, đơn hàng, phiếu hỗ trợ. Khối `Tệp đính kèm` dùng chung một component cho mọi trang.
+- **Chặn tệp xấu bằng nội dung thật sự**, không tin đuôi tên hay `Content-Type`: danh sách trắng PDF/ảnh/Word/Excel/CSV/văn bản, khớp vài byte đầu với đuôi tên. Không nhận SVG, HTML, zip.
+- **Nội dung tệp nằm trên đĩa**, không trong CSDL — `scripts/sao-luu.sh` đóng gói riêng thành `.tar.gz`.
+- Gỡ tệp là xóa mềm, bắt buộc ghi lý do; tải về kiểm lại mã băm SHA-256 trước khi trả về.
+- 1 bảng CSDL + 6 CHECK, 4 route API, 1 component dùng chung, gắn vào 5 loại trang chứng từ.
+
+### Quyết định đáng ghi
+- **Không có mã quyền riêng cho tệp đính kèm** (QĐ-44): mượn nguyên quyền và phạm vi của chứng từ chủ. Một mã quyền riêng sẽ tách rời khỏi phạm vi dữ liệu thật của chứng từ và dễ thành cửa sau.
+- **Nhận dạng tệp theo byte đầu, không theo đuôi tên hay Content-Type** (QĐ-45): đây là chỗ duy nhất hệ thống nhận byte từ người ngoài và cất lên đĩa máy chủ.
+
+### Kiểm thử
+- 309 bài đơn vị, 772 bài tích hợp (thêm `thu:dinh-kem` 30 bài), 434 bài HTTP đầu-cuối — tất cả đạt.
+- Diễn tập cài mới trên CSDL rỗng: 15 migration chạy sạch, RLS phủ đủ mọi bảng có `tenant_id`.
+
 ## 0.14.1 — 21/09/2026 — Hiện phiên bản đang chạy
 
 **Chưa triển khai lên máy thật.**

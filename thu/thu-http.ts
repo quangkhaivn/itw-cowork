@@ -1683,6 +1683,100 @@ async function main() {
     `status ${trangCauHinh.status}`,
   );
 
+  // --- 7o. Tệp đính kèm ---
+  console.log("\n[7o] Tệp đính kèm");
+
+  /** Gửi tệp qua multipart — `goi()` chỉ biết JSON. */
+  async function guiTep(
+    loai: string,
+    doiTuong: string,
+    tenTep: string,
+    noiDung: Uint8Array,
+    cookie: string | null,
+  ): Promise<{ status: number; json: Record<string, unknown> }> {
+    const form = new FormData();
+    form.append("loai", loai);
+    form.append("doiTuong", doiTuong);
+    form.append("tep", new Blob([new Uint8Array(noiDung)]), tenTep);
+    const r = await fetch(`${URL_GOC}/api/v1/dinh-kem`, {
+      method: "POST",
+      headers: { "x-real-ip": IP_THU, origin: `http://${HOST}`, ...(cookie ? { cookie } : {}) },
+      body: form,
+    });
+    const text = await r.text();
+    let json: Record<string, unknown> = {};
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // không phải JSON
+    }
+    return { status: r.status, json };
+  }
+
+  const PDF_THU = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xc3, 0xa9]);
+
+  const tepChuaDn = await guiTep("sales_order", idDon2, "a.pdf", PDF_THU, null);
+  dat("Chưa đăng nhập thì không đính kèm được", tepChuaDn.status === 401, `status ${tepChuaDn.status}`);
+
+  const tepDoiLot = await guiTep("sales_order", idDon2, "that-su-la-exe.pdf", new Uint8Array([0x4d, 0x5a, 0x90, 0x00]), cookieQT);
+  dat("DK-04: tệp đội lốt (.pdf mà ruột là thứ khác) bị 415", tepDoiLot.status === 415, `status ${tepDoiLot.status}`);
+
+  const tepSvg = await guiTep("sales_order", idDon2, "logo.svg", new Uint8Array([0x3c, 0x73, 0x76, 0x67]), cookieQT);
+  dat("DK-04: SVG bị từ chối", tepSvg.status === 415 || tepSvg.status === 409, `status ${tepSvg.status}`);
+
+  const tepLoaiLa = await guiTep("bang_luong", idDon2, "a.pdf", PDF_THU, cookieQT);
+  dat("DK-01: loại chứng từ không nhận đính kèm bị 400", tepLoaiLa.status === 400, `status ${tepLoaiLa.status}`);
+
+  const tepOk = await guiTep("sales_order", idDon2, "hợp đồng ký.pdf", PDF_THU, cookieQT);
+  dat("DK-01: đính kèm được, giữ tên tiếng Việt có dấu", tepOk.status === 200 && tepOk.json.tenTep === "hợp đồng ký.pdf", JSON.stringify(tepOk.json));
+  const idTep = tepOk.json.id as string;
+
+  const dsTep = await goi(`/api/v1/dinh-kem?loai=sales_order&doiTuong=${idDon2}`, { cookie: cookieQT });
+  const dsTepJson = dsTep.json as unknown as { tep: { id: string }[]; quyen: { dinhKem: boolean } };
+  dat("Tệp hiện trong danh sách của chứng từ", dsTep.status === 200 && dsTepJson.tep.some((t) => t.id === idTep));
+  dat("Quản trị thấy được phép đính kèm", dsTepJson.quyen.dinhKem === true);
+
+  // Tải về: kiểm tiêu đề và đúng từng byte.
+  const taiVe = await fetch(`${URL_GOC}/api/v1/dinh-kem/${idTep}/tai`, { headers: { cookie: cookieQT ?? "", "x-real-ip": IP_THU } });
+  const byteVe = new Uint8Array(await taiVe.arrayBuffer());
+  dat("Tải về đúng từng byte đã tải lên", taiVe.status === 200 && byteVe.length === PDF_THU.length && byteVe.every((b, i) => b === PDF_THU[i]), `${byteVe.length} byte`);
+  dat("Tải về đúng kiểu tệp", taiVe.headers.get("content-type") === "application/pdf", String(taiVe.headers.get("content-type")));
+  dat(
+    "DK-05: luôn tải xuống, KHÔNG mở trong tab (Content-Disposition: attachment)",
+    (taiVe.headers.get("content-disposition") ?? "").startsWith("attachment;"),
+    String(taiVe.headers.get("content-disposition")),
+  );
+  dat("Không cho bộ nhớ đệm giữ lại tệp", (taiVe.headers.get("cache-control") ?? "").includes("no-store"), String(taiVe.headers.get("cache-control")));
+
+  const taiChuaDn = await fetch(`${URL_GOC}/api/v1/dinh-kem/${idTep}/tai`, { headers: { "x-real-ip": IP_THU } });
+  dat("Chưa đăng nhập thì không tải được tệp", taiChuaDn.status === 401, `status ${taiChuaDn.status}`);
+
+  const taiNgoaiPhamVi = await goi(`/api/v1/dinh-kem/${idTep}/tai`, { cookie: dnNv.cookie });
+  dat(
+    "DK-02: người ngoài phạm vi chứng từ KHÔNG tải được tệp — trả 404, không phải 403",
+    taiNgoaiPhamVi.status === 404,
+    `status ${taiNgoaiPhamVi.status}`,
+  );
+  const dsNgoaiPhamVi = await goi(`/api/v1/dinh-kem?loai=sales_order&doiTuong=${idDon2}`, { cookie: dnNv.cookie });
+  dat("DK-02: người ngoài phạm vi cũng không thấy danh sách tệp", dsNgoaiPhamVi.status === 404, `status ${dsNgoaiPhamVi.status}`);
+
+  // Đính kèm vào hóa đơn nhà cung cấp — đúng việc hay dùng nhất.
+  const tepHm = await guiTep("supplier_bill", idHm, "ban-chup-hoa-don.pdf", PDF_THU, cookieQT);
+  dat("Đính kèm bản chụp vào hóa đơn nhà cung cấp", tepHm.status === 200, JSON.stringify(tepHm.json));
+  const dsHm = await goi(`/api/v1/dinh-kem?loai=supplier_bill&doiTuong=${idHm}`, { cookie: cookieQT });
+  dat("Hóa đơn nhà cung cấp có tệp đính kèm", (dsHm.json as unknown as { tep: unknown[] }).tep.length === 1);
+
+  const goThieuLyDo = await goi(`/api/v1/dinh-kem/${idTep}/go`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "" } });
+  dat("DK-06: gỡ tệp phải ghi lý do", goThieuLyDo.status === 400, `status ${goThieuLyDo.status}`);
+  const goTepHttp = await goi(`/api/v1/dinh-kem/${idTep}/go`, { phuongThuc: "POST", cookie: cookieQT, than: { lyDo: "Tải nhầm tệp trong bài thử" } });
+  dat("DK-06: gỡ được tệp", goTepHttp.status === 200, JSON.stringify(goTepHttp.json));
+
+  const taiSauGo = await goi(`/api/v1/dinh-kem/${idTep}/tai`, { cookie: cookieQT });
+  dat("Tệp đã gỡ thì không tải về được nữa", taiSauGo.status === 404, `status ${taiSauGo.status}`);
+
+  const trangDonCoTep = await goi(`/ban-hang/don-hang/${idDon2}`, { cookie: cookieQT });
+  dat("Trang đơn hàng có khối Tệp đính kèm", trangDonCoTep.status === 200 && trangDonCoTep.text.includes("Tệp đính kèm"), `status ${trangDonCoTep.status}`);
+
   // --- 8. Khóa tạm khi sai mật khẩu, quản trị mở khóa ---
   let lanCuoi: PhanHoi | null = null;
   for (let i = 0; i < 5; i++) lanCuoi = await dangNhap(emailNv, "sai-mat-khau-1");

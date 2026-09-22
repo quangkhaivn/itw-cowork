@@ -92,6 +92,9 @@ export function xuLyApi<P extends Record<string, string> = Record<string, never>
         if (tuyChon.quyen) batBuocQuyen(hoSo, tuyChon.quyen);
         return xuLy(taoNguCanh(tx, phien.tenantId, hoSo, ip, userAgent), req, thamSo);
       });
+      // Route trả tệp (tải tệp đính kèm) tự dựng phản hồi nhị phân; mọi route khác
+      // trả dữ liệu thuần và được bọc thành JSON ở đây.
+      if (ketQua instanceof NextResponse) return ketQua;
       return NextResponse.json(ketQua ?? { ok: true });
     } catch (loi) {
       if (loi instanceof LoiThieuQuyen) {

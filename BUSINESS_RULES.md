@@ -412,3 +412,24 @@ Giữa hai bước hàng **không thuộc kho nào**. Đó là sự thật, và 
 Hàng đi qua **đúng** `ghiSoKho()` mà bán hàng, mua hàng và trả hàng dùng, nên `doiSoatKho()` vẫn khớp — kể cả khi hàng đang trên đường, và kể cả khi nhận thiếu (sổ ghi một bút toán xuất và một bút toán nhập nhỏ hơn; số dư vẫn cộng đúng bằng sổ cái).
 
 **Chưa làm ở phần này**: phiếu chuyển kho in ra giấy cho lái xe cầm, và tự động ghi hao hụt phần thiếu vào một tài khoản chi phí.
+
+## 20. Tệp đính kèm
+
+Đính tệp vào chứng từ: hóa đơn nhà cung cấp, phiếu khách trả hàng, phiếu trả nhà cung cấp, phiếu chuyển kho, đơn hàng, phiếu hỗ trợ.
+
+**Không có mã quyền riêng cho tệp đính kèm.** Quyền mượn nguyên của chứng từ chủ — ai xem được hóa đơn nhà cung cấp thì xem được tệp của nó, ai sửa được phiếu trả hàng thì đính kèm được vào đó (DK-02). Kiểm cả **phạm vi dữ liệu**, không chỉ mã quyền: nhân viên có `order.view` phạm vi "của mình" thì không đọc được tệp của đơn người khác.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| DK-01 | Chỉ đính kèm vào loại chứng từ hệ thống biết cách kiểm quyền xem. Thêm loại mới phải thêm cả ở CHECK và ở `src/modules/dinh-kem/quyen.ts` — thiếu một trong hai là có tệp mà không ai biết ai được đọc | [CSDL] CHECK · [SV] |
+| DK-02 | Quyền đọc/ghi **mượn nguyên** quyền và phạm vi của chứng từ chủ, không có mã quyền riêng | [SV] `quyen.ts` · [TH] |
+| DK-03 | Tệp rỗng bị chặn. Trần 20 MB mỗi tệp, tối đa 20 tệp một chứng từ — trần kỹ thuật, không phải ngưỡng nghiệp vụ | [CSDL] CHECK · [SV] · [ĐV] |
+| DK-04 | **Danh sách trắng kiểu tệp**, nhận dạng theo **nội dung thật sự** (vài byte đầu), không tin `Content-Type` trình duyệt gửi lên. Đuôi tên và nội dung phải khớp nhau — tệp đặt tên `.pdf` mà ruột không phải PDF bị từ chối. Không nhận SVG, HTML, zip: những thứ chạy được trong trình duyệt hoặc không kiểm được bên trong | [CSDL] CHECK · [SV] hàm thuần · [ĐV] · [TH] |
+| DK-05 | Tên tệp hiển thị được làm sạch (bỏ đường dẫn, ký tự điều khiển, dấu nháy). Tên trên đĩa là **id hệ thống sinh**, không phải tên người dùng đặt. Tải về luôn kèm `Content-Disposition: attachment` — không mở thẳng trong tab | [SV] · [ĐV] · [TH] |
+| DK-06 | Gỡ tệp là **xóa mềm**, bắt buộc ghi lý do. Tệp vẫn nằm trên đĩa và bản ghi vẫn còn — chứng từ đã có người nhìn thấy thì không được biến mất không dấu vết | [CSDL] CHECK · [SV] · [TH] |
+
+Nội dung tệp nằm **trên đĩa** (`data/dinh-kem`, gắn volume Docker), không trong CSDL — để bản sao lưu CSDL không phải kéo theo hàng gigabyte ảnh chụp hóa đơn. `scripts/sao-luu.sh` đóng gói riêng thư mục này thành `.tar.gz` cùng hạn giữ; **phục hồi phải lấy cả hai gói**.
+
+Mã băm SHA-256 lưu cùng bản ghi; tải về kiểm lại mã băm — tệp trên đĩa khác với lúc tải lên thì báo lỗi rõ ràng, không im lặng trả tệp sai.
+
+**Giới hạn cần biết**: bản sao lưu tệp đính kèm nằm trên cùng máy chủ như CSDL — mất máy chủ là mất cả hai (`VD-068`, chưa có nơi cất ngoài).

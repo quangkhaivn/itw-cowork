@@ -113,6 +113,8 @@ model Tenant {
   // Chuyển kho nội bộ
   stockTransfers       StockTransfer[]
   stockTransferItems   StockTransferItem[]
+  // Tệp đính kèm
+  attachments          Attachment[]
 
   @@map("tenants")
 }
@@ -213,6 +215,7 @@ model User {
   ownedSalesReturns    SalesReturn[]         @relation("TraHangBanPhuTrach")
   ownedPurchaseReturns PurchaseReturn[]      @relation("TraHangMuaPhuTrach")
   ownedStockTransfers  StockTransfer[]       @relation("ChuyenKhoPhuTrach")
+  uploadedAttachments  Attachment[]          @relation("TepDinhKemNguoiTai")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -2564,4 +2567,42 @@ model StockTransferItem {
   @@unique([transferId, lineNo])
   @@index([tenantId, productId])
   @@map("stock_transfer_items")
+}
+
+// ---------------------------------------------------------------------------
+// Tệp đính kèm cho chứng từ.
+// Nội dung tệp nằm TRÊN ĐĨA (thư mục `data/dinh-kem`, gắn thành volume Docker);
+// bảng này chỉ giữ thông tin về tệp. Để nội dung trong CSDL thì mỗi lần sao lưu
+// phải kéo theo hàng gigabyte ảnh chụp hóa đơn, và pg_dump chậm dần theo thời gian.
+// ---------------------------------------------------------------------------
+
+/// Một tệp đính kèm vào một chứng từ. Xóa là xóa mềm — không bao giờ mất dấu vết.
+model Attachment {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  /// supplier_bill | sales_return | purchase_return | stock_transfer | sales_order | support_ticket
+  objectType   String    @map("object_type") @db.VarChar(40)
+  objectId     String    @map("object_id") @db.Uuid
+  /// Tên tệp người dùng thấy. **Không** dùng để đặt tên tệp trên đĩa.
+  fileName     String    @map("file_name") @db.VarChar(255)
+  /// Đường dẫn tương đối trong thư mục đính kèm, do hệ thống sinh (không lấy từ người dùng).
+  storedPath   String    @map("stored_path") @db.VarChar(500)
+  /// Kiểu tệp do hệ thống xác định, không tin `Content-Type` trình duyệt gửi lên.
+  mimeType     String    @map("mime_type") @db.VarChar(100)
+  sizeBytes    Int       @map("size_bytes")
+  /// Để đối chiếu tệp trên đĩa có đúng tệp đã tải lên không, và để nhận ra tệp trùng.
+  sha256       String    @db.VarChar(64)
+  note         String?   @db.Text
+  uploadedAt   DateTime  @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  uploadedBy   String    @map("uploaded_by") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy    String?   @map("deleted_by") @db.Uuid
+  deleteReason String?   @map("delete_reason") @db.Text
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploader User   @relation("TepDinhKemNguoiTai", fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, objectType, objectId])
+  @@index([tenantId, sha256])
+  @@map("attachments")
 }
