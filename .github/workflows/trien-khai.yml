@@ -1,0 +1,64 @@
+name: Kiểm tra và triển khai
+
+# Luồng: mọi lần đẩy mã (push) lên nhánh master đều chạy "Kiểm tra" trước.
+# Việc "Triển khai" lên máy chủ thật (VPS) chỉ chạy tiếp SAU KHI "Kiểm tra" qua,
+# và CHỈ THỰC SỰ đụng vào máy chủ sau khi có người bấm duyệt trong GitHub —
+# xem bước cấu hình "environment: production" ở dưới. Đây là cổng duyệt bắt
+# buộc theo đúng nguyên tắc của dự án: không tự triển khai production khi
+# chưa có người có thẩm quyền duyệt phạm vi cụ thể (PHẦN E của đặc tả).
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {} # cho phép bấm "Run workflow" chạy tay trên GitHub khi cần
+
+jobs:
+  kiem-tra:
+    name: Kiểm tra (typecheck, lint, kiểm thử đơn vị, build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lấy mã nguồn
+        uses: actions/checkout@v4
+
+      - name: Cài Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Cài gói phụ thuộc
+        run: npm ci
+
+      - name: Sinh Prisma Client
+        run: npx prisma generate
+
+      - name: Chạy npm run kiem-tra (typecheck + lint + kiểm thử đơn vị + build)
+        run: npm run kiem-tra
+
+  trien-khai:
+    name: Triển khai lên máy chủ production
+    needs: kiem-tra
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    # "environment: production" là cổng duyệt tay. Phải cấu hình một lần trên
+    # GitHub: Settings → Environments → New environment → đặt tên đúng
+    # "production" → mục Deployment protection rules → "Required reviewers"
+    # → thêm chính mình. Thiếu bước này, job này sẽ chạy thẳng không chờ ai —
+    # PHẢI cấu hình trước khi dựa vào workflow này.
+    environment: production
+    steps:
+      - name: SSH vào máy chủ, kéo mã mới và chạy trien-khai.sh
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /root/cowork-itw
+            git fetch origin
+            git checkout master
+            git merge --ff-only origin/master
+            ./trien-khai.sh
