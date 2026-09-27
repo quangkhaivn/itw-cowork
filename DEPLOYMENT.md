@@ -1,11 +1,12 @@
 # Triển khai — TGTH Business Cowork
 
-Cập nhật: 19/09/2026.
+Cập nhật: 27/09/2026.
 
 ## Môi trường
 
 | Môi trường | Nơi | Ghi chú |
 |---|---|---|
+| Kho mã nguồn | [github.com/quangkhaivn/itw-cowork](https://github.com/quangkhaivn/itw-cowork) | Nhánh `master`. Từ 27/09/2026 là nơi máy chủ **kéo mã về**, thay vì nhận trực tiếp từ máy trạm |
 | Thật (production) | VPS 123HOST, AlmaLinux 9.3, 2 CPU / 4 GB RAM / 60 GB; `https://thegioitinhoc.io.vn` | Mã ở `/root/cowork-itw`. SSH cổng **2018** (cổng 22 bị chặn) |
 | Thử (staging) | **Chưa có.** | Máy hiện tại chạy cả website thử `itw-web`; thêm một bộ Cowork thứ hai sẽ thiếu RAM. Đề xuất: tách máy khi có dữ liệu kinh doanh thật (Phase 2 trở đi) |
 | Phát triển | Máy trạm | PostgreSQL cục bộ, xem mục cuối |
@@ -20,16 +21,54 @@ Internet ─▶ nginx máy chủ (:443, Let's Encrypt, /etc/nginx/conf.d/cowork.
                                                   redis (./data/redis)
 ```
 
+## Thiết lập một lần — chuyển máy chủ sang kéo mã từ GitHub (27/09/2026)
+
+Trước 27/09/2026, mã được đưa lên máy chủ trực tiếp từ máy trạm bằng `git archive | ssh` (xem mục "Cách cũ" bên dưới). Từ nay mã nguồn có ở GitHub (`quangkhaivn/itw-cowork`, riêng tư), nên máy chủ tự kéo về bằng `git pull` thay vì nhận từ máy trạm. Việc chuyển đổi này làm **một lần duy nhất**, chạy tay trên máy chủ (không tự động qua GitHub Actions — mọi lần triển khai vẫn cần người chạy tay `./trien-khai.sh`, đúng nguyên tắc "chỉ triển khai khi có người duyệt phạm vi cụ thể" ở PHẦN E của đặc tả):
+
+```bash
+ssh -p 2018 root@<máy chủ>
+cd /root/cowork-itw
+
+# Sao lưu thư mục hiện tại trước khi đổi cách quản lý mã — phòng khi git có vấn đề
+cp -a /root/cowork-itw "/root/cowork-itw.sao-luu-truoc-git-$(date -u +%Y%m%d%H%M%S)"
+
+git init
+git remote add origin https://github.com/quangkhaivn/itw-cowork.git
+git fetch origin
+git checkout -B master origin/master
+
+# Bắt buộc kiểm lại: .env, data/, .pgdata/ phải KHÔNG bị git đụng tới
+# (đều nằm trong .gitignore) — status chỉ nên báo "nothing to commit" hoặc
+# liệt kê đúng các tệp/thư mục đó dưới "Untracked", không phải "Changes".
+git status
+ls -la .env data/ 2>/dev/null
+```
+
+Nếu `git status` báo có thay đổi bất thường ở tệp mã nguồn (không phải `.env`/`data/`), dừng lại — nghĩa là bản đang chạy trên máy chủ đã bị sửa tay lệch khỏi commit đang có trên GitHub, cần đối chiếu trước khi tiếp tục, không âm thầm ghi đè.
+
+Xác thực với GitHub: repo riêng tư nên `git fetch`/`git pull` cần thông tin đăng nhập. Dùng một trong hai cách, không đặt token dạng chữ thường trong `.git/config` nếu tránh được:
+- **Personal access token phạm vi tối thiểu** (chỉ quyền đọc repo này) làm mật khẩu khi git hỏi, được credential helper của git lưu lại sau lần đầu.
+- Hoặc SSH deploy key: tạo cặp khóa mới trên máy chủ (`ssh-keygen -t ed25519 -f ~/.ssh/itw_cowork_deploy -N ""`), thêm khóa công khai vào GitHub → repo → Settings → Deploy keys (chỉ quyền đọc), rồi đổi remote sang `git@github.com:quangkhaivn/itw-cowork.git` và cấu hình `~/.ssh/config` dùng đúng khóa đó.
+
 ## Triển khai một phiên bản mới
 
-1. Trên máy trạm: `npm run kiem-tra` (typecheck + lint + kiểm thử đơn vị + build) và `npm run thu:tich-hop` trên CSDL phát triển. Commit.
-2. Đưa mã lên máy chủ — chỉ các tệp đã commit, **không** đè `.env` và `data/`:
+1. Trên máy trạm: `npm run kiem-tra` (typecheck + lint + kiểm thử đơn vị + build) và `npm run thu:tich-hop` trên CSDL phát triển. Commit và `git push origin master` lên GitHub.
+2. Trên máy chủ, kéo đúng mã vừa push về — không đụng `.env`, `data/`, `.pgdata/`:
    ```bash
-   # Gỡ mã cũ (giữ .env, data/, prisma/migrations đã áp) rồi giải nén bản mới
+   ssh -p 2018 root@<máy chủ>
+   cd /root/cowork-itw
+   git fetch origin
+   git log HEAD..origin/master --oneline   # xem trước sắp lên những commit nào
+   git pull --ff-only origin master
+   ```
+   `--ff-only` để lệnh dừng và báo lỗi rõ ràng nếu nhánh trên máy chủ lệch khỏi GitHub (bị sửa tay, hoặc máy chủ đứng sau một nhánh khác), thay vì âm thầm merge hoặc tạo commit lạ trên máy chủ.
+
+   **Cách cũ (trước 27/09/2026), giữ lại làm phương án dự phòng nếu GitHub không truy cập được từ máy chủ:**
+   ```bash
    ssh -p 2018 root@<máy chủ> 'cd /root/cowork-itw && rm -rf src thu worker scripts prisma/seed'
    git archive --format=tar HEAD | ssh -p 2018 root@<máy chủ> 'tar -x -C /root/cowork-itw'
    ```
-   Phải gỡ thư mục mã cũ trước: tệp đã xóa hoặc đổi chỗ trong bản mới (ví dụ `src/middleware.ts` → `src/proxy.ts`) mà còn sót lại sẽ làm bản dựng hỏng.
+   Phải gỡ thư mục mã cũ trước: tệp đã xóa hoặc đổi chỗ trong bản mới (ví dụ `src/middleware.ts` → `src/proxy.ts`) mà còn sót lại sẽ làm bản dựng hỏng. Cách này không cần máy chủ có mạng ra GitHub, nhưng lại cần máy trạm SSH thẳng vào máy chủ.
 3. Trên máy chủ: `cd /root/cowork-itw && ./trien-khai.sh`. Bảy bước:
    1. dựng ảnh `cowork-itw:latest`
    2. bật db + redis, chờ sẵn sàng
