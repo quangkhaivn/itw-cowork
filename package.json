@@ -36,7 +36,8 @@
     "thu:tra-hang": "tsx --env-file-if-exists=.env thu/thu-tra-hang.ts",
     "thu:chuyen-kho": "tsx --env-file-if-exists=.env thu/thu-chuyen-kho.ts",
     "thu:dinh-kem": "tsx --env-file-if-exists=.env thu/thu-dinh-kem.ts",
-    "thu:khach-nang-cao": "tsx --env-file-if-exists=.env thu/thu-khach-nang-cao.ts"
+    "thu:khach-nang-cao": "tsx --env-file-if-exists=.env thu/thu-khach-nang-cao.ts",
+    "thu:qa-khach": "tsx --env-file-if-exists=.env thu/thu-qa-khach.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
