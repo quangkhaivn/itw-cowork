@@ -5,7 +5,7 @@ import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { chuanHoaDienThoai, chuanHoaEmail, chuanHoaMaSoThue, chuanHoaTen } from "@/modules/crm/chuan-hoa";
-import { kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, tienVeChuoi, trongPhamVi } from "@/modules/crm/chung";
+import { khoaDoTrungLead, kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, tienVeChuoi, trongPhamVi } from "@/modules/crm/chung";
 import { LEAD_DANG_MO } from "@/modules/crm/hang-so";
 import { batBuocThayKhach, taoKhachHang, taoLienHe, timKhachCoTheTrung, type UngVienTrung } from "@/modules/khach-hang/service";
 import { taoCoHoi } from "@/modules/co-hoi/service";
@@ -237,6 +237,8 @@ export async function taoLead(nc: NguCanh, d: DuLieuTaoLead, rawPayload?: Record
   await kiemTraNguoiPhuTrach(nc, "crm.create", ownerId);
   await kiemTraMaDuLieuGoc(nc, "nguon_lead", d.nguon, "nguon");
 
+  // MK-07: cùng khóa với `nhanLead()` — lead tạo tay và lead từ form không lọt qua nhau khi cùng lúc.
+  await khoaDoTrungLead(nc.tx, nc.tenantId, k);
   const ungVien = await timTrungLead(nc, k);
   if (ungVien.length && !d.xacNhanKhongTrung) {
     throw new LoiNghiepVu(

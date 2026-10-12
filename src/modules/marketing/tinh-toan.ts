@@ -99,6 +99,20 @@ export function cacBuocKeTiep(tu: TrangThaiChienDich): TrangThaiChienDich[] {
 }
 
 // ---------------------------------------------------------------------------
+// Ký tự điều khiển
+// ---------------------------------------------------------------------------
+
+/**
+ * Ký tự điều khiển, trừ xuống dòng / tab / về đầu dòng. PostgreSQL không nhận NUL (U+0000)
+ * trong `text` / `jsonb` — để lọt xuống CSDL là lỗi 500 thay vì 400 (QA 12/10).
+ */
+export const KY_TU_DIEU_KHIEN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+
+export function coKyTuDieuKhien(s: unknown): boolean {
+  return typeof s === "string" && KY_TU_DIEU_KHIEN.test(s);
+}
+
+// ---------------------------------------------------------------------------
 // Chia lead vòng tròn (MK-08)
 // ---------------------------------------------------------------------------
 
@@ -173,7 +187,8 @@ export function docUtm(nguon: Record<string, unknown> | null | undefined): BoUtm
   const kq = {} as BoUtm;
   for (const k of KHOA_UTM) {
     const v = nguon?.[k];
-    kq[k] = typeof v === "string" && v.trim() ? v.trim().slice(0, 120) : null;
+    // Ký tự điều khiển trong UTM: bỏ giá trị đó (UTM chỉ để thống kê, không đáng từ chối cả lần gửi).
+    kq[k] = typeof v === "string" && v.trim() && !KY_TU_DIEU_KHIEN.test(v) ? v.trim().slice(0, 120) : null;
   }
   return kq;
 }
@@ -212,6 +227,10 @@ export function kiemTraDuLieuForm(truong: TruongFormCauHinh[], than: Record<stri
     const v = typeof tho === "string" ? tho.trim() : "";
     if (!v) {
       if (t.batBuoc) loi[t.khoa] = `Vui lòng nhập ${t.nhan.toLowerCase()}.`;
+      continue;
+    }
+    if (KY_TU_DIEU_KHIEN.test(v)) {
+      loi[t.khoa] = `${t.nhan} có ký tự không hợp lệ.`;
       continue;
     }
     if (v.length > dn.toiDa) {

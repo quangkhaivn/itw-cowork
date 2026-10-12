@@ -20,8 +20,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ma: string
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] ?? null;
   const khoa = req.headers.get("x-cowork-key") ?? bearer;
   try {
+    // Trần tính theo BYTE: kiểm Content-Length trước khi đọc (khỏi kéo cả thân lớn vào bộ nhớ),
+    // rồi kiểm lại số byte thật sau khi đọc (Content-Length có thể thiếu hoặc khai sai).
+    const khai = Number(req.headers.get("content-length") ?? "0");
+    if (Number.isFinite(khai) && khai > TOI_DA_BYTE) return NextResponse.json({ thongBao: "Dữ liệu gửi quá lớn." }, { status: 413 });
     const tho = await req.text();
-    if (tho.length > TOI_DA_BYTE) return NextResponse.json({ thongBao: "Dữ liệu gửi quá lớn." }, { status: 413 });
+    if (Buffer.byteLength(tho, "utf8") > TOI_DA_BYTE) return NextResponse.json({ thongBao: "Dữ liệu gửi quá lớn." }, { status: 413 });
     let than: unknown = null;
     try {
       than = JSON.parse(tho);

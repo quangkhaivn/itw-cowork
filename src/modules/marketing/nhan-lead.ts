@@ -8,11 +8,12 @@ import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { chuanHoaDienThoai, chuanHoaEmail, chuanHoaMaSoThue } from "@/modules/crm/chuan-hoa";
 import { LEAD_DANG_MO } from "@/modules/crm/hang-so";
+import { khoaDoTrungLead } from "@/modules/crm/chung";
 import { trongPhamVi } from "@/modules/crm/chung";
 import { docCauHinh } from "@/modules/cau-hinh/service";
 import { taoThongBao } from "@/modules/thong-bao/service";
 import { NHAN_KENH_NHAN, type KenhNhan } from "./hang-so";
-import { chonTheoVongTron, chuanHoaUtmCampaign, hanGoiLai, type BoUtm } from "./tinh-toan";
+import { chonTheoVongTron, chuanHoaUtmCampaign, hanGoiLai, KY_TU_DIEU_KHIEN, type BoUtm } from "./tinh-toan";
 import { cheLienLac, kiemTraChienDichGanDuoc, kiemTraNguonLead, locMarketing } from "./chung";
 import type { DuLieuNhapTayLead } from "./luoc-do";
 
@@ -94,12 +95,6 @@ async function tangDemChiaLead(tx: ClientTenant): Promise<number> {
   return last_number;
 }
 
-/** Người đang hoạt động, là người thật. */
-async function laNguoiHoatDong(tx: ClientTenant, id: string | null | undefined): Promise<boolean> {
-  if (!id) return false;
-  return Boolean(await tx.user.findFirst({ where: { id, status: "hoat-dong", isSystem: false }, select: { id: true } }));
-}
-
 /** Điều kiện "có quyền xem lead" — người nhận lead phải mở được lead của mình. */
 const CO_QUYEN_XEM_LEAD: Prisma.UserWhereInput = {
   status: "hoat-dong",
@@ -111,6 +106,12 @@ const CO_QUYEN_XEM_LEAD: Prisma.UserWhereInput = {
     },
   },
 };
+
+/** Người đang hoạt động VÀ có `crm.view` — điều kiện cho MỌI bước chọn người nhận lead (MK-08). */
+async function nhanDuocLead(tx: ClientTenant, id: string | null | undefined): Promise<boolean> {
+  if (!id) return false;
+  return Boolean(await tx.user.findFirst({ where: { id, ...CO_QUYEN_XEM_LEAD }, select: { id: true } }));
+}
 
 /** Danh sách nhận lead còn dùng được, đúng thứ tự vòng (MK-08). */
 export async function danhSachNhanLeadHieuLuc(tx: ClientTenant) {
@@ -132,6 +133,10 @@ function moTaKenh(d: DuLieuNhanLead, tenChienDich: string | null) {
 }
 
 export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhanLead, tacNhan: TacNhanNhanLead): Promise<KetQuaNhanLead> {
+  // 0. Chốt cuối: ký tự điều khiển (NUL…) trong bất kỳ trường chữ nào → 400, không để CSDL ném 500.
+  for (const [truong, v] of Object.entries({ hoTen: d.hoTen, dienThoai: d.dienThoai, email: d.email, congTy: d.congTy, chucDanh: d.chucDanh, maSoThue: d.maSoThue, nhuCau: d.nhuCau, ghiChu: d.ghiChu, ...d.utm })) {
+    if (typeof v === "string" && KY_TU_DIEU_KHIEN.test(v)) throw new LoiDinhDang(truong, "Có ký tự không hợp lệ.");
+  }
   // 1. Chuẩn hóa. Sai dạng thì ném lỗi theo trường — bên gọi đã kiểm trước, đây là chốt cuối.
   const dienThoai = chuanHoaDienThoai(d.dienThoai);
   const email = chuanHoaEmail(d.email);
@@ -160,9 +165,7 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
   const han = hanGoiLai(bayGio, soPhut);
   const ghiChuHan = han ? "" : "\nChưa đặt hạn gọi lại lead trong Cấu hình hệ thống (Marketing → Hạn gọi lại lead mới).";
   const kenhMoTa = moTaKenh(d, chienDich?.name ?? null);
-  const dongY = d.dongYNhanTin
-    ? { marketingOptIn: true, marketingOptInAt: bayGio, marketingOptOutAt: null, marketingConsentSource: d.nguonDongY.slice(0, 100) }
-    : {};
+  const dongYMoi = { marketingOptIn: true, marketingOptInAt: bayGio, marketingOptOutAt: null, marketingConsentSource: d.nguonDongY.slice(0, 100) };
 
   const nhatKy = (ketQua: "tao-moi" | "ghi-them", leadId: string, nguoiNhan: string) =>
     tx.leadCapture.create({
@@ -198,7 +201,9 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
       data: {
         tenantId,
         title: tieuDe.slice(0, 255),
-        description: `Kênh: ${kenhMoTa}.${dienThoai ? `\nĐiện thoại: ${d.dienThoai}` : ""}${email ? `\nEmail: ${email}` : ""}${nhuCau ? `\nNhu cầu: ${nhuCau}` : ""}${ghiChuHan}`,
+        // MK-15: KHÔNG chép SĐT / email vào mô tả việc — người xem việc mở lead để thấy liên lạc
+        // theo đúng quyền của mình (việc có thể giao / chuyển cho người không có crm.view).
+        description: `Kênh: ${kenhMoTa}.\nMở lead để xem thông tin liên lạc.${nhuCau ? `\nNhu cầu: ${nhuCau}` : ""}${ghiChuHan}`,
         ownerId: nguoiNhan,
         priority: "cao",
         dueAt: han,
@@ -213,6 +218,28 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
   };
 
   // 3. Dò trùng lead đang mở (MK-07): ghi thêm vào lead cũ, không đẻ lead thứ hai.
+  //    Khóa theo SĐT / email / MST trước khi dò — hai lần gửi cùng lúc không lọt qua nhau.
+  await khoaDoTrungLead(tx, tenantId, { dienThoai, email, maSoThue });
+
+  // MK-13 "từ chối luôn thắng": người này (lead bất kỳ giai đoạn, hoặc liên hệ khách) đã từng
+  // từ chối thì KHÔNG bật đồng ý lại qua kênh công khai — ai cũng gửi form hộ được. Để người
+  // phụ trách xác nhận lại bằng tay (ghi chú bên dưới).
+  const hoacNguoi = (cot: "lead" | "contact") => [
+    ...(dienThoai ? [{ phoneNormalized: dienThoai }] : []),
+    ...(email ? [{ emailNormalized: email }] : []),
+    ...(cot === "lead" && maSoThue ? [{ taxCodeNormalized: maSoThue }] : []),
+  ];
+  const [leadTuChoi, lienHeTuChoi] = await Promise.all([
+    tx.lead.findFirst({ where: { OR: hoacNguoi("lead"), marketingOptOutAt: { not: null } }, select: { marketingOptOutAt: true }, orderBy: { marketingOptOutAt: "desc" } }),
+    tx.contact.findFirst({ where: { OR: hoacNguoi("contact"), marketingOptOutAt: { not: null } }, select: { marketingOptOutAt: true }, orderBy: { marketingOptOutAt: "desc" } }),
+  ]);
+  const tuChoiLuc = leadTuChoi?.marketingOptOutAt ?? lienHeTuChoi?.marketingOptOutAt ?? null;
+  const tichDongYNhungDaTuChoi = d.dongYNhanTin && tuChoiLuc !== null;
+  const GHI_CHU_TU_CHOI = "Khách gửi form tích đồng ý nhận tin nhưng đã từng từ chối nhận tin – cần xác nhận lại với khách trước khi gửi tin marketing.";
+  const ghiChuTuChoi = (leadId: string, ownerId: string) =>
+    tx.interaction.create({
+      data: { tenantId, type: "note", leadId, subject: "Cần xác nhận lại đồng ý nhận tin", content: `${GHI_CHU_TU_CHOI}\nKênh: ${kenhMoTa}.`, ownerId, createdBy: tacNhan.nguoiId, updatedBy: tacNhan.nguoiId },
+    });
   const hoac: Prisma.LeadWhereInput[] = [];
   if (dienThoai) hoac.push({ phoneNormalized: dienThoai });
   if (email) hoac.push({ emailNormalized: email });
@@ -246,10 +273,11 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
         ...(!cu.companyName && congTy && { companyName: congTy }),
         ...(!cu.taxCode && maSoThue && { taxCode: d.maSoThue, taxCodeNormalized: maSoThue }),
         ...(!cu.campaignId && chienDich && { campaignId: chienDich.id }),
-        ...dongY,
+        ...(d.dongYNhanTin && !tuChoiLuc ? dongYMoi : {}),
         updatedBy: tacNhan.nguoiId,
       },
     });
+    if (tichDongYNhungDaTuChoi) await ghiChuTuChoi(cu.id, cu.ownerId);
     const conViec = await tx.task.findFirst({ where: { leadId: cu.id, status: { in: ["mo", "dang-lam"] } }, select: { id: true } });
     const viecId = conViec ? null : await taoViecGoiLai(cu.id, cu.ownerId, `Gọi lại lead đăng ký lại: ${hoTen}`);
     await taoThongBao(tx, tenantId, {
@@ -288,10 +316,10 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
   // 5. Chọn người nhận (MK-08).
   let nguoiNhan: string | null = null;
   let cachChia: KetQuaNhanLead["cachChia"] = "vong-tron";
-  if (d.nguoiChiDinhId && (await laNguoiHoatDong(tx, d.nguoiChiDinhId))) {
+  if (d.nguoiChiDinhId && (await nhanDuocLead(tx, d.nguoiChiDinhId))) {
     nguoiNhan = d.nguoiChiDinhId;
     cachChia = "chi-dinh";
-  } else if (khach && (await laNguoiHoatDong(tx, khach.ownerId))) {
+  } else if (khach && (await nhanDuocLead(tx, khach.ownerId))) {
     nguoiNhan = khach.ownerId;
     cachChia = "nguoi-phu-trach-khach";
   } else {
@@ -299,10 +327,10 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
     if (ds.length) {
       nguoiNhan = chonTheoVongTron(ds, await tangDemChiaLead(tx));
       cachChia = "vong-tron";
-    } else if (chienDich && (await laNguoiHoatDong(tx, chienDich.ownerId))) {
+    } else if (chienDich && (await nhanDuocLead(tx, chienDich.ownerId))) {
       nguoiNhan = chienDich.ownerId;
       cachChia = "phu-trach-chien-dich";
-    } else if (await laNguoiHoatDong(tx, d.nguoiDuPhongId)) {
+    } else if (await nhanDuocLead(tx, d.nguoiDuPhongId)) {
       nguoiNhan = d.nguoiDuPhongId;
       cachChia = "du-phong";
     } else {
@@ -349,12 +377,18 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
       captureChannel: d.kenh,
       matchedCustomerId: khach?.id ?? null,
       rawPayload: d.payload as never,
-      ...dongY,
+      // MK-13: đã từng từ chối → lead mới mang luôn lời từ chối (từ chối luôn thắng).
+      ...(tuChoiLuc
+        ? { marketingOptOutAt: tuChoiLuc, marketingConsentSource: "ke-thua-tu-choi" }
+        : d.dongYNhanTin
+          ? dongYMoi
+          : {}),
       createdBy: tacNhan.nguoiId,
       updatedBy: tacNhan.nguoiId,
     },
     select: { id: true },
   });
+  if (tichDongYNhungDaTuChoi) await ghiChuTuChoi(l.id, nguoiNhan);
   const viecId = await taoViecGoiLai(l.id, nguoiNhan, `Gọi lại lead mới: ${hoTen}${congTy && congTy !== hoTen ? ` — ${congTy}` : ""}`);
   await taoThongBao(tx, tenantId, {
     nguoiNhanId: nguoiNhan,

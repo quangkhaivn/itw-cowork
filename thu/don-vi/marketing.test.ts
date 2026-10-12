@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   canDuyetNganSach,
   cheDienThoai,
+  coKyTuDieuKhien,
   cheEmail,
   chonTheoVongTron,
   chuanHoaUtmCampaign,
@@ -175,6 +176,13 @@ describe("Kiểm dữ liệu form công khai (MK-11, LD-02)", () => {
   it("phải có SĐT hoặc email", () => {
     assert.ok(kiemTraDuLieuForm(truong, { hoTen: "An" }).loi.dienThoai);
     assert.deepEqual(kiemTraDuLieuForm(truong, { hoTen: "An", email: "a@b.vn" }).loi, {});
+  });
+  it("ký tự điều khiển (NUL…) bị từ chối theo trường; xuống dòng / tab vẫn nhận (QA 12/10)", () => {
+    assert.ok(kiemTraDuLieuForm(truong, { hoTen: "Nul\u0000Bot", email: "a@b.vn" }).loi.hoTen);
+    assert.deepEqual(kiemTraDuLieuForm(truong, { hoTen: "Dòng 1\n\tDòng 2", email: "a@b.vn" }).loi, {});
+    assert.ok(coKyTuDieuKhien("a\u0007b"));
+    assert.ok(!coKyTuDieuKhien("a\r\nb"));
+    assert.equal(docUtm({ utm_source: "fb\u0000" }).utm_source, null);
   });
   it("giá trị không phải chuỗi bị coi như trống", () => {
     assert.ok(kiemTraDuLieuForm(truong, { hoTen: { $gt: "" }, email: "a@b.vn" }).loi.hoTen);

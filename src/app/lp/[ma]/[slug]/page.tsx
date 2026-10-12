@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { demVaKiem } from "@/lib/gioi-han-toc-do";
+import { layIpKhach } from "@/lib/yeu-cau";
 import { voiTenant } from "@/lib/db";
 import { layMot, type ThamSoTrang } from "@/lib/trang";
 import FormDangKyCongKhai from "@/components/marketing/FormDangKyCongKhai";
@@ -35,8 +38,12 @@ export default async function TrangLanding({ params, searchParams }: ThamSo) {
   const sp = await searchParams;
   const t = await giaiTenantCongKhai(ma);
   if (!t) notFound();
+  const bienThe = chonBienThe(layMot(sp.v));
+  // Chống thổi phồng lượt xem: mỗi IP tính tối đa 20 lượt / trang / 10 phút (cùng trần với gửi form).
+  const ip = layIpKhach(await headers()) ?? "khong-ro";
+  const demXem = (await demVaKiem(`lp-xem:${t.code}:${slug.slice(0, 60)}:${ip}`, 20, 600)).choPhep;
   const kq = await voiTenant(t.id, async (tx) => {
-    const p = await docLandingCongKhai(tx, slug.slice(0, 60), chonBienThe(layMot(sp.v)), true);
+    const p = await docLandingCongKhai(tx, slug.slice(0, 60), bienThe, demXem);
     if (!p) return null;
     const f = p.formSlug ? await docFormCongKhai(tx, p.formSlug, false) : null;
     return { p, f };

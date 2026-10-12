@@ -6,7 +6,7 @@ import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { trongPhamVi } from "@/modules/crm/chung";
-import { docUtm, kiemTraDuLieuForm, taoSlug } from "./tinh-toan";
+import { docUtm, kiemTraDuLieuForm, laSlugHopLe, taoSlug } from "./tinh-toan";
 import { kiemTraChienDichGanDuoc, kiemTraNguonLead, locMarketing } from "./chung";
 import { nhanLead } from "./nhan-lead";
 import { LoiTuChoiNhan } from "./form";
@@ -137,6 +137,8 @@ export async function nhanQuaWebhook(
   than: unknown,
   meta: { ip: string | null; userAgent: string | null },
 ) {
+  // Mã nguồn sai khuôn: trả đúng câu "khóa không hợp lệ" như mọi trường hợp sai khác, không truy vấn.
+  if (!laSlugHopLe(maNguon)) throw new LoiTuChoiNhan("Khóa không hợp lệ.", 401, "sai-khoa", { kenh: "webhook", lyDo: "Mã nguồn sai khuôn" });
   const w = await tx.marketingWebhookSource.findFirst({ where: { code: maNguon }, select: { id: true, code: true, keyHash: true, status: true, campaignId: true, source: true, ownerId: true } });
   // Không phân biệt "không có nguồn" với "sai khóa" trong câu trả lời — tránh dò mã nguồn.
   if (!w) throw new LoiTuChoiNhan("Khóa không hợp lệ.", 401, "sai-khoa", { kenh: "webhook", lyDo: `Nguồn "${maNguon.slice(0, 60)}" không tồn tại` });
@@ -156,6 +158,9 @@ export async function nhanQuaWebhook(
       { khoa: "email", nhan: "Email", batBuoc: false },
       { khoa: "congTy", nhan: "Công ty", batBuoc: false },
       { khoa: "maSoThue", nhan: "Mã số thuế", batBuoc: false },
+      { khoa: "chucDanh", nhan: "Chức danh", batBuoc: false },
+      { khoa: "nhuCau", nhan: "Nhu cầu", batBuoc: false },
+      { khoa: "ghiChu", nhan: "Ghi chú", batBuoc: false },
     ],
     d,
   );

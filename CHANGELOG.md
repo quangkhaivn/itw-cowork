@@ -26,8 +26,14 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (MK). Kiến trúc: `ARCHITEC
 - **ROAS tính theo hóa đơn đã phát hành của khách mới** do chiến dịch mang về (QĐ-58).
 - **Che liên lạc theo quyền**, không theo tên vai trò (QĐ-64).
 
+### Sửa sau kiểm thử độc lập (QA 12/10)
+- **Gửi đồng thời không còn đẻ hai lead** cho cùng một SĐT / email: khóa tư vấn theo giá trị chuẩn hóa trước bước dò trùng, áp cả cho lead sale tạo tay.
+- **Lead dự phòng chỉ về người có quyền xem lead**; Thực tập sinh Marketing không còn nhận lead. Mô tả việc "Gọi lại" **không chép SĐT / email** nữa.
+- **Từ chối nhận tin luôn thắng** qua mọi kênh công khai: không xóa lời từ chối, lead mới kế thừa lời từ chối, kèm ghi chú "cần xác nhận lại".
+- Ký tự NUL / điều khiển → 400 thay vì 500; slug / mã sai khuôn → 404 không truy vấn; trần thân yêu cầu tính theo byte; lượt xem form / landing có trần theo IP.
+
 ### Kiểm thử
-- 338 bài đơn vị (thêm 29), 875 bài tích hợp (thêm `thu:marketing` 103 bài), 434 bài HTTP đầu-cuối — tất cả đạt.
+- 339 bài đơn vị (thêm 30), tích hợp thêm `thu:marketing` 103 bài + `thu:qa-marketing` 122 bài, bài HTTP `thu:qa-marketing-http` — xem báo cáo gộp.
 
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 

@@ -136,6 +136,8 @@ docker compose up -d
 
 ## Bẫy đã gặp trên máy chủ này
 
+- **nginx máy chủ PHẢI ghi đè `X-Real-IP` bằng `$remote_addr`** (`proxy_set_header X-Real-IP $remote_addr;` trong `/etc/nginx/conf.d/cowork.conf`). nginx trong Docker (`nginx/cowork.conf`) cố ý chuyển nguyên `$http_x_real_ip` nó nhận được, và ứng dụng tin tiêu đề này cho giới hạn tốc độ đăng nhập, form công khai, webhook (0.16.0). Nếu nginx máy chủ chỉ chuyển tiếp giá trị khách gửi, ai cũng lách được giới hạn bằng cách tự đặt `X-Real-IP`. Cổng 8080 phải chỉ mở trên `127.0.0.1` (đang vậy trong `docker-compose.yml`). Kiểm: `grep -n X-Real-IP /etc/nginx/conf.d/cowork.conf`.
+- 0.16.0: trang `/f/*` được nhúng iframe nhờ CSP `frame-ancestors` (QĐ-61) dù nginx máy chủ gửi `X-Frame-Options: SAMEORIGIN`; sau khi triển khai, thử nhúng một form vào một trang https khác một lần.
 - nginx máy chủ là **1.20.1**: viết `listen 443 ssl http2;`, không dùng `http2 on;`.
 - Chứng chỉ Let's Encrypt từng hết hạn vì `certbot-renew.timer` bật nhưng chưa được start. Kiểm `systemctl list-timers certbot*`.
 - `prisma migrate deploy` trong container phải gắn `-v "$(pwd)/prisma:/app/prisma"` (script đã làm).

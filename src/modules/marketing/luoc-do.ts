@@ -8,7 +8,7 @@ import {
   TRUONG_FORM,
   type KhoaTruongForm,
 } from "./hang-so";
-import { laSlugHopLe } from "./tinh-toan";
+import { coKyTuDieuKhien, laSlugHopLe } from "./tinh-toan";
 
 /** Lược đồ phân hệ Marketing. Luật MK-01 → MK-16 ở BUSINESS_RULES.md mục 21. */
 
@@ -204,7 +204,8 @@ export const LuocDoThanWebhook = z
 // Phân khúc (MK-14) — điều kiện theo danh mục trường cho phép, không nhận biểu thức tự do
 // ---------------------------------------------------------------------------
 
-const maDs = z.array(z.string().trim().min(1).max(50)).max(50).optional().default([]);
+const chuSach = (s: string) => !coKyTuDieuKhien(s);
+const maDs = z.array(z.string().trim().min(1).max(50).refine(chuSach, "Có ký tự không hợp lệ.")).max(50).optional().default([]);
 const ngayLoc = z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal("")]).optional().default("");
 const coKhong = z.enum(["", "co", "khong"]).optional().default("");
 
@@ -214,7 +215,7 @@ export const LuocDoDieuKienLead = z
     chienDichIds: z.array(z.uuid()).max(50).optional().default([]),
     giaiDoan: z.array(z.enum(["NEW_LEAD", "CONTACTED", "QUALIFIED", "DISQUALIFIED", "CONVERTED"])).max(5).optional().default([]),
     kenhNhan: z.array(z.enum(["form", "landing", "webhook", "nhap-tay"])).max(4).optional().default([]),
-    utmSource: z.string().trim().max(120).optional().default(""),
+    utmSource: z.string().trim().max(120).refine(chuSach, "Có ký tự không hợp lệ.").optional().default(""),
     taoTuNgay: ngayLoc,
     taoDenNgay: ngayLoc,
     coEmail: coKhong,
@@ -231,7 +232,7 @@ export const LuocDoDieuKienLienHe = z
     nganh: maDs,
     loaiKhach: maDs,
     trangThaiKhach: z.array(z.enum(["tiem-nang", "dang-giao-dich", "ngung-giao-dich"])).max(3).optional().default([]),
-    tinhThanh: z.array(z.string().trim().min(1).max(100)).max(70).optional().default([]),
+    tinhThanh: z.array(z.string().trim().min(1).max(100).refine(chuSach, "Có ký tự không hợp lệ.")).max(70).optional().default([]),
     coEmail: coKhong,
     coDienThoai: coKhong,
     dongYNhanTin: coKhong,
@@ -248,8 +249,8 @@ export const LuocDoPhanKhuc = z.discriminatedUnion("doiTuong", [
 export type PhanKhucDieuKien = z.infer<typeof LuocDoPhanKhuc>;
 
 export const LuocDoLuuPhanKhuc = z.object({
-  ten: z.string().trim().min(3, "Tên phân khúc tối thiểu 3 ký tự.").max(255),
-  ghiChu: chuoiTuyChon(2000),
+  ten: z.string().trim().min(3, "Tên phân khúc tối thiểu 3 ký tự.").max(255).refine(chuSach, "Có ký tự không hợp lệ."),
+  ghiChu: chuoiTuyChon(2000).refine((s) => !s || chuSach(s), "Có ký tự không hợp lệ."),
   phanKhuc: LuocDoPhanKhuc,
 });
 

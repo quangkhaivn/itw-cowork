@@ -6,7 +6,7 @@ import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi
 import { SU_KIEN } from "@/lib/su-kien";
 import { trongPhamVi } from "@/modules/crm/chung";
 import { TEN_O_BAY, TRUONG_FORM, type KenhNhan, type KhoaTruongForm } from "./hang-so";
-import { docUtm, kiemTraDuLieuForm, taoSlug, type TruongFormCauHinh } from "./tinh-toan";
+import { docUtm, kiemTraDuLieuForm, laSlugHopLe, taoSlug, type TruongFormCauHinh } from "./tinh-toan";
 import { kiemTraChienDichGanDuoc, kiemTraNguonLead, locMarketing } from "./chung";
 import { ghiNhanBiTuChoi, nhanLead, type KetQuaNhanLead } from "./nhan-lead";
 import { landingDungForm } from "./landing";
@@ -142,6 +142,8 @@ export async function suaForm(nc: NguCanh, id: string, d: DuLieuForm) {
 
 /** Form để dựng trang công khai. Form tắt / không có → null (trang trả 404, MK-11). */
 export async function docFormCongKhai(tx: ClientTenant, slug: string, tangLuotXem = false) {
+  // Slug sai khuôn (NUL, "../", chữ hoa…) → không truy vấn, coi như không có.
+  if (!laSlugHopLe(slug)) return null;
   const f = await tx.marketingForm.findFirst({
     where: { slug, status: "hoat-dong" },
     select: { id: true, slug: true, title: true, intro: true, fields: true, buttonText: true, successMessage: true, consentText: true },
@@ -189,6 +191,9 @@ export type KetQuaGuiForm = { ketQua: "spam" } | ({ ketQua: KetQuaNhanLead["ketQ
 
 /** Gửi form công khai (MK-11) → `nhanLead()`. */
 export async function guiFormCongKhai(tx: ClientTenant, tenantId: string, slug: string, than: Record<string, unknown>, meta: MetaGuiCongKhai): Promise<KetQuaGuiForm & { loiCamOn: string }> {
+  if (!laSlugHopLe(slug)) {
+    throw new LoiTuChoiNhan("Form không tồn tại hoặc đã tắt.", 404, "khong-tim-thay", { kenh: "form", lyDo: "Đường dẫn form sai khuôn" });
+  }
   const f = await tx.marketingForm.findFirst({
     where: { slug, status: "hoat-dong" },
     select: { id: true, slug: true, fields: true, consentText: true, campaignId: true, source: true, ownerId: true, successMessage: true },

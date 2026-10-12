@@ -177,6 +177,7 @@ export async function doiTrangThaiLanding(nc: NguCanh, id: string, trangThai: "n
  * hoặc trang chọn ngẫu nhiên). Đếm lượt xem cho đúng biến thể.
  */
 export async function docLandingCongKhai(tx: ClientTenant, slug: string, bienThe: "A" | "B", tangLuotXem = true) {
+  if (!laSlugHopLe(slug)) return null;
   const p = await tx.landingPage.findFirst({
     where: { slug, status: "xuat-ban" },
     select: { id: true, title: true, description: true, blocks: true, blocksB: true, form: { select: { slug: true, status: true } } },
