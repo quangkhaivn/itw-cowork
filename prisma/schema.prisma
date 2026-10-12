@@ -115,6 +115,13 @@ model Tenant {
   stockTransferItems   StockTransferItem[]
   // Tệp đính kèm
   attachments          Attachment[]
+  // Khách hàng nâng cao (0.16.0)
+  journeyStages        CustomerJourneyStage[]
+  journeyHistory       CustomerJourneyHistory[]
+  customerGroups       CustomerGroup[]
+  customerGroupMembers CustomerGroupMember[]
+  savedViews           SavedView[]
+  listPreferences      UserListPreference[]
 
   @@map("tenants")
 }
@@ -216,6 +223,8 @@ model User {
   ownedPurchaseReturns PurchaseReturn[]      @relation("TraHangMuaPhuTrach")
   ownedStockTransfers  StockTransfer[]       @relation("ChuyenKhoPhuTrach")
   uploadedAttachments  Attachment[]          @relation("TepDinhKemNguoiTai")
+  savedViews           SavedView[]           @relation("BoLocCua")
+  listPreferences      UserListPreference[]  @relation("TuyChonDanhSachCua")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -430,41 +439,51 @@ model DocumentSequence {
 
 /// Khách hàng (doanh nghiệp hoặc cá nhân). Một khách một mã.
 model Customer {
-  id                String   @id @default(uuid()) @db.Uuid
-  tenantId          String   @map("tenant_id") @db.Uuid
-  code              String   @db.VarChar(30)
-  name              String   @db.VarChar(255)
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @map("tenant_id") @db.Uuid
+  code                  String    @db.VarChar(30)
+  name                  String    @db.VarChar(255)
   /// Tên đã bỏ dấu, bỏ "công ty/TNHH/cổ phần…" — dùng dò trùng gần giống.
-  nameNormalized    String   @map("name_normalized") @db.VarChar(255)
-  taxCode           String?  @map("tax_code") @db.VarChar(30)
-  taxCodeNormalized String?  @map("tax_code_normalized") @db.VarChar(20)
-  customerType      String?  @map("customer_type") @db.VarChar(50) /// mã dữ liệu gốc loai_khach_hang
-  segment           String?  @db.VarChar(50) /// mã dữ liệu gốc phan_khuc_khach_hang
-  industry          String?  @db.VarChar(50) /// mã dữ liệu gốc nganh_nghe
-  source            String?  @db.VarChar(50) /// mã dữ liệu gốc nguon_lead
-  address           String?  @db.Text
-  province          String?  @db.VarChar(100)
-  website           String?  @db.VarChar(255)
-  phone             String?  @db.VarChar(30)
-  phoneNormalized   String?  @map("phone_normalized") @db.VarChar(20)
-  email             String?  @db.VarChar(255)
-  emailNormalized   String?  @map("email_normalized") @db.VarChar(255)
-  ownerId           String   @map("owner_id") @db.Uuid
-  note              String?  @db.Text
-  /// tiem-nang | dang-giao-dich | ngung-giao-dich (CHECK ở migration)
-  status            String   @default("tiem-nang") @db.VarChar(30)
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy         String?  @map("created_by") @db.Uuid
-  updatedBy         String?  @map("updated_by") @db.Uuid
+  nameNormalized        String    @map("name_normalized") @db.VarChar(255)
+  taxCode               String?   @map("tax_code") @db.VarChar(30)
+  taxCodeNormalized     String?   @map("tax_code_normalized") @db.VarChar(20)
+  customerType          String?   @map("customer_type") @db.VarChar(50) /// mã dữ liệu gốc loai_khach_hang
+  segment               String?   @db.VarChar(50) /// mã dữ liệu gốc phan_khuc_khach_hang
+  industry              String?   @db.VarChar(50) /// mã dữ liệu gốc nganh_nghe
+  source                String?   @db.VarChar(50) /// mã dữ liệu gốc nguon_lead
+  address               String?   @db.Text
+  province              String?   @db.VarChar(100)
+  website               String?   @db.VarChar(255)
+  phone                 String?   @db.VarChar(30)
+  phoneNormalized       String?   @map("phone_normalized") @db.VarChar(20)
+  email                 String?   @db.VarChar(255)
+  emailNormalized       String?   @map("email_normalized") @db.VarChar(255)
+  ownerId               String    @map("owner_id") @db.Uuid
+  note                  String?   @db.Text
+  /// tiem-nang | dang-giao-dich | ngung-giao-dich | da-gop (CHECK ở migration)
+  status                String    @default("tiem-nang") @db.VarChar(30)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy             String?   @map("created_by") @db.Uuid
+  updatedBy             String?   @map("updated_by") @db.Uuid
+  /// 0.16.0 — trạng thái hành trình (danh mục theo doanh nghiệp). KHÁC `status` (đang/ngừng giao dịch).
+  journeyStageId        String?   @map("journey_stage_id") @db.Uuid
+  journeyStageChangedAt DateTime? @map("journey_stage_changed_at") @db.Timestamptz(6)
+  /// 0.16.0 — khách đã gộp vào khách khác: không xóa, trỏ sang khách giữ lại (KHN-12).
+  mergedIntoId          String?   @map("merged_into_id") @db.Uuid
+  mergedAt              DateTime? @map("merged_at") @db.Timestamptz(6)
+  mergedBy              String?   @map("merged_by") @db.Uuid
+  /// 0.16.0 — điểm khách tiềm năng 0–100, tính lại khi có sự kiện liên quan (KHN-08).
+  leadScore             Int?      @map("lead_score") @db.SmallInt
+  leadScoreAt           DateTime? @map("lead_score_at") @db.Timestamptz(6)
 
-  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner                User                  @relation("KhachPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  tenant               Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner                User                     @relation("KhachPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
   contacts             Contact[]
   interactions         Interaction[]
   opportunities        Opportunity[]
   tasks                Task[]
-  convertedLeads       Lead[]                @relation("LeadThanhKhach")
+  convertedLeads       Lead[]                   @relation("LeadThanhKhach")
   quotations           Quotation[]
   salesOrders          SalesOrder[]
   warranties           Warranty[]
@@ -475,9 +494,16 @@ model Customer {
   maintenanceContracts MaintenanceContract[]
   renewals             Renewal[]
   salesReturns         SalesReturn[]
+  journeyStage         CustomerJourneyStage?    @relation(fields: [journeyStageId], references: [id], onDelete: Restrict)
+  mergedInto           Customer?                @relation("KhachDaGop", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom           Customer[]               @relation("KhachDaGop")
+  journeyHistory       CustomerJourneyHistory[]
+  groupMembers         CustomerGroupMember[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, taxCodeNormalized])
+  @@index([tenantId, journeyStageId])
+  @@index([tenantId, leadScore])
   @@index([tenantId, ownerId])
   @@index([tenantId, phoneNormalized])
   @@index([tenantId, emailNormalized])
@@ -488,24 +514,26 @@ model Customer {
 
 /// Người liên hệ của khách hàng. Quyền và phạm vi đi theo khách.
 model Contact {
-  id              String   @id @default(uuid()) @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
-  customerId      String   @map("customer_id") @db.Uuid
-  fullName        String   @map("full_name") @db.VarChar(255)
-  title           String?  @db.VarChar(255) /// chức danh
-  department      String?  @db.VarChar(255)
-  phone           String?  @db.VarChar(30)
-  phoneNormalized String?  @map("phone_normalized") @db.VarChar(20)
-  email           String?  @db.VarChar(255)
-  emailNormalized String?  @map("email_normalized") @db.VarChar(255)
-  zalo            String?  @db.VarChar(50)
-  isPrimary       Boolean  @default(false) @map("is_primary")
-  note            String?  @db.Text
-  status          String   @default("hoat-dong") @db.VarChar(30)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy       String?  @map("created_by") @db.Uuid
-  updatedBy       String?  @map("updated_by") @db.Uuid
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  customerId      String    @map("customer_id") @db.Uuid
+  fullName        String    @map("full_name") @db.VarChar(255)
+  title           String?   @db.VarChar(255) /// chức danh
+  department      String?   @db.VarChar(255)
+  phone           String?   @db.VarChar(30)
+  phoneNormalized String?   @map("phone_normalized") @db.VarChar(20)
+  email           String?   @db.VarChar(255)
+  emailNormalized String?   @map("email_normalized") @db.VarChar(255)
+  zalo            String?   @db.VarChar(50)
+  /// 0.16.0 — ngày sinh, dùng cho nhắc sinh nhật (KHN-15). Không bắt buộc.
+  birthDate       DateTime? @map("birth_date") @db.Date
+  isPrimary       Boolean   @default(false) @map("is_primary")
+  note            String?   @db.Text
+  status          String    @default("hoat-dong") @db.VarChar(30)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.Uuid
+  updatedBy       String?   @map("updated_by") @db.Uuid
 
   tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer      Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -2605,4 +2633,150 @@ model Attachment {
   @@index([tenantId, objectType, objectId])
   @@index([tenantId, sha256])
   @@map("attachments")
+}
+
+// ---------------------------------------------------------------------------
+// 0.16.0 — Khách hàng nâng cao: hành trình, nhóm khách, bộ lọc đã lưu.
+// Luật: BUSINESS_RULES.md mục 21 (KHN).
+// ---------------------------------------------------------------------------
+
+/// Trạng thái hành trình khách hàng — danh mục theo doanh nghiệp. KHÁC `customers.status`.
+model CustomerJourneyStage {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  code          String   @db.VarChar(50)
+  name          String   @db.VarChar(100)
+  /// "#RRGGBB"
+  color         String   @db.VarChar(7)
+  sortOrder     Int      @default(0) @map("sort_order")
+  /// mo | thanh-cong | that-bai — `that-bai` nằm ngoài phễu (khách bỏ, sai số, trùng…)
+  kind          String   @default("mo") @db.VarChar(20)
+  /// Khách đứng quá số ngày này ở trạng thái thì nhắc người phụ trách. NULL = không nhắc.
+  staleDays     Int?     @map("stale_days")
+  /// Mốc tự chuyển bước (mã trong src/modules/hanh-trinh/moc.ts). NULL = chỉ đổi tay.
+  autoMilestone String?  @map("auto_milestone") @db.VarChar(30)
+  status        String   @default("hoat-dong") @db.VarChar(30)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?  @map("created_by") @db.Uuid
+  updatedBy     String?  @map("updated_by") @db.Uuid
+
+  tenant      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customers   Customer[]
+  historyFrom CustomerJourneyHistory[] @relation("HanhTrinhTu")
+  historyTo   CustomerJourneyHistory[] @relation("HanhTrinhSang")
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, autoMilestone])
+  @@index([tenantId, sortOrder])
+  @@map("customer_journey_stages")
+}
+
+/// Lịch sử đổi trạng thái hành trình. **Chỉ ghi thêm** (trigger chan_sua_xoa).
+model CustomerJourneyHistory {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  customerId  String   @map("customer_id") @db.Uuid
+  fromStageId String?  @map("from_stage_id") @db.Uuid
+  toStageId   String?  @map("to_stage_id") @db.Uuid
+  /// true = hệ thống tự chuyển theo mốc nghiệp vụ; false = người dùng đổi tay.
+  isAuto      Boolean  @default(false) @map("is_auto")
+  milestone   String?  @db.VarChar(30)
+  note        String?  @db.Text
+  /// Người đổi (hoặc người có thao tác gây ra lần tự chuyển).
+  changedBy   String?  @map("changed_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer  Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  fromStage CustomerJourneyStage? @relation("HanhTrinhTu", fields: [fromStageId], references: [id], onDelete: Restrict)
+  toStage   CustomerJourneyStage? @relation("HanhTrinhSang", fields: [toStageId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, customerId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("customer_journey_history")
+}
+
+/// Nhóm khách hàng (nhiều–nhiều với khách).
+model CustomerGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  color       String   @db.VarChar(7)
+  description String?  @db.Text
+  sortOrder   Int      @default(0) @map("sort_order")
+  status      String   @default("hoat-dong") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  tenant  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members CustomerGroupMember[]
+
+  @@index([tenantId, status])
+  @@map("customer_groups")
+}
+
+/// Bảng nối khách ↔ nhóm. Là bảng nối nên gỡ thành viên được xóa dòng.
+model CustomerGroupMember {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  groupId    String   @map("group_id") @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String?  @map("created_by") @db.Uuid
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  group    CustomerGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@unique([groupId, customerId])
+  @@index([tenantId, customerId])
+  @@map("customer_group_members")
+}
+
+/// Bộ lọc đã lưu của một màn hình danh sách: cá nhân hoặc dùng chung.
+model SavedView {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  /// khach-hang (CHECK)
+  screen    String   @db.VarChar(30)
+  name      String   @db.VarChar(100)
+  isShared  Boolean  @default(false) @map("is_shared")
+  /// Tham số lọc dạng URL. Đọc ra luôn kiểm lại bằng lược đồ — không tin dữ liệu lưu.
+  filters   Json
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner  User   @relation("BoLocCua", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, screen, ownerId])
+  @@map("saved_views")
+}
+
+/// Tùy chọn danh sách theo người dùng: cột hiển thị + bộ lọc mặc định.
+model UserListPreference {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  screen        String   @db.VarChar(30)
+  /// Mảng mã cột. Đọc ra lọc theo danh mục cột thật.
+  columns       Json?
+  defaultViewId String?  @map("default_view_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     String?  @map("created_by") @db.Uuid
+  updatedBy     String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("TuyChonDanhSachCua", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, screen])
+  @@map("user_list_preferences")
 }
