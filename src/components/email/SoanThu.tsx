@@ -74,7 +74,7 @@ export default function SoanThu({
           <div className="phan-form">
             <div className="truong">
               <label htmlFor="st-tieu-de">Tiêu đề thư</label>
-              <input id="st-tieu-de" value={tieuDe} maxLength={200} onChange={(e) => khiDoi(e.target.value, khoi)} placeholder="Ưu đãi tháng 10 cho {{cong_ty}}" required />
+              <input type="text" id="st-tieu-de" value={tieuDe} maxLength={200} onChange={(e) => khiDoi(e.target.value, khoi)} placeholder="Ưu đãi tháng 10 cho {{cong_ty}}" required />
               <span className="goi-y">
                 Biến được dùng: {Object.entries(BIEN_CA_NHAN).map(([b, m]) => `{{${b}}} = ${m.toLowerCase()}`).join(" · ")}
               </span>
@@ -90,17 +90,17 @@ export default function SoanThu({
                   <button type="button" className="nut trong nho" disabled={i === khoi.length - 1} onClick={() => doiCho(i, 1)} aria-label="Xuống">↓</button>
                   <button type="button" className="nut trong nho" onClick={() => khiDoi(tieuDe, khoi.filter((_, j) => j !== i))}>Bỏ</button>
                 </div>
-                {k.loai === "tieu-de" && <input aria-label="Tiêu đề" value={k.noiDung} maxLength={200} onChange={(e) => sua(i, { ...k, noiDung: e.target.value })} />}
+                {k.loai === "tieu-de" && <input type="text" aria-label="Tiêu đề" value={k.noiDung} maxLength={200} onChange={(e) => sua(i, { ...k, noiDung: e.target.value })} />}
                 {k.loai === "doan-van" && <textarea aria-label="Đoạn văn" rows={4} value={k.noiDung} maxLength={5000} onChange={(e) => sua(i, { ...k, noiDung: e.target.value })} />}
                 {k.loai === "nut" && (
                   <div className="luoi-form">
                     <div className="truong">
                       <label>Chữ trên nút</label>
-                      <input value={k.nhan} maxLength={80} onChange={(e) => sua(i, { ...k, nhan: e.target.value })} />
+                      <input type="text" value={k.nhan} maxLength={80} onChange={(e) => sua(i, { ...k, nhan: e.target.value })} />
                     </div>
                     <div className="truong">
                       <label>Liên kết (https://)</label>
-                      <input type="url" value={k.url} onChange={(e) => sua(i, { ...k, url: e.target.value })} />
+                      <input type="text" inputMode="url" value={k.url} onChange={(e) => sua(i, { ...k, url: e.target.value })} />
                     </div>
                   </div>
                 )}
@@ -108,15 +108,15 @@ export default function SoanThu({
                   <div className="luoi-form">
                     <div className="truong">
                       <label>Địa chỉ ảnh (https://)</label>
-                      <input type="url" value={k.url} onChange={(e) => sua(i, { ...k, url: e.target.value })} />
+                      <input type="text" inputMode="url" value={k.url} onChange={(e) => sua(i, { ...k, url: e.target.value })} />
                     </div>
                     <div className="truong">
                       <label>Mô tả ảnh</label>
-                      <input value={k.moTa} maxLength={200} onChange={(e) => sua(i, { ...k, moTa: e.target.value })} />
+                      <input type="text" value={k.moTa} maxLength={200} onChange={(e) => sua(i, { ...k, moTa: e.target.value })} />
                     </div>
                     <div className="truong ca-dong">
                       <label>Bấm vào ảnh thì mở (https://, để trống nếu không)</label>
-                      <input type="url" value={k.lienKet} onChange={(e) => sua(i, { ...k, lienKet: e.target.value })} />
+                      <input type="text" inputMode="url" value={k.lienKet} onChange={(e) => sua(i, { ...k, lienKet: e.target.value })} />
                     </div>
                   </div>
                 )}
@@ -124,7 +124,7 @@ export default function SoanThu({
                   <>
                     {k.muc.map((m, j) => (
                       <div key={j} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                        <input aria-label={`Mục ${j + 1}`} value={m} maxLength={500} onChange={(e) => sua(i, { ...k, muc: k.muc.map((x, t) => (t === j ? e.target.value : x)) })} />
+                        <input type="text" aria-label={`Mục ${j + 1}`} value={m} maxLength={500} onChange={(e) => sua(i, { ...k, muc: k.muc.map((x, t) => (t === j ? e.target.value : x)) })} />
                         <button type="button" className="nut trong nho" disabled={k.muc.length === 1} onClick={() => sua(i, { ...k, muc: k.muc.filter((_, t) => t !== j) })}>
                           Bỏ
                         </button>

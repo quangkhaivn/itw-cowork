@@ -122,12 +122,12 @@ export default function FormKetNoiEmail({
           <div className="luoi-form">
             <div className="truong">
               <label htmlFor="kn-host">Máy chủ</label>
-              <input id="kn-host" value={f.host} disabled={!duocSua} onChange={(e) => doi("host", e.target.value)} placeholder="smtp.gmail.com" required />
+              <input type="text" id="kn-host" value={f.host} disabled={!duocSua} onChange={(e) => doi("host", e.target.value)} placeholder="smtp.gmail.com" required />
               {loiCua(loi, "host") && <span className="chu-loi">{loiCua(loi, "host")}</span>}
             </div>
             <div className="truong">
               <label htmlFor="kn-port">Cổng</label>
-              <input id="kn-port" inputMode="numeric" value={f.port} disabled={!duocSua} onChange={(e) => doi("port", e.target.value)} required />
+              <input type="text" id="kn-port" inputMode="numeric" value={f.port} disabled={!duocSua} onChange={(e) => doi("port", e.target.value)} required />
             </div>
             <div className="truong">
               <label htmlFor="kn-bm">Mã hóa kết nối</label>
@@ -139,7 +139,7 @@ export default function FormKetNoiEmail({
             </div>
             <div className="truong">
               <label htmlFor="kn-user">Tên đăng nhập</label>
-              <input id="kn-user" autoComplete="off" value={f.tenDangNhap} disabled={!duocSua} onChange={(e) => doi("tenDangNhap", e.target.value)} />
+              <input type="text" id="kn-user" autoComplete="off" value={f.tenDangNhap} disabled={!duocSua} onChange={(e) => doi("tenDangNhap", e.target.value)} />
             </div>
             <div className="truong">
               <label htmlFor="kn-mk">Mật khẩu / mật khẩu ứng dụng</label>
@@ -165,7 +165,7 @@ export default function FormKetNoiEmail({
           <div className="luoi-form">
             <div className="truong">
               <label htmlFor="kn-ten">Tên người gửi</label>
-              <input id="kn-ten" value={f.tenNguoiGui} disabled={!duocSua} onChange={(e) => doi("tenNguoiGui", e.target.value)} placeholder="Thế Giới Tin Học" required />
+              <input type="text" id="kn-ten" value={f.tenNguoiGui} disabled={!duocSua} onChange={(e) => doi("tenNguoiGui", e.target.value)} placeholder="Thế Giới Tin Học" required />
               {loiCua(loi, "tenNguoiGui") && <span className="chu-loi">{loiCua(loi, "tenNguoiGui")}</span>}
             </div>
             <div className="truong">

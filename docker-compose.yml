@@ -47,6 +47,8 @@ services:
       REDIS_URL: ${REDIS_URL}
       AUTH_SECRET: ${AUTH_SECRET}
       APP_URL: ${APP_URL}
+      # 0.16.0: khóa mã hóa mật khẩu SMTP + khóa TOTP, và ký liên kết huỷ nhận tin.
+      APP_ENC_KEY: ${APP_ENC_KEY}
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -67,6 +69,9 @@ services:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
+      # 0.16.0: worker gửi chiến dịch email — cần giải mã mật khẩu SMTP và dựng liên kết trong thư.
+      APP_ENC_KEY: ${APP_ENC_KEY}
+      APP_URL: ${APP_URL}
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }

@@ -85,7 +85,7 @@ export default function TrangDangNhap() {
           )}
           <div className="truong">
             <label htmlFor="ma">Mã xác thực</label>
-            <input id="ma" name="ma" inputMode="numeric" autoComplete="one-time-code" maxLength={20} value={ma} onChange={(e) => datMa(e.target.value)} required autoFocus />
+            <input type="text" id="ma" name="ma" inputMode="numeric" autoComplete="one-time-code" maxLength={20} value={ma} onChange={(e) => datMa(e.target.value)} required autoFocus />
           </div>
           <button className="nut chinh" type="submit" disabled={dangGui}>
             {dangGui ? "Đang kiểm tra…" : "Xác nhận"}

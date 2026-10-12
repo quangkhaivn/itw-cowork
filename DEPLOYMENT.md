@@ -121,6 +121,13 @@ docker compose up -d
 - Trước khi triển khai migration có sửa dữ liệu: **diễn tập nâng cấp** — dựng CSDL giống hệt bản đang chạy (migration cũ + seed cũ), áp migration mới + seed mới, kiểm kết quả. Bản 19/09 đã diễn tập đúng như vậy.
 - Không bao giờ chạy `prisma db push` hay `migrate dev` trên máy thật.
 
+### Nâng cấp lên 0.16.0 (email marketing, xác thực 2 lớp)
+
+- **Biến môi trường mới `APP_ENC_KEY`** — sinh một lần `openssl rand -base64 32`, thêm vào `.env` trước khi triển khai. `docker-compose.yml` đã chuyển biến này cho cả `app` và `worker` (worker cũng nhận thêm `APP_URL` để dựng liên kết trong thư). Sao lưu giá trị này cùng chỗ với `.env`: **mất hoặc đổi khóa** = mật khẩu SMTP phải nhập lại, mọi người đã bật 2 lớp phải được quản trị đặt lại, liên kết huỷ nhận tin trong thư đã gửi hết hiệu lực.
+- Migration `20261012090000_email_marketing_2_lop` chỉ thêm bảng / cột / CHECK, không sửa dữ liệu cũ; chạy lại `rls.sql` như mọi lần.
+- Máy chủ cần đi ra được cổng SMTP của nhà cung cấp (465 hoặc 587). Một số nhà cung cấp VPS chặn cổng 25/465/587 mặc định — thử bằng nút **Gửi thư thử** ở Quản trị → Kết nối email trước khi lập chiến dịch.
+- Tên miền gửi nên có SPF/DKIM đúng với nhà cung cấp SMTP, nếu không thư dễ vào mục Thư rác.
+
 ### Nâng cấp lên 0.3.0 (Phase 2 — CRM)
 
 - Migration `20260919171944_phase2_crm`: chỉ thêm 7 bảng, không sửa dữ liệu cũ, trừ một câu `INSERT … ON CONFLICT DO NOTHING` cấp `sales.approve` cho vai trò dựng sẵn `sales-manager`.

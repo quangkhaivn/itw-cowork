@@ -199,7 +199,7 @@ export default function QuanTri2Lop({
           )}
           <div className="truong">
             <label htmlFor="dl-ly-do">Lý do</label>
-            <input id="dl-ly-do" value={lyDo} onChange={(e) => datLyDo(e.target.value)} placeholder="Mất điện thoại, đổi máy…" />
+            <input type="text" id="dl-ly-do" value={lyDo} onChange={(e) => datLyDo(e.target.value)} placeholder="Mất điện thoại, đổi máy…" />
           </div>
         </div>
         <div className="chan-form">

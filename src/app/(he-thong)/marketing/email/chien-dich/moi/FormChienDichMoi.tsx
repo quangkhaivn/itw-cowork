@@ -42,7 +42,7 @@ export default function FormChienDichMoi({
         <div className="luoi-form">
           <div className="truong">
             <label htmlFor="cd-ten">Tên chiến dịch</label>
-            <input id="cd-ten" value={ten} maxLength={255} onChange={(e) => datTen(e.target.value)} placeholder="Ưu đãi máy chủ tháng 10" required />
+            <input type="text" id="cd-ten" value={ten} maxLength={255} onChange={(e) => datTen(e.target.value)} placeholder="Ưu đãi máy chủ tháng 10" required />
             {loiCua(loi, "ten") && <span className="chu-loi">{loiCua(loi, "ten")}</span>}
           </div>
           <div className="truong">

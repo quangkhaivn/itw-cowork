@@ -65,7 +65,7 @@ export default function SuaNhap({
         <div className="phan-form">
           <div className="truong">
             <label htmlFor="sn-ten">Tên chiến dịch</label>
-            <input id="sn-ten" value={ten} maxLength={255} onChange={(e) => (datDaLuu(false), datTen(e.target.value))} />
+            <input type="text" id="sn-ten" value={ten} maxLength={255} onChange={(e) => (datDaLuu(false), datTen(e.target.value))} />
           </div>
         </div>
         <div className="phan-form">

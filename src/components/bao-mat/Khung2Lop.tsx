@@ -126,8 +126,8 @@ export default function Khung2Lop({ trangThai, sauKhiBat }: { trangThai: TrangTh
           {che === "sinh-lai" && (
             <form onSubmit={sinhLai} className="luoi-form">
               <div className="truong">
-                <label htmlFor="2l-ma-sl">Mã 6 số đang hiện trên điện thoại</label>
-                <input id="2l-ma-sl" inputMode="numeric" autoComplete="one-time-code" value={ma} onChange={(e) => datMa(e.target.value)} required />
+                <label htmlFor="hai-lop-ma-sl">Mã 6 số đang hiện trên điện thoại</label>
+                <input type="text" id="hai-lop-ma-sl" inputMode="numeric" autoComplete="one-time-code" value={ma} onChange={(e) => datMa(e.target.value)} required />
               </div>
               <div className="chan-form">
                 <button type="button" className="nut trong" onClick={() => datChe("")}>Thôi</button>
@@ -138,12 +138,12 @@ export default function Khung2Lop({ trangThai, sauKhiBat }: { trangThai: TrangTh
           {che === "tat" && (
             <form onSubmit={tat} className="luoi-form">
               <div className="truong">
-                <label htmlFor="2l-mk">Mật khẩu hiện tại</label>
-                <input id="2l-mk" type="password" autoComplete="current-password" value={matKhau} onChange={(e) => datMatKhau(e.target.value)} required />
+                <label htmlFor="hai-lop-mk">Mật khẩu hiện tại</label>
+                <input id="hai-lop-mk" type="password" autoComplete="current-password" value={matKhau} onChange={(e) => datMatKhau(e.target.value)} required />
               </div>
               <div className="truong">
-                <label htmlFor="2l-ma-tat">Mã 6 số hoặc mã khôi phục</label>
-                <input id="2l-ma-tat" autoComplete="one-time-code" value={ma} onChange={(e) => datMa(e.target.value)} required />
+                <label htmlFor="hai-lop-ma-tat">Mã 6 số hoặc mã khôi phục</label>
+                <input type="text" id="hai-lop-ma-tat" autoComplete="one-time-code" value={ma} onChange={(e) => datMa(e.target.value)} required />
               </div>
               <div className="chan-form">
                 <button type="button" className="nut trong" onClick={() => datChe("")}>Thôi</button>
@@ -164,8 +164,8 @@ export default function Khung2Lop({ trangThai, sauKhiBat }: { trangThai: TrangTh
           </ol>
           <div className="luoi-form">
             <div className="truong">
-              <label htmlFor="2l-ma">Mã 6 số</label>
-              <input id="2l-ma" inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={ma} onChange={(e) => datMa(e.target.value)} required autoFocus />
+              <label htmlFor="hai-lop-ma">Mã 6 số</label>
+              <input type="text" id="hai-lop-ma" inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={ma} onChange={(e) => datMa(e.target.value)} required autoFocus />
             </div>
           </div>
           <div className="chan-form">

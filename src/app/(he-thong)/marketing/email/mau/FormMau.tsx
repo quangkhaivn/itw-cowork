@@ -69,7 +69,7 @@ export default function FormMau({
         <div className="phan-form">
           <div className="truong">
             <label htmlFor="mau-ten">Tên mẫu (nội bộ)</label>
-            <input id="mau-ten" value={ten} maxLength={255} disabled={!duocSua} onChange={(e) => datTen(e.target.value)} required />
+            <input type="text" id="mau-ten" value={ten} maxLength={255} disabled={!duocSua} onChange={(e) => datTen(e.target.value)} required />
           </div>
         </div>
         {duocSua && (
