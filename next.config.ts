@@ -21,6 +21,14 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'" },
         ],
       },
+      {
+        // 0.16.0 — QĐ-61: CHỈ trang form đăng ký công khai được nhúng iframe vào website khác
+        // (https). Mục này đứng sau nên ghi đè CSP của mục trên cho đúng đường /f/… (khóa trùng
+        // thì mục sau thắng — tài liệu next.config `headers`). Landing page và mọi trang trong hệ
+        // thống vẫn 'none'. Trình duyệt hiện đại bỏ qua X-Frame-Options khi có frame-ancestors.
+        source: "/f/:path*",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self' https:; base-uri 'self'; form-action 'self'" }],
+      },
     ];
   },
 };

@@ -24,7 +24,7 @@ export default async function BangDieuKhien() {
     tq: await tongQuanHeThong(tx, nd.hoSo),
   }));
 
-  const khongCoKhoiNao = !bdk.banHang && !bdk.pipeline && !bdk.baoGia && !bdk.donHang && !bdk.kho && !bdk.dichVu && !bdk.duAn;
+  const khongCoKhoiNao = !bdk.banHang && !bdk.pipeline && !bdk.baoGia && !bdk.donHang && !bdk.kho && !bdk.dichVu && !bdk.duAn && !bdk.marketing;
 
   return (
     <>
@@ -175,6 +175,43 @@ export default async function BangDieuKhien() {
                 </div>
               </div>
             )}
+          </div>
+        </>
+      )}
+
+      {bdk.marketing && (
+        <>
+          <h2 className="tieu-de-khoi">Marketing tháng này</h2>
+          <div className="luoi-chi-so">
+            <div className="the chi-so">
+              <div className="nhan">Lead mới trong tháng</div>
+              <div className="gia-tri">{dinhDangSo(bdk.marketing.soLeadThang)}</div>
+              <div className="ghi-chu">
+                {bdk.marketing.theoNguon.length === 0
+                  ? "chưa có lead nào"
+                  : bdk.marketing.theoNguon.map((n) => `${n.nguon} ${dinhDangSo(n.soLead)}`).join(" · ")}
+              </div>
+            </div>
+            <div className="the chi-so">
+              <div className="nhan">Chi phí / lead (CPL)</div>
+              <div className="gia-tri">{bdk.marketing.cplThang === null ? "—" : dinhDangTien(bdk.marketing.cplThang)}</div>
+              <div className="ghi-chu">
+                {bdk.marketing.cplThang === null
+                  ? "chưa có lead gắn chiến dịch trong tháng"
+                  : `${dinhDangTien(bdk.marketing.chiPhiThang)} cho ${dinhDangSo(bdk.marketing.soLeadChienDichThang)} lead từ chiến dịch`}
+              </div>
+            </div>
+            <div className="the chi-so">
+              <div className="nhan">Chiến dịch nhiều lead nhất</div>
+              <div className="gia-tri">{bdk.marketing.theoChienDich[0] ? dinhDangSo(bdk.marketing.theoChienDich[0].soLead) : "—"}</div>
+              <div className="ghi-chu">
+                {bdk.marketing.theoChienDich[0] ? (
+                  <Link href={`/marketing/chien-dich/${bdk.marketing.theoChienDich[0].id}`}>{bdk.marketing.theoChienDich[0].ten}</Link>
+                ) : (
+                  <Link href="/marketing/chien-dich">Chưa có chiến dịch nào có lead trong tháng</Link>
+                )}
+              </div>
+            </div>
           </div>
         </>
       )}

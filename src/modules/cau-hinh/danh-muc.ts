@@ -211,6 +211,21 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     macDinh: null,
     dungTuPhase: 6,
   },
+  {
+    // 0.16.0 — Marketing (MK-09). `dungTuPhase` đặt bằng phase hiện tại để màn hình Cấu hình
+    // không ghi "chưa dùng": phần này đã chạy, chỉ không thuộc một phase đánh số.
+    khoa: "marketing.phut_goi_lai_lead",
+    nhom: "Marketing",
+    nhan: "Hạn gọi lại lead mới",
+    moTa:
+      "Lead mới từ form, landing page, webhook hay nhập tay sinh một việc “Gọi lại” cho sale được giao, hạn = lúc nhận + số phút này. Chưa đặt thì việc vẫn được tạo nhưng KHÔNG có hạn, và màn hình Marketing nói rõ là chưa đặt.",
+    donVi: "phút",
+    toiThieu: 5,
+    toiDa: 10080,
+    soNguyen: true,
+    macDinh: null,
+    dungTuPhase: 8,
+  },
 ];
 
 export function timMuc(khoa: string): MucCauHinh | undefined {

@@ -64,6 +64,13 @@ const DUONG_VE: Record<string, string> = {
   "tra-ncc": "m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h4",
   "chuyen-kho": "M4 7h13l-3-3M20 17H7l3 3",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
+  // 0.16.0 — Marketing
+  "chien-dich": "M3 11l18-8-8 18-2-8-8-2z",
+  "nhan-lead": "M22 12h-6l-2 3h-4l-2-3H2M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z",
+  "form-dang-ky": "M4 3h16v18H4zM8 8h8M8 12h8M8 16h4",
+  webhook: "M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7",
+  "phan-khuc": "M21.2 15.9A10 10 0 1 1 8 2.8M22 12A10 10 0 0 0 12 2v10z",
+  landing: "M3 4h18v16H3zM3 9h18M8 13h8M10 17h4",
 };
 
 export default function BieuTuong({ ten, co = 18 }: { ten: string; co?: number }) {

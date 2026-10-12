@@ -11,6 +11,7 @@ import { dieuKienXemHoaDon } from "@/modules/tai-chinh/service";
 import { congNo, soNgayQuaHan, tongHopTuoiNo, bienLoiNhuanKy, dong } from "@/modules/tai-chinh/tinh-toan";
 import { conBanDuoc, mucTon } from "@/modules/kho/tinh-toan";
 import { XAC_SUAT_GOI_Y } from "@/modules/crm/hang-so";
+import { khoiMarketingBangDieuKhien } from "@/modules/marketing/service";
 
 /**
  * Bảng điều hành — mục 20 prompt 20/09. **Chỉ số liệu thật**, không con số minh họa.
@@ -209,6 +210,8 @@ export async function bangDieuKhien(nc: NguCanh) {
     kho,
     dichVu,
     duAn,
+    // 0.16.0 — khối Marketing; không có `marketing.view` thì null.
+    marketing: await khoiMarketingBangDieuKhien(nc),
     viec: { cuaToi: viecCuaToi, quaHan: viecQuaHan },
   };
 }

@@ -49,7 +49,14 @@ export type BieuTuong =
   | "phieu-chi"
   | "khach-tra"
   | "tra-ncc"
-  | "chuyen-kho";
+  | "chuyen-kho"
+  // 0.16.0 — Marketing
+  | "chien-dich"
+  | "nhan-lead"
+  | "form-dang-ky"
+  | "webhook"
+  | "phan-khuc"
+  | "landing";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -95,6 +102,18 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     muc: [
       { nhan: "Khách hàng", href: "/crm/khach-hang", quyen: "customer.view", bieuTuong: "khach-hang", tuKhoa: "customer 360 lien he contact ma so thue" },
       { nhan: "Lead", href: "/crm/lead", quyen: "crm.view", bieuTuong: "lead", tuKhoa: "khach tiem nang lead chuyen doi" },
+    ],
+  },
+  {
+    // 0.16.0 — chỉ những màn hình đã chạy thật (mục 6 ARCHITECTURE).
+    nhan: "Marketing",
+    muc: [
+      { nhan: "Chiến dịch", href: "/marketing/chien-dich", quyen: "marketing.view", bieuTuong: "chien-dich", tuKhoa: "campaign chien dich ngan sach chi phi cpl roas utm" },
+      { nhan: "Nhận lead", href: "/marketing/nhan-lead", quyen: "marketing.view", bieuTuong: "nhan-lead", tuKhoa: "chia lead vong tron nhat ky nhan lead nhap tay" },
+      { nhan: "Form đăng ký", href: "/marketing/form", quyen: "marketing.view", bieuTuong: "form-dang-ky", tuKhoa: "form dang ky cong khai nhung iframe website" },
+      { nhan: "Webhook", href: "/marketing/webhook", quyen: "marketing.view", bieuTuong: "webhook", tuKhoa: "webhook facebook lead ads zalo zapier khoa bi mat" },
+      { nhan: "Phân khúc", href: "/marketing/phan-khuc", quyen: "marketing.view", bieuTuong: "phan-khuc", tuKhoa: "segment phan khuc tep khach dong y nhan tin" },
+      { nhan: "Landing page", href: "/marketing/landing", quyen: "marketing.view", bieuTuong: "landing", tuKhoa: "landing page trang dich ab test" },
     ],
   },
   {
