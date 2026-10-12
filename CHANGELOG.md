@@ -14,8 +14,9 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (EM) và 22 (XT). Kiến trú
 - **Huỷ nhận tin một chạm**: liên kết ký HMAC trong chân thư, trang `/huy-nhan-tin/…`, và tiêu đề `List-Unsubscribe` + `List-Unsubscribe-Post` để Gmail/Outlook huỷ ngay trong hộp thư. Cột `marketing_opt_out_at` mới trên lead và liên hệ.
 - **Theo dõi mở / bấm** (bật ở Kết nối email). Bấm chỉ chuyển tới liên kết có thật trong thư.
 - Gửi thành công ghi tương tác `email` vào dòng thời gian lead / khách.
+- **Bản in báo giá theo mẫu ITW**: logo công ty (Hồ sơ công ty — PNG/JPEG/WebP ≤ 512 KB, kiểm byte đầu như tệp đính kèm, không nhận SVG), đầu trang công ty, dải tiêu đề "BẢNG BÁO GIÁ", khối khách hàng, bảng hàng có mã SP + VAT từng dòng, khối tổng + bằng chữ, điều khoản đánh số + thông tin chuyển khoản, ký tên hai bên. Vẫn in bằng trình duyệt (QĐ-21).
 - **Xác thực 2 lớp** (TOTP): tự bật ở Tài khoản của tôi, 10 mã khôi phục dùng một lần, đăng nhập hai bước; Quản trị chọn vai trò bắt buộc và đặt lại cho người mất điện thoại.
-- 7 bảng CSDL (22 CHECK + 1 trigger chỉ-ghi-thêm) + 7 cột trên `users` / `leads` / `contacts`, 27 route API (3 công khai), 10 màn hình + mục 2 lớp ở Tài khoản của tôi và bước 2 ở Đăng nhập, 2 ngưỡng Cấu hình.
+- 7 bảng CSDL (22 CHECK + 1 trigger chỉ-ghi-thêm) + 7 cột trên `users` / `leads` / `contacts`, 28 route API (3 công khai), 10 màn hình + mục 2 lớp ở Tài khoản của tôi và bước 2 ở Đăng nhập, 2 ngưỡng Cấu hình.
 
 ### Quyết định đáng ghi
 - Thêm **`nodemailer`** (QĐ-66) — thư viện gửi thư đã qua kiểm chứng thay vì tự viết SMTP.
@@ -25,7 +26,7 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (EM) và 22 (XT). Kiến trú
 - TOTP tự viết, chưa có mã QR (QĐ-71).
 
 ### Kiểm thử
-- 376 bài đơn vị (thêm 67: vector chuẩn RFC 4226 / RFC 6238, mã hóa, khối an toàn, lọc người nhận, mã ký liên kết, lỗi SMTP), 895 bài tích hợp (thêm `thu:email` 80 bài — nodemailer thật vào máy chủ SMTP giả — và `thu:xac-thuc-2-lop` 43 bài) — tất cả đạt.
+- 376 bài đơn vị (thêm 67: vector chuẩn RFC 4226 / RFC 6238, mã hóa, khối an toàn, lọc người nhận, mã ký liên kết, lỗi SMTP), 906 bài tích hợp (thêm `thu:email` 91 bài — nodemailer thật vào máy chủ SMTP giả — và `thu:xac-thuc-2-lop` 43 bài) — tất cả đạt.
 
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 

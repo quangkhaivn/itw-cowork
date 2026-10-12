@@ -24,6 +24,7 @@ import { ghiBam, ghiMo, huyNhanTin, thongTinHuyNhanTin } from "../src/modules/em
 import { kyMaLienKet } from "../src/modules/email/ma-lien-ket";
 import { LuocDoKetNoiEmail, LuocDoMau, LuocDoTaoChienDich } from "../src/modules/email/luoc-do";
 import { capNhatCauHinh } from "../src/modules/cau-hinh/service";
+import { datLogoCongTy, docLogoCongTy, LuocDoLogo, xoaLogoCongTy } from "../src/modules/ho-so-cong-ty/service";
 import { seedNenMong } from "../prisma/seed/index";
 import { clientChuSoHuu, dat, ketLuan } from "./thu-lib";
 
@@ -425,6 +426,43 @@ async function main() {
     huyKhongLyDo = true;
   }
   dat("[CSDL] chiến dịch huỷ phải có lý do", huyKhongLyDo);
+
+  // ------------------------------------------------------------------
+  console.log("\n— Logo công ty cho bản in báo giá —");
+  const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200, 7)]);
+  const b64 = (b: Buffer) => b.toString("base64");
+  await nemLoi("Nhân viên marketing không đổi được logo (setting.update)", "quyen", () =>
+    voi(T, mkt, (nc) => datLogoCongTy(nc, LuocDoLogo.parse({ tenTep: "logo.png", duLieuBase64: b64(PNG) }))),
+  );
+  await nemLoi("Ruột PNG mà đặt tên .jpg → từ chối (kiểm byte đầu)", "nghiep-vu", () =>
+    voi(T, gd, (nc) => datLogoCongTy(nc, LuocDoLogo.parse({ tenTep: "logo.jpg", duLieuBase64: b64(PNG) }))),
+    "kieu-tep",
+  );
+  await nemLoi("SVG bị từ chối (chạy được script)", "nghiep-vu", () =>
+    voi(T, gd, (nc) => datLogoCongTy(nc, LuocDoLogo.parse({ tenTep: "logo.svg", duLieuBase64: b64(Buffer.from("<svg onload='x()'/>")) }))),
+    "kieu-tep",
+  );
+  await nemLoi("PDF hợp lệ nhưng không phải ảnh → từ chối", "nghiep-vu", () =>
+    voi(T, gd, (nc) => datLogoCongTy(nc, LuocDoLogo.parse({ tenTep: "logo.pdf", duLieuBase64: b64(Buffer.from("%PDF-1.7 xxxxxxxx")) }))),
+    "kieu-tep",
+  );
+  await nemLoi("Tệp RIFF không phải WebP (ví dụ WAV) → từ chối", "nghiep-vu", () =>
+    voi(T, gd, (nc) => datLogoCongTy(nc, LuocDoLogo.parse({ tenTep: "logo.webp", duLieuBase64: b64(Buffer.from("RIFF\0\0\0\0WAVEfmt xxxxxxxx")) }))),
+    "kieu-tep",
+  );
+  await nemLoi("Quá 512 KB → từ chối", "nghiep-vu", () =>
+    voi(T, gd, (nc) => datLogoCongTy(nc, { tenTep: "logo.png", duLieuBase64: b64(Buffer.concat([PNG, Buffer.alloc(600 * 1024)])) })),
+    "tep-qua-lon",
+  );
+  const lg = await voi(T, gd, (nc) => datLogoCongTy(nc, LuocDoLogo.parse({ tenTep: "logo.png", duLieuBase64: b64(PNG) })));
+  dat("Logo PNG thật được lưu kèm mã băm", lg.mime === "image/png" && lg.kichThuoc === PNG.length && /^[0-9a-f]{64}$/.test(lg.sha256));
+  const docLg = await voiTenant(T, (tx) => docLogoCongTy(tx));
+  dat("Đọc lại đúng nội dung ảnh cho bản in", docLg?.duLieu === b64(PNG));
+  const nkLogo = await chu.auditLog.findMany({ where: { tenantId: T, objectType: "setting" } });
+  dat("Nhật ký ghi mã băm, không ghi nội dung ảnh", nkLogo.some((n) => JSON.stringify(n.after).includes(lg.sha256)) && !JSON.stringify(nkLogo).includes(b64(PNG)));
+  dat("Doanh nghiệp B không thấy logo của A", (await voiTenant(tenantB.id, (tx) => docLogoCongTy(tx))) === null);
+  await voi(T, gd, (nc) => xoaLogoCongTy(nc));
+  dat("Gỡ logo", (await voiTenant(T, (tx) => docLogoCongTy(tx))) === null);
 
   // ------------------------------------------------------------------
   console.log("\n— Cách ly tenant —");

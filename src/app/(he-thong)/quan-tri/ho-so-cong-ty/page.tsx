@@ -4,6 +4,7 @@ import { coQuyen } from "@/lib/phan-quyen";
 import { docDuLieu, yeuCauQuyen } from "@/lib/trang";
 import { xemHoSoCongTy } from "@/modules/ho-so-cong-ty/service";
 import FormHoSoCongTy from "./FormHoSoCongTy";
+import KhungLogo from "./KhungLogo";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function TrangHoSoCongTy() {
         duongDan={[{ nhan: "Quản trị" }]}
         moTa="Thông tin in lên đầu báo giá và các chứng từ sau này. Hệ thống không tự điền — mục nào chưa khai thì bản in để trống."
       />
+      <KhungLogo logo={hs.logo} duocSua={coQuyen(nd.hoSo, "setting.update")} />
       <FormHoSoCongTy duocSua={coQuyen(nd.hoSo, "setting.update")} muc={hs.muc} giaTri={hs.giaTri} thieu={hs.thieu} />
     </>
   );

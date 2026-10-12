@@ -113,7 +113,7 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Giao diện, API, bản in và (sau này) trợ lý AI **dùng chung một hàm** `tinhBaoGia()` nên con số không bao giờ lệch nhau; làm tròn từng dòng về đồng rồi mới cộng.
 - Ngưỡng duyệt đọc từ Cấu hình `bao_gia.nguong_bien_loi_nhuan`, **không viết cứng**; chưa đặt thì mọi báo giá phải duyệt (BG-04).
 - Phạm vi xem như cơ hội (QĐ-13): người lập, cộng đường chủ tài khoản khách.
-- Bản in là trang riêng ngoài khung ứng dụng (`src/app/(in)/bao-gia/[id]/in`), in bằng trình duyệt (QĐ-21); phần đầu lấy từ Hồ sơ công ty (QĐ-22).
+- Bản in là trang riêng ngoài khung ứng dụng (`src/app/(in)/bao-gia/[id]/in`), in bằng trình duyệt (QĐ-21); phần đầu lấy từ Hồ sơ công ty (QĐ-22). Từ 0.16.0 bố cục theo mẫu PDF báo giá của ITW CRM, có logo công ty (`tenant_settings` khóa `cong_ty.logo`, nhúng `data:` URI; kiểm byte đầu bằng `nhanDangTep()` của tệp đính kèm).
 
 ## 7e. Đơn hàng và kho (Phase 5)
 
