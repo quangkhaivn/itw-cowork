@@ -37,7 +37,8 @@
     "thu:chuyen-kho": "tsx --env-file-if-exists=.env thu/thu-chuyen-kho.ts",
     "thu:dinh-kem": "tsx --env-file-if-exists=.env thu/thu-dinh-kem.ts",
     "thu:marketing": "tsx --env-file-if-exists=.env thu/thu-marketing.ts",
-    "thu:qa-marketing": "tsx --env-file-if-exists=.env thu/thu-qa-marketing.ts"
+    "thu:qa-marketing": "tsx --env-file-if-exists=.env thu/thu-qa-marketing.ts",
+    "thu:qa-marketing-http": "tsx --env-file-if-exists=.env thu/thu-qa-marketing-http.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
