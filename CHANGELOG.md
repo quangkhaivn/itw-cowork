@@ -2,6 +2,33 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.16.0 — (chưa phát hành) — Marketing và thu lead
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (MK). Kiến trúc: `ARCHITECTURE.md` mục 7o. Quyết định QĐ-56 → QĐ-65.
+
+### Thêm
+- **Chiến dịch marketing** (`CD-2026-0001`): kênh, thời gian, ngân sách, người phụ trách, mã `utm_campaign`; chi phí thực tế theo ngày / khoản (hủy kèm lý do, không xóa). Chỉ số **CPL, ROAS, tỷ lệ đủ điều kiện, tỷ lệ chuyển đổi** — chưa có mẫu số thì để trống, không ghi 0.
+- **Duyệt ngân sách**: chiến dịch có ngân sách phải được Trưởng phòng Marketing / Giám đốc duyệt trước khi chạy; tăng ngân sách khi đang chạy thì tự về chờ duyệt. Chốt bằng CHECK trong CSDL.
+- **Một cửa nhận lead** `nhanLead()`: form công khai, landing page, webhook và nhập tay cùng chuẩn hóa, dò trùng (trùng lead đang mở → ghi thêm, không đẻ lead mới; trùng khách → lead mới gắn cảnh báo, giao người phụ trách khách), gắn chiến dịch theo UTM, **chia sale vòng tròn**, tạo việc “Gọi lại” có hạn theo Cấu hình, báo chuông. Mọi lần nhận — kể cả bị từ chối — vào nhật ký chỉ-ghi-thêm.
+- **Form đăng ký công khai** `/f/<mã doanh nghiệp>/<slug>`: chọn trường từ danh mục an toàn, câu hỏi đồng ý nhận tin (không tích sẵn), lời cảm ơn, nhận UTM, mã nhúng iframe; chống spam bằng giới hạn tốc độ, ô bẫy, trần độ dài.
+- **Webhook nhận lead** cho Facebook Lead Ads (qua Zapier / Make), Zalo, website khác: khóa bí mật theo nguồn, hiện một lần, đổi / thu hồi được; nhật ký nhận / từ chối.
+- **Phân khúc** lead hoặc liên hệ khách theo nguồn, chiến dịch, giai đoạn, phân khúc / ngành / loại khách, tỉnh thành, đã đồng ý nhận tin…; xem trước số lượng và mẫu. Cửa `danhSachTheoPhanKhuc()` cho gói Email marketing.
+- **Đồng ý / từ chối nhận tin** trên lead và liên hệ (`marketing_opt_in`, `marketing_opt_in_at`, `marketing_opt_out_at`, `marketing_consent_source`); ghi nhận trên trang lead.
+- **Landing page** `/lp/<mã doanh nghiệp>/<slug>` dựng từ 8 loại khối an toàn (tiêu đề, đoạn văn, ảnh https, lợi ích, nút gọi, form, hỏi đáp, lời khách), xuất bản / ẩn, **thử A/B** hai biến thể, thống kê lượt xem và tỷ lệ đăng ký.
+- Thực tập sinh Marketing bị **che SĐT / email** ở mọi màn hình và API marketing mới.
+- Khối **Marketing tháng này** trên Bảng điều hành (lead theo nguồn, CPL, chiến dịch nhiều lead nhất); khối **Nguồn marketing** trên trang lead.
+- Ngưỡng mới trong Cấu hình: `marketing.phut_goi_lai_lead` (chưa đặt).
+- 8 bảng CSDL + cột mới trên `leads`, `contacts`, `customers`, `opportunities`; 36 CHECK; 23 route API nội bộ + 2 route công khai; 16 màn hình nội bộ + 2 trang công khai (form, landing).
+
+### Quyết định đáng ghi
+- **Một hàm nhận lead cho mọi kênh**, nhận `tx` thay vì phiên người dùng vì khách ngoài không đăng nhập (QĐ-56).
+- **Tenant giải từ mã doanh nghiệp trên đường dẫn trước khi chạm dữ liệu** (QĐ-60); chỉ trang form được nhúng iframe, POST vẫn kiểm Origin, không mở CORS (QĐ-61); webhook xác thực bằng khóa nên miễn kiểm Origin (QĐ-62).
+- **ROAS tính theo hóa đơn đã phát hành của khách mới** do chiến dịch mang về (QĐ-58).
+- **Che liên lạc theo quyền**, không theo tên vai trò (QĐ-64).
+
+### Kiểm thử
+- 338 bài đơn vị (thêm 29), 875 bài tích hợp (thêm `thu:marketing` 103 bài), 434 bài HTTP đầu-cuối — tất cả đạt.
+
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 20 (DK).

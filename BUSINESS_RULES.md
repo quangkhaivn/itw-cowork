@@ -433,3 +433,37 @@ Nội dung tệp nằm **trên đĩa** (`data/dinh-kem`, gắn volume Docker), k
 Mã băm SHA-256 lưu cùng bản ghi; tải về kiểm lại mã băm — tệp trên đĩa khác với lúc tải lên thì báo lỗi rõ ràng, không im lặng trả tệp sai.
 
 **Giới hạn cần biết**: bản sao lưu tệp đính kèm nằm trên cùng máy chủ như CSDL — mất máy chủ là mất cả hai (`VD-068`, chưa có nơi cất ngoài).
+
+## 21. Marketing và thu lead (0.16.0)
+
+Chiến dịch, chi phí, chỉ số; **một cửa nhận lead** cho form công khai, landing page, webhook và nhập tay; phân khúc; landing page. Không thêm mã quyền: dùng phân hệ `marketing.*` đã có từ Phase 1 (Trưởng phòng Marketing, Nhân viên Marketing — phạm vi toàn công ty; Thực tập sinh Marketing — phạm vi của mình). Phạm vi tính theo `owner_id` của chiến dịch / form / nguồn webhook / phân khúc / landing.
+
+| Việc | Quyền |
+|---|---|
+| Xem chiến dịch, form, webhook, phân khúc, landing, nhật ký nhận lead | `marketing.view` |
+| Tạo chiến dịch, form, nguồn webhook, phân khúc, landing; nhập tay lead | `marketing.create` |
+| Sửa, đổi trạng thái, ghi / hủy chi phí, đổi khóa / thu hồi webhook, đặt danh sách nhận lead | `marketing.update` (trong phạm vi) |
+| Duyệt ngân sách chiến dịch | `marketing.approve` |
+| Ghi nhận đồng ý / từ chối nhận tin | `crm.update` (lead) · `customer.update` (liên hệ) · hoặc `marketing.update` |
+| Gửi form / gọi webhook | Không cần đăng nhập — form phải đang mở, webhook phải đúng khóa |
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| MK-01 | Mã chiến dịch `CD-<năm>-0001`, cấp nguyên tử. `utm_campaign` chuẩn hóa (bỏ dấu, chữ thường) và **duy nhất** trong doanh nghiệp — để một đường dẫn quảng cáo chỉ thuộc một chiến dịch | [CSDL] duy nhất + CHECK khuôn · [SV] · [TH] |
+| MK-02 | Kênh, trạng thái trong danh mục; ngân sách ≥ 0; ngày kết thúc ≥ ngày bắt đầu. Vòng đời: Kế hoạch → (Chờ duyệt) → Đang chạy ⇄ Tạm dừng → Kết thúc; Hủy (bắt buộc lý do) chỉ từ Kế hoạch / Chờ duyệt. Kết thúc / hủy thì khóa sửa | [CSDL] CHECK · [SV] hàm thuần · [ĐV] · [TH] |
+| MK-03 | **Ngân sách > 0 phải được duyệt (`marketing.approve`) trước khi chạy.** Tăng ngân sách vượt mức đã duyệt khi đang chạy → tự về Chờ duyệt. Người phụ trách không tự duyệt, trừ phạm vi duyệt toàn công ty. Từ chối phải có lý do. Gửi duyệt báo chuông người có quyền duyệt | [CSDL] CHECK `marketing_campaigns_duyet_check` · [SV] · [TH] |
+| MK-04 | Chi phí theo ngày / theo khoản, số tiền > 0. **Không xóa** — hủy kèm lý do. Không ghi chi phí vào chiến dịch đã hủy. Chi vượt ngân sách (đã duyệt) → cảnh báo, không chặn (hóa đơn quảng cáo về muộn vẫn phải ghi được) | [CSDL] CHECK · [SV] · [TH] |
+| MK-05 | CPL = chi phí / số lead; ROAS = doanh thu / chi phí; tỷ lệ đủ điều kiện, tỷ lệ chuyển đổi = / số lead. **Mẫu số 0 → để trống (null), không ghi 0.** Doanh thu = hóa đơn đã phát hành của khách mới do chiến dịch mang về (QĐ-58). Dòng tổng cộng đầu vào rồi tính lại, không cộng tỷ lệ | [SV] hàm thuần `tinhChiSoChienDich` · [ĐV] · [TH] |
+| MK-06 | **Mọi kênh đi qua `nhanLead()`**. SĐT / email / MST chuẩn hóa theo KH-07; cần họ tên (hoặc công ty) và SĐT hoặc email (LD-02) | [SV] · [TH] |
+| MK-07 | Dò trùng (LD-03) theo SĐT / email / MST: trùng **lead đang mở** → ghi thêm tương tác vào lead đó, bổ sung chỗ còn trống, báo người phụ trách, không tạo lead mới (và không đẻ việc gọi lại thứ hai nếu còn việc mở). Trùng **khách / liên hệ** → vẫn tạo lead mới, gắn `matched_customer_id`, giao người phụ trách khách. Ghi chú hệ thống không đổi giai đoạn lead | [SV] · [TH] |
+| MK-08 | Chia lead: vòng tròn theo danh sách sale nhận lead (bộ đếm nguyên tử trong `document_sequences`). Người trong danh sách phải đang hoạt động và có `crm.view`. Danh sách trống → người phụ trách chiến dịch → người phụ trách form / nguồn webhook / người nhập → Giám đốc / Quản trị | [SV] · [ĐV] · [TH] |
+| MK-09 | Lead mới sinh việc **“Gọi lại”** ưu tiên Cao cho người nhận, hạn = lúc nhận + `marketing.phut_goi_lai_lead`. **Chưa đặt → việc không có hạn** và mô tả việc + màn hình Nhận lead nói rõ. Chuông báo người nhận | [SV] · [TH] |
+| MK-10 | Gắn chiến dịch: `utm_campaign` khớp chiến dịch → chiến dịch đó; không thì chiến dịch của form / nguồn webhook / chọn tay. Lưu đủ 5 khóa UTM trên lead. Chuyển đổi lead: chiến dịch đi theo sang cơ hội; sang khách **chỉ khi khách mới** (QĐ-58) | [SV] · [TH] |
+| MK-11 | Form công khai: trường chỉ từ danh mục (họ tên, SĐT, email, công ty, chức danh, MST, nhu cầu, ghi chú) — form ngoài không ghi được người phụ trách, giai đoạn, giá trị. Trần độ dài từng trường, thân ≤ 20 KB. Ô bẫy chống bot (trả “thành công” nhưng không tạo lead, ghi nhật ký `spam`). Giới hạn tốc độ theo IP. Form tắt / mã doanh nghiệp sai → 404 | [SV] · [ĐV] · [TH] |
+| MK-12 | Webhook: khóa hiện **một lần**, máy chủ chỉ giữ SHA-256, so thời gian hằng; đổi khóa → khóa cũ hết hiệu lực ngay; thu hồi được. **Mọi lần nhận — kể cả bị từ chối** (sai / thiếu khóa, đã thu hồi, dữ liệu sai) — vào nhật ký `lead_captures` chỉ-ghi-thêm | [CSDL] CHECK + trigger · [SV] · [ĐV] · [TH] |
+| MK-13 | Đồng ý nhận tin chỉ khi **chính người đó** tự tích (ô không tích sẵn; form không hỏi thì không bao giờ coi là đồng ý; nhập tay phải có bằng chứng). Từ chối luôn thắng; đồng ý và từ chối không cùng bật. Lưu thời điểm và nguồn đồng ý | [CSDL] CHECK · [SV] · [TH] |
+| MK-14 | Phân khúc: điều kiện JSON chỉ gồm trường trong danh mục (Zod `.strict()`); dịch sang điều kiện truy vấn bằng mã, không nhận biểu thức tự do. Danh sách gửi tin (`danhSachTheoPhanKhuc`) mặc định **chỉ người đã đồng ý và chưa từ chối** | [SV] · [ĐV] · [TH] |
+| MK-15 | SĐT / email của lead hiện khi có `crm.view`; của liên hệ khách khi có `customer.view`; còn lại **che** (Thực tập sinh Marketing luôn bị che). Lấy danh sách không che để gửi cần `marketing.update` và không trả về trình duyệt | [SV] · [ĐV] · [TH] |
+| MK-16 | Landing page dựng từ danh mục khối khai báo bằng mã; không nhận HTML / script; ảnh và liên kết chỉ `https://`; tối đa 30 khối. Chỉ trang **đang xuất bản** mở công khai. Trang có khối form phải chọn form; xuất bản cần form đang mở. Đang xuất bản thì không đổi đường dẫn | [CSDL] CHECK · [SV] lược đồ · [ĐV] · [TH] |
+
+**Chưa làm ở phần này**: kéo lead trực tiếp từ Facebook Graph API (hiện nhận qua Zapier / Make gọi webhook); ảnh landing lấy từ tệp đính kèm; gửi email / SMS theo phân khúc (gói Email marketing); xuất phân khúc ra Excel; báo cáo thời gian phản hồi lead.
