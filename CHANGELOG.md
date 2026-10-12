@@ -33,7 +33,7 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (MK). Kiến trúc: `ARCHITEC
 - Ký tự NUL / điều khiển → 400 thay vì 500; slug / mã sai khuôn → 404 không truy vấn; trần thân yêu cầu tính theo byte; lượt xem form / landing có trần theo IP.
 
 ### Kiểm thử
-- 339 bài đơn vị (thêm 30), tích hợp thêm `thu:marketing` 103 bài + `thu:qa-marketing` 122 bài, bài HTTP `thu:qa-marketing-http` — xem báo cáo gộp.
+- 339 bài đơn vị (thêm 30), 997 bài tích hợp (thêm `thu:marketing` 103 bài và `thu:qa-marketing` 122 bài), 434 bài HTTP đầu-cuối + 107 bài `thu:qa-marketing-http` — tất cả đạt.
 
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 
