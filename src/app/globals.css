@@ -757,6 +757,9 @@ table.bang-in .mo-ta-in { color: #555; font-size: 12px; margin-top: 2px; white-s
  * Màu của trạng thái / nhóm do người dùng đặt, truyền qua biến --mau.
  * ------------------------------------------------------------------------ */
 
+/* Thẻ chỉ số trong lưới: luật chung `.the + .the` đẩy thẻ thứ hai trở đi xuống 16px, làm lệch hàng. */
+.luoi-chi-so > .the + .the { margin-top: 0; }
+
 .cham-mau { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--mau, var(--chu-nhat)); flex-shrink: 0; }
 .nhan-mau { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--vien); white-space: nowrap; }
 

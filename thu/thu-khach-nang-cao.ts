@@ -28,6 +28,7 @@ import { diemCuaKhach, luuDiemNguon, tinhLaiToanBo, xemCauHinhDiem } from "../sr
 import { gopKhach, xemTruocGop } from "../src/modules/khach-hang/gop";
 import { nhapKhachCsv, xuatKhachCsv } from "../src/modules/khach-hang/nhap-xuat";
 import { banGiao, xemTruocBanGiao } from "../src/modules/ban-giao/service";
+import { timCongCu } from "../src/modules/tro-ly/cong-cu";
 import { seedNenMong } from "../prisma/seed/index";
 import { clientChuSoHuu, dat, ketLuan } from "./thu-lib";
 
@@ -321,6 +322,11 @@ async function main() {
   dat("Điểm nguồn đã đặt được cộng", (await voi(T, nv1, (nc) => diemCuaKhach(nc, k1.id))).phan.some((p) => p.nhan.startsWith("Nguồn") && p.diem === 20));
   const cauHinhDiem = await voi(T, nv1, (nc) => xemCauHinhDiem(nc));
   dat("Màn hình chấm điểm nói rõ đang dùng trọng số (mặc định) và đã có hạng", cauHinhDiem.cauHinh.diemMoiTuongTac === 5 && cauHinhDiem.thongKe.coHang);
+
+  const congCu = timCongCu("diem_hanh_trinh_khach")!;
+  const ccKq = (await voi(T, nv1, (nc) => congCu.chay(nc, { khachHangId: k1.id }))) as { diem: number; lichSuHanhTrinh: unknown[] };
+  dat("Trợ lý: công cụ đọc điểm + hành trình trả đúng điểm và lịch sử", ccKq.diem === (await voi(T, nv1, (nc) => diemCuaKhach(nc, k1.id))).diemHienTai && ccKq.lichSuHanhTrinh.length > 0);
+  await nemLoi("Trợ lý: công cụ điểm/hành trình theo phạm vi người hỏi (NV2 không đọc khách NV1)", "khong-thay", () => voi(T, nv2, (nc) => congCu.chay(nc, { khachHangId: k1.id })));
 
   // ------------------------------------------------------------------
   console.log("\n— Nhắc việc: đứng lâu + sinh nhật —");
