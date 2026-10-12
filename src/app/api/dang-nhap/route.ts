@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { timTenantTheoMa, voiTenant } from "@/lib/db";
-import { bamMatKhau, datCookiePhien, kiemTraMatKhau, kyPhien } from "@/lib/xac-thuc";
+import { bamMatKhau, datCookiePhien, datCookiePhienTam2Lop, kiemTraMatKhau, kyPhien, kyPhienTam2Lop } from "@/lib/xac-thuc";
 import { ghiSuKien, SU_KIEN } from "@/lib/su-kien";
 import { ghiKiemToan } from "@/lib/kiem-toan";
 import { demVaKiem, xoaDem } from "@/lib/gioi-han-toc-do";
@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
 
   type KetQua =
     | { loai: "ok"; id: string; email: string; hoTen: string; phaiDoiMatKhau: boolean }
+    | { loai: "can-2-lop"; id: string; email: string }
     | { loai: "sai" }
     | { loai: "khoa"; conLaiGiay: number };
 
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
         mustChangePassword: true,
         failedLoginCount: true,
         lockedUntil: true,
+        totpEnabledAt: true,
       },
     });
 
@@ -153,6 +155,10 @@ export async function POST(req: NextRequest) {
       return { loai: "sai" };
     }
 
+    // XT-04: tài khoản bật 2 lớp — mật khẩu đúng mới chỉ qua bước 1. Chưa cấp phiên, chưa ghi
+    // "đăng nhập"; bộ đếm sai giữ nguyên để bước nhập mã dùng chung cơ chế khóa tài khoản.
+    if (nguoiDung.totpEnabledAt) return { loai: "can-2-lop", id: nguoiDung.id, email: nguoiDung.email };
+
     await tx.user.update({
       where: { id: nguoiDung.id },
       data: { lastLoginAt: bayGio, failedLoginCount: 0, lockedUntil: null },
@@ -188,6 +194,10 @@ export async function POST(req: NextRequest) {
   if (ketQua.loai === "sai") return NextResponse.json({ thongBao: THONG_BAO_SAI }, { status: 401 });
 
   await xoaDem(khoaTaiKhoan);
+  if (ketQua.loai === "can-2-lop") {
+    await datCookiePhienTam2Lop(await kyPhienTam2Lop({ userId: ketQua.id, tenantId: tenant.id, email: ketQua.email }));
+    return NextResponse.json({ ok: true, can2Lop: true });
+  }
   const token = await kyPhien({ userId: ketQua.id, tenantId: tenant.id, email: ketQua.email });
   await datCookiePhien(token);
 

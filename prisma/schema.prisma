@@ -2691,33 +2691,37 @@ model EmailTemplate {
 
 /// Chiến dịch email. Số EM-2026-0001. Nội dung chép từ mẫu lúc lập, **đóng băng** lúc duyệt.
 model EmailCampaign {
-  id              String    @id @default(uuid()) @db.Uuid
-  tenantId        String    @map("tenant_id") @db.Uuid
-  code            String    @db.VarChar(30)
-  name            String    @db.VarChar(255)
-  templateId      String?   @map("template_id") @db.Uuid
-  subject         String    @db.VarChar(255)
-  blocks          Json      @default("[]")
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  code             String    @db.VarChar(30)
+  name             String    @db.VarChar(255)
+  templateId       String?   @map("template_id") @db.Uuid
+  subject          String    @db.VarChar(255)
+  blocks           Json      @default("[]")
   /// Mã nguồn người nhận (src/modules/email/nguon-nguoi-nhan.ts) + tham số lọc.
-  sourceCode      String    @map("source_code") @db.VarChar(50)
-  sourceParams    Json      @default("{}") @map("source_params")
+  sourceCode       String    @map("source_code") @db.VarChar(50)
+  sourceParams     Json      @default("{}") @map("source_params")
   /// DRAFT | PENDING_APPROVAL | SENDING | PAUSED | COMPLETED | CANCELLED
-  status          String    @default("DRAFT") @db.VarChar(20)
-  submittedAt     DateTime? @map("submitted_at") @db.Timestamptz(6)
-  submittedBy     String?   @map("submitted_by") @db.Uuid
-  approvedAt      DateTime? @map("approved_at") @db.Timestamptz(6)
-  approvedBy      String?   @map("approved_by") @db.Uuid
-  pausedAt        DateTime? @map("paused_at") @db.Timestamptz(6)
-  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
-  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
-  cancelledBy     String?   @map("cancelled_by") @db.Uuid
-  cancelReason    String?   @map("cancel_reason") @db.Text
+  status           String    @default("DRAFT") @db.VarChar(20)
+  submittedAt      DateTime? @map("submitted_at") @db.Timestamptz(6)
+  submittedBy      String?   @map("submitted_by") @db.Uuid
+  approvedAt       DateTime? @map("approved_at") @db.Timestamptz(6)
+  approvedBy       String?   @map("approved_by") @db.Uuid
+  pausedAt         DateTime? @map("paused_at") @db.Timestamptz(6)
+  /// Vì sao đang tạm dừng: người bấm, hoặc máy tự dừng khi hộp thư gửi báo lỗi kết nối / đăng nhập.
+  pauseReason      String?   @map("pause_reason") @db.Text
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
+  cancelledAt      DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledBy      String?   @map("cancelled_by") @db.Uuid
+  cancelReason     String?   @map("cancel_reason") @db.Text
   /// Chụp lại lúc duyệt: có theo dõi mở/bấm hay không (đổi Cấu hình sau không đổi thư đã gửi).
-  trackingEnabled Boolean   @default(false) @map("tracking_enabled")
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy       String?   @map("created_by") @db.Uuid
-  updatedBy       String?   @map("updated_by") @db.Uuid
+  trackingEnabled  Boolean   @default(false) @map("tracking_enabled")
+  /// Chụp lại lúc duyệt: bao nhiêu người bị loại vì lý do gì (cả những người không có email, không thành dòng người nhận).
+  recipientSummary Json      @default("{}") @map("recipient_summary")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?   @map("created_by") @db.Uuid
+  updatedBy        String?   @map("updated_by") @db.Uuid
 
   tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   template   EmailTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)

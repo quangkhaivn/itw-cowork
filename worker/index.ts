@@ -7,6 +7,7 @@ import { docCauHinh } from "../src/modules/cau-hinh/service";
 import { homNayVN } from "../src/modules/crm/chung";
 import { MA_TAC_VU_QUET } from "../src/modules/nhac-viec/quy-tac";
 import { daToiGioChay } from "../src/modules/nhac-viec/tinh-toan";
+import { guiLoThu } from "../src/modules/email/gui";
 
 /**
  * Tiến trình nền — Phase 8.
@@ -92,11 +93,23 @@ async function motNhip() {
       // Một doanh nghiệp hỏng thì ghi lại và đi tiếp; lần chạy hỏng đã nằm trong job_runs.
       console.error(`[worker] ${luc} — quét doanh nghiệp ${t.code} hỏng:`, loi);
     }
+    // 0.16.0 — gửi chiến dịch email: mỗi nhịp một lô, tốc độ theo Cấu hình (email.so_thu_moi_phut).
+    try {
+      const kq = await guiLoThu(t.id);
+      if (kq.daGui || kq.loi || kq.boQua || kq.tamDung || kq.xong.length) {
+        console.log(
+          `[worker] ${t.code}: email — gửi ${kq.daGui}, lỗi ${kq.loi}, bỏ qua ${kq.boQua}, trả lại ${kq.traLai}` +
+            `${kq.tamDung ? ", TỰ TẠM DỪNG (hộp thư gửi lỗi)" : ""}${kq.xong.length ? `, ${kq.xong.length} chiến dịch xong` : ""}.`,
+        );
+      }
+    } catch (loi) {
+      console.error(`[worker] ${luc} — gửi email doanh nghiệp ${t.code} hỏng:`, loi);
+    }
   }
 }
 
 async function main() {
-  console.log("[worker] Khởi động. Phase 8: quét nhắc việc hằng ngày theo giờ trong Cấu hình.");
+  console.log("[worker] Khởi động. Phase 8: quét nhắc việc hằng ngày theo giờ trong Cấu hình. 0.16.0: gửi chiến dịch email theo lô.");
   await motNhip();
   while (dangChay) {
     await new Promise((r) => setTimeout(r, NHIP_MS));

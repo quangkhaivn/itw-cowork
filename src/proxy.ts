@@ -13,12 +13,19 @@ import { cacHostHopLe, cungNguonGoc } from "@/lib/yeu-cau";
  * từng hành động (`xuLyApi` → `batBuocQuyen`) và cũng không thay thế RLS.
  */
 
-const DUONG_MO = ["/dang-nhap", "/api/dang-nhap", "/api/khoe"];
+const DUONG_MO = ["/dang-nhap", "/api/dang-nhap", "/api/khoe", "/huy-nhan-tin", "/api/cong-khai"];
+
+/**
+ * Đường công khai cho người ngoài (người nhận thư, ứng dụng thư gọi List-Unsubscribe-Post).
+ * Không dùng cookie phiên, xác thực bằng **mã ký** trong đường dẫn — nên không có gì để giả
+ * mạo liên trang, và ứng dụng thư không gửi Origin. Miễn kiểm nguồn gốc cho riêng tiền tố này.
+ */
+const TIEN_TO_CONG_KHAI = "/api/cong-khai/";
 
 export async function proxy(req: NextRequest) {
   const duongDan = req.nextUrl.pathname;
 
-  if (duongDan.startsWith("/api/") && !cungNguonGoc(req.method, req.headers, cacHostHopLe(req.headers))) {
+  if (duongDan.startsWith("/api/") && !duongDan.startsWith(TIEN_TO_CONG_KHAI) && !cungNguonGoc(req.method, req.headers, cacHostHopLe(req.headers))) {
     return NextResponse.json({ thongBao: "Yêu cầu bị từ chối: sai nguồn gốc." }, { status: 403 });
   }
 

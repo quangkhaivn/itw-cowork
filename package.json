@@ -20,7 +20,7 @@
     "thu:su-kien": "tsx --env-file-if-exists=.env thu/thu-su-kien.ts",
     "thu:quan-tri": "tsx --env-file-if-exists=.env thu/thu-quan-tri.ts",
     "thu:http": "tsx --env-file-if-exists=.env thu/thu-http.ts",
-    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm && npm run thu:san-pham && npm run thu:bao-gia && npm run thu:don-hang && npm run thu:dich-vu && npm run thu:tai-chinh && npm run thu:tu-dong-hoa && npm run thu:tro-ly && npm run thu:mua-hang && npm run thu:cong-no-tra && npm run thu:tra-hang && npm run thu:chuyen-kho && npm run thu:dinh-kem",
+    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm && npm run thu:san-pham && npm run thu:bao-gia && npm run thu:don-hang && npm run thu:dich-vu && npm run thu:tai-chinh && npm run thu:tu-dong-hoa && npm run thu:tro-ly && npm run thu:mua-hang && npm run thu:cong-no-tra && npm run thu:tra-hang && npm run thu:chuyen-kho && npm run thu:dinh-kem && npm run thu:email && npm run thu:xac-thuc-2-lop",
     "thu:tat-ca": "npm run thu:don-vi && npm run thu:tich-hop",
     "kiem-tra": "npm run typecheck && npm run lint && npm run thu:don-vi && npm run build",
     "thu:crm": "tsx --env-file-if-exists=.env thu/thu-crm.ts",
@@ -35,7 +35,9 @@
     "thu:cong-no-tra": "tsx --env-file-if-exists=.env thu/thu-cong-no-tra.ts",
     "thu:tra-hang": "tsx --env-file-if-exists=.env thu/thu-tra-hang.ts",
     "thu:chuyen-kho": "tsx --env-file-if-exists=.env thu/thu-chuyen-kho.ts",
-    "thu:dinh-kem": "tsx --env-file-if-exists=.env thu/thu-dinh-kem.ts"
+    "thu:dinh-kem": "tsx --env-file-if-exists=.env thu/thu-dinh-kem.ts",
+    "thu:email": "tsx --env-file-if-exists=.env thu/thu-email.ts",
+    "thu:xac-thuc-2-lop": "tsx --env-file-if-exists=.env thu/thu-xac-thuc-2-lop.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
