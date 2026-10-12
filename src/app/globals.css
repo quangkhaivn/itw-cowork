@@ -751,3 +751,22 @@ table.bang-in .mo-ta-in { color: #555; font-size: 12px; margin-top: 2px; white-s
 @media (max-width: 900px) {
   .ds-chat > li { max-width: 100%; }
 }
+
+/* --------------------------------------------------------------------------
+ * 0.16.0 — xác thực 2 lớp, email marketing
+ * ------------------------------------------------------------------------ */
+.ds-ma-khoi-phuc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 24px; margin: 12px 0 16px; padding-left: 24px; font-size: 15px; }
+.khoa-2-lop { font-size: 15px; letter-spacing: .04em; word-break: break-all; }
+.uri-2-lop { width: 100%; margin-top: 6px; font-family: ui-monospace, monospace; font-size: 12px; }
+.buoc-2-lop { padding-left: 20px; line-height: 1.6; }
+.buoc-2-lop li + li { margin-top: 8px; }
+.khung-xem-thu { width: 100%; height: 560px; border: 1px solid var(--vien); border-radius: 8px; background: #fff; }
+.khoi-email { border: 1px solid var(--vien); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: var(--the); }
+.khoi-email .dau-khoi { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.khoi-email .dau-khoi strong { margin-right: auto; }
+.them-khoi { display: flex; gap: 6px; flex-wrap: wrap; }
+.trang-cong-khai { max-width: 520px; }
+@media (max-width: 900px) {
+  .ds-ma-khoi-phuc { grid-template-columns: 1fr; }
+  .khung-xem-thu { height: 440px; }
+}
