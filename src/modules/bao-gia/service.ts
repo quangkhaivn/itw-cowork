@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { khiCoSuKienKhach } from "@/modules/khach-hang/su-kien-khach";
 import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
@@ -622,6 +623,8 @@ export async function guiKhach(nc: NguCanh, id: string, d: { kenh: string; ghiCh
     await nc.tx.opportunity.update({ where: { id: q.opportunity.id }, data: { stage: "QUOTATION", updatedBy: nc.hoSo.userId } });
     await nc.suKien({ eventType: SU_KIEN.OPPORTUNITY_STAGE_CHANGED, objectType: "opportunity", objectId: q.opportunity.id, payload: { tu: "OPPORTUNITY", den: "QUOTATION", boiBaoGia: q.number } });
   }
+  // 0.16.0: mốc "Đã gửi báo giá" của hành trình khách + tính lại điểm (KHN-04, KHN-09).
+  await khiCoSuKienKhach(nc, q.customer.id, "bao-gia-da-gui");
   return chiTietBaoGia(nc, id);
 }
 

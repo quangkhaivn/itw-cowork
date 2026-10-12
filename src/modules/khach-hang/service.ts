@@ -5,11 +5,13 @@ import { LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { chuanHoaDienThoai, chuanHoaEmail, chuanHoaMaSoThue, chuanHoaTen } from "@/modules/crm/chuan-hoa";
-import { kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, tienVeChuoi, trongPhamVi } from "@/modules/crm/chung";
+import { homNayVN, kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, ngayVeDate, tienVeChuoi, trongPhamVi } from "@/modules/crm/chung";
 import { CO_HOI_DANG_MO, NHAN_GIAI_DOAN, NHAN_TUONG_TAC, tinhPipeline } from "@/modules/crm/hang-so";
 import type { BoLocKhachHang, DuLieuLienHe, DuLieuSuaKhachHang, DuLieuTaoKhachHang } from "./luoc-do";
 import { LuocDoSuaLienHe } from "./luoc-do";
 import type { z } from "zod";
+import { docCauHinh } from "@/modules/cau-hinh/service";
+import { khiCoSuKienKhach } from "./su-kien-khach";
 
 /**
  * Phân hệ Khách hàng — nghiệp vụ. Luật: BUSINESS_RULES.md mục 3 (KH-01 → KH-07).
@@ -41,6 +43,13 @@ const CHON_KHACH = {
   createdAt: true,
   updatedAt: true,
   owner: { select: { id: true, fullName: true } },
+  // 0.16.0
+  journeyStageChangedAt: true,
+  journeyStage: { select: { id: true, name: true, color: true, kind: true, staleDays: true } },
+  leadScore: true,
+  leadScoreAt: true,
+  mergedAt: true,
+  mergedInto: { select: { id: true, code: true, name: true } },
 } satisfies Prisma.CustomerSelect;
 
 type BanGhiKhach = Prisma.CustomerGetPayload<{ select: typeof CHON_KHACH }>;
@@ -65,15 +74,26 @@ function chuyenDoi(k: BanGhiKhach) {
     trangThai: k.status,
     taoLuc: k.createdAt,
     suaLuc: k.updatedAt,
+    hanhTrinh: k.journeyStage
+      ? { id: k.journeyStage.id, ten: k.journeyStage.name, mau: k.journeyStage.color, loai: k.journeyStage.kind, soNgayDungLau: k.journeyStage.staleDays, tuLuc: k.journeyStageChangedAt }
+      : null,
+    diem: k.leadScore,
+    diemLuc: k.leadScoreAt,
+    gopVao: k.mergedInto ? { id: k.mergedInto.id, ma: k.mergedInto.code, ten: k.mergedInto.name, luc: k.mergedAt } : null,
   };
 }
 export type KhachHangChiTiet = ReturnType<typeof chuyenDoi>;
 
 /** Ảnh chụp để ghi before/after kiểm toán. */
 function anhChup(k: KhachHangChiTiet) {
-  const { taoLuc: _t, suaLuc: _s, nguoiPhuTrach, ...con } = k;
+  // Hành trình, điểm, gộp có nhật ký riêng — không lặp vào ảnh chụp sửa thông tin.
+  const { taoLuc: _t, suaLuc: _s, nguoiPhuTrach, hanhTrinh: _h, diem: _d, diemLuc: _dl, gopVao: _g, ...con } = k;
   void _t;
   void _s;
+  void _h;
+  void _d;
+  void _dl;
+  void _g;
   return { ...con, nguoiPhuTrachId: nguoiPhuTrach.id };
 }
 
@@ -218,9 +238,18 @@ async function kiemTraTrung(nc: NguCanh, khoa: KhoaNhanDien, xacNhan: boolean) {
 // Đọc
 // ---------------------------------------------------------------------------
 
-export async function danhSachKhachHang(nc: NguCanh, boLoc: BoLocKhachHang) {
-  batBuocQuyen(nc.hoSo, "customer.view");
+/**
+ * Điều kiện lọc danh sách khách (dùng chung cho danh sách, đếm theo hành trình, xuất CSV).
+ * Phạm vi `customer.view` LUÔN được áp — bộ lọc dùng chung áp vào sale vẫn chỉ ra khách
+ * của sale (KHN-07). `boHanhTrinh` = bỏ điều kiện hành trình để đếm từng thẻ trạng thái.
+ */
+export async function dieuKienLocKhach(
+  nc: NguCanh,
+  boLoc: BoLocKhachHang,
+  tc: { boHanhTrinh?: boolean } = {},
+): Promise<{ where: Prisma.CustomerWhereInput; canhBao: string | null }> {
   const dieuKien: Prisma.CustomerWhereInput[] = [await locTheoPhamVi(nc, "customer.view")];
+  let canhBao: string | null = null;
   if (boLoc.q) {
     const q = boLoc.q;
     const so = q.replace(/\D/g, "");
@@ -243,9 +272,80 @@ export async function danhSachKhachHang(nc: NguCanh, boLoc: BoLocKhachHang) {
   }
   if (boLoc.nguoiPhuTrach) dieuKien.push({ ownerId: boLoc.nguoiPhuTrach });
   if (boLoc.phanKhuc) dieuKien.push({ segment: boLoc.phanKhuc });
-  if (boLoc.trangThai) dieuKien.push({ status: boLoc.trangThai });
+  // Khách đã gộp ẩn khỏi danh sách, trừ khi tra đúng trạng thái "đã gộp" (KHN-12).
+  dieuKien.push(boLoc.trangThai ? { status: boLoc.trangThai } : { status: { not: "da-gop" } });
+  if (boLoc.hanhTrinh && !tc.boHanhTrinh) dieuKien.push({ journeyStageId: boLoc.hanhTrinh === "chua-co" ? null : boLoc.hanhTrinh });
+  if (boLoc.nhom) dieuKien.push({ groupMembers: { some: { groupId: boLoc.nhom } } });
 
-  const where: Prisma.CustomerWhereInput = { AND: dieuKien };
+  switch (boLoc.nhanh) {
+    case "cua-toi":
+      dieuKien.push({ ownerId: nc.hoSo.userId });
+      break;
+    case "chua-co-hanh-trinh":
+      dieuKien.push({ journeyStageId: null });
+      break;
+    case "co-co-hoi-mo":
+      dieuKien.push({ opportunities: { some: { stage: { in: CO_HOI_DANG_MO }, status: "hoat-dong" } } });
+      break;
+    case "chua-tuong-tac":
+      dieuKien.push({ interactions: { none: { status: "hoat-dong" } } });
+      break;
+    case "dung-lau": {
+      // Ngưỡng nằm trên từng trạng thái (KHN-14) nên so cột với cột — dùng SQL có tham số.
+      const ids = await nc.tx.$queryRaw<{ id: string }[]>`
+        SELECT c.id::text AS id FROM customers c JOIN customer_journey_stages s ON s.id = c.journey_stage_id
+        WHERE s.stale_days IS NOT NULL AND c.journey_stage_changed_at IS NOT NULL
+          AND c.journey_stage_changed_at < now() - make_interval(days => s.stale_days)
+      `;
+      dieuKien.push({ id: { in: ids.map((x) => x.id) } });
+      if (!(await nc.tx.customerJourneyStage.count({ where: { staleDays: { not: null } } }))) {
+        canhBao = "Chưa trạng thái hành trình nào đặt số ngày “đứng lâu” — đặt ở trang Hành trình khách hàng.";
+      }
+      break;
+    }
+    case "sinh-nhat-thang-nay": {
+      const thang = Number(homNayVN().slice(5, 7));
+      const ids = await nc.tx.$queryRaw<{ id: string }[]>`
+        SELECT DISTINCT customer_id::text AS id FROM contacts
+        WHERE status = 'hoat-dong' AND birth_date IS NOT NULL AND extract(month FROM birth_date) = ${thang}
+      `;
+      dieuKien.push({ id: { in: ids.map((x) => x.id) } });
+      break;
+    }
+    case "nong": {
+      const nong = await docCauHinh(nc.tx, "diem_khach.nguong_nong");
+      if (nong === null) {
+        canhBao = "Chưa đặt ngưỡng điểm khách Nóng ở Quản trị → Cấu hình — chưa lọc được khách nóng.";
+        dieuKien.push({ id: { in: [] } });
+      } else {
+        dieuKien.push({ leadScore: { gte: nong } });
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  return { where: { AND: dieuKien }, canhBao };
+}
+
+function thuTuSapXep(ma: string | undefined): Prisma.CustomerOrderByWithRelationInput[] {
+  switch (ma) {
+    case "moi-tao":
+      return [{ createdAt: "desc" }];
+    case "ten":
+      return [{ name: "asc" }];
+    case "diem":
+      return [{ leadScore: { sort: "desc", nulls: "last" } }, { updatedAt: "desc" }];
+    case "dung-lau-nhat":
+      return [{ journeyStageChangedAt: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }];
+    default:
+      return [{ updatedAt: "desc" }];
+  }
+}
+
+export async function danhSachKhachHang(nc: NguCanh, boLoc: BoLocKhachHang) {
+  batBuocQuyen(nc.hoSo, "customer.view");
+  const { where, canhBao } = await dieuKienLocKhach(nc, boLoc);
   const [tong, dong] = await Promise.all([
     nc.tx.customer.count({ where }),
     nc.tx.customer.findMany({
@@ -253,8 +353,9 @@ export async function danhSachKhachHang(nc: NguCanh, boLoc: BoLocKhachHang) {
       select: {
         ...CHON_KHACH,
         _count: { select: { opportunities: { where: { stage: { in: CO_HOI_DANG_MO } } }, contacts: { where: { status: "hoat-dong" } } } },
+        groupMembers: { select: { group: { select: { id: true, name: true, color: true } } } },
       },
-      orderBy: [{ updatedAt: "desc" }],
+      orderBy: thuTuSapXep(boLoc.sapXep),
       skip: (boLoc.trang - 1) * boLoc.coTrang,
       take: boLoc.coTrang,
     }),
@@ -263,8 +364,28 @@ export async function danhSachKhachHang(nc: NguCanh, boLoc: BoLocKhachHang) {
     tong,
     trang: boLoc.trang,
     coTrang: boLoc.coTrang,
-    dong: dong.map((k) => ({ ...chuyenDoi(k), soCoHoiMo: k._count.opportunities, soLienHe: k._count.contacts })),
+    canhBao,
+    dong: dong.map((k) => ({
+      ...chuyenDoi(k),
+      soCoHoiMo: k._count.opportunities,
+      soLienHe: k._count.contacts,
+      nhom: k.groupMembers.map((m) => ({ id: m.group.id, ten: m.group.name, mau: m.group.color })),
+    })),
   };
+}
+
+/** Số khách theo từng trạng thái hành trình, với cùng bộ lọc (trừ chính điều kiện hành trình). */
+export async function demTheoHanhTrinh(nc: NguCanh, boLoc: BoLocKhachHang) {
+  batBuocQuyen(nc.hoSo, "customer.view");
+  const { where } = await dieuKienLocKhach(nc, boLoc, { boHanhTrinh: true });
+  const nhom = await nc.tx.customer.groupBy({ by: ["journeyStageId"], where, _count: { _all: true } });
+  const theoId: Record<string, number> = {};
+  let tong = 0;
+  for (const g of nhom) {
+    theoId[g.journeyStageId ?? "chua-co"] = g._count._all;
+    tong += g._count._all;
+  }
+  return { tong, theoId };
 }
 
 /** Đọc một khách trong phạm vi `maQuyen` — ngoài phạm vi thì coi như không tồn tại (404). */
@@ -282,7 +403,21 @@ export async function chiTietKhachHang(nc: NguCanh, id: string) {
 /** Kiểm người dùng thấy được khách này — các phân hệ khác (cơ hội, tương tác) gọi trước khi gắn. */
 export async function batBuocThayKhach(nc: NguCanh, id: string) {
   batBuocQuyen(nc.hoSo, "customer.view", { objectType: "customer", objectId: id });
-  return docKhachTrongPhamVi(nc, id, "customer.view");
+  const k = await docKhachTrongPhamVi(nc, id, "customer.view");
+  chanKhachDaGop(k);
+  return k;
+}
+
+/** KHN-13: không gắn bản ghi mới, không sửa khách đã gộp — chỉ đường đúng là khách giữ lại. */
+export function chanKhachDaGop(k: { ma: string; trangThai: string; gopVao: { ma: string; ten: string } | null }) {
+  if (k.trangThai === "da-gop") {
+    throw new LoiNghiepVu(
+      `Khách ${k.ma} đã được gộp vào ${k.gopVao ? `${k.gopVao.ma} — ${k.gopVao.ten}` : "khách khác"}. Dùng khách giữ lại.`,
+      409,
+      "da-gop",
+      { gopVao: k.gopVao },
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -349,6 +484,7 @@ export async function taoKhachHang(nc: NguCanh, d: DuLieuTaoKhachHang) {
     if (lh) {
       await ghiLienHeMoi(nc, k.id, { ...lh, laChinh: true }, lh.dt, lh.em);
     }
+    await khiCoSuKienKhach(nc, k.id, "tao-khach");
     return kq;
   } catch (loi) {
     if (laLoiTrung(loi)) throw new LoiNghiepVu("Mã số thuế hoặc mã khách đã tồn tại.", 409, "trung");
@@ -359,6 +495,7 @@ export async function taoKhachHang(nc: NguCanh, d: DuLieuTaoKhachHang) {
 export async function suaKhachHang(nc: NguCanh, id: string, d: DuLieuSuaKhachHang) {
   batBuocQuyen(nc.hoSo, "customer.update", { objectType: "customer", objectId: id });
   const truoc = await docKhachTrongPhamVi(nc, id, "customer.update");
+  chanKhachDaGop(truoc);
 
   // Chỉ chuẩn hóa và dò trùng những khóa nhận diện thực sự đổi.
   const doiMst = d.maSoThue !== undefined && d.maSoThue !== truoc.maSoThue;
@@ -428,6 +565,7 @@ const CHON_LIEN_HE = {
   phone: true,
   email: true,
   zalo: true,
+  birthDate: true,
   isPrimary: true,
   note: true,
   status: true,
@@ -443,6 +581,7 @@ function lienHeRa(c: Prisma.ContactGetPayload<{ select: typeof CHON_LIEN_HE }>) 
     dienThoai: c.phone,
     email: c.email,
     zalo: c.zalo,
+    ngaySinh: c.birthDate ? c.birthDate.toISOString().slice(0, 10) : null,
     laChinh: c.isPrimary,
     ghiChu: c.note,
     trangThai: c.status,
@@ -466,6 +605,7 @@ async function ghiLienHeMoi(nc: NguCanh, khachId: string, d: DuLieuLienHe, dt: s
       email: d.email ?? null,
       emailNormalized: em,
       zalo: d.zalo ?? null,
+      birthDate: d.ngaySinh ? ngayVeDate(d.ngaySinh) : null,
       isPrimary: d.laChinh ?? false,
       note: d.ghiChu ?? null,
       createdBy: nc.hoSo.userId,
@@ -479,17 +619,21 @@ async function ghiLienHeMoi(nc: NguCanh, khachId: string, d: DuLieuLienHe, dt: s
   return kq;
 }
 
+/** Gắn liên hệ mới cho khách — dùng chung cho form, nhập CSV, script nhập từ ITW CRM. */
+
 export async function taoLienHe(nc: NguCanh, khachId: string, d: DuLieuLienHe) {
   batBuocQuyen(nc.hoSo, "customer.update", { objectType: "customer", objectId: khachId });
-  await docKhachTrongPhamVi(nc, khachId, "customer.update");
-  return ghiLienHeMoi(nc, khachId, d, chuanHoaDienThoai(d.dienThoai), chuanHoaEmail(d.email));
+  chanKhachDaGop(await docKhachTrongPhamVi(nc, khachId, "customer.update"));
+  const kq = await ghiLienHeMoi(nc, khachId, d, chuanHoaDienThoai(d.dienThoai), chuanHoaEmail(d.email));
+  await khiCoSuKienKhach(nc, khachId);
+  return kq;
 }
 
 export async function suaLienHe(nc: NguCanh, id: string, d: z.infer<typeof LuocDoSuaLienHe>) {
   const truocGoc = await nc.tx.contact.findFirst({ where: { id }, select: CHON_LIEN_HE });
   if (!truocGoc) throw new LoiKhongTimThay("Liên hệ");
   batBuocQuyen(nc.hoSo, "customer.update", { objectType: "contact", objectId: id });
-  await docKhachTrongPhamVi(nc, truocGoc.customerId, "customer.update");
+  chanKhachDaGop(await docKhachTrongPhamVi(nc, truocGoc.customerId, "customer.update"));
   const truoc = lienHeRa(truocGoc);
 
   if (d.laChinh) {
@@ -504,6 +648,7 @@ export async function suaLienHe(nc: NguCanh, id: string, d: z.infer<typeof LuocD
       ...(d.dienThoai !== undefined && { phone: d.dienThoai, phoneNormalized: chuanHoaDienThoai(d.dienThoai) }),
       ...(d.email !== undefined && { email: d.email, emailNormalized: chuanHoaEmail(d.email) }),
       ...(d.zalo !== undefined && { zalo: d.zalo }),
+      ...(d.ngaySinh !== undefined && { birthDate: d.ngaySinh ? ngayVeDate(d.ngaySinh) : null }),
       ...(d.laChinh !== undefined && { isPrimary: d.laChinh }),
       ...(d.ghiChu !== undefined && { note: d.ghiChu }),
       ...(d.trangThai !== undefined && { status: d.trangThai }),
@@ -513,6 +658,7 @@ export async function suaLienHe(nc: NguCanh, id: string, d: z.infer<typeof LuocD
   });
   const sau = lienHeRa(c);
   await nc.kiemToan({ action: "sua", objectType: "contact", objectId: id, before: truoc, after: sau });
+  await khiCoSuKienKhach(nc, truoc.khachHangId);
   return sau;
 }
 
@@ -680,6 +826,7 @@ export async function quyenGiaoDienKhach(nc: NguCanh, ownerId?: string) {
     tao: coQuyen(nc.hoSo, "customer.create"),
     sua,
     xuat: coQuyen(nc.hoSo, "customer.export"),
+    quanLy: coQuyen(nc.hoSo, "customer.approve"),
     taoCoHoi: coQuyen(nc.hoSo, "sales.create"),
     ghiTuongTac: coQuyen(nc.hoSo, "crm.create"),
     taoViec: coQuyen(nc.hoSo, "task.create"),

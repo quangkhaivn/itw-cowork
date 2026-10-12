@@ -109,6 +109,27 @@ export const QUY_TAC: DinhNghiaQuyTac[] = [
     khoaNguong: "theo_doi.khach_chua_mua_lai_thang",
     thieuNguong: "Chưa đặt số tháng chưa mua lại ở Quản trị → Cấu hình.",
   },
+  // --- 0.16.0: Khách hàng nâng cao (BUSINESS_RULES.md mục 21) ---
+  {
+    ma: "khach-dung-lau",
+    nhan: "Khách đứng lâu một trạng thái hành trình",
+    moTa:
+      "Khách đứng ở một trạng thái hành trình quá số ngày đặt riêng cho trạng thái đó (trang Hành trình khách hàng). Mỗi lần khách vào một trạng thái chỉ nhắc một lần. Trạng thái chưa đặt số ngày thì không nhắc.",
+    nhom: "Chăm sóc khách hàng",
+    mucDo: "canh-bao",
+    khoaNguong: null,
+    thieuNguong: "",
+  },
+  {
+    ma: "sinh-nhat-lien-he",
+    nhan: "Sinh nhật người liên hệ",
+    moTa:
+      "Người liên hệ đang hoạt động của khách có sinh nhật hôm nay — hoặc sắp tới, nếu đã đặt số ngày nhắc trước ở Quản trị → Cấu hình. Nhắc người phụ trách khách.",
+    nhom: "Chăm sóc khách hàng",
+    mucDo: "thong-tin",
+    khoaNguong: null,
+    thieuNguong: "",
+  },
 ];
 
 export function timQuyTac(ma: string): DinhNghiaQuyTac | undefined {
