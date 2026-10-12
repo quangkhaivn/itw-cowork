@@ -13,6 +13,9 @@ import { LOP_GIAI_DOAN, NHAN_GIAI_DOAN, NHAN_TRANG_THAI_VIEC, NHAN_TUONG_TAC, NH
 import { chiTietLead } from "@/modules/lead/service";
 import FormLead from "../FormLead";
 import TacVuLead from "./TacVuLead";
+import NutDongYNhanTin from "@/components/marketing/NutDongYNhanTin";
+import { thongTinMarketingLead } from "@/modules/marketing/service";
+import { NHAN_KENH_NHAN } from "@/modules/marketing/hang-so";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +36,9 @@ export default async function TrangChiTietLead({ params, searchParams }: { param
       const tenNguon = (await banDoTenDuLieuGoc(nc, ["nguon_lead"])).nguon_lead;
       const nguoiSua = d.quyen.sua ? await danhSachNguoiPhuTrach(nc, "crm.update") : [];
       const nguoiViec = d.quyen.taoViec ? await danhSachNguoiPhuTrach(nc, "task.create") : [];
-      return { ...d, luaChon, tenNguon, nguoiSua, nguoiViec };
+      // 0.16.0 — nguồn marketing của lead (kênh nhận, chiến dịch, UTM, đồng ý nhận tin).
+      const mk = await thongTinMarketingLead(nc, id);
+      return { ...d, luaChon, tenNguon, nguoiSua, nguoiViec, mk };
     } catch (loi) {
       if (loi instanceof LoiKhongTimThay) return null;
       throw loi;
@@ -122,6 +127,47 @@ export default async function TrangChiTietLead({ params, searchParams }: { param
               </dl>
             </section>
           )}
+
+          <section className="the">
+            <div className="dau">
+              <h2>Nguồn marketing</h2>
+              {duLieu.mk.duocDoiDongY && <NutDongYNhanTin doiTuong="lead" id={lead.id} dangDongY={duLieu.mk.dongYNhanTin} />}
+            </div>
+            <dl className="bang-thong-tin">
+              <dt>Kênh nhận</dt>
+              <dd>
+                {duLieu.mk.kenhNhan ? NHAN_KENH_NHAN[duLieu.mk.kenhNhan] : "Nhập trong CRM"}
+                {duLieu.mk.soLanDangKy > 1 && ` · đăng ký ${duLieu.mk.soLanDangKy} lần`}
+              </dd>
+              <dt>Chiến dịch</dt>
+              <dd>{duLieu.mk.chienDich ? `${duLieu.mk.chienDich.ma} — ${duLieu.mk.chienDich.ten}` : "—"}</dd>
+              {(duLieu.mk.utm.utm_source || duLieu.mk.utm.utm_campaign) && (
+                <>
+                  <dt>UTM</dt>
+                  <dd>{Object.entries(duLieu.mk.utm).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join(" · ")}</dd>
+                </>
+              )}
+              {duLieu.mk.khachTrung && (
+                <>
+                  <dt>Trùng khách</dt>
+                  <dd>
+                    <span className="huy-hieu canh-bao">Đã có khách</span> <Link href={`/crm/khach-hang/${duLieu.mk.khachTrung.id}`}>{duLieu.mk.khachTrung.ma} — {duLieu.mk.khachTrung.ten}</Link>
+                  </dd>
+                </>
+              )}
+              <dt>Nhận tin marketing</dt>
+              <dd>
+                {duLieu.mk.tuChoiLuc ? (
+                  <span className="huy-hieu loi">Đã từ chối {dinhDangNgayGio(duLieu.mk.tuChoiLuc)}</span>
+                ) : duLieu.mk.dongYNhanTin ? (
+                  <span className="huy-hieu tot">Đồng ý {dinhDangNgayGio(duLieu.mk.dongYLuc)}</span>
+                ) : (
+                  <span className="huy-hieu">Chưa đồng ý</span>
+                )}
+                {duLieu.mk.nguonDongY && <span className="phu nho"> · {duLieu.mk.nguonDongY}</span>}
+              </dd>
+            </dl>
+          </section>
 
           <section className="the">
             <div className="dau">

@@ -595,3 +595,31 @@ export async function doiDongYNhanTin(nc: NguCanh, doiTuong: "lead" | "lien-he",
   await nc.suKien({ eventType: SU_KIEN.MARKETING_CONSENT_CHANGED, objectType: doiTuong === "lead" ? "lead" : "contact", objectId: id, payload: { dongY: d.dongY } });
   return { id, dongY: d.dongY };
 }
+
+/** Thông tin marketing của một lead cho trang chi tiết lead (CRM). Cùng quyền + phạm vi `crm.view`. */
+export async function thongTinMarketingLead(nc: NguCanh, leadId: string) {
+  batBuocQuyen(nc.hoSo, "crm.view", { objectType: "lead", objectId: leadId });
+  const l = await nc.tx.lead.findFirst({
+    where: { id: leadId, ...(await locMarketing(nc, "crm.view")) },
+    select: {
+      captureChannel: true, utmSource: true, utmMedium: true, utmCampaign: true, utmContent: true, utmTerm: true,
+      marketingOptIn: true, marketingOptInAt: true, marketingOptOutAt: true, marketingConsentSource: true,
+      campaign: { select: { id: true, code: true, name: true } },
+      matchedCustomer: { select: { id: true, code: true, name: true } },
+      _count: { select: { captures: true } },
+    },
+  });
+  if (!l) throw new LoiKhongTimThay("Lead");
+  return {
+    kenhNhan: l.captureChannel,
+    utm: { utm_source: l.utmSource, utm_medium: l.utmMedium, utm_campaign: l.utmCampaign, utm_content: l.utmContent, utm_term: l.utmTerm },
+    chienDich: l.campaign ? { id: l.campaign.id, ma: l.campaign.code, ten: l.campaign.name } : null,
+    khachTrung: l.matchedCustomer ? { id: l.matchedCustomer.id, ma: l.matchedCustomer.code, ten: l.matchedCustomer.name } : null,
+    dongYNhanTin: l.marketingOptIn,
+    dongYLuc: l.marketingOptInAt,
+    tuChoiLuc: l.marketingOptOutAt,
+    nguonDongY: l.marketingConsentSource,
+    soLanDangKy: l._count.captures,
+    duocDoiDongY: coQuyen(nc.hoSo, "crm.update") || coQuyen(nc.hoSo, "marketing.update"),
+  };
+}
