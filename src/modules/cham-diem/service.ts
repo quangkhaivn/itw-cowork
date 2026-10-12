@@ -196,8 +196,11 @@ export async function xemCauHinhDiem(nc: NguCanh) {
     else if (h === "am") am += p._count._all;
     else if (h === "lanh") lanh += p._count._all;
   }
+  const daDat = (await nc.tx.tenantSetting.findMany({ where: { key: { startsWith: "diem_khach." } }, select: { key: true } })).map((d) => d.key);
   return {
     cauHinh: cfg,
+    /** Khóa trọng số Giám đốc đã tự đặt — còn lại đang dùng mặc định (ghi rõ trên màn hình). */
+    daDat,
     nguon: nguon.map((n) => ({ ma: n.code, ten: n.name, dangDung: n.status === "hoat-dong", diem: cfg.diemNguon[n.code] ?? null })),
     thongKe: { nong, am, lanh, chuaCo, coHang: cfg.nguongNong !== null && cfg.nguongAm !== null && cfg.nguongAm < cfg.nguongNong },
     quyen: { suaCauHinh: coQuyen(nc.hoSo, "setting.update"), tinhLai: coQuyen(nc.hoSo, "customer.approve") },

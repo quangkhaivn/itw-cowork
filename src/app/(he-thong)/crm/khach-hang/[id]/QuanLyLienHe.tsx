@@ -15,12 +15,13 @@ interface LienHe {
   dienThoai: string | null;
   email: string | null;
   zalo: string | null;
+  ngaySinh: string | null;
   laChinh: boolean;
   ghiChu: string | null;
   trangThai: string;
 }
 
-const RONG = { hoTen: "", chucDanh: "", phongBan: "", dienThoai: "", email: "", zalo: "", laChinh: false, ghiChu: "", trangThai: "hoat-dong" };
+const RONG = { hoTen: "", chucDanh: "", phongBan: "", dienThoai: "", email: "", zalo: "", ngaySinh: "", laChinh: false, ghiChu: "", trangThai: "hoat-dong" };
 
 /** Bảng liên hệ của một khách hàng + hộp thoại thêm / sửa. Liên hệ không xóa — đặt "ngừng". */
 export default function QuanLyLienHe({ khachHangId, lienHe, duocSua }: { khachHangId: string; lienHe: LienHe[]; duocSua: boolean }) {
@@ -42,6 +43,7 @@ export default function QuanLyLienHe({ khachHangId, lienHe, duocSua }: { khachHa
             dienThoai: l.dienThoai ?? "",
             email: l.email ?? "",
             zalo: l.zalo ?? "",
+            ngaySinh: l.ngaySinh ?? "",
             laChinh: l.laChinh,
             ghiChu: l.ghiChu ?? "",
             trangThai: l.trangThai,
@@ -112,6 +114,7 @@ export default function QuanLyLienHe({ khachHangId, lienHe, duocSua }: { khachHa
                   <td>
                     {l.dienThoai ? <a href={`tel:${l.dienThoai.replace(/\s/g, "")}`}>{l.dienThoai}</a> : <span className="mo">—</span>}
                     {l.zalo && <div className="dong-phu">Zalo: {l.zalo}</div>}
+                    {l.ngaySinh && <div className="dong-phu">Sinh nhật: {l.ngaySinh.slice(8, 10)}/{l.ngaySinh.slice(5, 7)}</div>}
                   </td>
                   <td>{l.email ? <a href={`mailto:${l.email}`}>{l.email}</a> : <span className="mo">—</span>}</td>
                   {duocSua && (
@@ -139,6 +142,7 @@ export default function QuanLyLienHe({ khachHangId, lienHe, duocSua }: { khachHa
               {o("email", "Email", "email")}
               {o("zalo", "Zalo")}
               {o("phongBan", "Bộ phận")}
+              {o("ngaySinh", "Ngày sinh (nhắc sinh nhật)", "date")}
             </div>
             <div className="truong">
               <label htmlFor="lh-ghichu">Ghi chú</label>
