@@ -351,7 +351,7 @@ async function main() {
   console.log("\n— Gộp khách trùng —");
   const giu = await voi(T, nv1, (nc) => taoKhachHang(nc, LuocDoTaoKhachHang.parse({ xacNhanKhongTrung: true, ten: `Công ty Giữ Lại ${DAU}`, dienThoai: "0901000010", lienHe: { hoTen: "Anh Giữ" } })));
   const gop = await voi(T, nv1, (nc) =>
-    taoKhachHang(nc, LuocDoTaoKhachHang.parse({ xacNhanKhongTrung: true, ten: `Cty Bị Gộp ${DAU}`, maSoThue: MST("32"), email: "gop@thu.test", lienHe: { hoTen: "Chị Gộp", laChinh: true }, xacNhanKhongTrung: true })),
+    taoKhachHang(nc, LuocDoTaoKhachHang.parse({ ten: `Cty Bị Gộp ${DAU}`, maSoThue: MST("32"), email: "gop@thu.test", lienHe: { hoTen: "Chị Gộp", laChinh: true }, xacNhanKhongTrung: true })),
   );
   // Dựng đủ loại bản ghi gắn với khách bị gộp.
   const chGop = await voi(T, nv1, (nc) => taoCoHoi(nc, LuocDoTaoCoHoi.parse({ khachHangId: gop.id, tieuDe: "Cơ hội gộp", giaTri: "1", hanhDongKeTiep: "Gọi", ngayHanhDong: NGAY_MAI })));
@@ -391,7 +391,7 @@ async function main() {
   await nemLoi("KHN-11: nhân viên (không có customer.approve) không gộp được", "quyen", () => voi(T, nv1, (nc) => gopKhach(nc, { giuLaiId: giu.id, biGopId: gop.id, lyDo: "Trùng" })));
   const kGd = await voi(T, gd, (nc) => taoKhachHang(nc, LuocDoTaoKhachHang.parse({ xacNhanKhongTrung: true, ten: `Khách Của Giám Đốc ${DAU}`, dienThoai: "0901000012" })));
   await nemLoi("KHN-11: khách ngoài phạm vi sửa của người gộp → không tìm thấy", "khong-thay", () => voi(T, tp, (nc) => gopKhach(nc, { giuLaiId: giu.id, biGopId: kGd.id, lyDo: "Trùng" })));
-  const kKhacMst = await voi(T, nv1, (nc) => taoKhachHang(nc, LuocDoTaoKhachHang.parse({ xacNhanKhongTrung: true, ten: `Cty Khác MST ${DAU}`, maSoThue: MST("33"), xacNhanKhongTrung: true })));
+  const kKhacMst = await voi(T, nv1, (nc) => taoKhachHang(nc, LuocDoTaoKhachHang.parse({ ten: `Cty Khác MST ${DAU}`, maSoThue: MST("33"), xacNhanKhongTrung: true })));
   await nemLoi("KHN-11: hai khách khác mã số thuế không gộp được", "nghiep-vu", () => voi(T, tp, (nc) => gopKhach(nc, { giuLaiId: kKhacMst.id, biGopId: gop.id, lyDo: "Thử" })), "khac-ma-so-thue");
   const xt = await voi(T, tp, (nc) => xemTruocGop(nc, giu.id, gop.id));
   dat("Xem trước gộp liệt kê số bản ghi từng bảng và trường sẽ bổ sung", xt.chuyen.find((c) => c.bang === "opportunities.customer_id")?.so === 1 && xt.boSung.some((b) => b.truong === "Mã số thuế"));
