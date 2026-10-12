@@ -115,6 +115,15 @@ model Tenant {
   stockTransferItems   StockTransferItem[]
   // Tệp đính kèm
   attachments          Attachment[]
+  // Marketing và thu lead
+  marketingCampaigns   MarketingCampaign[]
+  marketingCosts       MarketingCost[]
+  leadAssignees        MarketingLeadAssignee[]
+  marketingForms       MarketingForm[]
+  webhookSources       MarketingWebhookSource[]
+  leadCaptures         LeadCapture[]
+  marketingSegments    MarketingSegment[]
+  landingPages         LandingPage[]
 
   @@map("tenants")
 }
@@ -184,38 +193,45 @@ model User {
   createdBy          String?   @map("created_by") @db.Uuid
   updatedBy          String?   @map("updated_by") @db.Uuid
 
-  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staffProfile         StaffProfile?         @relation("HoSoCuaNguoiDung")
+  tenant               Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile         StaffProfile?            @relation("HoSoCuaNguoiDung")
   userRoles            UserRole[]
   /// Những người nhận người này làm quản lý trực tiếp.
-  reports              StaffProfile[]        @relation("QuanLyTrucTiep")
+  reports              StaffProfile[]           @relation("QuanLyTrucTiep")
   // Phase 2 — người phụ trách
-  ownedCustomers       Customer[]            @relation("KhachPhuTrach")
-  ownedLeads           Lead[]                @relation("LeadPhuTrach")
-  ownedInteractions    Interaction[]         @relation("TuongTacCua")
-  ownedOpportunities   Opportunity[]         @relation("CoHoiPhuTrach")
-  ownedTasks           Task[]                @relation("ViecPhuTrach")
-  ownedQuotations      Quotation[]           @relation("BaoGiaPhuTrach")
-  ownedSalesOrders     SalesOrder[]          @relation("DonHangPhuTrach")
-  managedProjects      Project[]             @relation("DuAnPhuTrach")
-  ownedTickets         SupportTicket[]       @relation("PhieuHoTroTiepNhan")
-  assignedTickets      SupportTicket[]       @relation("PhieuHoTroXuLy")
-  ownedInvoices        Invoice[]             @relation("HoaDonPhuTrach")
+  ownedCustomers       Customer[]               @relation("KhachPhuTrach")
+  ownedLeads           Lead[]                   @relation("LeadPhuTrach")
+  ownedInteractions    Interaction[]            @relation("TuongTacCua")
+  ownedOpportunities   Opportunity[]            @relation("CoHoiPhuTrach")
+  ownedTasks           Task[]                   @relation("ViecPhuTrach")
+  ownedQuotations      Quotation[]              @relation("BaoGiaPhuTrach")
+  ownedSalesOrders     SalesOrder[]             @relation("DonHangPhuTrach")
+  managedProjects      Project[]                @relation("DuAnPhuTrach")
+  ownedTickets         SupportTicket[]          @relation("PhieuHoTroTiepNhan")
+  assignedTickets      SupportTicket[]          @relation("PhieuHoTroXuLy")
+  ownedInvoices        Invoice[]                @relation("HoaDonPhuTrach")
   // Phase 8
-  notifications        Notification[]        @relation("ThongBaoCuaNguoiDung")
-  dailyActionItems     DailyActionItem[]     @relation("ViecHomNayCuaNguoiDung")
-  ownedMaintenance     MaintenanceContract[] @relation("BaoTriPhuTrach")
-  ownedRenewals        Renewal[]             @relation("GiaHanPhuTrach")
+  notifications        Notification[]           @relation("ThongBaoCuaNguoiDung")
+  dailyActionItems     DailyActionItem[]        @relation("ViecHomNayCuaNguoiDung")
+  ownedMaintenance     MaintenanceContract[]    @relation("BaoTriPhuTrach")
+  ownedRenewals        Renewal[]                @relation("GiaHanPhuTrach")
   // Phase 9
-  aiConversations      AiConversation[]      @relation("HoiThoaiCuaNguoiDung")
+  aiConversations      AiConversation[]         @relation("HoiThoaiCuaNguoiDung")
   // Mua hàng
-  purchaseRequests     PurchaseRequest[]     @relation("DeNghiMuaCua")
-  ownedPurchaseOrders  PurchaseOrder[]       @relation("DonMuaPhuTrach")
-  ownedSupplierBills   SupplierBill[]        @relation("HoaDonMuaPhuTrach")
-  ownedSalesReturns    SalesReturn[]         @relation("TraHangBanPhuTrach")
-  ownedPurchaseReturns PurchaseReturn[]      @relation("TraHangMuaPhuTrach")
-  ownedStockTransfers  StockTransfer[]       @relation("ChuyenKhoPhuTrach")
-  uploadedAttachments  Attachment[]          @relation("TepDinhKemNguoiTai")
+  purchaseRequests     PurchaseRequest[]        @relation("DeNghiMuaCua")
+  ownedPurchaseOrders  PurchaseOrder[]          @relation("DonMuaPhuTrach")
+  ownedSupplierBills   SupplierBill[]           @relation("HoaDonMuaPhuTrach")
+  ownedSalesReturns    SalesReturn[]            @relation("TraHangBanPhuTrach")
+  ownedPurchaseReturns PurchaseReturn[]         @relation("TraHangMuaPhuTrach")
+  ownedStockTransfers  StockTransfer[]          @relation("ChuyenKhoPhuTrach")
+  uploadedAttachments  Attachment[]             @relation("TepDinhKemNguoiTai")
+  // Marketing
+  ownedCampaigns       MarketingCampaign[]      @relation("ChienDichPhuTrach")
+  leadAssignee         MarketingLeadAssignee[]  @relation("NhanLeadVongTron")
+  ownedForms           MarketingForm[]          @relation("FormPhuTrach")
+  ownedWebhookSources  MarketingWebhookSource[] @relation("NguonWebhookPhuTrach")
+  ownedSegments        MarketingSegment[]       @relation("PhanKhucPhuTrach")
+  ownedLandingPages    LandingPage[]            @relation("LandingPhuTrach")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -445,6 +461,8 @@ model Customer {
   address           String?  @db.Text
   province          String?  @db.VarChar(100)
   website           String?  @db.VarChar(255)
+  /// Marketing: chiến dịch đưa khách này tới (chạm đầu tiên — MK-10). Chỉ ghi khi đang trống.
+  campaignId        String?  @map("campaign_id") @db.Uuid
   phone             String?  @db.VarChar(30)
   phoneNormalized   String?  @map("phone_normalized") @db.VarChar(20)
   email             String?  @db.VarChar(255)
@@ -460,11 +478,14 @@ model Customer {
 
   tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner                User                  @relation("KhachPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  campaign             MarketingCampaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   contacts             Contact[]
   interactions         Interaction[]
   opportunities        Opportunity[]
   tasks                Task[]
   convertedLeads       Lead[]                @relation("LeadThanhKhach")
+  /// Marketing: lead mới khớp khách này lúc nhận (MK-07).
+  matchedLeads         Lead[]                @relation("LeadTrungKhach")
   quotations           Quotation[]
   salesOrders          SalesOrder[]
   warranties           Warranty[]
@@ -482,30 +503,38 @@ model Customer {
   @@index([tenantId, phoneNormalized])
   @@index([tenantId, emailNormalized])
   @@index([tenantId, status])
+  @@index([tenantId, campaignId])
   @@index([nameNormalized(ops: raw("gin_trgm_ops"))], type: Gin, map: "customers_name_normalized_trgm_idx")
   @@map("customers")
 }
 
 /// Người liên hệ của khách hàng. Quyền và phạm vi đi theo khách.
 model Contact {
-  id              String   @id @default(uuid()) @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
-  customerId      String   @map("customer_id") @db.Uuid
-  fullName        String   @map("full_name") @db.VarChar(255)
-  title           String?  @db.VarChar(255) /// chức danh
-  department      String?  @db.VarChar(255)
-  phone           String?  @db.VarChar(30)
-  phoneNormalized String?  @map("phone_normalized") @db.VarChar(20)
-  email           String?  @db.VarChar(255)
-  emailNormalized String?  @map("email_normalized") @db.VarChar(255)
-  zalo            String?  @db.VarChar(50)
-  isPrimary       Boolean  @default(false) @map("is_primary")
-  note            String?  @db.Text
-  status          String   @default("hoat-dong") @db.VarChar(30)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy       String?  @map("created_by") @db.Uuid
-  updatedBy       String?  @map("updated_by") @db.Uuid
+  id                     String    @id @default(uuid()) @db.Uuid
+  tenantId               String    @map("tenant_id") @db.Uuid
+  customerId             String    @map("customer_id") @db.Uuid
+  fullName               String    @map("full_name") @db.VarChar(255)
+  title                  String?   @db.VarChar(255) /// chức danh
+  department             String?   @db.VarChar(255)
+  phone                  String?   @db.VarChar(30)
+  phoneNormalized        String?   @map("phone_normalized") @db.VarChar(20)
+  email                  String?   @db.VarChar(255)
+  emailNormalized        String?   @map("email_normalized") @db.VarChar(255)
+  zalo                   String?   @db.VarChar(50)
+  isPrimary              Boolean   @default(false) @map("is_primary")
+  note                   String?   @db.Text
+  /// Đồng ý nhận tin marketing (MK-13) — chỉ đặt khi chính người đó đồng ý.
+  marketingOptIn         Boolean   @default(false) @map("marketing_opt_in")
+  marketingOptInAt       DateTime? @map("marketing_opt_in_at") @db.Timestamptz(6)
+  /// Từ chối nhận tin: luôn thắng đồng ý (CHECK không cho hai cờ cùng bật).
+  marketingOptOutAt      DateTime? @map("marketing_opt_out_at") @db.Timestamptz(6)
+  /// Đồng ý / từ chối ghi nhận ở đâu: "form:<slug>", "webhook:<mã>", "nhap-tay", "huy-dang-ky"…
+  marketingConsentSource String?   @map("marketing_consent_source") @db.VarChar(100)
+  status                 String    @default("hoat-dong") @db.VarChar(30)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy              String?   @map("created_by") @db.Uuid
+  updatedBy              String?   @map("updated_by") @db.Uuid
 
   tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer      Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -548,18 +577,37 @@ model Lead {
   /// Dữ liệu gốc từ website / Zalo / form — giữ nguyên để đối chiếu.
   rawPayload             Json?     @map("raw_payload")
   note                   String?   @db.Text
+  // --- Marketing (0.16.0) ---
+  /// Chiến dịch đưa lead tới (MK-10).
+  campaignId             String?   @map("campaign_id") @db.Uuid
+  utmSource              String?   @map("utm_source") @db.VarChar(120)
+  utmMedium              String?   @map("utm_medium") @db.VarChar(120)
+  utmCampaign            String?   @map("utm_campaign") @db.VarChar(120)
+  utmContent             String?   @map("utm_content") @db.VarChar(120)
+  utmTerm                String?   @map("utm_term") @db.VarChar(120)
+  /// Kênh nhận: form | landing | webhook | nhap-tay. Null = lead do sale tạo trong CRM.
+  captureChannel         String?   @map("capture_channel") @db.VarChar(20)
+  /// Lúc nhận, SĐT/email/MST đã khớp khách hàng này (MK-07) — cảnh báo cho sale.
+  matchedCustomerId      String?   @map("matched_customer_id") @db.Uuid
+  marketingOptIn         Boolean   @default(false) @map("marketing_opt_in")
+  marketingOptInAt       DateTime? @map("marketing_opt_in_at") @db.Timestamptz(6)
+  marketingOptOutAt      DateTime? @map("marketing_opt_out_at") @db.Timestamptz(6)
+  marketingConsentSource String?   @map("marketing_consent_source") @db.VarChar(100)
   status                 String    @default("hoat-dong") @db.VarChar(30)
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy              String?   @map("created_by") @db.Uuid
   updatedBy              String?   @map("updated_by") @db.Uuid
 
-  tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner                User          @relation("LeadPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
-  convertedCustomer    Customer?     @relation("LeadThanhKhach", fields: [convertedCustomerId], references: [id], onDelete: SetNull)
-  convertedOpportunity Opportunity?  @relation("LeadThanhCoHoi", fields: [convertedOpportunityId], references: [id], onDelete: SetNull)
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner                User               @relation("LeadPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  convertedCustomer    Customer?          @relation("LeadThanhKhach", fields: [convertedCustomerId], references: [id], onDelete: SetNull)
+  convertedOpportunity Opportunity?       @relation("LeadThanhCoHoi", fields: [convertedOpportunityId], references: [id], onDelete: SetNull)
   interactions         Interaction[]
   tasks                Task[]
+  campaign             MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  matchedCustomer      Customer?          @relation("LeadTrungKhach", fields: [matchedCustomerId], references: [id], onDelete: SetNull)
+  captures             LeadCapture[]
 
   @@unique([tenantId, code])
   @@index([tenantId, ownerId])
@@ -567,6 +615,7 @@ model Lead {
   @@index([tenantId, phoneNormalized])
   @@index([tenantId, emailNormalized])
   @@index([tenantId, taxCodeNormalized])
+  @@index([tenantId, campaignId])
   @@map("leads")
 }
 
@@ -626,6 +675,8 @@ model Opportunity {
   lostReason        String?   @map("lost_reason") @db.VarChar(50) /// mã dữ liệu gốc ly_do_thua
   lostNote          String?   @map("lost_note") @db.Text
   competitor        String?   @db.VarChar(255)
+  /// Marketing: chiến dịch đưa cơ hội tới (chép từ lead lúc chuyển đổi — MK-10).
+  campaignId        String?   @map("campaign_id") @db.Uuid
   closedAt          DateTime? @map("closed_at") @db.Timestamptz(6)
   status            String    @default("hoat-dong") @db.VarChar(30)
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -633,13 +684,14 @@ model Opportunity {
   createdBy         String?   @map("created_by") @db.Uuid
   updatedBy         String?   @map("updated_by") @db.Uuid
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  owner        User          @relation("CoHoiPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contact      Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner        User               @relation("CoHoiPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
   interactions Interaction[]
   tasks        Task[]
-  fromLeads    Lead[]        @relation("LeadThanhCoHoi")
+  fromLeads    Lead[]             @relation("LeadThanhCoHoi")
+  campaign     MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   quotations   Quotation[]
   salesOrders  SalesOrder[]
   renewals     Renewal[]
@@ -648,6 +700,7 @@ model Opportunity {
   @@index([tenantId, ownerId, stage])
   @@index([tenantId, customerId])
   @@index([tenantId, stage, nextActionDate])
+  @@index([tenantId, campaignId])
   @@map("opportunities")
 }
 
@@ -2605,4 +2658,276 @@ model Attachment {
   @@index([tenantId, objectType, objectId])
   @@index([tenantId, sha256])
   @@map("attachments")
+}
+
+// ===========================================================================
+// Marketing và thu lead (0.16.0)
+//
+// Chiến dịch + chi phí → chỉ số CPL/ROAS; một cửa nhận lead `nhanLead()` cho form công
+// khai, landing page, webhook và nhập tay; phân khúc; landing page dựng từ khối an toàn.
+// Luật nghiệp vụ: BUSINESS_RULES.md mục 21 (MK). Ràng buộc CHECK viết tay trong migration.
+// ===========================================================================
+
+/// Chiến dịch marketing. Mã CD-2026-0001; utm_campaign duy nhất để gắn lead theo đường dẫn.
+model MarketingCampaign {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  code           String    @db.VarChar(30)
+  name           String    @db.VarChar(255)
+  /// facebook | google | zalo | tiktok | website | email | su-kien | offline | khac
+  channel        String    @db.VarChar(30)
+  /// Giá trị utm_campaign người làm quảng cáo đặt trên đường dẫn. Duy nhất trong doanh nghiệp.
+  utmCampaign    String?   @map("utm_campaign") @db.VarChar(120)
+  startDate      DateTime? @map("start_date") @db.Date
+  endDate        DateTime? @map("end_date") @db.Date
+  budget         Decimal   @default(0) @db.Decimal(18, 2)
+  targetLeads    Int?      @map("target_leads")
+  ownerId        String    @map("owner_id") @db.Uuid
+  /// ke-hoach | cho-duyet | dang-chay | tam-dung | ket-thuc | huy
+  status         String    @default("ke-hoach") @db.VarChar(20)
+  /// Ngân sách đã được duyệt (MK-03). Tăng ngân sách quá mức này thì phải duyệt lại.
+  approvedBudget Decimal?  @map("approved_budget") @db.Decimal(18, 2)
+  approvedBy     String?   @map("approved_by") @db.Uuid
+  approvedAt     DateTime? @map("approved_at") @db.Timestamptz(6)
+  cancelReason   String?   @map("cancel_reason") @db.Text
+  note           String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+
+  tenant         Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner          User                     @relation("ChienDichPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  costs          MarketingCost[]
+  leads          Lead[]
+  customers      Customer[]
+  opportunities  Opportunity[]
+  forms          MarketingForm[]
+  webhookSources MarketingWebhookSource[]
+  captures       LeadCapture[]
+  landingPages   LandingPage[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, utmCampaign])
+  @@index([tenantId, status])
+  @@index([tenantId, ownerId])
+  @@map("marketing_campaigns")
+}
+
+/// Chi phí thực tế của chiến dịch, theo ngày / theo khoản. Không xóa — hủy kèm lý do (MK-04).
+model MarketingCost {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  campaignId   String    @map("campaign_id") @db.Uuid
+  costDate     DateTime  @map("cost_date") @db.Date
+  amount       Decimal   @db.Decimal(18, 2)
+  /// quang-cao | noi-dung | in-an | su-kien | qua-tang | khac
+  category     String    @default("quang-cao") @db.VarChar(30)
+  note         String?   @db.Text
+  /// hoat-dong | huy
+  status       String    @default("hoat-dong") @db.VarChar(20)
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledBy  String?   @map("cancelled_by") @db.Uuid
+  cancelReason String?   @map("cancel_reason") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+  updatedBy    String?   @map("updated_by") @db.Uuid
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, campaignId, costDate])
+  @@map("marketing_costs")
+}
+
+/// Danh sách sale nhận lead theo vòng tròn (MK-08). Thứ tự theo sort_order rồi theo id.
+model MarketingLeadAssignee {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  sortOrder Int      @default(0) @map("sort_order")
+  /// hoat-dong | tam-dung
+  status    String   @default("hoat-dong") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("NhanLeadVongTron", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, userId])
+  @@map("marketing_lead_assignees")
+}
+
+/// Form đăng ký công khai /f/<mã doanh nghiệp>/<slug>. Trường chỉ lấy từ danh mục an toàn.
+model MarketingForm {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  slug           String   @db.VarChar(60)
+  name           String   @db.VarChar(255)
+  title          String   @db.VarChar(255)
+  intro          String?  @db.Text
+  /// [{ khoa, nhan, batBuoc }] — khoa thuộc danh mục TRUONG_FORM (src/modules/marketing/hang-so.ts).
+  fields         Json
+  buttonText     String?  @map("button_text") @db.VarChar(60)
+  successMessage String?  @map("success_message") @db.Text
+  /// Câu hỏi đồng ý nhận tin. Trống = form không hỏi, lead không được coi là đã đồng ý.
+  consentText    String?  @map("consent_text") @db.Text
+  campaignId     String?  @map("campaign_id") @db.Uuid
+  /// Mã dữ liệu gốc nguon_lead gán cho lead từ form này.
+  source         String?  @db.VarChar(50)
+  ownerId        String   @map("owner_id") @db.Uuid
+  viewCount      Int      @default(0) @map("view_count")
+  /// hoat-dong | tat
+  status         String   @default("hoat-dong") @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign     MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  owner        User               @relation("FormPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  captures     LeadCapture[]
+  landingPages LandingPage[]
+
+  @@unique([tenantId, slug])
+  @@map("marketing_forms")
+}
+
+/// Nguồn webhook nhận lead (Facebook Lead Ads qua Zapier/Make, Zalo, website khác).
+/// Khóa bí mật chỉ lưu bản băm SHA-256, hiện một lần lúc tạo / đổi khóa (MK-12).
+model MarketingWebhookSource {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  code           String    @db.VarChar(60)
+  name           String    @db.VarChar(255)
+  keyHash        String    @map("key_hash") @db.VarChar(64)
+  /// 4 ký tự cuối của khóa — để người dùng nhận ra khóa nào đang dùng.
+  keyHint        String    @map("key_hint") @db.VarChar(8)
+  campaignId     String?   @map("campaign_id") @db.Uuid
+  source         String?   @db.VarChar(50)
+  ownerId        String    @map("owner_id") @db.Uuid
+  /// hoat-dong | thu-hoi
+  status         String    @default("hoat-dong") @db.VarChar(20)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedBy      String?   @map("revoked_by") @db.Uuid
+  lastReceivedAt DateTime? @map("last_received_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  owner    User               @relation("NguonWebhookPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  captures LeadCapture[]
+
+  @@unique([tenantId, code])
+  @@map("marketing_webhook_sources")
+}
+
+/// Nhật ký mỗi lần nhận lead — mọi kênh, cả lần bị từ chối. **Chỉ ghi thêm** (trigger).
+model LeadCapture {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  /// form | landing | webhook | nhap-tay
+  channel         String   @db.VarChar(20)
+  /// tao-moi | ghi-them | tu-choi | spam
+  result          String   @db.VarChar(20)
+  reason          String?  @db.Text
+  leadId          String?  @map("lead_id") @db.Uuid
+  campaignId      String?  @map("campaign_id") @db.Uuid
+  formId          String?  @map("form_id") @db.Uuid
+  webhookSourceId String?  @map("webhook_source_id") @db.Uuid
+  landingPageId   String?  @map("landing_page_id") @db.Uuid
+  /// A | B — biến thể landing page người gửi đã xem.
+  landingVariant  String?  @map("landing_variant") @db.VarChar(1)
+  assignedTo      String?  @map("assigned_to") @db.Uuid
+  utmSource       String?  @map("utm_source") @db.VarChar(120)
+  utmMedium       String?  @map("utm_medium") @db.VarChar(120)
+  utmCampaign     String?  @map("utm_campaign") @db.VarChar(120)
+  utmContent      String?  @map("utm_content") @db.VarChar(120)
+  utmTerm         String?  @map("utm_term") @db.VarChar(120)
+  /// Dữ liệu đã cắt độ dài, giữ để đối chiếu. Không giữ khóa bí mật.
+  payload         Json?
+  ipAddress       String?  @map("ip_address") @db.VarChar(45)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy       String?  @map("created_by") @db.Uuid
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead          Lead?                   @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  campaign      MarketingCampaign?      @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  form          MarketingForm?          @relation(fields: [formId], references: [id], onDelete: Restrict)
+  webhookSource MarketingWebhookSource? @relation(fields: [webhookSourceId], references: [id], onDelete: Restrict)
+  landingPage   LandingPage?            @relation(fields: [landingPageId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, campaignId, createdAt])
+  @@index([tenantId, formId])
+  @@index([tenantId, webhookSourceId, createdAt(sort: Desc)])
+  @@index([tenantId, landingPageId])
+  @@map("lead_captures")
+}
+
+/// Phân khúc lead / liên hệ theo điều kiện. Điều kiện là JSON kiểm bằng Zod theo danh mục trường.
+model MarketingSegment {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  name       String   @db.VarChar(255)
+  /// lead | lien-he
+  target     String   @db.VarChar(20)
+  conditions Json
+  note       String?  @db.Text
+  ownerId    String   @map("owner_id") @db.Uuid
+  /// hoat-dong | luu-tru
+  status     String   @default("hoat-dong") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy  String?  @map("created_by") @db.Uuid
+  updatedBy  String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner  User   @relation("PhanKhucPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@map("marketing_segments")
+}
+
+/// Landing page công khai /lp/<mã doanh nghiệp>/<slug>, dựng từ khối khai báo bằng mã (MK-16).
+model LandingPage {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  slug        String    @db.VarChar(60)
+  name        String    @db.VarChar(255)
+  /// Tiêu đề thẻ <title> và chia sẻ mạng xã hội.
+  title       String    @db.VarChar(255)
+  description String?   @db.VarChar(500)
+  /// Danh sách khối (biến thể A). Kiểm bằng Zod ở src/modules/marketing/khoi-landing.ts.
+  blocks      Json
+  /// Biến thể B cho thử nghiệm A/B. Null = không thử.
+  blocksB     Json?     @map("blocks_b")
+  formId      String?   @map("form_id") @db.Uuid
+  campaignId  String?   @map("campaign_id") @db.Uuid
+  ownerId     String    @map("owner_id") @db.Uuid
+  /// nhap | xuat-ban | an
+  status      String    @default("nhap") @db.VarChar(20)
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+  viewsA      Int       @default(0) @map("views_a")
+  viewsB      Int       @default(0) @map("views_b")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?   @map("created_by") @db.Uuid
+  updatedBy   String?   @map("updated_by") @db.Uuid
+
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  form     MarketingForm?     @relation(fields: [formId], references: [id], onDelete: SetNull)
+  campaign MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  owner    User               @relation("LandingPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  captures LeadCapture[]
+
+  @@unique([tenantId, slug])
+  @@map("landing_pages")
 }
