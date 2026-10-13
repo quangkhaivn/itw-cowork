@@ -128,8 +128,9 @@ Quyết định QĐ-67 → QĐ-76. Migration `20261012090000_email_marketing_2_l
 
 ### Kiểm thử (bản gộp)
 
-- Bản gộp `release/0.16`: **371 bài đơn vị**, **1.289 kiểm chứng tích hợp** trong 22 bộ của `thu:tich-hop` (gồm `thu:khach-nang-cao` 140, `thu:qa-khach` 135, `thu:marketing` 103, `thu:qa-marketing` 122 và bài mới `thu:gop-k-m` 17 cho tương tác chéo hai gói), **438 bài `thu:http`** và **107 bài `thu:qa-marketing-http`** trên bản dựng production — tất cả đạt.
-- `prisma migrate diff --from-migrations … --to-schema …` trên CSDL tạm: rỗng (lược đồ khớp tổng hai migration).
+- Bản gộp `release/0.16` (K + M + E): **448 bài đơn vị**, **1.562 kiểm chứng tích hợp** trong 26 bộ của `thu:tich-hop` (gồm `thu:khach-nang-cao` 140, `thu:qa-khach` 135, `thu:marketing` 103, `thu:qa-marketing` 122, `thu:email` 91, `thu:xac-thuc-2-lop` 43, `thu:qa-email` 124 và hai bài mới cho tương tác chéo: `thu:gop-k-m` 17, `thu:gop-m-e` 15). Trên bản dựng production: **434 bài `thu:http`**, **107 bài `thu:qa-marketing-http`**, **75 bài `thu:qa-email-http`** — tất cả đạt.
+- `prisma migrate diff --from-migrations … --to-schema …` trên CSDL tạm: rỗng (lược đồ khớp tổng ba migration). Diễn tập cài mới trên CSDL trống: 18 migration + `rls.sql` + seed chạy sạch.
+- `db:seed:mau` chạy hết (sửa bước đọc đơn mẫu bằng tài khoản thiếu `order.view`).
 
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 

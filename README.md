@@ -3,7 +3,7 @@
 Hệ điều hành vận hành doanh nghiệp (Business Operating System) nội bộ của **Công ty Cổ phần Thế Giới Tin Học (TGTH / ITW)**: CRM, bán hàng, báo giá, đơn hàng, kho, dự án kỹ thuật, chăm sóc khách hàng, tài chính quản trị, tự động hóa và trợ lý AI — trên **một** nguồn dữ liệu.
 
 - Máy chủ thật: <https://thegioitinhoc.io.vn>
-- Trạng thái: **bản 0.13.0 chạy thật trên `thegioitinhoc.io.vn` từ 21/09/2026** — Phase 1 → 9 (nền móng; CRM; sản phẩm và bảng giá; báo giá; đơn hàng và kho; dự án, bảo hành, bàn dịch vụ; tài chính và bảng điều hành; tự động hóa và nhắc việc; trợ lý AI) cùng **mua hàng, công nợ phải trả, trả hàng / đổi máy**. Bản **0.14.0** (chuyển kho nội bộ) và **0.15.0** (tệp đính kèm) xong trên máy phát triển, chưa triển khai. Bản **0.16.0** (khách hàng nâng cao; marketing và thu lead) đang gộp trên nhánh `release/0.16`, chưa phát hành. Còn chờ Giám đốc khai dữ liệu nền và các ngưỡng — chưa khai thì một số màn hình báo "chưa đặt ngưỡng" thay vì tự đoán số. Trợ lý AI cần khóa API mới chạy được. Điểm vào cho phiên làm việc mới: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). Luật nghiệp vụ: [`BUSINESS_RULES.md`](BUSINESS_RULES.md).
+- Trạng thái: **bản 0.13.0 chạy thật trên `thegioitinhoc.io.vn` từ 21/09/2026** — Phase 1 → 9 (nền móng; CRM; sản phẩm và bảng giá; báo giá; đơn hàng và kho; dự án, bảo hành, bàn dịch vụ; tài chính và bảng điều hành; tự động hóa và nhắc việc; trợ lý AI) cùng **mua hàng, công nợ phải trả, trả hàng / đổi máy**. Bản **0.14.0** (chuyển kho nội bộ) và **0.15.0** (tệp đính kèm) xong trên máy phát triển, chưa triển khai. Bản **0.16.0** (13/10/2026 — khách hàng nâng cao; marketing & thu lead; email marketing; xác thực 2 lớp; bản in báo giá có logo) xong trên máy phát triển (nhánh `release/0.16`), chưa triển khai — cần thêm biến `APP_ENC_KEY`. Còn chờ Giám đốc khai dữ liệu nền và các ngưỡng — chưa khai thì một số màn hình báo "chưa đặt ngưỡng" thay vì tự đoán số. Trợ lý AI cần khóa API mới chạy được. Điểm vào cho phiên làm việc mới: [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md). Luật nghiệp vụ: [`BUSINESS_RULES.md`](BUSINESS_RULES.md).
 
 > Giao diện, chú thích mã và tài liệu viết bằng tiếng Việt. Tên bảng và cột cơ sở dữ liệu viết bằng tiếng Anh, `snake_case` (quyết định QĐ-02 trong [`docs/quyet-dinh-kien-truc.md`](docs/quyet-dinh-kien-truc.md)).
 
@@ -82,10 +82,11 @@ Không có bí mật nào trong mã nguồn. `.env` nằm trong `.gitignore`.
 | `npm run dev` / `build` / `start` | Phát triển / dựng / chạy bản dựng |
 | `npm run typecheck` | Kiểm kiểu TypeScript |
 | `npm run lint` | ESLint (luật của Next.js) |
-| `npm run thu:don-vi` | Kiểm thử đơn vị — không cần CSDL (371 bài) |
-| `npm run thu:tich-hop` | Kiểm thử tích hợp trên CSDL thật: cách ly tenant, phân quyền, nhật ký, bất biến quản trị, CRM, sản phẩm… tới khách hàng nâng cao và marketing (1.289 kiểm chứng, 22 bộ). **Chỉ chạy trên CSDL phát triển** |
+| `npm run thu:don-vi` | Kiểm thử đơn vị — không cần CSDL (448 bài) |
+| `npm run thu:tich-hop` | Kiểm thử tích hợp trên CSDL thật: cách ly tenant, phân quyền, nhật ký, bất biến quản trị, CRM, sản phẩm… tới khách hàng nâng cao, marketing, email và xác thực 2 lớp (1.562 kiểm chứng, 26 bộ). **Chỉ chạy trên CSDL phát triển** |
 | `npm run thu:http` | Kiểm thử đầu-cuối qua HTTP trên máy chủ đang chạy (434 kiểm chứng, thêm 4 nếu quản trị đang bị bắt đổi mật khẩu). Cần `THU_URL`, `THU_EMAIL`, `THU_MAT_KHAU` |
 | `npm run thu:qa-marketing-http` | Bài HTTP đối kháng cho đường công khai form / landing / webhook (107 kiểm chứng). Cần `THU_URL`; không cần đăng nhập. **Chỉ máy phát triển** |
+| `npm run thu:qa-email-http` | Bài HTTP đối kháng cho đăng nhập 2 bước, bắt buộc 2 lớp, kết nối email, liên kết công khai trong thư (75 kiểm chứng). Cần `THU_URL`, `THU_SMTP_CONG` (máy chủ SMTP giả tự dựng). **Chỉ máy phát triển** |
 | `npm run kiem-tra` | typecheck + lint + đơn vị + build — chạy trước mỗi lần commit |
 | `npm run db:migrate` / `db:seed` / `db:seed:mau` | Migration / seed nền móng / dữ liệu mẫu |
 

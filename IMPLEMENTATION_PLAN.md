@@ -183,13 +183,20 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - Nhân tiện thêm màn hình *Quản trị → Cấu hình* hiện **phiên bản và mã bản dựng đang chạy** (bản 0.14.1), để lần triển khai sau không phải đoán máy thật đang chạy gì.
 - **Chưa làm có chủ đích**: xem trước ảnh/PDF ngay trong trang (hiện chỉ tải về), giới hạn dung lượng theo gói dịch vụ.
 
+## 4n. Tích hợp CRM — 0.16.0 (xong trên máy phát triển, 13/10/2026)
+
+- [x] Khách hàng nâng cao (hành trình, nhóm, bộ lọc đã lưu, chấm điểm, gộp khách, CSV, bàn giao) · [x] Marketing & thu lead (chiến dịch, CPL/ROAS, form `/f`, landing `/lp`, webhook, phân khúc) · [x] Email marketing (SMTP, mẫu khối an toàn, đợt gửi có duyệt, hủy nhận tin, theo dõi) · [x] Xác thực 2 lớp TOTP · [x] Bản in báo giá có logo
+- [x] Gộp ba gói + tương tác chéo (bàn giao gồm việc Marketing, gộp khách mang chiến dịch, đợt gửi email theo phân khúc, hủy nhận tin tắt cờ đồng ý) · [x] kiểm thử (448 đơn vị, 1.562 tích hợp, 434 + 107 + 75 HTTP) · [x] diễn tập cài mới 18 migration
+- [ ] Triển khai máy thật — cần `APP_ENC_KEY` (không đổi sau khi dùng), nginx máy chủ ghi đè `X-Real-IP`, mở cổng SMTP ra ngoài.
+- Ngưỡng mới chờ Giám đốc: ngưỡng điểm Nóng/Ấm, hạn gọi lại lead mới, tốc độ gửi email (đang mặc định chậm).
+
 ## 5. Sau Phase 9 — việc còn lại
 
 Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc phase nào, xếp theo thứ tự nên làm:
 
 1. ~~Triển khai 0.3.0 → 0.13.0 lên máy thật~~ **đã xong 21/09/2026** (`VD-101` đóng). Máy thật đang chạy 0.13.0; bản 0.14.0 (chuyển kho) và 0.15.0 (tệp đính kèm) còn trên máy phát triển, chưa triển khai đợt tiếp theo.
 2. **Khai dữ liệu nền và các ngưỡng** (`VD-104` → `VD-109`) — nay **chặn thật**, không còn là việc chờ song song: màn hình đã có trên máy thật mà ngưỡng chưa đặt, nên một số tính năng báo "chưa đặt ngưỡng" thay vì chạy.
-3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0), ~~công nợ phải trả~~ (0.12.0), ~~trả hàng / đổi máy~~ (0.13.0), ~~chuyển kho nội bộ~~ (0.14.0) và ~~tệp đính kèm~~ (0.15.0) **đã làm**. Còn: gửi nhắc ra ngoài qua email hoặc Zalo, hoàn tiền mặt cho khách, bù trừ công nợ hai chiều, dự báo dòng tiền, nơi cất sao lưu ngoài máy chủ.
+3. **Phần cố ý để lại** — ~~mua hàng~~ (0.11.0), ~~công nợ phải trả~~ (0.12.0), ~~trả hàng / đổi máy~~ (0.13.0), ~~chuyển kho nội bộ~~ (0.14.0), ~~tệp đính kèm~~ (0.15.0) và tích hợp CRM / marketing / email (0.16.0) **đã làm**. Còn: gửi nhắc tự động ra ngoài qua email hoặc Zalo, hoàn tiền mặt cho khách, bù trừ công nợ hai chiều, dự báo dòng tiền, nơi cất sao lưu ngoài máy chủ.
 
 ## 6. Câu hỏi chờ Giám đốc
 
