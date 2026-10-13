@@ -37,7 +37,9 @@
     "thu:chuyen-kho": "tsx --env-file-if-exists=.env thu/thu-chuyen-kho.ts",
     "thu:dinh-kem": "tsx --env-file-if-exists=.env thu/thu-dinh-kem.ts",
     "thu:email": "tsx --env-file-if-exists=.env thu/thu-email.ts",
-    "thu:xac-thuc-2-lop": "tsx --env-file-if-exists=.env thu/thu-xac-thuc-2-lop.ts"
+    "thu:xac-thuc-2-lop": "tsx --env-file-if-exists=.env thu/thu-xac-thuc-2-lop.ts",
+    "thu:qa-email": "tsx --env-file-if-exists=.env thu/thu-qa-email.ts",
+    "thu:qa-email-http": "tsx --env-file-if-exists=.env thu/thu-qa-email-http.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
