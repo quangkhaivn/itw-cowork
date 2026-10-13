@@ -43,7 +43,7 @@ export default function FormChienDichMoi({
         </div>
       )}
       <div className="phan-form">
-        <h3>Chiến dịch</h3>
+        <h3>Đợt gửi</h3>
         <div className="luoi-form">
           <div className="truong">
             <label htmlFor="cd-ten">Tên đợt gửi</label>
