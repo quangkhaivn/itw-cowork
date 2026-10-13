@@ -21,7 +21,7 @@ export default async function TrangChiTietChienDich({ params }: { params: Promis
     <>
       <DauTrang
         tieuDe={c.ten}
-        duongDan={[{ nhan: "Marketing" }, { nhan: "Chiến dịch", href: "/marketing/chien-dich" }]}
+        duongDan={[{ nhan: "Marketing" }, { nhan: "Chiến dịch marketing", href: "/marketing/chien-dich" }]}
         moTa={
           <>
             {c.ma} · {NHAN_KENH[c.kenh] ?? c.kenh} · phụ trách {c.nguoiPhuTrach.hoTen}

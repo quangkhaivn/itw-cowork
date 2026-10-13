@@ -32,7 +32,7 @@ export default async function TrangChienDich({ searchParams }: { searchParams: T
   return (
     <>
       <DauTrang
-        tieuDe="Chiến dịch"
+        tieuDe="Chiến dịch marketing"
         duongDan={[{ nhan: "Marketing" }]}
         moTa="Ngân sách, chi phí thực tế và hiệu quả của từng chiến dịch. CPL = chi phí / lead; ROAS = doanh thu hóa đơn của khách mới do chiến dịch mang về / chi phí. Chưa có mẫu số thì để trống, không ghi 0."
         hanhDong={

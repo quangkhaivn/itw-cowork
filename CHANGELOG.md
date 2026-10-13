@@ -116,6 +116,11 @@ Quyết định QĐ-67 → QĐ-76. Migration `20261012090000_email_marketing_2_l
 
 ### Sau khi gộp các gói
 
+- **Đợt gửi email chọn được người nhận theo phân khúc Marketing** (chỉ người đã đồng ý và chưa từ chối; cần quyền sửa Marketing).
+- **Sửa lỗi chéo M×E**: hủy nhận tin qua liên kết trong thư với người đã đồng ý ở Marketing bị CSDL từ chối (CHECK cấm đồng ý và từ chối cùng bật) — nay tắt luôn cờ đồng ý. Form công khai coi email đã hủy trong thư là đã từ chối (không bật lại đồng ý).
+- Một cột `marketing_opt_out_at` dùng chung cho Marketing và Email (migration email đổi thành `ADD COLUMN IF NOT EXISTS`).
+- Menu Marketing gộp một nhóm; tách tên **"Chiến dịch marketing"** (ngân sách, UTM, CPL/ROAS) và **"Đợt gửi email"**.
+- Nguồn người nhận "liên hệ" của email bỏ cả khách đã gộp.
 - **Bàn giao khi nghỉ việc chuyển cả việc Marketing**: chiến dịch chưa kết thúc, form / nguồn webhook / phân khúc đang dùng, landing nháp / đang xuất bản, và suất nhận lead vòng tròn (người nhận chưa có suất thì nhận nguyên suất, đã có thì suất người nghỉ tạm dừng).
 - **Gộp khách mang theo chiến dịch chạm đầu tiên** sang khách giữ lại khi khách giữ lại chưa có; lead "trùng khách" (`matched_customer_id`) tự chuyển theo nhờ gộp đọc khóa ngoại từ catalog.
 - **Nhận lead trùng SĐT / email của khách đã gộp** gắn khách giữ lại và giao người phụ trách khách đó (trước khi sửa: gắn vào khách đã gộp).

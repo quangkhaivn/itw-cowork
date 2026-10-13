@@ -20,7 +20,7 @@ export default async function TrangSuaChienDich({ params }: { params: Promise<{ 
   const c = ct.chienDich;
   return (
     <>
-      <DauTrang tieuDe={`Sửa ${c.ma}`} duongDan={[{ nhan: "Marketing" }, { nhan: "Chiến dịch", href: "/marketing/chien-dich" }, { nhan: c.ten, href: `/marketing/chien-dich/${id}` }]} />
+      <DauTrang tieuDe={`Sửa ${c.ma}`} duongDan={[{ nhan: "Marketing" }, { nhan: "Chiến dịch marketing", href: "/marketing/chien-dich" }, { nhan: c.ten, href: `/marketing/chien-dich/${id}` }]} />
       <FormChienDich
         nguoiPhuTrach={nguoi.some((n) => n.id === c.nguoiPhuTrach.id) ? nguoi : [{ id: c.nguoiPhuTrach.id, fullName: c.nguoiPhuTrach.hoTen }, ...nguoi]}
         nganSachDaDuyet={c.nganSachDaDuyet ? dinhDangNhapTien(String(Math.round(Number(c.nganSachDaDuyet)))) : null}

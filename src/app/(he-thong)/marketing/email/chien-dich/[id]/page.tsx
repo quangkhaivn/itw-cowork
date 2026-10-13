@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import KhungXemThu from "@/components/email/KhungXemThu";
-import type { ThamSoLoc } from "@/components/email/ChonNguoiNhan";
+import { thamSoTuChienDich } from "@/components/email/tham-so-nguoi-nhan";
 import DauTrang from "@/components/ui/DauTrang";
 import PhanTrang from "@/components/ui/PhanTrang";
 import { taoNguCanh } from "@/lib/api";
@@ -11,6 +11,7 @@ import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { luaChonDuLieuGoc } from "@/modules/crm/chung";
 import { LuocDoLocNguoiNhan } from "@/modules/email/luoc-do";
 import { chiTietChienDich, quyenGiaoDienEmail } from "@/modules/email/service";
+import { luaChonPhanKhuc } from "@/modules/marketing/service";
 import {
   LOP_TRANG_THAI_CHIEN_DICH,
   LOP_TRANG_THAI_NGUOI_NHAN,
@@ -38,8 +39,12 @@ export default async function TrangChiTietChienDich({ params, searchParams }: { 
   const du = await docDuLieu(nd, async (tx) => {
     const nc = taoNguCanh(tx, nd.phien.tenantId, nd.hoSo);
     try {
-      const [c, dl] = await Promise.all([chiTietChienDich(nc, id, loc), luaChonDuLieuGoc(nc, ["nguon_lead", "phan_khuc_khach_hang", "nganh_nghe"])]);
-      return { c, dl };
+      const [c, dl, pk] = await Promise.all([
+        chiTietChienDich(nc, id, loc),
+        luaChonDuLieuGoc(nc, ["nguon_lead", "phan_khuc_khach_hang", "nganh_nghe"]),
+        luaChonPhanKhuc(nc),
+      ]);
+      return { c, dl, pk };
     } catch (loi) {
       if (loi instanceof LoiKhongTimThay) return null;
       throw loi;
@@ -63,7 +68,7 @@ export default async function TrangChiTietChienDich({ params, searchParams }: { 
     <>
       <DauTrang
         tieuDe={`${c.ma} · ${c.ten}`}
-        duongDan={[{ nhan: "Marketing" }, { nhan: "Chiến dịch email", href: "/marketing/email/chien-dich" }]}
+        duongDan={[{ nhan: "Marketing" }, { nhan: "Đợt gửi email", href: "/marketing/email/chien-dich" }]}
         moTa={
           <>
             <span className={`huy-hieu ${LOP_TRANG_THAI_CHIEN_DICH[c.trangThai] ?? ""}`}>{NHAN_TRANG_THAI_CHIEN_DICH[c.trangThai]}</span> · Người nhận: {c.moTaNguon}
@@ -128,10 +133,12 @@ export default async function TrangChiTietChienDich({ params, searchParams }: { 
           ten={c.ten}
           tieuDe={c.tieuDe}
           khoi={c.khoi}
-          thamSo={{ doiTuong: "lead", giaiDoan: [], nguon: [], phanKhuc: [], nganh: [], ...(c.thamSo as Partial<ThamSoLoc>) }}
+          thamSo={thamSoTuChienDich(c.nguon, c.thamSo)}
           luaChon={{ nguon: du.dl["nguon_lead"] ?? [], phanKhuc: du.dl["phan_khuc_khach_hang"] ?? [], nganh: du.dl["nganh_nghe"] ?? [] }}
           xemLead={q.xemLead}
           xemLienHe={q.xemLienHe}
+          dsPhanKhuc={du.pk}
+          xemPhanKhuc={q.phanKhuc}
           emailCuaToi={nd.hoSo.email}
           duocGuiThu={q.tao}
         />

@@ -4,6 +4,7 @@ import { coQuyen } from "@/lib/phan-quyen";
 import { LoiNghiepVu } from "@/lib/loi";
 import { locTheoPhamVi } from "@/modules/crm/chung";
 import { GIAI_DOAN_LEAD, LEAD_DANG_MO } from "@/modules/crm/hang-so";
+import { danhSachTheoPhanKhuc } from "@/modules/marketing/service";
 import type { UngVien } from "./tinh-toan";
 
 /**
@@ -16,8 +17,8 @@ import type { UngVien } from "./tinh-toan";
  *     **đã lọc theo phạm vi dữ liệu** của người gọi. Việc loại email hỏng / trùng / đã từ chối
  *     làm chung một chỗ ở `locNguoiNhan()`, nguồn không cần lo.
  *
- * Gói Marketing (phân khúc) cắm vào bằng `dangKyNguonNguoiNhan({ ma: "phan-khuc", … })`
- * gọi `danhSachTheoPhanKhuc()` của họ. Không phải sửa gì ở chiến dịch hay worker.
+ * Gói Marketing (phân khúc) cắm vào bằng nguồn `phan-khuc` ở cuối tệp, gọi
+ * `danhSachTheoPhanKhuc()` của họ. Không phải sửa gì ở chiến dịch hay worker.
  */
 
 export interface NguonNguoiNhan<T = unknown> {
@@ -94,7 +95,7 @@ const LOC_DON_GIAN: NguonNguoiNhan<ThamSoLocDonGian> = {
         status: "hoat-dong",
         customer: {
           ...(await locTheoPhamVi(nc, "customer.view")),
-          status: { not: "ngung-giao-dich" },
+          status: { notIn: ["ngung-giao-dich", "da-gop"] },
           ...(t.nguon.length && { source: { in: t.nguon } }),
           ...(t.phanKhuc.length && { segment: { in: t.phanKhuc } }),
           ...(t.nganh.length && { industry: { in: t.nganh } }),
@@ -129,6 +130,47 @@ export function dangKyNguonNguoiNhan<T>(nguon: NguonNguoiNhan<T>): void {
   SO_NGUON.set(nguon.ma, nguon as NguonNguoiNhan<unknown>);
 }
 dangKyNguonNguoiNhan(LOC_DON_GIAN);
+
+export const LuocDoPhanKhucNguoiNhan = z.object({
+  phanKhucId: z.uuid("Chọn phân khúc."),
+  /** Tên phân khúc lúc chọn — chỉ để hiện mô tả; danh sách luôn đọc lại theo id. */
+  tenPhanKhuc: z.string().trim().max(255).optional().default(""),
+});
+export type ThamSoPhanKhuc = z.infer<typeof LuocDoPhanKhucNguoiNhan>;
+
+/**
+ * Nguồn "phân khúc" của gói Marketing (BUSINESS_RULES MK-14, EM-12). Chỉ trả người ĐÃ đồng ý và
+ * CHƯA từ chối nhận tin (`chiNguoiNhanDuoc`). Cần email thật để gửi nên gọi với `boCheDeGui`, vốn
+ * đòi `marketing.update` — người chỉ có `marketing.view` (thực tập sinh) hay sale (không có
+ * `marketing.view`) không lấy được danh sách. Kết quả chỉ đi vào máy chủ; màn hình xem trước vẫn
+ * che email theo quyền như nguồn lọc đơn giản.
+ */
+const PHAN_KHUC: NguonNguoiNhan<ThamSoPhanKhuc> = {
+  ma: "phan-khuc",
+  nhan: "Phân khúc marketing (chỉ người đã đồng ý nhận tin)",
+  quyen: ["marketing.view"],
+  luocDo: LuocDoPhanKhucNguoiNhan,
+  moTa(t) {
+    return `Phân khúc marketing${t.tenPhanKhuc ? ` “${t.tenPhanKhuc}”` : ""} · chỉ người đã đồng ý nhận tin`;
+  },
+  async lay(nc, t) {
+    if (!coQuyen(nc.hoSo, "marketing.update")) {
+      throw new LoiNghiepVu("Lấy người nhận theo phân khúc cần quyền sửa Marketing (marketing.update).", 403, "thieu-quyen-nguon");
+    }
+    const ds = await danhSachTheoPhanKhuc(nc, t.phanKhucId, { chiNguoiNhanDuoc: true, boCheDeGui: true, gioiHan: TRAN_NGUOI_NHAN + 1 });
+    return ds.map((d) => ({
+      email: d.email,
+      ten: d.hoTen,
+      congTy: d.congTy,
+      loai: d.doiTuong === "lead" ? ("lead" as const) : ("contact" as const),
+      id: d.id,
+      khachHangId: d.khachHangId,
+      // Đã lọc "chưa từ chối" ở truy vấn; vẫn chuyển cờ để `locNguoiNhan()` chặn lần nữa.
+      tuChoiLuc: d.tuChoiNhanTin ? new Date() : null,
+    }));
+  },
+};
+dangKyNguonNguoiNhan(PHAN_KHUC);
 
 export function timNguon(ma: string): NguonNguoiNhan<unknown> {
   const n = SO_NGUON.get(ma);

@@ -11,7 +11,7 @@ export default async function TrangTaoChienDich() {
   const nguoi = await docDuLieu(nd, (tx) => danhSachNguoiPhuTrach(taoNguCanh(tx, nd.phien.tenantId, nd.hoSo), "marketing.create"));
   return (
     <>
-      <DauTrang tieuDe="Thêm chiến dịch" duongDan={[{ nhan: "Marketing" }, { nhan: "Chiến dịch", href: "/marketing/chien-dich" }]} />
+      <DauTrang tieuDe="Thêm chiến dịch" duongDan={[{ nhan: "Marketing" }, { nhan: "Chiến dịch marketing", href: "/marketing/chien-dich" }]} />
       <FormChienDich
         nguoiPhuTrach={nguoi}
         banDau={{ ten: "", kenh: "facebook", utmCampaign: "", ngayBatDau: "", ngayKetThuc: "", nganSach: "", mucTieuLead: "", nguoiPhuTrachId: nd.hoSo.userId, ghiChu: "" }}

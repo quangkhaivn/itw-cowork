@@ -174,6 +174,13 @@ export async function danhSachPhanKhuc(nc: NguCanh) {
   );
 }
 
+/** Danh sách gọn (không đếm) cho ô chọn phân khúc ở màn hình khác — vd. chọn người nhận email. */
+export async function luaChonPhanKhuc(nc: NguCanh): Promise<{ id: string; ten: string; doiTuong: "lead" | "lien-he" }[]> {
+  if (!coQuyen(nc.hoSo, "marketing.view")) return [];
+  const ds = await nc.tx.marketingSegment.findMany({ where: { status: "hoat-dong", ...(await locMarketing(nc)) }, select: { id: true, name: true, target: true }, orderBy: { name: "asc" } });
+  return ds.map((s) => ({ id: s.id, ten: s.name, doiTuong: s.target as "lead" | "lien-he" }));
+}
+
 export async function chiTietPhanKhuc(nc: NguCanh, id: string) {
   batBuocQuyen(nc.hoSo, "marketing.view", { objectType: "marketing_segment", objectId: id });
   const pk = await docTrongPhamVi(nc, id);

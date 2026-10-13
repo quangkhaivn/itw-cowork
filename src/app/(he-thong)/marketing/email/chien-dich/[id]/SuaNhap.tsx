@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import ChonNguoiNhan, { type ThamSoLoc } from "@/components/email/ChonNguoiNhan";
+import ChonNguoiNhan from "@/components/email/ChonNguoiNhan";
+import { nguonVaThamSo, type PhanKhucChon, type ThamSoLoc } from "@/components/email/tham-so-nguoi-nhan";
 import SoanThu from "@/components/email/SoanThu";
 import { useGoiApi } from "@/components/ui/goi-api";
 import type { Khoi } from "@/modules/email/tinh-toan";
@@ -19,6 +20,8 @@ export default function SuaNhap({
   luaChon,
   xemLead,
   xemLienHe,
+  dsPhanKhuc,
+  xemPhanKhuc,
   emailCuaToi,
   duocGuiThu,
 }: {
@@ -30,6 +33,8 @@ export default function SuaNhap({
   luaChon: { nguon: LuaChon; phanKhuc: LuaChon; nganh: LuaChon };
   xemLead: boolean;
   xemLienHe: boolean;
+  dsPhanKhuc: PhanKhucChon[];
+  xemPhanKhuc: boolean;
   emailCuaToi: string;
   duocGuiThu: boolean;
 }) {
@@ -43,7 +48,7 @@ export default function SuaNhap({
 
   async function luu() {
     datDaLuu(false);
-    if (await goi(`/api/v1/email/chien-dich/${id}`, "PATCH", { ten, tieuDe, khoi, nguon: "loc-don-gian", thamSo })) {
+    if (await goi(`/api/v1/email/chien-dich/${id}`, "PATCH", { ten, tieuDe, khoi, ...nguonVaThamSo(thamSo) })) {
       datDaLuu(true);
       router.refresh();
     }
@@ -64,13 +69,13 @@ export default function SuaNhap({
         )}
         <div className="phan-form">
           <div className="truong">
-            <label htmlFor="sn-ten">Tên chiến dịch</label>
+            <label htmlFor="sn-ten">Tên đợt gửi</label>
             <input type="text" id="sn-ten" value={ten} maxLength={255} onChange={(e) => (datDaLuu(false), datTen(e.target.value))} />
           </div>
         </div>
         <div className="phan-form">
           <h3>Người nhận</h3>
-          <ChonNguoiNhan giaTri={thamSo} khiDoi={(t) => (datDaLuu(false), datThamSo(t))} luaChon={luaChon} xemLead={xemLead} xemLienHe={xemLienHe} />
+          <ChonNguoiNhan giaTri={thamSo} khiDoi={(t) => (datDaLuu(false), datThamSo(t))} luaChon={luaChon} xemLead={xemLead} xemLienHe={xemLienHe} dsPhanKhuc={dsPhanKhuc} xemPhanKhuc={xemPhanKhuc} />
         </div>
         <div className="chan-form">
           <button type="button" className="nut chinh" disabled={dangGui} onClick={luu}>

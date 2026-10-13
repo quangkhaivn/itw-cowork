@@ -26,13 +26,13 @@ export default async function TrangChienDichEmail({ searchParams }: { searchPara
   return (
     <>
       <DauTrang
-        tieuDe="Chiến dịch email"
+        tieuDe="Đợt gửi email"
         duongDan={[{ nhan: "Marketing" }]}
         moTa="Chọn mẫu và người nhận → gửi duyệt → người có quyền duyệt đưa vào hàng gửi. Máy gửi dần theo tốc độ đặt ở Cấu hình, người đã từ chối nhận tin luôn bị loại."
         hanhDong={
           coQuyen(nd.hoSo, "marketing.create") ? (
             <Link className="nut chinh" href="/marketing/email/chien-dich/moi">
-              Lập chiến dịch
+              Lập đợt gửi email
             </Link>
           ) : null
         }
@@ -64,7 +64,7 @@ export default async function TrangChienDichEmail({ searchParams }: { searchPara
           )}
         </form>
         {kq.dong.length === 0 ? (
-          <TrongRong tieuDe={coLoc ? "Không có chiến dịch nào khớp" : "Chưa có chiến dịch email nào"}>
+          <TrongRong tieuDe={coLoc ? "Không có chiến dịch nào khớp" : "Chưa có đợt gửi email nào"}>
             {!coLoc && "Soạn một mẫu email trước, rồi lập chiến dịch từ mẫu đó."}
           </TrongRong>
         ) : (

@@ -229,11 +229,14 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
     ...(email ? [{ emailNormalized: email }] : []),
     ...(cot === "lead" && maSoThue ? [{ taxCodeNormalized: maSoThue }] : []),
   ];
-  const [leadTuChoi, lienHeTuChoi] = await Promise.all([
+  const [leadTuChoi, lienHeTuChoi, huyQuaEmail] = await Promise.all([
     tx.lead.findFirst({ where: { OR: hoacNguoi("lead"), marketingOptOutAt: { not: null } }, select: { marketingOptOutAt: true }, orderBy: { marketingOptOutAt: "desc" } }),
     tx.contact.findFirst({ where: { OR: hoacNguoi("contact"), marketingOptOutAt: { not: null } }, select: { marketingOptOutAt: true }, orderBy: { marketingOptOutAt: "desc" } }),
+    // Gói Email (EM): người đã bấm "hủy nhận tin" trong thư nằm trong danh sách chặn theo email —
+    // kể cả khi lead / liên hệ mang email đó đã đổi email hay chưa từng có trong CRM.
+    email ? tx.emailSuppression.findFirst({ where: { email, reason: "huy-nhan-tin", status: "hoat-dong" }, select: { createdAt: true } }) : null,
   ]);
-  const tuChoiLuc = leadTuChoi?.marketingOptOutAt ?? lienHeTuChoi?.marketingOptOutAt ?? null;
+  const tuChoiLuc = leadTuChoi?.marketingOptOutAt ?? lienHeTuChoi?.marketingOptOutAt ?? huyQuaEmail?.createdAt ?? null;
   const tichDongYNhungDaTuChoi = d.dongYNhanTin && tuChoiLuc !== null;
   const GHI_CHU_TU_CHOI = "Khách gửi form tích đồng ý nhận tin nhưng đã từng từ chối nhận tin – cần xác nhận lại với khách trước khi gửi tin marketing.";
   const ghiChuTuChoi = (leadId: string, ownerId: string) =>

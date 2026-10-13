@@ -3,14 +3,9 @@
 import { useGoiApi } from "@/components/ui/goi-api";
 import { useState } from "react";
 import { NHAN_GIAI_DOAN } from "@/modules/crm/hang-so";
+import { nguonVaThamSo, type PhanKhucChon, type ThamSoLoc } from "./tham-so-nguoi-nhan";
 
-export interface ThamSoLoc {
-  doiTuong: "lead" | "lien-he";
-  giaiDoan: string[];
-  nguon: string[];
-  phanKhuc: string[];
-  nganh: string[];
-}
+export type { PhanKhucChon, ThamSoLoc };
 
 type LuaChon = { ma: string; ten: string }[];
 
@@ -23,8 +18,9 @@ interface XemTruoc {
 }
 
 /**
- * Chọn người nhận bằng nguồn tối thiểu "loc-don-gian" (EM-12). Gói Marketing sẽ cắm thêm nguồn
- * "phân khúc"; khi đó màn hình này thêm một lựa chọn nguồn, phần còn lại giữ nguyên.
+ * Chọn người nhận (EM-12): nguồn "loc-don-gian" (lead / liên hệ theo điều kiện) hoặc nguồn
+ * "phan-khuc" của gói Marketing — chỉ người đã đồng ý nhận tin (MK-14). Dùng phân khúc cần
+ * `marketing.update` (máy chủ kiểm lại; ở đây chỉ để không mời bấm nút chắc chắn bị từ chối).
  */
 export default function ChonNguoiNhan({
   giaTri,
@@ -32,6 +28,8 @@ export default function ChonNguoiNhan({
   luaChon,
   xemLead,
   xemLienHe,
+  dsPhanKhuc = [],
+  xemPhanKhuc = false,
   chiDoc = false,
 }: {
   giaTri: ThamSoLoc;
@@ -39,6 +37,8 @@ export default function ChonNguoiNhan({
   luaChon: { nguon: LuaChon; phanKhuc: LuaChon; nganh: LuaChon };
   xemLead: boolean;
   xemLienHe: boolean;
+  dsPhanKhuc?: PhanKhucChon[];
+  xemPhanKhuc?: boolean;
   chiDoc?: boolean;
 }) {
   const { goi, dangGui, loi } = useGoiApi();
@@ -50,7 +50,7 @@ export default function ChonNguoiNhan({
   const bat = (ds: string[], ma: string, co: boolean) => (co ? [...ds, ma] : ds.filter((x) => x !== ma));
 
   async function dem() {
-    const r = await goi<XemTruoc>("/api/v1/email/nguoi-nhan/xem-truoc", "POST", { nguon: "loc-don-gian", thamSo: giaTri });
+    const r = await goi<XemTruoc>("/api/v1/email/nguoi-nhan/xem-truoc", "POST", nguonVaThamSo(giaTri));
     if (r) datKq(r);
   }
 
@@ -83,8 +83,33 @@ export default function ChonNguoiNhan({
             <option value="lien-he" disabled={!xemLienHe}>
               Liên hệ của khách hàng{!xemLienHe ? " (cần quyền xem khách hàng)" : ""}
             </option>
+            <option value="phan-khuc" disabled={!xemPhanKhuc}>
+              Phân khúc marketing{!xemPhanKhuc ? " (cần quyền sửa Marketing)" : ""}
+            </option>
           </select>
         </div>
+        {giaTri.doiTuong === "phan-khuc" && (
+          <div className="truong">
+            <label htmlFor="nn-phan-khuc">Phân khúc</label>
+            <select
+              id="nn-phan-khuc"
+              disabled={chiDoc}
+              value={giaTri.phanKhucId ?? ""}
+              onChange={(e) => {
+                const p = dsPhanKhuc.find((x) => x.id === e.target.value);
+                doi({ phanKhucId: e.target.value, tenPhanKhuc: p?.ten ?? "" });
+              }}
+            >
+              <option value="">— Chọn phân khúc —</option>
+              {dsPhanKhuc.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.ten} ({p.doiTuong === "lead" ? "lead" : "liên hệ khách"})
+                </option>
+              ))}
+            </select>
+            <span className="goi-y">Chỉ gửi người đã đồng ý nhận tin và chưa từ chối. Sửa điều kiện ở Marketing → Phân khúc.</span>
+          </div>
+        )}
         {giaTri.doiTuong === "lead" &&
           nhomChon(
             "Giai đoạn lead",
@@ -92,7 +117,7 @@ export default function ChonNguoiNhan({
             giaTri.giaiDoan,
             "giaiDoan",
           )}
-        {nhomChon("Nguồn", luaChon.nguon, giaTri.nguon, "nguon")}
+        {giaTri.doiTuong !== "phan-khuc" && nhomChon("Nguồn", luaChon.nguon, giaTri.nguon, "nguon")}
         {giaTri.doiTuong === "lien-he" && nhomChon("Phân khúc khách", luaChon.phanKhuc, giaTri.phanKhuc, "phanKhuc")}
         {giaTri.doiTuong === "lien-he" && nhomChon("Ngành nghề khách", luaChon.nganh, giaTri.nganh, "nganh")}
       </div>

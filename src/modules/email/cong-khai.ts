@@ -49,8 +49,11 @@ export async function huyNhanTin(ma: string, bc: BoiCanhYeuCau): Promise<boolean
     if (r.unsubscribedAt) return true;
     const luc = new Date();
     await tx.emailRecipient.update({ where: { id: r.id }, data: { unsubscribedAt: luc } });
-    const lead = await tx.lead.updateMany({ where: { emailNormalized: r.email, marketingOptOutAt: null }, data: { marketingOptOutAt: luc } });
-    const lh = await tx.contact.updateMany({ where: { emailNormalized: r.email, marketingOptOutAt: null }, data: { marketingOptOutAt: luc } });
+    // Gói Marketing (MK-13): từ chối luôn thắng đồng ý, CHECK `*_dong_y_nhan_tin_check` cấm hai cờ cùng
+    // bật → tắt `marketing_opt_in` cùng lúc và ghi nguồn, y như ghi nhận từ chối ở màn hình lead.
+    const tuChoi = { marketingOptOutAt: luc, marketingOptIn: false, marketingConsentSource: "huy-nhan-tin-email" };
+    const lead = await tx.lead.updateMany({ where: { emailNormalized: r.email, marketingOptOutAt: null }, data: tuChoi });
+    const lh = await tx.contact.updateMany({ where: { emailNormalized: r.email, marketingOptOutAt: null }, data: tuChoi });
     await tx.emailSuppression.upsert({
       where: { tenantId_email: { tenantId: m.tenantId, email: r.email } },
       update: { reason: "huy-nhan-tin", status: "hoat-dong", recipientId: r.id },

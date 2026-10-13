@@ -544,6 +544,8 @@ export function quyenGiaoDienEmail(hoSo: NguCanh["hoSo"]) {
     duyet: coQuyen(hoSo, "marketing.approve"),
     xemLead: coQuyen(hoSo, "crm.view"),
     xemLienHe: coQuyen(hoSo, "customer.view"),
+    /** Nguồn "phân khúc" của gói Marketing cần email thật → `marketing.update` (xem nguon-nguoi-nhan.ts). */
+    phanKhuc: coQuyen(hoSo, "marketing.update"),
   };
 }
 
