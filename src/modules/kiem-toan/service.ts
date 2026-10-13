@@ -21,6 +21,14 @@ export const NHAN_HANH_DONG: Record<string, string> = {
   "mo-khoa-dang-nhap": "Mở khóa đăng nhập",
   "doi-giai-doan": "Đổi giai đoạn",
   "chuyen-doi": "Chuyển đổi lead",
+  "doi-hanh-trinh": "Đổi trạng thái hành trình",
+  "tu-chuyen-hanh-trinh": "Tự chuyển bước hành trình",
+  "gan-nhom": "Gắn vào nhóm khách",
+  "bo-nhom": "Gỡ khỏi nhóm khách",
+  "tinh-lai-diem": "Tính lại điểm khách",
+  "gop-khach": "Gộp khách hàng",
+  "ban-giao": "Bàn giao khi nghỉ việc",
+  "xuat-csv": "Xuất CSV",
 };
 
 export const NHAN_DOI_TUONG: Record<string, string> = {
@@ -33,6 +41,9 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   "he-thong": "Hệ thống",
   customer: "Khách hàng",
   contact: "Liên hệ",
+  journey_stage: "Trạng thái hành trình",
+  customer_group: "Nhóm khách hàng",
+  saved_view: "Bộ lọc đã lưu",
   lead: "Lead",
   interaction: "Tương tác",
   opportunity: "Cơ hội",

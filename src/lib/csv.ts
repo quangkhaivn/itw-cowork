@@ -120,10 +120,19 @@ export function docBangCsv(noiDung: string, cot: CotCsv[]): KetQuaDocBang {
   return { thieuCot, cotLa, dong };
 }
 
-/** Ghi CSV cho Excel tiếng Việt: BOM + CRLF + bọc nháy khi cần. */
+/**
+ * Chống chèn công thức (CSV injection — BUSINESS_RULES CSV-01): ô CHUỖI bắt đầu bằng `= + - @`,
+ * tab hay xuống dòng thì Excel / LibreOffice hiểu là công thức (`=HYPERLINK(...)`, `=cmd|...`).
+ * Thêm dấu `'` ở đầu để bảng tính hiển thị nguyên văn. Ô kiểu SỐ (giá, số lượng âm) giữ nguyên.
+ */
+export function voHieuCongThuc(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+}
+
+/** Ghi CSV cho Excel tiếng Việt: BOM + CRLF + bọc nháy khi cần + chống chèn công thức. */
 export function taoCsv(tieuDe: string[], dong: (string | number | null | undefined)[][]): string {
   const o = (x: string | number | null | undefined) => {
-    const s = x === null || x === undefined ? "" : String(x);
+    const s = x === null || x === undefined ? "" : typeof x === "number" ? String(x) : voHieuCongThuc(String(x));
     return /[",;\n\r\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return "﻿" + [tieuDe, ...dong].map((h) => h.map(o).join(",")).join("\r\n") + "\r\n";

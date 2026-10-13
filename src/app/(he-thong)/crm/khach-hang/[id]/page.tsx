@@ -22,11 +22,16 @@ import {
 import { khach360, LOAI_DU_LIEU_KHACH, quyenGiaoDienKhach } from "@/modules/khach-hang/service";
 import FormKhachHang from "../FormKhachHang";
 import QuanLyLienHe from "./QuanLyLienHe";
+import { DoiHanhTrinh, NhomCuaKhach } from "./HanhTrinhKhach";
+import { docDanhMucTrangThai, lichSuHanhTrinh } from "@/modules/hanh-trinh/service";
+import { danhSachNhomKhach, nhomCuaKhach } from "@/modules/nhom-khach/service";
+import { diemCuaKhach } from "@/modules/cham-diem/service";
+import { NHAN_HANG } from "@/modules/cham-diem/tinh-toan";
 
 export const dynamic = "force-dynamic";
 
 const LA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const THE = ["tong-quan", "lien-he", "co-hoi", "tuong-tac", "cong-viec", "dong-thoi-gian", "sua"] as const;
+const THE = ["tong-quan", "hanh-trinh", "lien-he", "co-hoi", "tuong-tac", "cong-viec", "dong-thoi-gian", "sua"] as const;
 type The = (typeof THE)[number];
 
 export default async function TrangKhach360({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: ThamSoTrang }) {
@@ -48,19 +53,30 @@ export default async function TrangKhach360({ params, searchParams }: { params: 
         quyen.sua && tabYeuCau === "sua"
           ? { luaChon: await luaChonDuLieuGoc(nc, LOAI_DU_LIEU_KHACH), nguoi: await danhSachNguoiPhuTrach(nc, "customer.update") }
           : null;
-      return { ...d, quyenUi: quyen, tenDuLieu, nguoiViec, choSua };
+      // 0.16.0: hành trình, nhóm, điểm.
+      const [danhMucHT, lichSuHT, nhomKhach, tatCaNhom, diem] = await Promise.all([
+        docDanhMucTrangThai(tx),
+        tabYeuCau === "hanh-trinh" ? lichSuHanhTrinh(nc, id) : Promise.resolve([]),
+        nhomCuaKhach(nc, id),
+        danhSachNhomKhach(nc),
+        diemCuaKhach(nc, id),
+      ]);
+      return { ...d, quyenUi: quyen, tenDuLieu, nguoiViec, choSua, danhMucHT, lichSuHT, nhomKhach, tatCaNhom: tatCaNhom.nhom, diem };
     } catch (loi) {
       if (loi instanceof LoiKhongTimThay) return null;
       throw loi;
     }
   });
   if (!duLieu) notFound();
-  const { khach, lienHe, coHoi, tuongTac, viec, dongThoiGian, thongKe, quyen, quyenUi, tenDuLieu, nguoiViec, choSua } = duLieu;
+  const { khach, lienHe, coHoi, tuongTac, viec, dongThoiGian, thongKe, quyen, quyenUi, tenDuLieu, nguoiViec, choSua, danhMucHT, lichSuHT, nhomKhach, tatCaNhom, diem } = duLieu;
+  const daGop = khach.trangThai === "da-gop";
+  const suaDuoc = quyenUi.sua && !daGop;
   const tab: The = THE.includes(tabYeuCau) && (tabYeuCau !== "sua" || quyenUi.sua) ? tabYeuCau : "tong-quan";
   const ten = (loai: string, ma: string | null) => (ma ? (tenDuLieu[loai]?.[ma] ?? ma) : "—");
 
   const cacThe: { ma: The; nhan: string; so?: number; hien: boolean }[] = [
     { ma: "tong-quan", nhan: "Tổng quan", hien: true },
+    { ma: "hanh-trinh", nhan: "Hành trình & điểm", hien: true },
     { ma: "lien-he", nhan: "Liên hệ", so: lienHe.filter((l) => l.trangThai === "hoat-dong").length, hien: true },
     { ma: "co-hoi", nhan: "Cơ hội", so: coHoi.length, hien: quyen.xemCoHoi },
     { ma: "tuong-tac", nhan: "Tương tác", so: tuongTac.length, hien: quyen.xemTuongTac },
@@ -77,7 +93,18 @@ export default async function TrangKhach360({ params, searchParams }: { params: 
           <>
             {khach.ma}
             {khach.maSoThue && ` · MST ${khach.maSoThue}`} · Phụ trách: {khach.nguoiPhuTrach.hoTen} ·{" "}
-            <span className="huy-hieu">{NHAN_TRANG_THAI_KHACH[khach.trangThai] ?? khach.trangThai}</span>
+            <span className="huy-hieu">{NHAN_TRANG_THAI_KHACH[khach.trangThai] ?? khach.trangThai}</span>{" "}
+            {khach.hanhTrinh && (
+              <span className="nhan-mau">
+                <span className="cham-mau" style={{ "--mau": khach.hanhTrinh.mau } as React.CSSProperties} />
+                {khach.hanhTrinh.ten}
+              </span>
+            )}{" "}
+            {khach.diem !== null && (
+              <span className={`diem-khach ${diem.hang ?? ""}`} title={diem.hang ? `Khách ${NHAN_HANG[diem.hang]}` : "Chưa đặt ngưỡng Nóng/Ấm"}>
+                {khach.diem} điểm{diem.hang ? ` · ${NHAN_HANG[diem.hang]}` : ""}
+              </span>
+            )}
           </>
         }
         hanhDong={
@@ -88,7 +115,12 @@ export default async function TrangKhach360({ params, searchParams }: { params: 
               </Link>
             )}
             {quyenUi.taoViec && <NutTaoViec ganKem={{ khachHangId: khach.id }} nguoiPhuTrach={nguoiViec} toiId={nd.hoSo.userId} />}
-            {quyenUi.sua && tab !== "sua" && (
+            {quyenUi.quanLy && !daGop && (
+              <Link className="nut" href={`/crm/khach-hang/gop?giuLai=${khach.id}`}>
+                Gộp khách trùng vào đây
+              </Link>
+            )}
+            {suaDuoc && tab !== "sua" && (
               <Link className="nut" href={`/crm/khach-hang/${khach.id}?tab=sua`}>
                 Sửa thông tin
               </Link>
@@ -96,6 +128,13 @@ export default async function TrangKhach360({ params, searchParams }: { params: 
           </>
         }
       />
+
+      {daGop && khach.gopVao && (
+        <div className="hop-thong-bao canh-bao" role="status">
+          Khách này đã được gộp vào <Link href={`/crm/khach-hang/${khach.gopVao.id}`}>{khach.gopVao.ma} — {khach.gopVao.ten}</Link>
+          {khach.gopVao.luc ? ` ngày ${dinhDangNgay(khach.gopVao.luc)}` : ""}. Mọi liên hệ, cơ hội, chứng từ đã chuyển sang khách giữ lại; trang này chỉ còn để tra cứu.
+        </div>
+      )}
 
       {moTao && (
         <div className="hop-thong-bao tot" role="status">
@@ -219,7 +258,113 @@ export default async function TrangKhach360({ params, searchParams }: { params: 
         </>
       )}
 
-      {tab === "lien-he" && <QuanLyLienHe khachHangId={khach.id} lienHe={lienHe} duocSua={quyenUi.sua} />}
+      {tab === "hanh-trinh" && (
+        <div className="luoi-the">
+          <section className="the">
+            <div className="dau">
+              <h2>Hành trình khách hàng</h2>
+              <Link className="nho" href="/crm/hanh-trinh">
+                Xem phễu
+              </Link>
+            </div>
+            <div className="than">
+              <p style={{ marginTop: 0 }}>
+                Hiện tại:{" "}
+                {khach.hanhTrinh ? (
+                  <span className="nhan-mau">
+                    <span className="cham-mau" style={{ "--mau": khach.hanhTrinh.mau } as React.CSSProperties} />
+                    {khach.hanhTrinh.ten}
+                  </span>
+                ) : (
+                  <span className="mo">chưa có trạng thái</span>
+                )}
+                {khach.hanhTrinh?.tuLuc && <span className="phu nho"> · từ {dinhDangNgayGio(khach.hanhTrinh.tuLuc)}</span>}
+              </p>
+              {suaDuoc && (
+                <DoiHanhTrinh
+                  khachHangId={khach.id}
+                  hienTaiId={khach.hanhTrinh?.id ?? null}
+                  trangThai={danhMucHT.filter((t) => t.trangThai === "hoat-dong").map((t) => ({ id: t.id, ten: t.ten }))}
+                />
+              )}
+              <h3 style={{ marginTop: 18 }}>Lịch sử</h3>
+              {lichSuHT.length === 0 ? (
+                <p className="phu nho">Chưa có lần đổi nào.</p>
+              ) : (
+                <ul className="ds-tuong-tac">
+                  {lichSuHT.map((l) => (
+                    <li key={l.id}>
+                      <div className="dau-dong">
+                        <span className={`huy-hieu ${l.tuDong ? "chinh" : ""}`}>{l.tuDong ? "Tự động" : "Đổi tay"}</span>
+                        <strong>
+                          {l.tu?.ten ?? "(chưa có)"} → {l.sang?.ten ?? "(bỏ trống)"}
+                        </strong>
+                        <span className="phu">
+                          {dinhDangNgayGio(l.luc)} · {l.nguoi}
+                          {l.moc && ` · mốc: ${l.moc}`}
+                        </span>
+                      </div>
+                      {l.ghiChu && <p className="phu">{l.ghiChu}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+          <section className="the">
+            <div className="dau">
+              <h2>Điểm khách tiềm năng</h2>
+              <Link className="nho" href="/crm/cham-diem">
+                Cách chấm
+              </Link>
+            </div>
+            <div className="than">
+              {diem.diemHienTai === null ? (
+                <p className="phu">{diem.phan[0]?.nhan ?? "Không chấm điểm."}</p>
+              ) : (
+                <>
+                  <p style={{ marginTop: 0 }}>
+                    <span className={`diem-khach ${diem.hang ?? ""}`} style={{ fontSize: 18 }}>
+                      {diem.diemHienTai}
+                    </span>{" "}
+                    {diem.hang ? <strong>Khách {NHAN_HANG[diem.hang]}</strong> : <span className="phu nho">Chưa đặt ngưỡng Nóng/Ấm — chưa xếp hạng.</span>}
+                  </p>
+                  <ul className="ds-diem">
+                    {diem.phan.map((p, i) => (
+                      <li key={i}>
+                        <span>{p.nhan}</span>
+                        <span className={`so ${p.diem < 0 ? "am-diem" : ""}`}>
+                          {p.diem > 0 ? "+" : ""}
+                          {p.diem}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {diem.diemLuu !== diem.diemHienTai && (
+                    <p className="phu nho">Điểm lưu trên danh sách ({diem.diemLuu ?? "chưa tính"}) sẽ cập nhật ở lần tính lại kế tiếp.</p>
+                  )}
+                  {diem.tinhLuc && <p className="phu nho">Tính lần cuối: {dinhDangNgayGio(diem.tinhLuc)}</p>}
+                </>
+              )}
+            </div>
+          </section>
+          <section className="the">
+            <div className="dau">
+              <h2>Nhóm khách hàng</h2>
+            </div>
+            <div className="than">
+              <NhomCuaKhach
+                khachHangId={khach.id}
+                dangCo={nhomKhach.map((n) => n.id)}
+                tatCa={(suaDuoc ? tatCaNhom.filter((g) => g.trangThai === "hoat-dong" || nhomKhach.some((n) => n.id === g.id)) : nhomKhach).map((g) => ({ id: g.id, ten: g.ten, mau: g.mau }))}
+                duocSua={suaDuoc}
+              />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === "lien-he" && <QuanLyLienHe khachHangId={khach.id} lienHe={lienHe} duocSua={suaDuoc} />}
 
       {tab === "co-hoi" && (
         <section className="the">

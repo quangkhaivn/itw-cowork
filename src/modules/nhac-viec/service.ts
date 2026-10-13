@@ -19,7 +19,9 @@ import {
   sapXepViec,
   soNgayGiua,
   tomTatViec,
+  trungNgaySinh,
 } from "./tinh-toan";
+import { khachDungLau } from "@/modules/hanh-trinh/service";
 
 /**
  * Bản quét nhắc việc — mục 21–22 prompt 20/09. Luật: BUSINESS_RULES.md mục 13.
@@ -344,7 +346,9 @@ async function quetKhachLauChuaMuaLai(tx: ClientTenant, homNay: string, soThang:
   const moc = ngayVeDate(congThang(homNay, -soThang));
   const ds = await tx.customer.findMany({
     where: {
-      status: "hoat-dong",
+      // Sửa 0.16.0: trạng thái khách không có giá trị "hoat-dong" (KH-06) nên điều kiện cũ không
+      // bao giờ khớp — quy tắc chưa từng sinh việc nào. Khách ngừng giao dịch / đã gộp thì không nhắc.
+      status: { notIn: ["ngung-giao-dich", "da-gop"] },
       salesOrders: { some: { status: { not: "CANCELLED" } }, none: { status: { not: "CANCELLED" }, orderDate: { gte: moc } } },
     },
     select: {
@@ -372,6 +376,59 @@ async function quetKhachLauChuaMuaLai(tx: ClientTenant, homNay: string, soThang:
   });
 }
 
+/**
+ * KHN-14: khách đứng ở trạng thái hành trình quá `stale_days` của chính trạng thái đó.
+ * Mỗi lần VÀO một trạng thái chỉ nhắc một lần: đã có việc nhắc từ ngày vào trạng thái trở đi
+ * thì thôi — không nhắc lặp mỗi sáng cho cùng một lần đứng lâu.
+ */
+async function quetKhachDungLau(tx: ClientTenant, homNay: string): Promise<ViecMoi[]> {
+  const ra: ViecMoi[] = [];
+  for (const k of await khachDungLau(tx, homNay)) {
+    const daNhac = await tx.dailyActionItem.findFirst({
+      where: { ruleCode: "khach-dung-lau", objectType: "customer", objectId: k.id, forDate: { gte: ngayVeDate(k.vao), lt: ngayVeDate(homNay) } },
+      select: { id: true },
+    });
+    if (daNhac) continue;
+    ra.push({
+      nguoiId: k.ownerId,
+      maQuyTac: "khach-dung-lau",
+      mucDo: "canh-bao",
+      tieuDe: `${k.name} đứng lâu ở "${k.tenTrangThai}"`,
+      lyDo: `Đã ${k.soNgay} ngày ở trạng thái này (từ ${ngayGon(k.vao)}), ngưỡng nhắc ${k.nguong} ngày.`,
+      duongDan: `/crm/khach-hang/${k.id}?tab=hanh-trinh`,
+      doiTuong: "customer",
+      doiTuongId: k.id,
+    });
+  }
+  return ra;
+}
+
+/** KHN-15: sinh nhật người liên hệ — đúng ngày, hoặc trước N ngày nếu đã đặt trong Cấu hình. */
+async function quetSinhNhat(tx: ClientTenant, homNay: string): Promise<ViecMoi[]> {
+  const truoc = (await docCauHinh(tx, "theo_doi.sinh_nhat_nhac_truoc_ngay")) ?? 0;
+  const dich = congNgay(homNay, truoc);
+  const ds = await tx.contact.findMany({
+    where: { status: "hoat-dong", birthDate: { not: null }, customer: { status: { notIn: ["da-gop", "ngung-giao-dich"] } } },
+    select: { id: true, fullName: true, birthDate: true, customer: { select: { id: true, name: true, ownerId: true } } },
+  });
+  const ra: ViecMoi[] = [];
+  for (const c of ds) {
+    if (!trungNgaySinh(dateVeNgay(c.birthDate!), dich)) continue;
+    const [, thang, ngay] = dateVeNgay(c.birthDate!).split("-");
+    ra.push({
+      nguoiId: c.customer.ownerId,
+      maQuyTac: "sinh-nhat-lien-he",
+      mucDo: "thong-tin",
+      tieuDe: `Sinh nhật ${c.fullName} — ${c.customer.name}`,
+      lyDo: truoc > 0 ? `Sinh nhật ngày ${ngay}/${thang}, còn ${truoc} ngày.` : `Hôm nay (${ngay}/${thang}) là sinh nhật.`,
+      duongDan: `/crm/khach-hang/${c.customer.id}?tab=lien-he`,
+      doiTuong: "contact",
+      doiTuongId: c.id,
+    });
+  }
+  return ra;
+}
+
 async function chayMotQuyTac(
   tx: ClientTenant,
   tenantId: string,
@@ -396,6 +453,10 @@ async function chayMotQuyTac(
       return quetBaoTriDenKy(tx, tenantId, homNay);
     case "khach-lau-chua-mua-lai":
       return quetKhachLauChuaMuaLai(tx, homNay, nguong!);
+    case "khach-dung-lau":
+      return quetKhachDungLau(tx, homNay);
+    case "sinh-nhat-lien-he":
+      return quetSinhNhat(tx, homNay);
     default:
       return [];
   }

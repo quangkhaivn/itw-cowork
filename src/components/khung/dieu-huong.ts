@@ -49,7 +49,10 @@ export type BieuTuong =
   | "phieu-chi"
   | "khach-tra"
   | "tra-ncc"
-  | "chuyen-kho";
+  | "chuyen-kho"
+  | "hanh-trinh"
+  | "nhom-khach"
+  | "cham-diem";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -95,6 +98,9 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     muc: [
       { nhan: "Khách hàng", href: "/crm/khach-hang", quyen: "customer.view", bieuTuong: "khach-hang", tuKhoa: "customer 360 lien he contact ma so thue" },
       { nhan: "Lead", href: "/crm/lead", quyen: "crm.view", bieuTuong: "lead", tuKhoa: "khach tiem nang lead chuyen doi" },
+      { nhan: "Hành trình khách hàng", href: "/crm/hanh-trinh", quyen: "customer.view", bieuTuong: "hanh-trinh", tuKhoa: "journey trang thai buoc pheu ty le chuyen doi funnel" },
+      { nhan: "Nhóm khách hàng", href: "/crm/nhom-khach", quyen: "customer.view", bieuTuong: "nhom-khach", tuKhoa: "group nhom khach phan loai tag" },
+      { nhan: "Chấm điểm khách", href: "/crm/cham-diem", quyen: "customer.view", bieuTuong: "cham-diem", tuKhoa: "lead scoring diem nong am lanh hot" },
     ],
   },
   {

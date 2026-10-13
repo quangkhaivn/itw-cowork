@@ -2,6 +2,46 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.16.0 — (chưa phát hành) — Khách hàng nâng cao
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (KHN). Kiến trúc: `ARCHITECTURE.md` mục 7o.
+**Chưa triển khai lên máy thật.**
+
+### Thêm
+- **Hành trình khách hàng**: danh mục trạng thái riêng của doanh nghiệp (tên, màu, thứ tự, loại đang theo / thành công / thất bại, số ngày "đứng lâu" tùy chọn) — tách hẳn khỏi trạng thái giao dịch hiện có. Mỗi lần đổi ghi một dòng lịch sử chỉ-ghi-thêm: từ, sang, ai, lúc nào, tự động hay đổi tay.
+- **Tự chuyển bước theo nghiệp vụ**: tạo khách, mở cơ hội, gửi báo giá, thắng cơ hội, xác nhận đơn — chỉ tiến, không lùi; khách đã "thất bại" chỉ được báo giá / thắng cơ hội / đơn xác nhận kéo lại.
+- Trang **Hành trình khách hàng**: kéo thả xếp trạng thái (điện thoại dùng nút ↑↓), sửa màu / mốc / số ngày đứng lâu, và **phễu chuyển đổi** theo kỳ tính từ lịch sử (bước xa nhất từng chạm, tỷ lệ so với tổng và so với bước trước, số ngày trung bình).
+- **Danh sách khách hàng**: thẻ trạng thái kèm số khách, đổi hành trình ngay trên dòng, 7 lọc nhanh (của tôi, chưa có trạng thái, đứng lâu, sinh nhật trong tháng, có cơ hội mở, chưa tương tác, khách nóng), sắp xếp (gồm theo điểm), **bộ lọc đã lưu** cá nhân / dùng chung / mặc định, **tùy chọn cột** lưu theo người dùng.
+- **Nhóm khách hàng** nhiều–nhiều, lọc theo nhóm; **thao tác hàng loạt** tối đa 500 khách: gắn / gỡ nhóm, đổi hành trình, đổi người phụ trách (vẫn theo KH-05).
+- **Chấm điểm khách** 0–100 từ tín hiệu có thật, diễn giải từng phần trong Customer 360, trọng số ở Cấu hình (mặc định ghi rõ là mặc định), ngưỡng Nóng/Ấm do Giám đốc đặt — chưa đặt thì không xếp hạng. Điểm theo nguồn khách, nút "Tính lại toàn bộ".
+- **Nhắc việc mới**: khách đứng lâu một trạng thái (ngưỡng riêng từng trạng thái, mỗi lần vào chỉ nhắc một lần), sinh nhật người liên hệ (thêm ngày sinh cho liên hệ).
+- **Gộp khách trùng**: xem trước số bản ghi từng bảng, chuyển toàn bộ sang khách giữ lại trong một giao dịch, khách bị gộp giữ lại ở trạng thái "Đã gộp".
+- **Xuất / nhập CSV khách hàng** gồm cả hành trình, nhóm, người phụ trách (email), ngày sinh liên hệ; xem trước rồi mới ghi, dò trùng theo KH-02/KH-03.
+- **Bàn giao khi nhân viên nghỉ việc** ở trang người dùng: xem trước số việc từng loại, chuyển việc đang dở rồi khóa tài khoản.
+- Trợ lý ITA thêm công cụ đọc `diem_hanh_trinh_khach`.
+- **Script nhập từ ITW CRM** `scripts/nhap-tu-itw-crm.ts <itwcrm.db> [--ghi]`: mặc định chạy thử và in báo cáo; nhập trạng thái hành trình, nhóm, khách, liên hệ (kèm ngày sinh), tương tác, trạng thái hiện tại; dò trùng MST / điện thoại; gắn nhóm nhãn "ITW CRM"; chạy lại không nhân đôi (QĐ-55). Đã thử với CSDL mẫu của ITW CRM 1.8 (31 khách, 30 liên hệ, 30 tương tác).
+- 6 bảng CSDL + 8 cột, 19 tệp route API, 5 màn hình mới (cùng danh sách khách, Customer 360 và trang người dùng được mở rộng), 3 mục menu.
+
+### Sửa
+- Quy tắc nhắc "Khách lâu chưa mua lại" lọc khách theo `status = 'hoat-dong'` — giá trị không tồn tại trên khách hàng, nên quy tắc chưa từng sinh việc nào. Nay lọc "không ngừng giao dịch, không đã gộp".
+- Thẻ chỉ số trong lưới bị lệch hàng (luật chung `.the + .the` đẩy thẻ thứ hai trở đi xuống 16px).
+
+### Sửa sau kiểm thử QA độc lập (`thu:qa-khach`, 135 kiểm chứng)
+- **Xuất CSV chống chèn công thức** (CSV-01): ô bắt đầu bằng `= + - @`, tab, xuống dòng được thêm `'`. Sửa ở `taoCsv()` dùng chung nên xuất sản phẩm cũng an toàn.
+- **Nhập CSV hỏng từ ~150 dòng** vì hết hạn giao dịch 5 giây: route theo lô (nhập CSV khách + sản phẩm, hàng loạt, tính lại điểm) chạy với hạn 120 giây; cấu hình chấm điểm đọc một lần mỗi giao dịch (QĐ-56). 2.000 dòng xem trước ~45 giây.
+- **Gộp đồng thời tạo chuỗi gộp**: gộp nay khóa hai dòng khách theo thứ tự id rồi mới kiểm `da-gop`.
+- **Thanh tìm kiếm toàn cục trả khách đã gộp** — nay ẩn.
+- Gộp khách đóng việc hôm nay đang mở và chuyển thông báo chưa đọc của khách bị gộp; lọc nhanh "Đứng lâu" dùng chung hàm với máy quét; bàn giao báo rõ khi người nhận thiếu quyền xem một loại việc; script nhập ITW đi theo khách giữ lại khi trùng một khách đã gộp.
+
+### Quyết định đáng ghi
+- **Trưởng phòng Kinh doanh được cấp `customer.approve`** (QĐ-46) để quản lý hành trình, nhóm, bộ lọc chung, gộp khách — không bắt cả phòng chờ Giám đốc.
+- **Gộp khách đọc danh sách bảng từ catalog PostgreSQL** (QĐ-51): bảng sau này có khóa ngoại tới khách tự được chuyển, không bị sót.
+- **Nhập CSV khách: mỗi dòng một SAVEPOINT, xem trước là chạy thật rồi cuộn ngược** (QĐ-54).
+- Chấm điểm khách chứ chưa chấm lead (QĐ-49).
+
+### Kiểm thử
+- Thêm `thu:khach-nang-cao` (bài tích hợp) và `thu/don-vi/khach-nang-cao.test.ts` (29 bài đơn vị). Bài gộp khách đếm từng bảng có khóa ngoại tới khách (liệt kê bằng `information_schema`) trước và sau khi gộp.
+
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 20 (DK).

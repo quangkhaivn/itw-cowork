@@ -170,6 +170,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // được cấp bù bằng migration phase7_tai_chinh (QĐ-10).
       maQuyen("finance", "view"),
       maQuyen("finance", "export"),
+      // 0.16.0 (Khách hàng nâng cao): sắp xếp hành trình, gộp khách trùng, bộ lọc dùng chung,
+      // tính lại điểm. Doanh nghiệp đã có được cấp bù bằng migration khach_hang_nang_cao (QĐ-37).
+      maQuyen("customer", "approve"),
       ...tron(["dashboard", "kpi", "report", "alert", "project"], XEM_XUAT),
       maQuyen("ai", "view"),
     ],

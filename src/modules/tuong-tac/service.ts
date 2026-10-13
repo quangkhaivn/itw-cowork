@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { khiCoSuKienKhach } from "@/modules/khach-hang/su-kien-khach";
 import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
@@ -93,6 +94,8 @@ export async function ghiTuongTac(nc: NguCanh, d: DuLieuGhiTuongTac) {
     await nc.kiemToan({ action: "doi-giai-doan", objectType: "lead", objectId: d.leadId, before: { giaiDoan: "NEW_LEAD" }, after: { giaiDoan: "CONTACTED" } });
     await nc.suKien({ eventType: SU_KIEN.LEAD_CONTACTED, objectType: "lead", objectId: d.leadId, payload: { tuongTacId: t.id } });
   }
+  // 0.16.0: tương tác mới làm đổi điểm khách (KHN-09).
+  await khiCoSuKienKhach(nc, khachId);
   return t;
 }
 

@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { khiCoSuKienKhach } from "@/modules/khach-hang/su-kien-khach";
 import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
@@ -354,6 +355,8 @@ export async function taoCoHoi(nc: NguCanh, d: DuLieuTaoCoHoi, tuy: { tuLeadId?:
     objectId: c.id,
     payload: { ma, khachHangId: d.khachHangId, giaTri: d.giaTri, ...(tuy.tuLeadId && { tuLeadId: tuy.tuLeadId }) },
   });
+  // 0.16.0: mốc "Có cơ hội đang mở" của hành trình khách + tính lại điểm (KHN-04, KHN-09).
+  await khiCoSuKienKhach(nc, d.khachHangId, "co-hoi-mo");
   return kq;
 }
 
@@ -458,5 +461,6 @@ export async function doiGiaiDoan(nc: NguCanh, id: string, d: DuLieuDoiGiaiDoan)
     objectId: id,
     payload: { tu, den, giaTri: sau.giaTri, ...(den === "LOST" && { lyDoThua: d.lyDoThua }) },
   });
+  await khiCoSuKienKhach(nc, sau.khachHang.id, den === "WON" ? "co-hoi-thang" : moLai ? "co-hoi-mo" : undefined);
   return sau;
 }

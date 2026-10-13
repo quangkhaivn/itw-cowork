@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { khiCoSuKienKhach } from "@/modules/khach-hang/su-kien-khach";
 import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
@@ -474,6 +475,8 @@ export async function xacNhanDon(nc: NguCanh, id: string, d: { khoId: string; gh
   await nc.kiemToan({ action: "sua", objectType: "sales_order", objectId: id, before: { trangThai: don.status }, after: { trangThai: "CONFIRMED", khoId: d.khoId } });
   await nc.suKien({ eventType: SU_KIEN.ORDER_CONFIRMED, objectType: "sales_order", objectId: id, payload: { so: don.number, khoId: d.khoId } });
   await nc.suKien({ eventType: SU_KIEN.STOCK_RESERVED, objectType: "inventory", objectId: id, payload: { so: don.number, khoId: d.khoId } });
+  // 0.16.0: mốc "Đơn hàng được xác nhận" của hành trình khách + tính lại điểm (KHN-04, KHN-09).
+  await khiCoSuKienKhach(nc, don.customer.id, "don-xac-nhan");
   return { id, trangThai: "CONFIRMED" };
 }
 

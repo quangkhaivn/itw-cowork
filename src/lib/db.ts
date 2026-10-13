@@ -63,16 +63,33 @@ export type ClientTenant = Parameters<Parameters<PrismaClient["$transaction"]>[0
 export async function voiTenant<T>(
   tenantId: string,
   congViec: (tx: ClientTenant) => Promise<T>,
+  tuyChon: TuyChonGiaoDich = {},
 ): Promise<T> {
   if (!LA_UUID.test(tenantId)) {
     throw new Error(`tenantId không hợp lệ: ${tenantId}`);
   }
-  return prisma.$transaction(async (tx) => {
-    // Tham số hóa qua set_config, không nối chuỗi vào câu lệnh.
-    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-    return congViec(tx as ClientTenant);
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      // Tham số hóa qua set_config, không nối chuỗi vào câu lệnh.
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+      return congViec(tx as ClientTenant);
+    },
+    // Không truyền gì = giữ mặc định của Prisma (5 giây) cho mọi thao tác thường.
+    tuyChon.timeoutMs ? { timeout: tuyChon.timeoutMs } : undefined,
+  );
 }
+
+export interface TuyChonGiaoDich {
+  /** Hạn của giao dịch (ms). Bỏ trống = mặc định Prisma 5 giây. Chỉ nới cho thao tác theo lô — QĐ-56. */
+  timeoutMs?: number;
+}
+
+/**
+ * Hạn giao dịch cho thao tác THEO LÔ có trần số dòng rõ ràng: nhập CSV (≤ 5.000 dòng), thao tác
+ * hàng loạt (≤ 500 khách), tính lại toàn bộ điểm. Cả lô vẫn là MỘT giao dịch — hỏng giữa chừng
+ * thì cuộn ngược hết; đổi lại giữ khóa lâu hơn, nên chỉ dùng ở các route đã kê (QĐ-56).
+ */
+export const HAN_GIAO_DICH_THEO_LO_MS = 120_000;
 
 /**
  * Tra cứu tenant theo mã. Đây là thao tác duy nhất được phép chạy ngoài ngữ cảnh

@@ -26,7 +26,16 @@ export type HanhDong =
   | "khoa-dang-nhap"
   | "mo-khoa-dang-nhap"
   | "doi-giai-doan"
-  | "chuyen-doi";
+  | "chuyen-doi"
+  // 0.16.0 — Khách hàng nâng cao
+  | "doi-hanh-trinh"
+  | "tu-chuyen-hanh-trinh"
+  | "gan-nhom"
+  | "bo-nhom"
+  | "tinh-lai-diem"
+  | "gop-khach"
+  | "ban-giao"
+  | "xuat-csv";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

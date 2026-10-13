@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRANG_THAI_KHACH } from "@/modules/crm/hang-so";
-import { chuoiTuyChon, uuidTuyChon } from "@/modules/crm/chung";
+import { chuoiTuyChon, ngayTuyChon, uuidTuyChon } from "@/modules/crm/chung";
+import { MA_LOC_NHANH, MA_SAP_XEP } from "./danh-muc-loc";
 
 /** Lược đồ dữ liệu vào của phân hệ Khách hàng. Dùng chung cho API, form và kiểm thử. */
 
@@ -18,6 +19,8 @@ export const LuocDoLienHe = z.object({
   dienThoai: chuoiTuyChon(30),
   email: emailTuyChon,
   zalo: chuoiTuyChon(50),
+  /** 0.16.0 — ngày sinh "yyyy-mm-dd", dùng cho nhắc sinh nhật (KHN-15). */
+  ngaySinh: ngayTuyChon,
   laChinh: z.boolean().optional(),
   ghiChu: chuoiTuyChon(2000),
 });
@@ -65,9 +68,16 @@ export const LuocDoLocKhachHang = z.object({
   q: z.string().trim().max(100).optional().default(""),
   nguoiPhuTrach: z.union([z.uuid(), z.literal("")]).optional().default(""),
   phanKhuc: z.string().trim().max(50).optional().default(""),
-  trangThai: z.enum(["", ...TRANG_THAI_KHACH]).optional().default(""),
+  /** `da-gop` chỉ để tra khách đã gộp; mặc định danh sách ẩn khách đã gộp (KHN-12). */
+  trangThai: z.enum(["", ...TRANG_THAI_KHACH, "da-gop"]).optional().default(""),
   trang: z.coerce.number().int().min(1).max(10_000).optional().default(1),
-  coTrang: z.coerce.number().int().min(10).max(100).optional().default(20),
+  coTrang: z.coerce.number().int().min(10).max(200).optional().default(20),
+  // --- 0.16.0: hành trình, nhóm, lọc nhanh, sắp xếp (giá trị phải nằm trong danh mục thật) ---
+  /** id trạng thái hành trình, hoặc "chua-co" = chưa có trạng thái. */
+  hanhTrinh: z.union([z.uuid(), z.literal("chua-co"), z.literal("")]).optional(),
+  nhom: z.union([z.uuid(), z.literal("")]).optional(),
+  nhanh: z.enum(["", ...MA_LOC_NHANH]).optional(),
+  sapXep: z.enum(["", ...MA_SAP_XEP]).optional(),
 });
 export type BoLocKhachHang = z.infer<typeof LuocDoLocKhachHang>;
 

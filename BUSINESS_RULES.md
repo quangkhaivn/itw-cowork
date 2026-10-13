@@ -433,3 +433,40 @@ Nội dung tệp nằm **trên đĩa** (`data/dinh-kem`, gắn volume Docker), k
 Mã băm SHA-256 lưu cùng bản ghi; tải về kiểm lại mã băm — tệp trên đĩa khác với lúc tải lên thì báo lỗi rõ ràng, không im lặng trả tệp sai.
 
 **Giới hạn cần biết**: bản sao lưu tệp đính kèm nằm trên cùng máy chủ như CSDL — mất máy chủ là mất cả hai (`VD-068`, chưa có nơi cất ngoài).
+
+## 21. Khách hàng nâng cao (0.16.0)
+
+Hành trình khách hàng, nhóm khách, lọc nhanh / bộ lọc đã lưu / tùy chọn cột, thao tác hàng loạt, chấm điểm khách, nhắc đứng lâu và sinh nhật, gộp khách trùng, xuất / nhập CSV, bàn giao khi nghỉ việc. Nghiệp vụ tham khảo ITW CRM 1.7–1.8, viết lại theo kiến trúc Cowork.
+
+**Quyền**: xem theo `customer.view`; đổi hành trình, gắn nhóm, thao tác hàng loạt theo `customer.update` **trong phạm vi**; quản lý danh mục trạng thái và nhóm, bộ lọc dùng chung, gộp khách, tính lại toàn bộ điểm cần `customer.approve` (cấp thêm cho Trưởng phòng Kinh doanh, phạm vi "team" — QĐ-46); xuất CSV `customer.export`; nhập CSV `customer.create`; bảng điểm theo nguồn `setting.update`; bàn giao `user.update`.
+
+**Trạng thái hành trình ≠ trạng thái giao dịch.** `customers.status` (tiềm năng / đang / ngừng giao dịch, thêm `da-gop`) giữ nguyên ý nghĩa cũ; hành trình là cột riêng `journey_stage_id` trỏ vào danh mục của doanh nghiệp.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| KHN-01 | Trạng thái hành trình là danh mục riêng theo doanh nghiệp (tên, màu `#RRGGBB`, thứ tự, loại `mo` / `thanh-cong` / `that-bai`, số ngày đứng lâu tùy chọn). Không đụng `customers.status`. Không xóa trạng thái — ngừng dùng, và chỉ ngừng được khi không còn khách nào ở đó | [CSDL] CHECK · [SV] · [TH] |
+| KHN-02 | Mọi lần đổi trạng thái — tay hay tự động — ghi một dòng `customer_journey_history` **chỉ ghi thêm** (từ, sang, ai, lúc nào, tự/tay, mốc, ghi chú) kèm Audit Log + Business Event, qua đúng một hàm `ghiDoiHanhTrinh()` | [CSDL] trigger `chan_sua_xoa` + CHECK · [SV] · [TH] |
+| KHN-03 | Mốc tự chuyển là **mã** (`hanh-trinh/moc.ts`: tạo khách, có cơ hội mở, đã gửi báo giá, thắng cơ hội, đơn xác nhận). Mỗi mốc gắn tối đa một trạng thái; trạng thái thất bại không nhận mốc | [CSDL] duy nhất + CHECK · [SV] · [TH] |
+| KHN-04 | Tự chuyển **chỉ tiến** theo thứ tự, không lùi, không tự đẩy vào trạng thái thất bại. Khách đang ở trạng thái thất bại chỉ được mốc mạnh (báo giá gửi, thắng cơ hội, đơn xác nhận) kéo lại. Tự chuyển chạy trong cùng giao dịch với thao tác gây ra mốc | [SV] hàm thuần `coTuChuyen` · [ĐV] · [TH] |
+| KHN-05 | Nhóm khách nhiều–nhiều; tên nhóm không trùng (không phân biệt hoa thường). Tạo/sửa nhóm cần `customer.approve`; gắn/gỡ khách cần `customer.update` trên khách đó. Số khách của nhóm tính trong phạm vi người xem | [CSDL] duy nhất · [SV] · [TH] |
+| KHN-06 | Phễu chuyển đổi: khách **tạo trong kỳ**, tính **bước xa nhất từng chạm** theo lịch sử (khách đã qua báo giá rồi bỏ vẫn tính là tới báo giá). Trạng thái thất bại nằm ngoài phễu. Mẫu số 0 → tỷ lệ `null`, không phải 0% | [SV] hàm thuần `tinhPheu` · [ĐV] · [TH] |
+| KHN-07 | Bộ lọc dùng chung cần `customer.approve`. Áp bộ lọc (kể cả dùng chung) **luôn** qua phạm vi `customer.view` của người xem. Tham số lưu và tham số trên URL đều được lọc theo danh mục khóa + giá trị thật (lọc nhanh, sắp xếp, cột) — giá trị lạ bị bỏ, không tin dữ liệu lưu | [SV] `kiemTraThamSoBoLoc`, `locCot` · [ĐV] · [TH] |
+| KHN-08 | Điểm khách 0–100 chỉ từ tín hiệu có thật (nguồn, tương tác và gặp mặt gần đây, im lặng lâu, cơ hội mở, báo giá đã gửi, đã có đơn xác nhận, có cách liên lạc). Không dùng giá vốn, không gọi AI. Trọng số ở Cấu hình (`diem_khach.*`) có **mặc định ghi rõ là mặc định**; ngưỡng Nóng/Ấm **chưa đặt → không xếp hạng** và lọc "Khách nóng" báo chưa đặt. Khách ngừng giao dịch / đã gộp không chấm; khách ở trạng thái thất bại = 0 | [CSDL] CHECK 0–100 · [SV] hàm thuần `chamDiem`, `hangDiem` · [ĐV] · [TH] |
+| KHN-09 | Điểm tự tính lại khi có tương tác, cơ hội (tạo / đổi giai đoạn), báo giá gửi, đơn xác nhận, liên hệ thêm/sửa, gộp khách. "Tính lại toàn bộ" cần `customer.approve`. Tính lại điểm không đổi `updated_at` của khách | [SV] · [TH] |
+| KHN-10 | Thao tác hàng loạt tối đa 500 khách, một giao dịch. Có khách nằm ngoài phạm vi sửa hoặc đã gộp → **từ chối cả lô**. Đổi người phụ trách hàng loạt theo KH-05 | [SV] · [TH] |
+| KHN-11 | Gộp khách cần `customer.approve` và **cả hai** khách trong phạm vi `customer.update` của người gộp. Hai khách khác mã số thuế → chặn (hai pháp nhân). Một giao dịch; **khóa hai dòng khách (`FOR UPDATE`, theo thứ tự id) trước khi đọc và kiểm `da-gop`** — hai lần gộp đồng thời (C→B trong lúc B→A) không tạo chuỗi gộp | [SV] · [TH] (bài QA tranh chấp đồng thời) |
+| KHN-12 | Khách bị gộp **không bị xóa**: `status = da-gop`, `merged_into_id` trỏ khách giữ lại. **Mọi** bảng có khóa ngoại tới khách (đọc từ catalog PostgreSQL lúc chạy) chuyển sang khách giữ lại, trừ lịch sử hành trình chỉ-ghi-thêm. Trường còn trống của khách giữ lại được bổ sung từ khách bị gộp. Khách từng gộp vào khách bị gộp trỏ thẳng sang khách giữ lại. Việc hôm nay đang mở của khách bị gộp được đóng (bỏ qua, ghi lý do); thông báo chưa đọc trỏ sang khách giữ lại | [CSDL] CHECK `customers_da_gop_check` · [SV] · [TH] (đếm từng bảng qua `information_schema`) |
+| KHN-13 | Không gắn bản ghi mới (cơ hội, báo giá, đơn, tương tác, việc…), không sửa, không đổi hành trình khách đã gộp. Danh sách mặc định, xuất CSV, trợ lý và **thanh tìm kiếm toàn cục** ẩn khách đã gộp; mở theo id vẫn thấy (trỏ sang khách giữ lại) | [SV] `chanKhachDaGop` · [TH] |
+| KHN-14 | Nhắc "khách đứng lâu": ngưỡng đặt **riêng từng trạng thái**; trạng thái chưa đặt thì không nhắc. Mỗi lần vào một trạng thái chỉ nhắc một lần (không nhắc lặp mỗi sáng). Lọc nhanh "Đứng lâu" và máy quét dùng **chung một hàm** `khachDungLau()` (ngày lịch giờ VN, bỏ khách ngừng giao dịch / đã gộp, bỏ trạng thái đã ngừng) | [CSDL] CHECK 1–365 · [SV] · [ĐV] · [TH] |
+| KHN-15 | Nhắc sinh nhật người liên hệ đang hoạt động, giao cho người phụ trách khách. Mặc định nhắc đúng ngày; nhắc trước N ngày khi Giám đốc đặt `theo_doi.sinh_nhat_nhac_truoc_ngay`. Sinh ngày 29/02 nhắc vào 28/02 năm không nhuận | [SV] · [ĐV] · [TH] |
+| KHN-16 | Nhập CSV khách: luôn xem trước rồi mới ghi; mỗi dòng chạy trong một SAVEPOINT qua đúng service (xem trước = chạy thật rồi cuộn ngược). Có Mã KH hoặc trùng MST → cập nhật khách đó (KH-02); trùng mềm (KH-03) → bỏ qua dòng trừ khi người nhập xác nhận. Mỗi lần ghi lưu `import_jobs` | [SV] · [ĐV] · [TH] |
+| KHN-17 | Bàn giao khi nghỉ việc (`user.update`): xem trước số việc từng loại; chuyển việc **đang dở** (khách, lead mở, cơ hội mở, việc chưa xong, báo giá chưa chốt, đơn chưa giao xong, hóa đơn đang theo dõi, phiếu hỗ trợ mở, bảo trì, gia hạn) rồi khóa tài khoản — một giao dịch. Việc đã xong giữ nguyên người làm. Không bàn giao cho chính mình hoặc người đã ngừng. Người nhận thiếu quyền xem một loại việc → vẫn chuyển nhưng kết quả **nêu rõ** loại việc đó để cấp vai trò (không chặn: quản trị có thể bàn giao tạm cho mình rồi phân lại) | [SV] · [TH] |
+| KHN-18 | Nhập CSV, thao tác hàng loạt, tính lại toàn bộ điểm chạy với hạn giao dịch `HAN_GIAO_DICH_THEO_LO_MS` (120 giây) thay vì 5 giây mặc định; vẫn MỘT giao dịch (QĐ-56) | [SV] `xuLyApi(..., { hanGiaoDichMs })` · [TH] (QA: 2.000 dòng, 500 khách) |
+
+### Xuất CSV (dùng chung mọi bộ xuất)
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| CSV-01 | **Chống chèn công thức**: ô chuỗi bắt đầu bằng `=` `+` `-` `@`, tab hoặc xuống dòng được thêm dấu `'` ở đầu để Excel / LibreOffice hiện nguyên văn (không chạy `=HYPERLINK`, `=cmd|…`). Ô kiểu số giữ nguyên. Áp trong `taoCsv()` nên mọi bộ xuất (khách hàng, sản phẩm…) đều được che | [SV] hàm thuần `voHieuCongThuc` · [ĐV] · [TH] |
+
+**Chưa làm ở phần này**: chấm điểm cho **lead** (chỉ chấm khách — QĐ-49); tự động chạy "tính lại toàn bộ" theo lịch (điểm cũ dần với tín hiệu "im lặng lâu" cho tới khi có sự kiện mới hoặc quản lý bấm tính lại); gộp **lead** trùng; hoàn tác gộp bằng một nút (nhật ký đủ trước/sau để làm tay).

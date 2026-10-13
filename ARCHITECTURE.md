@@ -197,6 +197,17 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Tên tệp trên đĩa là **id do hệ thống sinh**, không phải tên người dùng đặt — chặn cả `../` lẫn tên trùng nhau. Hai lớp chặn đường dẫn thoát thư mục: kiểm khuôn dạng (`duongDanHopLe`) và kiểm `path.resolve` nằm trong thư mục gốc.
 - Nội dung **không** vào CSDL, để `pg_dump` không phải kéo theo ảnh chụp hóa đơn; `scripts/sao-luu.sh` đóng gói riêng thư mục đĩa cùng hạn giữ.
 
+## 7o. Khách hàng nâng cao (0.16.0)
+
+- Phân hệ mới: `src/modules/hanh-trinh` (`moc.ts` danh mục mốc tự chuyển, `tinh-toan.ts` thuần — `coTuChuyen`, `tinhPheu`; `service.ts`), `src/modules/nhom-khach`, `src/modules/cham-diem` (`tinh-toan.ts` thuần — `chamDiem`, `hangDiem`; `service.ts`), `src/modules/ban-giao`. Mở rộng `src/modules/khach-hang`: `danh-muc-loc.ts` (danh mục lọc nhanh / sắp xếp / cột, thuần), `bo-loc.ts` (bộ lọc đã lưu + tùy chọn cột), `hang-loat.ts`, `gop.ts`, `nhap-xuat.ts`, `su-kien-khach.ts`, `tinh-toan.ts`. Luật: `BUSINESS_RULES.md` mục 21 (KHN).
+- **Một cửa ghi hành trình**: `ghiDoiHanhTrinh()` ghi cột trên `customers`, dòng lịch sử chỉ-ghi-thêm, Audit Log và Business Event. Đổi tay, đổi hàng loạt, nhập CSV, gộp khách và tự chuyển đều đi qua đây.
+- **Móc nối một dòng**: các service cơ hội, báo giá, đơn hàng, tương tác, khách hàng gọi `khiCoSuKienKhach(nc, khachId, moc?)` ngay trong giao dịch của thao tác gốc → tự chuyển bước (nếu là mốc) + tính lại điểm. Thao tác gốc hỏng thì hai việc này cuộn ngược theo (QĐ-48).
+- **Danh sách khách dùng một hàm điều kiện** `dieuKienLocKhach()` cho danh sách, đếm theo hành trình (thẻ trạng thái) và xuất CSV — phạm vi `customer.view` luôn được áp ở đây, nên bộ lọc dùng chung không mở thêm khách cho ai (KHN-07).
+- **Điểm**: lưu `customers.lead_score` để sắp xếp / lọc phía máy chủ; phần diễn giải tính lại lúc xem từ cùng hàm thuần `chamDiem()`. Gom tín hiệu bằng một truy vấn có tham số cho một hoặc mọi khách. Ghi điểm bằng SQL thô để không đổi `updated_at`.
+- **Gộp khách** đọc khóa ngoại trỏ vào `customers.id` từ catalog PostgreSQL lúc chạy (QĐ-51) — bảng mới có khóa ngoại tới khách tự được chuyển; bài thử đếm từng bảng qua `information_schema` trước/sau.
+- **Nhập CSV** chạy mỗi dòng trong một SAVEPOINT qua đúng service thường; xem trước là chạy thật rồi `ROLLBACK TO SAVEPOINT` (QĐ-54).
+- Giao diện: danh sách khách (thẻ trạng thái, lọc nhanh, bộ lọc đã lưu, cột, đổi hành trình trên dòng, thanh hàng loạt), Customer 360 thẻ "Hành trình & điểm", trang `/crm/hanh-trinh` (kéo thả HTML5 + nút ↑↓ cho điện thoại, phễu), `/crm/nhom-khach`, `/crm/cham-diem`, `/crm/khach-hang/nhap-csv`, `/crm/khach-hang/gop`, khối "Bàn giao khi nghỉ việc" ở trang người dùng.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.
@@ -206,8 +217,8 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 | Việc | Vì sao chưa | Làm ở |
 |---|---|---|
 | Chuông thông báo | Chưa có sự kiện nào cần báo cho người dùng; chuông không có gì bên trong là nút chết | Phase 8 |
-| Tùy chọn cột trên bảng | Bảng CRM 5–7 cột vẫn đọc tốt; chưa có yêu cầu thật để ẩn/hiện cột | khi có yêu cầu |
-| Xuất CSV khách hàng | Quyền `customer.export` đã có nhưng chưa có màn hình; bộ xuất CSV dùng chung đã sẵn ở `src/lib/csv.ts` | khi cần |
+| Tùy chọn cột trên bảng | ~~Chưa có yêu cầu thật~~ — **đã làm 0.16.0** cho danh sách khách hàng (mục 7o) | — |
+| Xuất CSV khách hàng | ~~Chưa có màn hình~~ — **đã làm 0.16.0** (mục 7o) | — |
 | Hợp đồng bảo trì định kỳ và gia hạn tự động | Cần bộ nhắc việc chạy nền mới có ích; dữ liệu bảo hành đã đủ để sinh nhắc khi có | Phase 8 |
 | Trả hàng, đổi máy | Đi kèm công nợ và hóa đơn; làm một nửa sẽ lệch kho và lệch tiền | Phase 7 |
 | Tệp đính kèm (ảnh hiện trường, biên bản) | Chưa chọn nơi lưu tệp trên máy chủ thật; cần bàn với Giám đốc về dung lượng và sao lưu | khi có yêu cầu |

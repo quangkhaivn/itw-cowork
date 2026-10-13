@@ -11,6 +11,7 @@ import { NHAN_HANH_DONG } from "@/modules/kiem-toan/service";
 import { chiTietNguoiDung, luaChonChoForm } from "@/modules/nguoi-dung/service";
 import FormNguoiDung from "../FormNguoiDung";
 import TacVuTaiKhoan from "./TacVuTaiKhoan";
+import BanGiao from "./BanGiao";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,9 @@ export default async function TrangChiTietNguoiDung({
             dangKhoa={dangKhoa}
             laChinhMinh={nguoi.id === nd.hoSo.userId}
           />
+        )}
+        {duocSua && nguoi.id !== nd.hoSo.userId && (
+          <BanGiao nguoiId={nguoi.id} hoTen={nguoi.hoTen} nguoiNhan={luaChon.nguoi.filter((n) => n.id !== nguoi.id).map((n) => ({ id: n.id, hoTen: n.hoTen }))} />
         )}
         {lichSu && (
           <section className="the">

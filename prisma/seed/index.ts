@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { VAI_TRO, toanBoQuyen, kiemTraGioiHanAI } from "../../src/lib/vai-tro";
 import { LOAI_DU_LIEU_GOC } from "../../src/modules/du-lieu-goc/loai";
 import { kiemTraMatKhauManh } from "../../src/lib/mat-khau";
+import { TRANG_THAI_KHOI_TAO } from "../../src/modules/hanh-trinh/moc";
 
 /**
  * Seed nền móng.
@@ -197,6 +198,16 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
     }
   }
   console.log(`✓ Dữ liệu gốc: ${LOAI_DU_LIEU_GOC.length} loại, thêm ${soMucMoi} mục`);
+
+  // ---- 5b. Trạng thái hành trình khách hàng (0.16.0) — chỉ khi doanh nghiệp chưa có trạng thái nào ----
+  if ((await db.customerJourneyStage.count({ where: { tenantId: tenant.id } })) === 0) {
+    for (const [i, t] of TRANG_THAI_KHOI_TAO.entries()) {
+      await db.customerJourneyStage.create({
+        data: { tenantId: tenant.id, code: t.ma, name: t.ten, color: t.mau, kind: t.loai, autoMilestone: t.moc, sortOrder: i + 1 },
+      });
+    }
+    console.log(`✓ Trạng thái hành trình khách hàng: ${TRANG_THAI_KHOI_TAO.length}`);
+  }
 
   // ---- 6. Tài khoản máy cho trợ lý ITA ----
   const ita = await db.user.upsert({

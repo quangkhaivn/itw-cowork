@@ -133,6 +133,8 @@ NGUON.push(
       const ds = await nc.tx.customer.findMany({
         where: {
           ...pham,
+          // KHN-12/13: khách đã gộp không hiện ở thanh tìm kiếm — mở theo id vẫn được (trỏ sang khách giữ lại).
+          status: { not: "da-gop" },
           OR: [
             { name: { contains: q, mode: "insensitive" } },
             { nameNormalized: { contains: chuanHoaTen(q) } },

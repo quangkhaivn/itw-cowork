@@ -63,6 +63,10 @@ const DUONG_VE: Record<string, string> = {
   "khach-tra": "M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4",
   "tra-ncc": "m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h4",
   "chuyen-kho": "M4 7h13l-3-3M20 17H7l3 3",
+  // 0.16.0 — Khách hàng nâng cao
+  "hanh-trinh": "M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 15V9a4 4 0 0 1 4-4h6M18 9v6a4 4 0 0 1-4 4H8",
+  "nhom-khach": "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6",
+  "cham-diem": "M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z",
   "tai-xuong": "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
 };
 

@@ -2,7 +2,9 @@ import { z } from "zod";
 import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen } from "@/lib/phan-quyen";
 import { LuocDoLocKhachHang } from "@/modules/khach-hang/luoc-do";
-import { danhSachKhachHang, khach360 } from "@/modules/khach-hang/service";
+import { chiTietKhachHang, danhSachKhachHang, khach360 } from "@/modules/khach-hang/service";
+import { diemCuaKhach } from "@/modules/cham-diem/service";
+import { lichSuHanhTrinh } from "@/modules/hanh-trinh/service";
 import { LuocDoLocCoHoi } from "@/modules/co-hoi/luoc-do";
 import { danhSachCoHoi, duLieuPipeline } from "@/modules/co-hoi/service";
 import { LuocDoLocViec, danhSachViec } from "@/modules/cong-viec/service";
@@ -86,6 +88,28 @@ export const SO_CONG_CU: CongCu[] = [
     async chay(nc, t) {
       const k = await khach360(nc, String(t.khachHangId));
       return k;
+    },
+  },
+  {
+    ten: "diem_hanh_trinh_khach",
+    moTa:
+      "Điểm khách tiềm năng (0–100, kèm diễn giải từng phần và hạng Nóng/Ấm/Lạnh nếu đã đặt ngưỡng) và " +
+      "hành trình của một khách: trạng thái hiện tại, các lần đổi gần đây (tự động hay đổi tay).",
+    quyen: "customer.view",
+    thamSo: z.object({ khachHangId: z.uuid() }),
+    luocDoJson: doiTuong({ khachHangId: chuoi("id khách hàng lấy từ tim_khach_hang.") }, ["khachHangId"]),
+    async chay(nc, t) {
+      const id = String(t.khachHangId);
+      const k = await chiTietKhachHang(nc, id);
+      const [diem, lichSu] = await Promise.all([diemCuaKhach(nc, id), lichSuHanhTrinh(nc, id)]);
+      return {
+        khach: { id: k.id, ma: k.ma, ten: k.ten },
+        hanhTrinhHienTai: k.hanhTrinh ? { ten: k.hanhTrinh.ten, tuLuc: k.hanhTrinh.tuLuc } : null,
+        diem: diem.diemHienTai,
+        hang: diem.hang,
+        dienGiai: diem.phan,
+        lichSuHanhTrinh: lichSu.slice(0, 10).map((l) => ({ tu: l.tu?.ten ?? null, sang: l.sang?.ten ?? null, tuDong: l.tuDong, moc: l.moc, luc: l.luc, nguoi: l.nguoi })),
+      };
     },
   },
   {

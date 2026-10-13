@@ -163,3 +163,19 @@ export function demQuyTacSanSang(
   }
   return { sanSang, tong: QUY_TAC.length };
 }
+
+/**
+ * Ngày sinh `ngaySinh` ("yyyy-mm-dd") có rơi vào ngày `ngay` không (bỏ qua năm). Người sinh
+ * 29/02 được nhắc vào 28/02 những năm không nhuận — để không bị bỏ sót ba năm liền.
+ */
+export function trungNgaySinh(ngaySinh: string, ngay: string): boolean {
+  const ns = ngaySinh.slice(5);
+  const d = ngay.slice(5);
+  if (ns === d) return true;
+  if (ns === "02-29" && d === "02-28") {
+    const nam = Number(ngay.slice(0, 4));
+    const nhuan = (nam % 4 === 0 && nam % 100 !== 0) || nam % 400 === 0;
+    return !nhuan;
+  }
+  return false;
+}
