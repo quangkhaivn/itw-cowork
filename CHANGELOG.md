@@ -87,7 +87,8 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 22 (MK). Kiến trúc: `ARCHITEC
 
 ### Kiểm thử (bản gộp)
 
-- @@SO@@
+- Bản gộp `release/0.16`: **371 bài đơn vị**, **1.289 kiểm chứng tích hợp** trong 22 bộ của `thu:tich-hop` (gồm `thu:khach-nang-cao` 140, `thu:qa-khach` 135, `thu:marketing` 103, `thu:qa-marketing` 122 và bài mới `thu:gop-k-m` 17 cho tương tác chéo hai gói), **438 bài `thu:http`** và **107 bài `thu:qa-marketing-http`** trên bản dựng production — tất cả đạt.
+- `prisma migrate diff --from-migrations … --to-schema …` trên CSDL tạm: rỗng (lược đồ khớp tổng hai migration).
 
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 
