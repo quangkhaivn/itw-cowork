@@ -518,7 +518,9 @@ async function seedDichVuMau(tenantId: string, id: Map<string, string>) {
   const don = await db.salesOrder.findFirst({ where: { tenantId, status: { in: ["CONFIRMED", "PARTIALLY_DELIVERED"] } }, select: { id: true } });
   const khoChinh = await db.warehouse.findFirst({ where: { tenantId, code: "KHO-CHINH" }, select: { id: true } });
   if (don && khoChinh) {
-    const ct = await voi(TPKT, (nc) => dh.chiTietDonHang(nc, don.id));
+    // Đọc đơn bằng Giám đốc: Trưởng phòng Kỹ thuật không có `order.view` (vai trò chuẩn), trước
+    // đây bước này làm hỏng cả lần nạp mẫu ở "Không đủ quyền: order.view".
+    const ct = await voi(GD, (nc) => dh.chiTietDonHang(nc, don.id));
     const conGiao = ct.don.dong.filter((d) => d.conPhaiGiao > 0 && d.theoSerial);
     if (conGiao.length > 0) {
       const serialConLai = await db.serialNumber.findMany({
