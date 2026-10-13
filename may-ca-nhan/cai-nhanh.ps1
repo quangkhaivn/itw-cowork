@@ -114,7 +114,17 @@ if (-not (Test-Path $PgCtl)) {
   if (Test-Path $DirPg) { Remove-Item -Recurse -Force $DirPg }
   Move-Item (Join-Path $DirTam 'package/native') $DirPg
   Remove-Item -Recurse -Force (Join-Path $DirTam 'package'); Remove-Item -Force $tgz.FullName
-  if (-not $LaWindows) { Get-ChildItem $PgBin | ForEach-Object { & chmod +x $_.FullName } }
+  if (-not $LaWindows) {
+    # Bản Linux (chỉ dùng để thử bộ cài): gói npm không giữ được symlink thư viện, phải dựng lại theo pg-symlinks.json.
+    Get-ChildItem $PgBin | ForEach-Object { & chmod +x $_.FullName }
+    $tepLk = Join-Path $DirPg 'pg-symlinks.json'
+    if (Test-Path $tepLk) {
+      foreach ($lk in (Get-Content $tepLk -Raw | ConvertFrom-Json)) {
+        $dich = Join-Path $DirPg ($lk.target -replace '^native/', '')
+        if (-not (Test-Path $dich)) { & ln -s (Split-Path -Leaf $lk.source) $dich }
+      }
+    }
+  }
 }
 Write-Host "PostgreSQL ở $DirPg"
 
