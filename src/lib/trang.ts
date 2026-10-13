@@ -36,6 +36,7 @@ export async function yeuCauDangNhap(): Promise<NguoiDungHienTai> {
   const nd = await layNguoiDungHienTai();
   if (!nd) redirect("/dang-nhap");
   if (nd.hoSo.phaiDoiMatKhau) redirect("/doi-mat-khau");
+  if (nd.hoSo.phaiBat2Lop) redirect("/bat-xac-thuc-2-lop");
   return nd;
 }
 

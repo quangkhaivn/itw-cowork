@@ -22,6 +22,8 @@ const DUONG_MO = [
   "/f",
   "/lp",
   "/api/cong-khai",
+  // 0.16.0 — Email marketing (QĐ-76): trang hủy nhận tin một chạm từ liên kết trong thư.
+  "/huy-nhan-tin",
 ];
 
 /**
@@ -30,7 +32,13 @@ const DUONG_MO = [
  * CSRF (vốn lợi dụng cookie của trình duyệt) không áp dụng. Form công khai thì VẪN kiểm Origin:
  * chỉ trang /f, /lp của chính hệ thống (kể cả khi nằm trong iframe) mới gửi được.
  */
-const KHONG_KIEM_NGUON = ["/api/cong-khai/webhook/"];
+const KHONG_KIEM_NGUON = [
+  "/api/cong-khai/webhook/",
+  // Email marketing (QĐ-76): người nhận thư / ứng dụng thư (List-Unsubscribe-Post) không gửi Origin.
+  // Xác thực bằng MÃ KÝ trong đường dẫn, không dùng cookie phiên — không có gì để giả mạo liên trang.
+  "/api/cong-khai/huy-nhan-tin/",
+  "/api/cong-khai/email/",
+];
 
 export async function proxy(req: NextRequest) {
   const duongDan = req.nextUrl.pathname;

@@ -61,6 +61,8 @@ interface TuyChonApi {
   choPhepKhiPhaiDoiMatKhau?: boolean;
   /** Hạn giao dịch (ms) cho route xử lý theo lô — xem `HAN_GIAO_DICH_THEO_LO_MS` (QĐ-56). */
   hanGiaoDichMs?: number;
+  /** Cho phép gọi khi vai trò bắt buộc 2 lớp mà người dùng chưa bật (chỉ các route bật 2 lớp). */
+  choPhepKhiPhaiBat2Lop?: boolean;
 }
 
 type NguCanhRoute<P> = { params: Promise<P> };
@@ -90,6 +92,9 @@ export function xuLyApi<P extends Record<string, string> = Record<string, never>
         hoSoDaDoc = hoSo;
         if (hoSo.phaiDoiMatKhau && !tuyChon.choPhepKhiPhaiDoiMatKhau) {
           throw new LoiNghiepVu("Bạn phải đổi mật khẩu trước khi tiếp tục.", 403, "phai-doi-mat-khau");
+        }
+        if (hoSo.phaiBat2Lop && !tuyChon.choPhepKhiPhaiBat2Lop && !tuyChon.choPhepKhiPhaiDoiMatKhau) {
+          throw new LoiNghiepVu("Vai trò của bạn bắt buộc xác thực 2 lớp. Bật 2 lớp trước khi tiếp tục.", 403, "phai-bat-2-lop");
         }
         if (tuyChon.quyen) batBuocQuyen(hoSo, tuyChon.quyen);
         return xuLy(taoNguCanh(tx, phien.tenantId, hoSo, ip, userAgent), req, thamSo);

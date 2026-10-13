@@ -132,6 +132,7 @@ Kiến trúc: `quotations` là đầu phiếu (số `QT-2026-0001`, khách hàng
 | BG-08 | Số lượng > 0 (tối đa 3 số lẻ); đơn giá, giá vốn, các cột tiền không âm; chiết khấu và VAT trong 0–100% | [CSDL] CHECK · [SV] lược đồ · [TH] |
 | BG-09 | Gửi khách **ghi lại thời điểm và kênh gửi** (email, Zalo, in giấy) — hệ thống chưa tự gửi email, người dùng gửi rồi ghi nhận. Gửi báo giá đẩy cơ hội liên quan sang giai đoạn `QUOTATION` | [SV] · [TH] |
 | BG-10 | Điều khoản thanh toán và giao hàng là **Dữ liệu gốc** (`dieu_khoan_thanh_toan`, `dieu_khoan_giao_hang`), không phải chữ gõ tự do — để dùng lại và thống kê được. Đơn vị tính trên dòng hàng cũng lấy từ Dữ liệu gốc `don_vi_tinh` | [SV] `kiemTraMaDuLieuGoc` · [TH] (ô chọn) |
+| BG-11 | Logo in trên báo giá (0.16.0): chỉ ảnh PNG / JPEG / WebP **thật** (kiểm byte đầu, đuôi tên phải khớp), tối đa 512 KB; không nhận SVG. Đổi / gỡ logo cần `setting.update`; nhật ký ghi mã băm, không ghi nội dung ảnh | [SV] `nhanDangTep` · [TH] |
 
 **Bản in (PDF)**: bản in là HTML có `@media print`, người dùng bấm "In / Lưu PDF" của trình duyệt (QĐ-21). Phần đầu lấy từ **Hồ sơ công ty** (Quản trị → Hồ sơ công ty). Mục nào chưa khai thì **để trống kèm nhắc**, hệ thống không tự điền thông tin pháp nhân (mục 5 luật vault).
 
@@ -504,3 +505,45 @@ Chiến dịch, chi phí, chỉ số; **một cửa nhận lead** cho form công
 | MK-16 | Landing page dựng từ danh mục khối khai báo bằng mã; không nhận HTML / script; ảnh và liên kết chỉ `https://`; tối đa 30 khối. Chỉ trang **đang xuất bản** mở công khai. Trang có khối form phải chọn form; xuất bản cần form đang mở. Đang xuất bản thì không đổi đường dẫn | [CSDL] CHECK · [SV] lược đồ · [ĐV] · [TH] |
 
 **Chưa làm ở phần này**: kéo lead trực tiếp từ Facebook Graph API (hiện nhận qua Zapier / Make gọi webhook); ảnh landing lấy từ tệp đính kèm; gửi email / SMS theo phân khúc (gói Email marketing); xuất phân khúc ra Excel; báo cáo thời gian phản hồi lead.
+
+## 23. Email marketing
+
+Gửi thư giới thiệu sản phẩm, khuyến mãi tới lead và liên hệ của khách qua hộp thư SMTP của công ty. **Gửi cần duyệt**: người soạn (`marketing.create/update`) lập chiến dịch, người có `marketing.approve` (Trưởng phòng Marketing, Giám đốc) mới đưa được vào hàng gửi. Kết nối SMTP do `integration.*` (Quản trị) giữ.
+
+Vòng đời chiến dịch: **Nháp → Chờ duyệt → Đang gửi ⇄ Tạm dừng → Đã gửi xong**, hoặc **Đã huỷ**. Chờ duyệt trả về Nháp được (kèm lý do).
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| EM-01 | Kết nối SMTP: cổng 1–65535, mã hóa `tls` / `starttls` / `none`, địa chỉ gửi đúng dạng email — [CSDL] CHECK. **Không gửi mật khẩu qua kết nối không mã hóa** (`none` + tên đăng nhập bị từ chối) — chỉ chặn ở [SV] `luuKetNoi` | [CSDL] CHECK (cổng, chế độ, địa chỉ) · [SV] · [TH] |
+| EM-02 | Mật khẩu SMTP **không bao giờ lưu dạng thuần**: mã hóa AES-256-GCM bằng `APP_ENC_KEY` trước khi ghi; API chỉ trả cờ "đã có mật khẩu"; nhật ký kiểm toán chỉ ghi "đã đổi / giữ nguyên / đã xóa". Bỏ trống ô mật khẩu khi lưu = giữ nguyên | [CSDL] CHECK tiền tố `v1:` · [SV] · [TH] |
+| EM-03 | Nội dung thư soạn bằng **khối an toàn** (tiêu đề, đoạn văn, nút liên kết, ảnh, danh sách, đường ngăn cách). Không có ô nào nhận HTML; máy chủ dựng HTML và thoát mọi ký tự — kể cả giá trị biến lấy từ dữ liệu khách. Liên kết và ảnh chỉ nhận `https://`. Tiêu đề thư không được xuống dòng | [SV] lược đồ + hàm thuần · [ĐV] · [TH] |
+| EM-04 | Biến cá nhân hóa **danh sách trắng**: `{{ten}}`, `{{cong_ty}}`, `{{email}}`, `{{cong_ty_gui}}` (so bằng `Object.hasOwn` — `{{constructor}}`, `{{__proto__}}`… cũng bị từ chối). Biến khác bị từ chối lúc lưu, không lặng lẽ để nguyên. Không dùng biến trong địa chỉ liên kết | [SV] · [ĐV] · [TH] |
+| EM-05 | Chuyển trạng thái chiến dịch chỉ theo vòng đời trên; đã xong / đã huỷ không mở lại. Huỷ phải có lý do | [CSDL] CHECK · [SV] hàm thuần · [ĐV] · [TH] |
+| EM-06 | **Gửi cần `marketing.approve`**. Nội dung và điều kiện người nhận chỉ sửa được khi còn Nháp; đã vào hàng gửi thì phải có người duyệt và thời điểm duyệt. Tạm dừng: `marketing.update` (ai soạn được cũng dừng được); tiếp tục, huỷ chiến dịch đang gửi: `marketing.approve` | [CSDL] CHECK · [SV] · [TH] |
+| EM-07 | Danh sách người nhận **chốt lúc duyệt**: loại người không có email, email sai dạng, đã từ chối nhận tin, email hỏng, và gộp trùng theo email chữ thường. Khóa duy nhất (chiến dịch, email) là chốt cuối chống gửi trùng | [CSDL] duy nhất + CHECK chữ thường · [SV] hàm thuần · [ĐV] · [TH] |
+| EM-08 | Mỗi người nhận một dòng trạng thái: Chờ gửi, Đang gửi, Đã gửi, Lỗi, Bị loại. **Lỗi và Bị loại phải có lý do**; Đã gửi phải có thời điểm gửi | [CSDL] CHECK · [TH] |
+| EM-09 | **Chân thư bắt buộc**: tên + địa chỉ công ty (Hồ sơ công ty) và liên kết huỷ nhận tin — máy tự thêm, người soạn không bỏ được. Hồ sơ công ty chưa khai địa chỉ thì không gửi duyệt / duyệt được | [SV] · [ĐV] · [TH] |
+| EM-10 | **Huỷ nhận tin một chạm**: liên kết mang mã ký HMAC (không đoán được, không chứa email). Mở trang **không** tự huỷ (trình quét thư mở sẵn mọi liên kết); bấm nút mới huỷ. Thư có tiêu đề `List-Unsubscribe` + `List-Unsubscribe-Post` (RFC 8058) để Gmail/Outlook huỷ ngay trong hộp thư. Huỷ ghi `marketing_opt_out_at` lên **mọi** lead/liên hệ cùng email và đưa email vào danh sách chặn — mọi lần gửi sau đều loại | [SV] · [ĐV] mã ký · [TH] |
+| EM-11 | Theo dõi mở / bấm **tùy chọn** (bật ở Kết nối email, chụp lại lúc duyệt). Liên kết bấm chỉ chuyển tới URL **có trong nội dung chiến dịch**, theo chỉ số nằm trong mã ký — không nhận URL từ đường dẫn (chống open redirect). Nhật ký mở / bấm / huỷ chỉ ghi thêm | [SV] · [CSDL] trigger · [ĐV] · [TH] |
+| EM-12 | Người nhận lấy qua **nguồn người nhận** theo quyền và **phạm vi dữ liệu** của người thao tác: lead cần `crm.view`, liên hệ cần `customer.view`. Email người nhận chỉ hiện đủ cho người có quyền xem nguồn đó; người khác thấy dạng che (`ng•••@abc.vn`). Trần kỹ thuật 20.000 người một chiến dịch | [SV] · [TH] |
+| EM-13 | **Chỉ đổ lỗi cho người nhận khi chắc chắn.** Lỗi phía hộp thư gửi — mất kết nối, sai đăng nhập, **mọi 4xx**, mọi lỗi ở MAIL FROM hoặc DATA, và ở RCPT mà mã 5.4.x / 5.7.x hoặc câu trả lời nói về hạn mức, SPF/DKIM, relay, quyền gửi (Gmail 550 5.4.5, M365 5.7.60, 5.7.708) — thì thư **chưa đi** trả về hàng chờ, chiến dịch **tự tạm dừng** kèm lý do tiếng Việt và báo người lập + người duyệt. Chỉ ở RCPT với mã 5.1.x / 5.2.1 (hoặc 550/551/553 không mã mở rộng mà câu trả lời nói rõ người nhận không tồn tại) mới ghi Lỗi + đưa email vào danh sách chặn "email hỏng". 5.2.2 hộp thư đầy và 5.7.x chính sách bên nhận → Lỗi cho đúng người đó, không chặn. `APP_ENC_KEY` thiếu / sai hoặc Hồ sơ công ty mất địa chỉ (EM-09) lúc đang gửi → cũng tự tạm dừng kèm lý do | [SV] hàm thuần · [ĐV] · [TH] |
+| EM-14 | **Gửi tối đa một lần**: dòng đã nhận việc (Đang gửi) mà máy dừng giữa chừng quá 10 phút → ghi Lỗi "không rõ đã gửi chưa", **không gửi lại**. Tốc độ đếm theo CSDL; bước đếm + nhận việc chạy dưới `pg_advisory_xact_lock` theo doanh nghiệp, nên khởi động lại worker hay chạy nhiều worker cùng lúc cũng không vượt ngưỡng | [SV] · [CSDL] khóa tư vấn · [TH] |
+| EM-15 | Thư thử (của kết nối, mẫu hoặc chiến dịch) chỉ gửi tới email của chính người bấm, không tạo dòng người nhận, không ghi tương tác | [SV] · [TH] |
+| EM-16 | Gửi thành công ghi một **tương tác `email`** vào dòng thời gian lead / khách (TT-02), người ghi là người lập chiến dịch. Thư hàng loạt **không** tự chuyển lead sang "Đã liên hệ" (LD-04 không áp) | [SV] · [TH] |
+
+Ngưỡng ở Cấu hình: `email.so_thu_moi_phut` (chưa đặt → **10 thư/phút**, mức chậm an toàn cho Gmail/Microsoft 365, ghi rõ là mặc định), `email.so_thu_toi_da_moi_ngay` (chưa đặt → không chặn theo ngày).
+
+## 24. Xác thực 2 lớp
+
+Mã 6 số đổi mỗi 30 giây (TOTP, RFC 6238) từ ứng dụng xác thực trên điện thoại. Mỗi người tự bật ở **Tài khoản của tôi**; Quản trị chọn vai trò **bắt buộc** và đặt lại cho người mất máy.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| XT-01 | Bật = nhận khóa bí mật → nhập đúng mã 6 số đang hiện. Chưa xác nhận thì khóa chỉ ở trạng thái chờ, đăng nhập chưa đòi mã | [SV] · [TH] |
+| XT-02 | Khóa bí mật TOTP **mã hóa** như mật khẩu SMTP (gắn với từng người — chép sang người khác không giải được); đã bật thì phải có khóa | [CSDL] CHECK · [SV] · [ĐV] · [TH] |
+| XT-03 | 10 **mã khôi phục** dùng một lần, chỉ lưu băm (HMAC-SHA256 có khóa riêng); hiện đúng một lần lúc bật / sinh lại. Sinh lại thì mã cũ hết hiệu lực | [CSDL] CHECK · [SV] · [TH] |
+| XT-04 | Đăng nhập 2 bước: mật khẩu đúng chỉ cấp **phiên tạm 5 phút** (cookie riêng, không mở được trang hay API nào), nhập mã đúng mới cấp phiên thật và mới ghi "đăng nhập" | [SV] route · chạy thật |
+| XT-05 | Một câu lỗi chung cho mọi kiểu sai mã. Mã sai dùng **chung bộ đếm khóa tài khoản** với bước mật khẩu (N lần / M phút ở Cấu hình) + giới hạn tốc độ theo IP và tài khoản; nhập đúng thì xoá bộ đếm tốc độ. Hàng rào này áp cho **cả** bước 2 đăng nhập lẫn các thao tác trong phiên cần mã (tắt 2 lớp, sinh lại mã khôi phục). Mỗi mã TOTP chỉ dùng được một lần (chặn phát lại trong cửa sổ ±30 giây); phiên tạm chỉ dùng được một lần (ký trước lần đăng nhập thành công gần nhất thì hết giá trị). `APP_ENC_KEY` sai → 503 câu chung cho người ngoài, log máy chủ ghi rõ | [SV] · [ĐV] · [TH] |
+| XT-06 | Vai trò bắt buộc 2 lớp do người có `setting.update` chọn. **Chưa đặt = không bắt buộc ai.** Người bị bắt mà chưa bật thì sau đăng nhập chỉ vào được trang bật 2 lớp; API trả 403 `phai-bat-2-lop` | [SV] `layHoSoQuyen` + `xuLyApi` + `yeuCauDangNhap` · [TH] |
+| XT-07 | Bật, tắt, đặt lại đều **thu hồi mọi phiên khác** (như đổi mật khẩu). Tắt cần cả mật khẩu và một mã. Vai trò bắt buộc thì không tự tắt được | [SV] · [TH] |
+| XT-08 | Quản trị (`user.update`) đặt lại 2 lớp cho người khác, bắt buộc ghi lý do, ghi kiểm toán; không tự đặt lại cho chính mình | [SV] · [TH] |

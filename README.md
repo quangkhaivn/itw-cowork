@@ -68,7 +68,8 @@ npm run worker         # tác vụ nền (cần REDIS_URL)
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Docker | Khởi tạo container PostgreSQL. |
 | `APP_DB_PASSWORD` | Docker | Mật khẩu vai `cowork_app`; phải khớp với `DATABASE_URL`. |
 | `AUTH_SECRET` | có | ≥ 32 ký tự, ký cookie phiên. `openssl rand -base64 48`. Đổi giá trị = đăng xuất mọi người. |
-| `APP_URL` | có | URL công khai, dùng cho kiểm tra nguồn gốc (CSRF). |
+| `APP_URL` | có | URL công khai, dùng cho kiểm tra nguồn gốc (CSRF) và dựng liên kết huỷ nhận tin / theo dõi trong thư. Worker cũng cần. |
+| `APP_ENC_KEY` | khi dùng email / 2 lớp | 32 byte base64 (`openssl rand -base64 32`). Mã hóa AES-256-GCM mật khẩu SMTP và khóa xác thực 2 lớp; ký liên kết công khai trong thư. Cấp cho **app và worker**. Không đổi sau khi dùng (QĐ-68). Thiếu thì hai phần đó báo "chưa có khóa", phần khác chạy bình thường. |
 | `REDIS_URL`, `REDIS_PASSWORD` | máy thật | Giới hạn tốc độ đăng nhập dùng chung giữa tiến trình. Thiếu thì dùng bộ nhớ tiến trình. |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` | lần seed đầu | Tài khoản quản trị đầu tiên. Seed không bao giờ ghi đè mật khẩu tài khoản đã có. |
 

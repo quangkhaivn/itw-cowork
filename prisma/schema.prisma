@@ -131,6 +131,14 @@ model Tenant {
   leadCaptures         LeadCapture[]
   marketingSegments    MarketingSegment[]
   landingPages         LandingPage[]
+  // Email marketing + xác thực 2 lớp (0.16.0)
+  emailSettings        EmailSetting[]
+  emailTemplates       EmailTemplate[]
+  emailCampaigns       EmailCampaign[]
+  emailRecipients      EmailRecipient[]
+  emailEvents          EmailEvent[]
+  emailSuppressions    EmailSuppression[]
+  recoveryCodes        UserRecoveryCode[]
 
   @@map("tenants")
 }
@@ -194,6 +202,15 @@ model User {
   failedLoginCount   Int       @default(0) @map("failed_login_count")
   /// Khóa tạm tới thời điểm này sau quá nhiều lần sai.
   lockedUntil        DateTime? @map("locked_until") @db.Timestamptz(6)
+  /// Xác thực 2 lớp (TOTP RFC 6238). Khóa bí mật **mã hóa** AES-256-GCM bằng APP_ENC_KEY, không lưu dạng thuần.
+  totpSecretEnc      String?   @map("totp_secret_enc") @db.Text
+  /// Khóa đang chờ xác nhận lúc người dùng bật 2 lớp (chưa có hiệu lực cho tới khi nhập đúng mã).
+  totpPendingEnc     String?   @map("totp_pending_enc") @db.Text
+  totpEnabledAt      DateTime? @map("totp_enabled_at") @db.Timestamptz(6)
+  /// Bước thời gian (30 giây) của mã đã dùng gần nhất — chặn dùng lại cùng một mã.
+  totpLastStep       BigInt?   @map("totp_last_step")
+  /// Mốc đổi thiết lập bảo mật (bật/tắt/đặt lại 2 lớp). Phiên ký trước mốc này hết hiệu lực, như đổi mật khẩu.
+  securityChangedAt  DateTime? @map("security_changed_at") @db.Timestamptz(6)
   status             String    @default("hoat-dong") @db.VarChar(30)
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -241,6 +258,8 @@ model User {
   ownedWebhookSources  MarketingWebhookSource[] @relation("NguonWebhookPhuTrach")
   ownedSegments        MarketingSegment[]       @relation("PhanKhucPhuTrach")
   ownedLandingPages    LandingPage[]            @relation("LandingPhuTrach")
+  // Xác thực 2 lớp
+  recoveryCodes        UserRecoveryCode[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -554,7 +573,7 @@ model Contact {
   /// Đồng ý nhận tin marketing (MK-13) — chỉ đặt khi chính người đó đồng ý.
   marketingOptIn         Boolean   @default(false) @map("marketing_opt_in")
   marketingOptInAt       DateTime? @map("marketing_opt_in_at") @db.Timestamptz(6)
-  /// Từ chối nhận tin: luôn thắng đồng ý (CHECK không cho hai cờ cùng bật).
+  /// Từ chối nhận tin: luôn thắng đồng ý (CHECK không cho hai cờ cùng bật). Email marketing (EM) dùng chung cột này.
   marketingOptOutAt      DateTime? @map("marketing_opt_out_at") @db.Timestamptz(6)
   /// Đồng ý / từ chối ghi nhận ở đâu: "form:<slug>", "webhook:<mã>", "nhap-tay", "huy-dang-ky"…
   marketingConsentSource String?   @map("marketing_consent_source") @db.VarChar(100)
@@ -564,13 +583,14 @@ model Contact {
   createdBy              String?   @map("created_by") @db.Uuid
   updatedBy              String?   @map("updated_by") @db.Uuid
 
-  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer      Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  interactions  Interaction[]
-  opportunities Opportunity[]
-  quotations    Quotation[]
-  salesOrders   SalesOrder[]
-  tickets       SupportTicket[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  interactions    Interaction[]
+  opportunities   Opportunity[]
+  quotations      Quotation[]
+  salesOrders     SalesOrder[]
+  tickets         SupportTicket[]
+  emailRecipients EmailRecipient[]
 
   @@index([tenantId, customerId])
   @@index([tenantId, phoneNormalized])
@@ -636,6 +656,7 @@ model Lead {
   campaign             MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   matchedCustomer      Customer?          @relation("LeadTrungKhach", fields: [matchedCustomerId], references: [id], onDelete: SetNull)
   captures             LeadCapture[]
+  emailRecipients      EmailRecipient[]
 
   @@unique([tenantId, code])
   @@index([tenantId, ownerId])
@@ -3104,4 +3125,207 @@ model LandingPage {
 
   @@unique([tenantId, slug])
   @@map("landing_pages")
+}
+
+// ---------------------------------------------------------------------------
+// Email marketing (0.16.0): kết nối SMTP, mẫu thư dựng bằng khối an toàn, chiến dịch
+// gửi qua hàng đợi trong worker, huỷ nhận tin một chạm, theo dõi mở / bấm.
+// Luật: BUSINESS_RULES.md mục 23 (EM). Kiến trúc: ARCHITECTURE.md mục 7q.
+// ---------------------------------------------------------------------------
+
+/// Kết nối hộp thư gửi (SMTP) — một dòng mỗi doanh nghiệp. Mật khẩu **mã hóa**, không bao giờ trả ra API.
+model EmailSetting {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  host            String    @db.VarChar(255)
+  port            Int
+  /// tls (cổng 465) | starttls (cổng 587) | none (chỉ cho máy chủ nội bộ)
+  security        String    @db.VarChar(10)
+  username        String?   @db.VarChar(255)
+  /// AES-256-GCM bằng APP_ENC_KEY, gắn ngữ cảnh doanh nghiệp. null = máy chủ không đòi đăng nhập.
+  passwordEnc     String?   @map("password_enc") @db.Text
+  fromName        String    @map("from_name") @db.VarChar(255)
+  fromEmail       String    @map("from_email") @db.VarChar(255)
+  replyTo         String?   @map("reply_to") @db.VarChar(255)
+  /// Bật điểm ảnh đếm lượt mở và chuyển hướng đếm lượt bấm.
+  trackingEnabled Boolean   @default(false) @map("tracking_enabled")
+  lastTestAt      DateTime? @map("last_test_at") @db.Timestamptz(6)
+  lastTestOk      Boolean?  @map("last_test_ok")
+  lastTestError   String?   @map("last_test_error") @db.Text
+  status          String    @default("hoat-dong") @db.VarChar(30)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.Uuid
+  updatedBy       String?   @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId])
+  @@map("email_settings")
+}
+
+/// Mẫu email: tiêu đề + danh sách khối an toàn (JSON đã kiểm bằng lược đồ). Không nhận HTML tự do.
+model EmailTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String   @db.VarChar(255)
+  subject   String   @db.VarChar(255)
+  blocks    Json     @default("[]")
+  /// hoat-dong | luu-tru
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaigns EmailCampaign[]
+
+  @@index([tenantId, status])
+  @@map("email_templates")
+}
+
+/// Chiến dịch email. Số EM-2026-0001. Nội dung chép từ mẫu lúc lập, **đóng băng** lúc duyệt.
+model EmailCampaign {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  code             String    @db.VarChar(30)
+  name             String    @db.VarChar(255)
+  templateId       String?   @map("template_id") @db.Uuid
+  subject          String    @db.VarChar(255)
+  blocks           Json      @default("[]")
+  /// Mã nguồn người nhận (src/modules/email/nguon-nguoi-nhan.ts) + tham số lọc.
+  sourceCode       String    @map("source_code") @db.VarChar(50)
+  sourceParams     Json      @default("{}") @map("source_params")
+  /// DRAFT | PENDING_APPROVAL | SENDING | PAUSED | COMPLETED | CANCELLED
+  status           String    @default("DRAFT") @db.VarChar(20)
+  submittedAt      DateTime? @map("submitted_at") @db.Timestamptz(6)
+  submittedBy      String?   @map("submitted_by") @db.Uuid
+  approvedAt       DateTime? @map("approved_at") @db.Timestamptz(6)
+  approvedBy       String?   @map("approved_by") @db.Uuid
+  pausedAt         DateTime? @map("paused_at") @db.Timestamptz(6)
+  /// Vì sao đang tạm dừng: người bấm, hoặc máy tự dừng khi hộp thư gửi báo lỗi kết nối / đăng nhập.
+  pauseReason      String?   @map("pause_reason") @db.Text
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
+  cancelledAt      DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledBy      String?   @map("cancelled_by") @db.Uuid
+  cancelReason     String?   @map("cancel_reason") @db.Text
+  /// Chụp lại lúc duyệt: có theo dõi mở/bấm hay không (đổi Cấu hình sau không đổi thư đã gửi).
+  trackingEnabled  Boolean   @default(false) @map("tracking_enabled")
+  /// Chụp lại lúc duyệt: bao nhiêu người bị loại vì lý do gì (cả những người không có email, không thành dòng người nhận).
+  recipientSummary Json      @default("{}") @map("recipient_summary")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?   @map("created_by") @db.Uuid
+  updatedBy        String?   @map("updated_by") @db.Uuid
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template   EmailTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  recipients EmailRecipient[]
+  events     EmailEvent[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@map("email_campaigns")
+}
+
+/// Một người nhận của một chiến dịch. Khóa duy nhất (chiến dịch, email) chống gửi trùng.
+model EmailRecipient {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  campaignId     String    @map("campaign_id") @db.Uuid
+  /// Email đã chuẩn hóa chữ thường.
+  email          String    @db.VarChar(255)
+  name           String    @db.VarChar(255)
+  companyName    String?   @map("company_name") @db.VarChar(255)
+  /// lead | contact
+  recipientType  String    @map("recipient_type") @db.VarChar(20)
+  leadId         String?   @map("lead_id") @db.Uuid
+  contactId      String?   @map("contact_id") @db.Uuid
+  customerId     String?   @map("customer_id") @db.Uuid
+  /// QUEUED | SENDING | SENT | FAILED | SKIPPED
+  status         String    @default("QUEUED") @db.VarChar(20)
+  /// Lý do lỗi / bị loại — bắt buộc khi FAILED hoặc SKIPPED.
+  reason         String?   @db.Text
+  attemptAt      DateTime? @map("attempt_at") @db.Timestamptz(6)
+  sentAt         DateTime? @map("sent_at") @db.Timestamptz(6)
+  messageId      String?   @map("message_id") @db.VarChar(255)
+  openedAt       DateTime? @map("opened_at") @db.Timestamptz(6)
+  openCount      Int       @default(0) @map("open_count")
+  clickedAt      DateTime? @map("clicked_at") @db.Timestamptz(6)
+  clickCount     Int       @default(0) @map("click_count")
+  unsubscribedAt DateTime? @map("unsubscribed_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  lead     Lead?         @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  contact  Contact?      @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  events   EmailEvent[]
+
+  @@unique([campaignId, email])
+  @@index([tenantId, campaignId, status])
+  @@index([tenantId, status, attemptAt])
+  @@map("email_recipients")
+}
+
+/// Nhật ký mở / bấm / huỷ nhận tin. Chỉ ghi thêm (trigger chan_sua_xoa).
+model EmailEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  campaignId  String   @map("campaign_id") @db.Uuid
+  recipientId String   @map("recipient_id") @db.Uuid
+  /// open | click | unsubscribe
+  eventType   String   @map("event_type") @db.VarChar(20)
+  linkIndex   Int?     @map("link_index")
+  url         String?  @db.Text
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.Text
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign  EmailCampaign  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  recipient EmailRecipient @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, campaignId, eventType])
+  @@map("email_events")
+}
+
+/// Danh sách chặn gửi theo địa chỉ email: đã huỷ nhận tin, email hỏng (máy chủ nhận từ chối hẳn).
+model EmailSuppression {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  email       String   @db.VarChar(255)
+  /// huy-nhan-tin | email-hong
+  reason      String   @db.VarChar(30)
+  recipientId String?  @map("recipient_id") @db.Uuid
+  note        String?  @db.Text
+  status      String   @default("hoat-dong") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@map("email_suppressions")
+}
+
+/// Mã khôi phục 2 lớp: dùng một lần, chỉ lưu **băm** (HMAC-SHA256 có khóa riêng).
+model UserRecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @map("code_hash") @db.VarChar(64)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@index([tenantId, userId])
+  @@map("user_recovery_codes")
 }

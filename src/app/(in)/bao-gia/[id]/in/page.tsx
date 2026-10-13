@@ -2,16 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { taoNguCanh } from "@/lib/api";
 import { LoiKhongTimThay } from "@/lib/loi";
-import { dinhDangNgay, dinhDangPhanTram, dinhDangTien } from "@/lib/dinh-dang";
+import { dinhDangNgay, dinhDangPhanTram, dinhDangSo, dinhDangTien } from "@/lib/dinh-dang";
 import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { banDoTenDuLieuGoc } from "@/modules/crm/chung";
 import { chiTietBaoGia, soPhienBan, xemPhienBan } from "@/modules/bao-gia/service";
 import { docTienBangChu, NHAN_TRANG_THAI_BAO_GIA } from "@/modules/bao-gia/tinh-toan";
-import { docHoSoCongTy } from "@/modules/ho-so-cong-ty/service";
+import { docHoSoCongTy, docLogoCongTy } from "@/modules/ho-so-cong-ty/service";
 import NutIn from "./NutIn";
 
 export const dynamic = "force-dynamic";
 
+const CHAM = "………………";
 const LA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -19,6 +20,9 @@ const LA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  *
  * Không dùng thư viện sinh PDF: bản in là HTML có `@media print`, nên sửa mẫu chỉ là sửa
  * CSS, và font tiếng Việt luôn đúng vì dùng font hệ thống.
+ *
+ * Bố cục theo mẫu PDF báo giá của ITW CRM (0.16.0): logo + đầu công ty, dải tiêu đề, khối khách
+ * hàng, bảng hàng có VAT, khối tổng + bằng chữ, điều khoản đánh số, ký tên hai bên.
  *
  * Thông tin công ty lấy từ Hồ sơ công ty (Quản trị → Hồ sơ công ty). Chưa khai thì để
  * trống kèm nhắc — KHÔNG điền dữ liệu pháp nhân tự nghĩ ra (mục 5 luật vault).
@@ -38,6 +42,7 @@ export default async function BanInBaoGia({ params, searchParams }: { params: Pr
         bg: ct.baoGia,
         pb: ban,
         congTy: await docHoSoCongTy(tx, nd.phien.tenantId),
+        logo: await docLogoCongTy(tx),
         tenDieuKhoan: await banDoTenDuLieuGoc(nc, ["dieu_khoan_thanh_toan", "dieu_khoan_giao_hang", "don_vi_tinh"]),
       };
     } catch (loi) {
@@ -47,7 +52,28 @@ export default async function BanInBaoGia({ params, searchParams }: { params: Pr
   });
   if (!du) notFound();
 
-  const { bg, pb, congTy, tenDieuKhoan } = du;
+  const { bg, pb, congTy, tenDieuKhoan, logo } = du;
+  const coCk = Number(pb.tongChietKhau) > 0;
+  // Điều khoản đánh số như mẫu ITW: từng điều khoản của phiên bản, điều khoản chung của công ty,
+  // rồi dòng "TK" thông tin chuyển khoản.
+  const dieuKhoan: { loai: "so" | "tk"; noiDung: string }[] = [
+    ...(pb.dieuKhoanThanhToan ? [{ loai: "so" as const, noiDung: `Thanh toán: ${tenDieuKhoan.dieu_khoan_thanh_toan?.[pb.dieuKhoanThanhToan] ?? pb.dieuKhoanThanhToan}` }] : []),
+    ...(pb.dieuKhoanGiaoHang ? [{ loai: "so" as const, noiDung: `Giao hàng: ${tenDieuKhoan.dieu_khoan_giao_hang?.[pb.dieuKhoanGiaoHang] ?? pb.dieuKhoanGiaoHang}` }] : []),
+    ...(pb.dieuKhoanBaoHanh ? [{ loai: "so" as const, noiDung: `Bảo hành: ${pb.dieuKhoanBaoHanh}` }] : []),
+    ...(congTy["cong_ty.dieu_khoan_mac_dinh"] || "")
+      .split(/\r?\n/)
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .map((x) => ({ loai: "so" as const, noiDung: x })),
+    ...(congTy["cong_ty.ngan_hang"] && congTy["cong_ty.so_tai_khoan"]
+      ? [
+          {
+            loai: "tk" as const,
+            noiDung: `Thông tin chuyển khoản: ${congTy["cong_ty.so_tai_khoan"]} — ${congTy["cong_ty.ngan_hang"]}${congTy["cong_ty.chu_tai_khoan"] ? ` — ${congTy["cong_ty.chu_tai_khoan"]}` : ""}`,
+          },
+        ]
+      : []),
+  ];
   const thieu = [
     ["Địa chỉ công ty", congTy["cong_ty.dia_chi"]],
     ["Mã số thuế", congTy["cong_ty.ma_so_thue"]],
@@ -74,170 +100,208 @@ export default async function BanInBaoGia({ params, searchParams }: { params: Pr
         </div>
       )}
 
-      <article className="to-in">
-        <header className="dau-in">
-          <div>
+      <article className="to-in mau-itw">
+        {/* 1. Đầu trang: logo + thông tin công ty (bố cục theo mẫu báo giá ITW) */}
+        <header className="dau-itw">
+          {logo && (
+            // eslint-disable-next-line @next/next/no-img-element -- logo nhúng data: URI từ Hồ sơ công ty
+            <img className="logo-itw" src={`data:${logo.mime};base64,${logo.duLieu}`} alt={congTy.tenHienThi} />
+          )}
+          <div className="cty-itw">
             <h1>{congTy.tenHienThi}</h1>
-            <dl>
-              {congTy["cong_ty.dia_chi"] && (
-                <div>
-                  <dt>Địa chỉ:</dt>
-                  <dd>{congTy["cong_ty.dia_chi"]}</dd>
-                </div>
-              )}
-              {congTy["cong_ty.ma_so_thue"] && (
-                <div>
-                  <dt>Mã số thuế:</dt>
-                  <dd>{congTy["cong_ty.ma_so_thue"]}</dd>
-                </div>
-              )}
-              {(congTy["cong_ty.dien_thoai"] || congTy["cong_ty.email"]) && (
-                <div>
-                  <dt>Liên hệ:</dt>
-                  <dd>
-                    {congTy["cong_ty.dien_thoai"]}
-                    {congTy["cong_ty.dien_thoai"] && congTy["cong_ty.email"] ? " · " : ""}
-                    {congTy["cong_ty.email"]}
-                  </dd>
-                </div>
-              )}
-              {congTy["cong_ty.website"] && (
-                <div>
-                  <dt>Website:</dt>
-                  <dd>{congTy["cong_ty.website"]}</dd>
-                </div>
-              )}
-            </dl>
-          </div>
-          <div className="so-in">
-            <h2>BÁO GIÁ</h2>
-            <div className="so">{soPhienBan(bg.so, pb.phienBan)}</div>
-            <div>Ngày: {dinhDangNgay(pb.guiLuc ?? pb.taoLuc)}</div>
-            {pb.hieuLucDen && <div>Hiệu lực đến: {dinhDangNgay(pb.hieuLucDen)}</div>}
+            {congTy["cong_ty.dia_chi"] && (
+              <div>
+                <b>Đ/c:</b> {congTy["cong_ty.dia_chi"]}
+              </div>
+            )}
+            {(congTy["cong_ty.dien_thoai"] || congTy["cong_ty.email"]) && (
+              <div>
+                {congTy["cong_ty.dien_thoai"] && (
+                  <>
+                    <b>ĐT:</b> {congTy["cong_ty.dien_thoai"]}
+                  </>
+                )}
+                {congTy["cong_ty.dien_thoai"] && congTy["cong_ty.email"] ? <span className="cach"> | </span> : null}
+                {congTy["cong_ty.email"] && (
+                  <>
+                    <b>Email:</b> {congTy["cong_ty.email"]}
+                  </>
+                )}
+              </div>
+            )}
+            {(congTy["cong_ty.website"] || congTy["cong_ty.ma_so_thue"]) && (
+              <div>
+                {congTy["cong_ty.website"] && (
+                  <>
+                    <b>Web:</b> {congTy["cong_ty.website"]}
+                  </>
+                )}
+                {congTy["cong_ty.website"] && congTy["cong_ty.ma_so_thue"] ? <span className="cach"> | </span> : null}
+                {congTy["cong_ty.ma_so_thue"] && (
+                  <>
+                    <b>MST:</b> {congTy["cong_ty.ma_so_thue"]}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </header>
 
-        <section className="khach-in">
-          <h3>Kính gửi</h3>
-          <div className="ten-khach">{bg.khachHang.ten}</div>
-          <dl>
-            {bg.lienHe && (
-              <div>
-                <dt>Người nhận:</dt>
-                <dd>
-                  {bg.lienHe.hoTen}
-                  {bg.lienHe.chucDanh ? ` — ${bg.lienHe.chucDanh}` : ""}
-                  {bg.lienHe.dienThoai ? ` · ${bg.lienHe.dienThoai}` : ""}
-                </dd>
-              </div>
-            )}
-            {bg.khachHang.diaChi && (
-              <div>
-                <dt>Địa chỉ:</dt>
-                <dd>{bg.khachHang.diaChi}</dd>
-              </div>
-            )}
-            {bg.khachHang.maSoThue && (
-              <div>
-                <dt>Mã số thuế:</dt>
-                <dd>{bg.khachHang.maSoThue}</dd>
-              </div>
-            )}
-          </dl>
-          <p className="loi-mo">
-            {congTy.tenHienThi} trân trọng gửi Quý khách bảng báo giá cho các hạng mục dưới đây. Đơn giá tính bằng đồng Việt Nam (VND).
-          </p>
-        </section>
+        {/* 2. Dải tiêu đề + dòng số / ngày / hiệu lực */}
+        <div className="dai-itw tieu-de">BẢNG BÁO GIÁ</div>
+        <div className="dai-itw phu">QUOTATION / PROPOSAL</div>
+        <div className="thong-tin-itw">
+          <span>
+            <b>SỐ BG:</b> {soPhienBan(bg.so, pb.phienBan)}
+          </span>
+          <span>
+            <b>NGÀY:</b> {dinhDangNgay(pb.guiLuc ?? pb.taoLuc)}
+          </span>
+          <span>{pb.hieuLucDen ? `Hiệu lực đến: ${dinhDangNgay(pb.hieuLucDen)}` : ""}</span>
+        </div>
 
-        <table className="bang-in">
+        {/* 3. Khối khách hàng */}
+        <div className="dai-itw muc">KÍNH GỬI {bg.khachHang.ten.toUpperCase()}</div>
+        <table className="khach-itw">
+          <tbody>
+            <tr>
+              <td colSpan={3}>
+                <b>Tên khách hàng/Công ty:</b> {bg.khachHang.ten}
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={2}>
+                <b>Địa chỉ:</b> {bg.khachHang.diaChi || CHAM}
+              </td>
+              <td>
+                <b>Người liên hệ:</b> {bg.lienHe ? `${bg.lienHe.hoTen}${bg.lienHe.chucDanh ? ` (${bg.lienHe.chucDanh})` : ""}` : CHAM}
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <b>MST:</b> {bg.khachHang.maSoThue || CHAM}
+              </td>
+              <td>
+                <b>Điện thoại:</b> {bg.lienHe?.dienThoai || bg.khachHang.dienThoai || CHAM}
+              </td>
+              <td>
+                <b>Email:</b> {bg.lienHe?.email || bg.khachHang.email || CHAM}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="loi-mo-itw">{congTy.tenHienThi} xin trân trọng gửi đến Quý khách hàng bảng báo giá sản phẩm/dịch vụ như sau:</p>
+
+        {/* 4. Bảng hàng — có VAT từng dòng */}
+        <div className="cuon-ngang">
+        <table className="bang-in bang-itw">
           <thead>
             <tr>
-              <th className="so">STT</th>
-              <th>Hàng hóa / dịch vụ</th>
-              <th className="so">SL</th>
-              <th>ĐVT</th>
-              <th className="so">Đơn giá</th>
-              {Number(pb.tongChietKhau) > 0 && <th className="so">CK</th>}
+              <th className="giua-itw">STT</th>
+              <th>Mã SP</th>
+              <th>Tên sản phẩm / Mô tả</th>
+              <th className="giua-itw">ĐVT</th>
+              <th className="giua-itw">SL</th>
+              <th className="so">Đơn giá (VNĐ)</th>
+              {coCk && <th className="so">CK</th>}
               <th className="so">VAT</th>
-              <th className="so">Thành tiền</th>
+              <th className="so">Thành tiền (VNĐ)</th>
             </tr>
           </thead>
           <tbody>
             {pb.dong.map((d, i) => (
               <tr key={d.id}>
-                <td className="so">{i + 1}</td>
+                <td className="giua-itw">{i + 1}</td>
+                <td className="nho-itw">{d.sku ?? ""}</td>
                 <td>
                   <strong>{d.ten}</strong>
                   {d.moTa && <div className="mo-ta-in">{d.moTa}</div>}
                 </td>
-                <td className="so">{Number(d.soLuong).toLocaleString("vi-VN")}</td>
-                <td>{(d.donViTinh ? tenDieuKhoan.don_vi_tinh?.[d.donViTinh] : null) ?? d.donViTinh ?? ""}</td>
-                <td className="so">{dinhDangTien(d.donGia)}</td>
-                {Number(pb.tongChietKhau) > 0 && <td className="so">{Number(d.chietKhau) > 0 ? dinhDangPhanTram(d.chietKhau) : "—"}</td>}
+                <td className="giua-itw">{(d.donViTinh ? tenDieuKhoan.don_vi_tinh?.[d.donViTinh] : null) ?? d.donViTinh ?? ""}</td>
+                <td className="giua-itw">{Number(d.soLuong).toLocaleString("vi-VN")}</td>
+                <td className="so">{dinhDangSo(Math.round(Number(d.donGia)))}</td>
+                {coCk && <td className="so">{Number(d.chietKhau) > 0 ? dinhDangPhanTram(d.chietKhau) : "—"}</td>}
                 <td className="so">{dinhDangPhanTram(d.vat)}</td>
-                <td className="so">{dinhDangTien(d.thanhTien)}</td>
+                <td className="so">
+                  <strong>{dinhDangSo(Math.round(Number(d.thanhTien)))}</strong>
+                </td>
               </tr>
             ))}
+            {pb.dong.length === 0 && (
+              <tr>
+                <td colSpan={coCk ? 9 : 8} className="giua-itw">
+                  (Chưa có dòng hàng)
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        </div>
+
+        {/* 5. Khối tổng */}
+        <table className="tong-itw">
+          <tbody>
+            <tr>
+              <th>Cộng tiền hàng</th>
+              <td>{dinhDangTien(pb.tamTinh)}</td>
+            </tr>
+            {Number(pb.tongChietKhau) > 0 && (
+              <tr>
+                <th>Chiết khấu</th>
+                <td>− {dinhDangTien(pb.tongChietKhau)}</td>
+              </tr>
+            )}
+            <tr>
+              <th>Thuế GTGT (VAT)</th>
+              <td>{dinhDangTien(pb.tongVat)}</td>
+            </tr>
+            <tr className="tong-cong">
+              <th>TỔNG CỘNG THANH TOÁN</th>
+              <td>{dinhDangTien(pb.tongCong)}</td>
+            </tr>
+            <tr className="bang-chu">
+              <td colSpan={2}>Bằng chữ: {docTienBangChu(Number(pb.tongCong))}</td>
+            </tr>
           </tbody>
         </table>
 
-        <div className="tong-in">
-          <dl>
-            <div>
-              <dt>Tạm tính</dt>
-              <dd>{dinhDangTien(pb.tamTinh)}</dd>
-            </div>
-            {Number(pb.tongChietKhau) > 0 && (
-              <div>
-                <dt>Chiết khấu</dt>
-                <dd>− {dinhDangTien(pb.tongChietKhau)}</dd>
-              </div>
-            )}
-            <div>
-              <dt>Thuế GTGT</dt>
-              <dd>{dinhDangTien(pb.tongVat)}</dd>
-            </div>
-            <div className="tong-cong">
-              <dt>Tổng cộng</dt>
-              <dd>{dinhDangTien(pb.tongCong)}</dd>
-            </div>
-          </dl>
-          <p className="bang-chu">Bằng chữ: {docTienBangChu(Number(pb.tongCong))}</p>
-        </div>
-
-        {(pb.dieuKhoanThanhToan || pb.dieuKhoanGiaoHang || pb.dieuKhoanBaoHanh || congTy["cong_ty.dieu_khoan_mac_dinh"] || congTy["cong_ty.ngan_hang"]) && (
-          <section className="dieu-khoan-in">
-            <h3>Điều khoản</h3>
-            <ul>
-              {pb.dieuKhoanThanhToan && <li>Thanh toán: {tenDieuKhoan.dieu_khoan_thanh_toan?.[pb.dieuKhoanThanhToan] ?? pb.dieuKhoanThanhToan}</li>}
-              {pb.dieuKhoanGiaoHang && <li>Giao hàng: {tenDieuKhoan.dieu_khoan_giao_hang?.[pb.dieuKhoanGiaoHang] ?? pb.dieuKhoanGiaoHang}</li>}
-              {pb.dieuKhoanBaoHanh && <li>Bảo hành: {pb.dieuKhoanBaoHanh}</li>}
-              {congTy["cong_ty.ngan_hang"] && congTy["cong_ty.so_tai_khoan"] && (
-                <li>
-                  Tài khoản nhận tiền: {congTy["cong_ty.so_tai_khoan"]} — {congTy["cong_ty.ngan_hang"]}
-                  {congTy["cong_ty.chu_tai_khoan"] ? ` — ${congTy["cong_ty.chu_tai_khoan"]}` : ""}
-                </li>
-              )}
-            </ul>
-            {congTy["cong_ty.dieu_khoan_mac_dinh"] && <p className="dieu-khoan-chung">{congTy["cong_ty.dieu_khoan_mac_dinh"]}</p>}
+        {/* 6. Điều khoản */}
+        {dieuKhoan.length > 0 && (
+          <section className="dieu-khoan-itw">
+            <div className="dai-itw muc">ĐIỀU KHOẢN &amp; GHI CHÚ</div>
+            <table>
+              <tbody>
+                {dieuKhoan.map((dk, i) => (
+                  <tr key={i}>
+                    <td className={`so-dk ${dk.loai}`}>{dk.loai === "tk" ? "TK" : String(i + 1).padStart(2, "0")}</td>
+                    <td>{dk.noiDung}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </section>
         )}
 
-        <footer className="chan-in">
+        {/* 7. Ký tên */}
+        <footer className="ky-itw">
           <div>
-            <div className="nhan-ky">Người lập báo giá</div>
+            <div className="dai-ky">KHÁCH HÀNG</div>
+            <div className="ghi-ky">(Ký, ghi rõ họ tên)</div>
             <div className="cho-ky" />
-            <div className="ten-ky">{bg.nguoiPhuTrach.hoTen}</div>
-            {bg.nguoiPhuTrach.dienThoai && <div className="phu-ky">{bg.nguoiPhuTrach.dienThoai}</div>}
-            {bg.nguoiPhuTrach.email && <div className="phu-ky">{bg.nguoiPhuTrach.email}</div>}
           </div>
           <div>
-            <div className="nhan-ky">Đại diện {congTy.tenHienThi}</div>
+            <div className="dai-ky">{congTy.tenHienThi.toUpperCase()}</div>
+            <div className="ghi-ky">(Ký, đóng dấu)</div>
             <div className="cho-ky" />
             <div className="ten-ky">{congTy["cong_ty.nguoi_ky"]}</div>
             {congTy["cong_ty.chuc_vu_nguoi_ky"] && <div className="phu-ky">{congTy["cong_ty.chuc_vu_nguoi_ky"]}</div>}
           </div>
         </footer>
+        <p className="lap-boi-itw">
+          Người lập: <b>{bg.nguoiPhuTrach.hoTen}</b>
+          {bg.nguoiPhuTrach.dienThoai ? ` · ĐT: ${bg.nguoiPhuTrach.dienThoai}` : ""}
+          {bg.nguoiPhuTrach.email ? ` · ${bg.nguoiPhuTrach.email}` : ""}
+        </p>
       </article>
     </div>
   );

@@ -73,6 +73,8 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 | SQL injection | Prisma tham số hóa; SQL thô chỉ dùng template có tham số (`$queryRaw\`...${x}\``) |
 | IP thật | Chỉ tin `X-Real-IP` do nginx máy chủ đặt; nginx trong Docker chuyển tiếp nguyên giá trị |
 | Lộ lỗi | Lỗi ngoài dự kiến chỉ trả câu chung; chi tiết vào log máy chủ. `/api/khoe` không trả chi tiết lỗi |
+| Xác thực 2 lớp | TOTP RFC 6238 tự viết (`src/lib/totp.ts`); đăng nhập hai bước qua phiên tạm 5 phút; mã sai dùng chung bộ đếm khóa tài khoản; bật/tắt/đặt lại thu hồi phiên khác qua `users.security_changed_at` (mục 7r) |
+| Bí mật lưu trong CSDL | Mật khẩu SMTP, khóa TOTP: AES-256-GCM bằng `APP_ENC_KEY`, ngữ cảnh (doanh nghiệp / người dùng) trong AAD; CHECK chỉ nhận chuỗi `v1:…` (`src/lib/ma-hoa.ts`, QĐ-68) |
 | Nhật ký | `audit_logs`, `business_events` chỉ ghi thêm — trigger chặn UPDATE/DELETE kể cả với chủ sở hữu; tự che khóa `password`, `token`, `secret`, `apiKey`… |
 
 ## 6. Giao diện
@@ -111,7 +113,7 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Giao diện, API, bản in và (sau này) trợ lý AI **dùng chung một hàm** `tinhBaoGia()` nên con số không bao giờ lệch nhau; làm tròn từng dòng về đồng rồi mới cộng.
 - Ngưỡng duyệt đọc từ Cấu hình `bao_gia.nguong_bien_loi_nhuan`, **không viết cứng**; chưa đặt thì mọi báo giá phải duyệt (BG-04).
 - Phạm vi xem như cơ hội (QĐ-13): người lập, cộng đường chủ tài khoản khách.
-- Bản in là trang riêng ngoài khung ứng dụng (`src/app/(in)/bao-gia/[id]/in`), in bằng trình duyệt (QĐ-21); phần đầu lấy từ Hồ sơ công ty (QĐ-22).
+- Bản in là trang riêng ngoài khung ứng dụng (`src/app/(in)/bao-gia/[id]/in`), in bằng trình duyệt (QĐ-21); phần đầu lấy từ Hồ sơ công ty (QĐ-22). Từ 0.16.0 bố cục theo mẫu PDF báo giá của ITW CRM, có logo công ty (`tenant_settings` khóa `cong_ty.logo`, nhúng `data:` URI; kiểm byte đầu bằng `nhanDangTep()` của tệp đính kèm).
 
 ## 7e. Đơn hàng và kho (Phase 5)
 
@@ -217,6 +219,22 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - Chuyển đổi lead (`lead/service.ts`) mang `campaign_id` sang cơ hội và sang khách mới — một chỗ sửa duy nhất ngoài phân hệ.
 - `danhSachTheoPhanKhuc(nc, phanKhucId, tuyChon)` là cửa cho gói Email marketing; mặc định chỉ trả người nhận được tin và che liên lạc theo quyền.
 - Landing page là Server Component dựng từ khối đã kiểm Zod (`src/components/marketing/KhoiLanding.tsx`), dùng chung cho trang công khai và khung xem trước; form công khai là một client component dùng chung (`FormDangKyCongKhai.tsx`).
+
+## 7q. Email marketing
+
+- Phân hệ: `src/modules/email`. `tinh-toan.ts` (thuần — khối, dựng HTML, lọc người nhận, phân loại lỗi SMTP), `luoc-do.ts`, `ma-lien-ket.ts` (mã ký liên kết công khai), `van-chuyen.ts` (lớp gửi — nodemailer, thay được trong bài thử), `ket-noi.ts` (kết nối SMTP), `nguon-nguoi-nhan.ts` (giao diện nguồn người nhận), `service.ts` (mẫu + chiến dịch), `gui.ts` (gửi theo lô — worker gọi), `cong-khai.ts` (huỷ nhận tin, mở, bấm).
+- **Mẫu là dữ liệu, không phải HTML** (QĐ-23 + EM-03). Một hàm `dungThu()` dựng HTML cho xem trước, thư thử và thư thật — cái người soạn thấy là cái khách nhận. Xem trước hiện trong `<iframe sandbox="" srcDoc>`, không chèn vào DOM của trang.
+- **Nguồn người nhận là chỗ cắm** (QĐ-71). Chiến dịch chỉ biết `{ ma, quyen, luocDo, moTa(), lay(nc, thamSo) }`; `lay()` trả `{ email, ten, congTy, loai: "lead"|"contact", id, khachHangId, tuChoiLuc }` **đã lọc theo phạm vi** người gọi. Loại trùng / hỏng / từ chối làm chung một chỗ (`locNguoiNhan()`). Nguồn có sẵn: `loc-don-gian` (lead theo nguồn + giai đoạn; liên hệ theo nguồn / phân khúc / ngành của khách). Gói Marketing cắm phân khúc bằng `dangKyNguonNguoiNhan({ ma: "phan-khuc", … })`.
+- **Gửi tối đa một lần** (QĐ-70): nhận việc (`FOR UPDATE SKIP LOCKED` → SENDING) và COMMIT **trước** khi mở SMTP; gửi ngoài giao dịch; ghi kết quả bằng giao dịch nhỏ. Kẹt SENDING quá 10 phút → FAILED, không gửi lại. Tốc độ đếm trong CSDL (thư đã nhận việc trong 60 giây qua), dưới `pg_advisory_xact_lock` theo doanh nghiệp nên nhiều worker không cùng đếm một lúc. Phân loại lỗi SMTP dựa vào **lệnh** bị từ chối và **mã mở rộng** RFC 3463, không dựa vào `code` của nodemailer (nó gắn `EENVELOPE` cho cả lỗi MAIL FROM).
+- **Đường công khai** `/huy-nhan-tin/[mã]` và `/api/cong-khai/...` (QĐ-76): không có phiên; mã ký HMAC (khóa con của `APP_ENC_KEY`) mang doanh nghiệp + người nhận + chỉ số liên kết. `proxy.ts` mở hai tiền tố này và **miễn kiểm Origin** cho `/api/cong-khai/` vì ứng dụng thư gửi `List-Unsubscribe-Post` không kèm Origin. Mỗi đường giới hạn tốc độ theo IP.
+- Worker: mỗi nhịp 60 giây, sau bản quét nhắc việc, gọi `guiLoThu(tenantId)` cho từng doanh nghiệp trong `try` riêng.
+
+## 7r. Xác thực 2 lớp
+
+- Phân hệ: `src/modules/xac-thuc-2-lop/service.ts`; phần thuần `src/lib/totp.ts` (HOTP/TOTP, base32, mã khôi phục) có kiểm thử bằng vector chuẩn RFC 4226 / RFC 6238.
+- Đăng nhập: `/api/dang-nhap` kiểm mật khẩu như cũ; tài khoản bật 2 lớp thì cấp cookie `cowork_2lop` (JWT có `p: "2lop"`, 5 phút, path `/api/dang-nhap`) thay vì cookie phiên. `giaiMaPhien()` từ chối mọi token có `p`, nên phiên tạm không mở được gì. `/api/dang-nhap/2-lop` kiểm mã rồi mới cấp phiên thật.
+- **Thu hồi phiên**: `layHoSoQuyen().doiMatKhauLuc` = mốc muộn hơn của `password_changed_at` và `security_changed_at` — mọi chỗ đang so phiên với lần đổi mật khẩu tự động tính cả đổi thiết lập 2 lớp, không phải sửa từng chỗ.
+- **Bắt buộc theo vai trò**: danh sách mã vai trò lưu ở `tenant_settings` khóa `bao_mat.vai_tro_bat_buoc_2_lop` (mảng — màn hình Cấu hình chỉ nhận số, QĐ-73). `layHoSoQuyen()` tính `phaiBat2Lop`; `xuLyApi` chặn (trừ route có `choPhepKhiPhaiBat2Lop`), `yeuCauDangNhap()` đưa sang `/bat-xac-thuc-2-lop`.
 
 ## 8. Tác vụ nền
 

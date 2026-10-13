@@ -39,6 +39,7 @@ export const KIEU_SO = {
   traHangMua: { loai: "purchase_return", tienTo: "TM", doDai: 4, theoNam: true },
   chuyenKho: { loai: "stock_transfer", tienTo: "CK", doDai: 4, theoNam: true },
   chienDich: { loai: "marketing_campaign", tienTo: "CD", doDai: 4, theoNam: true },
+  chienDichEmail: { loai: "email_campaign", tienTo: "EM", doDai: 4, theoNam: true },
 } satisfies Record<string, KieuSo>;
 
 /** Năm hiện tại theo giờ Việt Nam (31/12 23:30 UTC đã là năm mới ở Việt Nam). */

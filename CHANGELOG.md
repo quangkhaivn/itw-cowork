@@ -2,9 +2,9 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.16.0 — (chưa phát hành)
+## 0.16.0 — 13/10/2026 — Tích hợp CRM: khách hàng nâng cao, marketing & thu lead, email marketing, xác thực 2 lớp
 
-Gộp hai gói: **Khách hàng nâng cao** (gói K) và **Marketing và thu lead** (gói M). **Chưa triển khai lên máy thật.**
+Gộp ba gói: **Khách hàng nâng cao** (gói K), **Marketing và thu lead** (gói M), **Email marketing + xác thực 2 lớp + bản in báo giá** (gói E). **Chưa triển khai lên máy thật.** Cần biến môi trường mới `APP_ENC_KEY` (app và worker).
 
 ### Khách hàng nâng cao
 
@@ -78,7 +78,43 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 22 (MK). Kiến trúc: `ARCHITEC
 #### Kiểm thử
 - 339 bài đơn vị (thêm 30), 997 bài tích hợp (thêm `thu:marketing` 103 bài và `thu:qa-marketing` 122 bài), 434 bài HTTP đầu-cuối + 107 bài `thu:qa-marketing-http` — tất cả đạt.
 
-### Sau khi gộp hai gói
+### Email marketing và xác thực 2 lớp
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 23 (EM) và 24 (XT). Kiến trúc: `ARCHITECTURE.md` mục 7q, 7r.
+Quyết định QĐ-67 → QĐ-76. Migration `20261012090000_email_marketing_2_lop`. Cần biến môi trường mới `APP_ENC_KEY` cho cả app và worker.
+
+#### Thêm
+- **Kết nối email** (Quản trị): máy chủ SMTP, cổng, mã hóa, tài khoản, người gửi, địa chỉ trả lời; nút gợi ý cho Gmail/Google Workspace (mật khẩu ứng dụng), Microsoft 365, SendGrid, Mailgun, Amazon SES; **Gửi thư thử** tới email của người đang đăng nhập. Mật khẩu **mã hóa** trước khi lưu, không bao giờ hiện lại.
+- **Mẫu email** soạn bằng khối an toàn — tiêu đề, đoạn văn, nút liên kết, ảnh, danh sách, đường ngăn cách — không có ô nào nhận HTML. Biến `{{ten}}`, `{{cong_ty}}`, `{{email}}`, `{{cong_ty_gui}}`. Xem trước dựng ở máy chủ, gửi thử tới chính mình.
+- **Chiến dịch email** (`EM-2026-0001`): chọn mẫu + người nhận (lead theo nguồn, giai đoạn; liên hệ theo nguồn, phân khúc, ngành) → đếm trước (đã loại người từ chối, email hỏng, trùng) → **gửi duyệt** → người có quyền duyệt marketing đưa vào hàng gửi → máy gửi dần theo tốc độ ở Cấu hình. Tạm dừng / tiếp tục / huỷ; thống kê đã gửi, lỗi, mở, bấm, huỷ nhận tin; mỗi người nhận một dòng trạng thái kèm lý do.
+- **Huỷ nhận tin một chạm**: liên kết ký HMAC trong chân thư, trang `/huy-nhan-tin/…`, và tiêu đề `List-Unsubscribe` + `List-Unsubscribe-Post` để Gmail/Outlook huỷ ngay trong hộp thư. Cột `marketing_opt_out_at` mới trên lead và liên hệ.
+- **Theo dõi mở / bấm** (bật ở Kết nối email). Bấm chỉ chuyển tới liên kết có thật trong thư.
+- Gửi thành công ghi tương tác `email` vào dòng thời gian lead / khách.
+- **Bản in báo giá theo mẫu ITW**: logo công ty (Hồ sơ công ty — PNG/JPEG/WebP ≤ 512 KB, kiểm byte đầu như tệp đính kèm, không nhận SVG), đầu trang công ty, dải tiêu đề "BẢNG BÁO GIÁ", khối khách hàng, bảng hàng có mã SP + VAT từng dòng, khối tổng + bằng chữ, điều khoản đánh số + thông tin chuyển khoản, ký tên hai bên. Vẫn in bằng trình duyệt (QĐ-21).
+- **Xác thực 2 lớp** (TOTP): tự bật ở Tài khoản của tôi, 10 mã khôi phục dùng một lần, đăng nhập hai bước; Quản trị chọn vai trò bắt buộc và đặt lại cho người mất điện thoại.
+- 7 bảng CSDL (22 CHECK + 1 trigger chỉ-ghi-thêm) + 7 cột trên `users` / `leads` / `contacts`, 28 route API (3 công khai), 10 màn hình + mục 2 lớp ở Tài khoản của tôi và bước 2 ở Đăng nhập, 2 ngưỡng Cấu hình.
+
+#### Quyết định đáng ghi
+- Thêm **`nodemailer`** (QĐ-67) — thư viện gửi thư đã qua kiểm chứng thay vì tự viết SMTP.
+- **Khóa mã hóa riêng `APP_ENC_KEY`** cho bí mật lưu trong CSDL, tách khỏi `AUTH_SECRET` (QĐ-68).
+- **Gửi tối đa một lần** (QĐ-70): máy dừng giữa chừng thì ghi lỗi chứ không gửi lại — khách nhận hai thư tệ hơn thiếu một thư.
+- **Nguồn người nhận là chỗ cắm** (QĐ-71) — phân khúc của gói Marketing cắm vào sau, không sửa chiến dịch.
+- TOTP tự viết, chưa có mã QR (QĐ-72).
+
+#### Sửa sau kiểm thử đối kháng (QA độc lập, 13/10)
+- **Phân loại lỗi SMTP**: chỉ đưa người nhận vào danh sách chặn khi lỗi ở RCPT có mã 5.1.x / 5.2.1 (hoặc 550/551/553 nói rõ người nhận không tồn tại). Hết hạn mức Gmail (5.4.5), M365 5.7.60 / 5.7.708, SPF/relay, mọi 4xx, mọi lỗi ở MAIL FROM / DATA → trả thư về hàng chờ, tự tạm dừng kèm lý do tiếng Việt. Trước đó một lần Gmail hết hạn mức chặn vĩnh viễn cả danh sách.
+- Nhiều worker cùng lúc không còn vượt tốc độ gửi: đếm + nhận việc dưới `pg_advisory_xact_lock`.
+- `APP_ENC_KEY` thiếu / sai / bản mã hỏng → lỗi 503 `khoa-ma-hoa-khong-khop` nói rõ phải làm gì (thư thử, bật 2 lớp); worker tự tạm dừng chiến dịch; bước 2 đăng nhập trả câu chung, log máy chủ ghi rõ.
+- Biến `{{constructor}}`, `{{__proto__}}`… không còn lọt danh sách trắng (`Object.hasOwn`).
+- Hồ sơ công ty mất địa chỉ sau khi duyệt → worker tự tạm dừng, không gửi thư thiếu chân thư.
+- Tắt 2 lớp / sinh lại mã khôi phục dùng chung hàng rào với bước 2 đăng nhập (giới hạn tốc độ + khóa tài khoản).
+- Đăng nhập 2 bước đúng thì xoá bộ đếm tốc độ; phiên tạm chỉ dùng được một lần.
+
+#### Kiểm thử
+- 386 bài đơn vị, 1.030 bài tích hợp (gồm `thu:qa-email` 124 bài của QA), 434 bài HTTP + 75 bài HTTP đối kháng (`thu:qa-email-http`) — tất cả đạt.
+- (Trước QA) 376 bài đơn vị (thêm 67: vector chuẩn RFC 4226 / RFC 6238, mã hóa, khối an toàn, lọc người nhận, mã ký liên kết, lỗi SMTP), 906 bài tích hợp (thêm `thu:email` 91 bài — nodemailer thật vào máy chủ SMTP giả — và `thu:xac-thuc-2-lop` 43 bài) — tất cả đạt.
+
+### Sau khi gộp các gói
 
 - **Bàn giao khi nghỉ việc chuyển cả việc Marketing**: chiến dịch chưa kết thúc, form / nguồn webhook / phân khúc đang dùng, landing nháp / đang xuất bản, và suất nhận lead vòng tròn (người nhận chưa có suất thì nhận nguyên suất, đã có thì suất người nghỉ tạm dừng).
 - **Gộp khách mang theo chiến dịch chạm đầu tiên** sang khách giữ lại khi khách giữ lại chưa có; lead "trùng khách" (`matched_customer_id`) tự chuyển theo nhờ gộp đọc khóa ngoại từ catalog.

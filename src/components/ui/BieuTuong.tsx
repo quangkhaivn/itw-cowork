@@ -4,6 +4,11 @@
  */
 
 const DUONG_VE: Record<string, string> = {
+  // 0.16.0 — email marketing, xác thực 2 lớp
+  email: "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6",
+  "mau-email": "M4 4h16v16H4zM4 9h16M9 9v11",
+  "ket-noi-email": "M22 2 11 13M22 2l-7 20-4-9-9-4z",
+  "bao-mat": "M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4M12 15v2",
   "bang-dieu-khien": "M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z",
   "nguoi-dung": "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
   "vai-tro": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",

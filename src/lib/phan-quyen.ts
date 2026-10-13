@@ -22,8 +22,24 @@ export interface HoSoQuyen {
   /** Mã quyền → phạm vi dữ liệu rộng nhất người này có. */
   phamVi: Map<string, PhamVi>;
   phaiDoiMatKhau: boolean;
-  /** Mốc đổi mật khẩu gần nhất — phiên ký trước mốc này bị coi là hết hiệu lực. */
+  /**
+   * Mốc thu hồi phiên: lần đổi mật khẩu **hoặc** đổi thiết lập 2 lớp gần nhất (lấy mốc muộn hơn).
+   * Phiên ký trước mốc này bị coi là hết hiệu lực.
+   */
   doiMatKhauLuc: Date | null;
+  /** Đã bật xác thực 2 lớp chưa. */
+  da2Lop: boolean;
+  /** Vai trò của người này nằm trong danh sách bắt buộc 2 lớp mà người này chưa bật (XT-06). */
+  phaiBat2Lop: boolean;
+}
+
+/** Khóa `tenant_settings` giữ danh sách mã vai trò bắt buộc 2 lớp (mảng JSON). Chưa đặt = không bắt buộc. */
+export const KHOA_BAT_BUOC_2_LOP = "bao_mat.vai_tro_bat_buoc_2_lop";
+
+export function mocMuonHon(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a.getTime() >= b.getTime() ? a : b;
 }
 
 /** Đọc toàn bộ vai trò và quyền của một người dùng. Gọi bên trong `voiTenant()`. */
@@ -36,6 +52,9 @@ export async function layHoSoQuyen(tx: ClientTenant, userId: string): Promise<Ho
       fullName: true,
       mustChangePassword: true,
       passwordChangedAt: true,
+      securityChangedAt: true,
+      totpEnabledAt: true,
+      isSystem: true,
       staffProfile: { select: { departmentId: true } },
       userRoles: {
         where: { status: "hoat-dong" },
@@ -71,6 +90,13 @@ export async function layHoSoQuyen(tx: ClientTenant, userId: string): Promise<Ho
 
   const phamVi = gopPhamVi(cap);
 
+  let phaiBat2Lop = false;
+  if (!nguoiDung.totpEnabledAt && !nguoiDung.isSystem) {
+    const dong = await tx.tenantSetting.findFirst({ where: { key: KHOA_BAT_BUOC_2_LOP, status: "hoat-dong" }, select: { value: true } });
+    const batBuoc = Array.isArray(dong?.value) ? (dong.value as unknown[]).filter((x): x is string => typeof x === "string") : [];
+    phaiBat2Lop = vaiTro.some((v) => batBuoc.includes(v.code));
+  }
+
   return {
     userId: nguoiDung.id,
     email: nguoiDung.email,
@@ -80,7 +106,9 @@ export async function layHoSoQuyen(tx: ClientTenant, userId: string): Promise<Ho
     quyen: new Set(phamVi.keys()),
     phamVi,
     phaiDoiMatKhau: nguoiDung.mustChangePassword,
-    doiMatKhauLuc: nguoiDung.passwordChangedAt,
+    doiMatKhauLuc: mocMuonHon(nguoiDung.passwordChangedAt, nguoiDung.securityChangedAt),
+    da2Lop: Boolean(nguoiDung.totpEnabledAt),
+    phaiBat2Lop,
   };
 }
 

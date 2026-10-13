@@ -40,7 +40,15 @@ export type HanhDong =
   | "duyet"
   | "tu-choi-duyet"
   | "huy"
-  | "doi-khoa";
+  | "doi-khoa"
+  // 0.16.0 — email marketing + xác thực 2 lớp
+  | "gui-thu"
+  | "huy-nhan-tin"
+  | "bat-2-lop"
+  | "tat-2-lop"
+  | "dat-lai-2-lop"
+  | "xac-thuc-2-lop-that-bai"
+  | "dung-ma-khoi-phuc";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;
@@ -67,6 +75,13 @@ const KHOA_NHAY_CAM = new Set([
   "apiKey",
   "api_key",
   "authorization",
+  // 0.16.0: mật khẩu SMTP đã mã hóa, khóa bí mật TOTP, mã khôi phục — không bao giờ vào nhật ký.
+  "passwordEnc",
+  "password_enc",
+  "totpSecret",
+  "totpSecretEnc",
+  "khoaBiMat",
+  "maKhoiPhuc",
 ]);
 
 /** Che giá trị nhạy cảm trước khi ghi. Không đưa mật khẩu hay khóa API vào nhật ký. */

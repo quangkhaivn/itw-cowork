@@ -69,6 +69,8 @@ export async function giaiMaPhien(token: string): Promise<PhienDaGiaiMa | null> 
     if (!payload.sub || typeof payload.tid !== "string" || typeof payload.email !== "string") {
       return null;
     }
+    // Phiên tạm giữa hai bước đăng nhập không phải phiên thật (XT-04).
+    if (payload.p !== undefined) return null;
     // Phiên ký trước bản 19/09 không có claim `ms` → dùng iat (giây) quy ra mili-giây.
     const kyLucMs = typeof payload.ms === "number" ? payload.ms : (payload.iat ?? 0) * 1000;
     return { userId: payload.sub, tenantId: payload.tid, email: payload.email, kyLucMs };
@@ -103,3 +105,57 @@ export async function layPhienHienTai(): Promise<PhienDaGiaiMa | null> {
 }
 
 export const TEN_COOKIE_PHIEN = TEN_COOKIE;
+
+// ---------------------------------------------------------------------------
+// Phiên tạm giữa hai bước đăng nhập (xác thực 2 lớp — XT-04)
+// ---------------------------------------------------------------------------
+
+const TEN_COOKIE_2_LOP = "cowork_2lop";
+const HAN_PHIEN_TAM_GIAY = 5 * 60;
+
+/**
+ * Sau khi mật khẩu đúng mà tài khoản bật 2 lớp: chưa cấp phiên thật, chỉ cấp một phiên tạm
+ * 5 phút có mục đích `2lop`. Phiên tạm KHÔNG mở được trang hay API nào — `giaiMaPhien()` từ
+ * chối nó vì khác tên cookie và có claim `p`; chỉ route nhập mã đọc nó.
+ */
+export async function kyPhienTam2Lop(noiDung: NoiDungPhien): Promise<string> {
+  return new SignJWT({ tid: noiDung.tenantId, email: noiDung.email, ms: Date.now(), p: "2lop" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(noiDung.userId)
+    .setIssuedAt()
+    .setExpirationTime(`${HAN_PHIEN_TAM_GIAY}s`)
+    .sign(layKhoaKy());
+}
+
+export async function giaiMaPhienTam2Lop(token: string): Promise<PhienDaGiaiMa | null> {
+  try {
+    const { payload } = await jwtVerify(token, layKhoaKy(), { algorithms: ["HS256"] });
+    if (payload.p !== "2lop" || !payload.sub || typeof payload.tid !== "string" || typeof payload.email !== "string" || typeof payload.ms !== "number") {
+      return null;
+    }
+    return { userId: payload.sub, tenantId: payload.tid, email: payload.email, kyLucMs: payload.ms };
+  } catch {
+    return null;
+  }
+}
+
+export async function datCookiePhienTam2Lop(token: string): Promise<void> {
+  const kho = await cookies();
+  kho.set(TEN_COOKIE_2_LOP, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/api/dang-nhap",
+    maxAge: HAN_PHIEN_TAM_GIAY,
+  });
+}
+
+export async function docCookiePhienTam2Lop(): Promise<string | null> {
+  const kho = await cookies();
+  return kho.get(TEN_COOKIE_2_LOP)?.value ?? null;
+}
+
+export async function xoaCookiePhienTam2Lop(): Promise<void> {
+  const kho = await cookies();
+  kho.set(TEN_COOKIE_2_LOP, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/api/dang-nhap", maxAge: 0 });
+}

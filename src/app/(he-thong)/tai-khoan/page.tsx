@@ -3,6 +3,9 @@ import DauTrang from "@/components/ui/DauTrang";
 import { dinhDangNgayGio } from "@/lib/dinh-dang";
 import { NHAN_PHAM_VI } from "@/lib/pham-vi";
 import { docDuLieu, yeuCauDangNhap } from "@/lib/trang";
+import { taoNguCanh } from "@/lib/api";
+import { trangThai2LopCuaToi } from "@/modules/xac-thuc-2-lop/service";
+import Khung2Lop from "@/components/bao-mat/Khung2Lop";
 import { MO_TA_HANH_DONG, MO_TA_PHAN_HE, type HanhDongQuyen, type PhanHe } from "@/lib/vai-tro";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +26,8 @@ export default async function TrangTaiKhoan() {
       },
     }),
   );
+
+  const haiLop = await docDuLieu(nd, (tx) => trangThai2LopCuaToi(taoNguCanh(tx, nd.phien.tenantId, nd.hoSo)));
 
   // Gom quyền theo phân hệ: phân hệ → [(hành động, phạm vi)].
   const theoPhanHe = new Map<string, { hanhDong: string; phamVi: string }[]>();
@@ -73,6 +78,15 @@ export default async function TrangTaiKhoan() {
           </div>
         </section>
       </div>
+
+      <section className="the" id="xac-thuc-2-lop">
+        <div className="dau">
+          <h2>Xác thực 2 lớp</h2>
+        </div>
+        <div className="than">
+          <Khung2Lop trangThai={{ ...haiLop, batLuc: haiLop.batLuc?.toISOString() ?? null }} />
+        </div>
+      </section>
 
       <section className="the">
         <div className="dau">

@@ -59,7 +59,12 @@ export type BieuTuong =
   | "form-dang-ky"
   | "webhook"
   | "phan-khuc"
-  | "landing";
+  | "landing"
+  // 0.16.0 — Email marketing + xác thực 2 lớp
+  | "email"
+  | "mau-email"
+  | "ket-noi-email"
+  | "bao-mat";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -114,12 +119,14 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     // 0.16.0 — chỉ những màn hình đã chạy thật (mục 6 ARCHITECTURE).
     nhan: "Marketing",
     muc: [
-      { nhan: "Chiến dịch", href: "/marketing/chien-dich", quyen: "marketing.view", bieuTuong: "chien-dich", tuKhoa: "campaign chien dich ngan sach chi phi cpl roas utm" },
+      { nhan: "Chiến dịch marketing", href: "/marketing/chien-dich", quyen: "marketing.view", bieuTuong: "chien-dich", tuKhoa: "campaign chien dich ngan sach chi phi cpl roas utm" },
       { nhan: "Nhận lead", href: "/marketing/nhan-lead", quyen: "marketing.view", bieuTuong: "nhan-lead", tuKhoa: "chia lead vong tron nhat ky nhan lead nhap tay" },
       { nhan: "Form đăng ký", href: "/marketing/form", quyen: "marketing.view", bieuTuong: "form-dang-ky", tuKhoa: "form dang ky cong khai nhung iframe website" },
       { nhan: "Webhook", href: "/marketing/webhook", quyen: "marketing.view", bieuTuong: "webhook", tuKhoa: "webhook facebook lead ads zalo zapier khoa bi mat" },
       { nhan: "Phân khúc", href: "/marketing/phan-khuc", quyen: "marketing.view", bieuTuong: "phan-khuc", tuKhoa: "segment phan khuc tep khach dong y nhan tin" },
       { nhan: "Landing page", href: "/marketing/landing", quyen: "marketing.view", bieuTuong: "landing", tuKhoa: "landing page trang dich ab test" },
+      { nhan: "Đợt gửi email", href: "/marketing/email/chien-dich", quyen: "marketing.view", bieuTuong: "email", tuKhoa: "email marketing chien dich email dot gui thu newsletter" },
+      { nhan: "Mẫu email", href: "/marketing/email/mau", quyen: "marketing.view", bieuTuong: "mau-email", tuKhoa: "mau thu email template noi dung" },
     ],
   },
   {
@@ -207,6 +214,8 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Dữ liệu gốc", href: "/quan-tri/du-lieu-goc", quyen: "master_data.view", bieuTuong: "du-lieu-goc", tuKhoa: "master data danh muc nguon lead don vi tinh" },
       { nhan: "Cấu hình hệ thống", href: "/quan-tri/cau-hinh", quyen: "setting.view", bieuTuong: "cau-hinh", tuKhoa: "settings nguong bien loi nhuan" },
       { nhan: "Hồ sơ công ty", href: "/quan-tri/ho-so-cong-ty", quyen: "setting.view", bieuTuong: "ho-so-cong-ty", tuKhoa: "company profile dia chi ma so thue tai khoan nguoi ky ban in" },
+      { nhan: "Kết nối email", href: "/quan-tri/ket-noi-email", quyen: "integration.view", bieuTuong: "ket-noi-email", tuKhoa: "smtp gmail microsoft 365 sendgrid hop thu gui email" },
+      { nhan: "Xác thực 2 lớp", href: "/quan-tri/xac-thuc-2-lop", quyen: "user.view", bieuTuong: "bao-mat", tuKhoa: "2fa totp bao mat authenticator ma xac thuc" },
       { nhan: "Tự động hóa", href: "/quan-tri/tu-dong-hoa", quyen: "setting.view", bieuTuong: "tu-dong-hoa", tuKhoa: "automation quy tac nhac viec lich chay nen job" },
       { nhan: "Nhật ký kiểm toán", href: "/quan-tri/nhat-ky-kiem-toan", quyen: "audit_log.view", bieuTuong: "nhat-ky", tuKhoa: "audit log lich su" },
     ],

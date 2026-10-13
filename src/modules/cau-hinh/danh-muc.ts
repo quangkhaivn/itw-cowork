@@ -406,6 +406,34 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     macDinh: null,
     dungTuPhase: 8,
   },
+  // 0.16.0 — Email marketing. Tốc độ gửi là chuyện an toàn của hộp thư gửi (nhà cung cấp
+  // khóa tài khoản gửi quá nhanh), nên chưa đặt thì dùng một mức **chậm** ghi rõ là mặc định.
+  {
+    khoa: "email.so_thu_moi_phut",
+    nhom: "Email marketing",
+    nhan: "Tốc độ gửi chiến dịch email",
+    moTa:
+      "Số thư tối đa máy gửi đi mỗi phút cho một doanh nghiệp. Mặc định 10 thư/phút (600 thư/giờ) — mức chậm, an toàn với Gmail/Microsoft 365. Dịch vụ gửi chuyên dụng (SendGrid, Mailgun, Amazon SES) cho phép cao hơn; đặt theo hạn mức trong hợp đồng của nhà cung cấp.",
+    donVi: "thư/phút",
+    toiThieu: 1,
+    toiDa: 600,
+    soNguyen: true,
+    macDinh: 10,
+    dungTuPhase: 8,
+  },
+  {
+    khoa: "email.so_thu_toi_da_moi_ngay",
+    nhom: "Email marketing",
+    nhan: "Số thư chiến dịch tối đa mỗi ngày",
+    moTa:
+      "Đủ số này trong ngày (giờ Việt Nam) thì máy ngừng gửi, hôm sau gửi tiếp. Để trống = không chặn theo ngày. Gmail thường giới hạn khoảng 500 thư/ngày, Google Workspace khoảng 2.000 — kiểm hạn mức thật của tài khoản trước khi đặt.",
+    donVi: "thư/ngày",
+    toiThieu: 1,
+    toiDa: 1_000_000,
+    soNguyen: true,
+    macDinh: null,
+    dungTuPhase: 8,
+  },
 ];
 
 export function timMuc(khoa: string): MucCauHinh | undefined {

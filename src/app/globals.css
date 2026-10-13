@@ -851,3 +851,72 @@ table.bang-in .mo-ta-in { color: #555; font-size: 12px; margin-top: 2px; white-s
 .khoi-sua > .dau { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--vien); background: var(--nen-sau); border-radius: var(--bo-goc) var(--bo-goc) 0 0; flex-wrap: wrap; }
 .khoi-sua > .than { padding: 12px; }
 .xem-truoc-lp { border: 1px dashed var(--vien-dam); border-radius: var(--bo-goc); padding: 12px; background: var(--nen); max-height: 80vh; overflow: auto; }
+
+/* --------------------------------------------------------------------------
+ * 0.16.0 — xác thực 2 lớp, email marketing
+ * ------------------------------------------------------------------------ */
+.ds-ma-khoi-phuc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 24px; margin: 12px 0 16px; padding-left: 24px; font-size: 15px; }
+.khoa-2-lop { font-size: 15px; letter-spacing: .04em; word-break: break-all; }
+.uri-2-lop { width: 100%; margin-top: 6px; font-family: ui-monospace, monospace; font-size: 12px; }
+.buoc-2-lop { padding-left: 20px; line-height: 1.6; }
+.buoc-2-lop li + li { margin-top: 8px; }
+.khung-xem-thu { width: 100%; height: 560px; border: 1px solid var(--vien); border-radius: 8px; background: #fff; }
+.khoi-email { border: 1px solid var(--vien); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: var(--the); }
+.khoi-email .dau-khoi { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.khoi-email .dau-khoi strong { margin-right: auto; }
+.them-khoi { display: flex; gap: 6px; flex-wrap: wrap; }
+.trang-cong-khai { max-width: 520px; }
+@media (max-width: 900px) {
+  .ds-ma-khoi-phuc { grid-template-columns: 1fr; }
+  .khung-xem-thu { height: 440px; }
+}
+.logo-ho-so { max-height: 64px; max-width: 220px; object-fit: contain; border: 1px solid var(--vien); border-radius: 6px; padding: 4px; background: #fff; }
+
+/* Bản in báo giá theo mẫu ITW (0.16.0) — màu lấy đúng bảng màu của PDF báo giá ITW CRM */
+.mau-itw { --itw-navy: #1f4e78; --itw-xanh: #2e75b6; --itw-cam: #ed7d31; --itw-nhat: #d9e2f3; --itw-vien: #9db3d6; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.dau-itw { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; }
+.logo-itw { height: 78px; max-width: 160px; object-fit: contain; }
+.cty-itw { font-size: 12px; line-height: 1.5; }
+.cty-itw h1 { font-size: 19px; color: var(--itw-navy); margin: 0 0 4px; }
+.cty-itw b { color: var(--itw-navy); }
+.cty-itw .cach { color: #999; }
+.dai-itw { background: var(--itw-navy); color: #fff; padding: 4px 8px; font-weight: 700; }
+.dai-itw.tieu-de { font-size: 28px; text-align: center; letter-spacing: 1px; padding: 6px 8px 2px; line-height: 1.2; }
+.dai-itw.phu { background: var(--itw-xanh); font-style: italic; font-weight: 400; text-align: center; font-size: 12px; padding: 2px 8px; }
+.dai-itw.muc { font-size: 12.5px; margin-top: 4px; }
+.thong-tin-itw { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--itw-xanh); color: #fff; padding: 5px 8px; margin: 6px 0 12px; font-size: 12px; }
+.thong-tin-itw > span:nth-child(2) { text-align: center; }
+.thong-tin-itw > span:nth-child(3) { text-align: right; }
+table.khach-itw { width: 100%; border-collapse: collapse; margin-bottom: 10px; background: #f5f8fc; font-size: 12px; }
+table.khach-itw td { border: 1px solid var(--itw-vien); padding: 4px 7px; }
+table.khach-itw b { color: var(--itw-navy); }
+.loi-mo-itw { font-style: italic; margin: 0 0 6px; }
+table.bang-itw th { background: var(--itw-navy); color: #fff; border-color: var(--itw-vien); }
+table.bang-itw td { border-color: var(--itw-vien); }
+table.bang-itw tbody tr:nth-child(even) td { background: #f5f8fc; }
+table.bang-itw .giua-itw { text-align: center; }
+table.bang-itw .nho-itw { font-size: 11px; }
+table.tong-itw { margin: 0 0 14px auto; border-collapse: collapse; min-width: 360px; }
+table.tong-itw th, table.tong-itw td { background: var(--itw-nhat); color: var(--itw-navy); padding: 5px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+table.tong-itw th { font-weight: 400; }
+table.tong-itw td { font-weight: 700; white-space: nowrap; }
+table.tong-itw .tong-cong th, table.tong-itw .tong-cong td { background: var(--itw-navy); color: #fff; font-weight: 700; font-size: 15px; }
+table.tong-itw .bang-chu td { text-align: left; font-style: italic; font-weight: 400; white-space: normal; }
+.dieu-khoan-itw { margin-bottom: 16px; }
+.dieu-khoan-itw table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dieu-khoan-itw td { border-bottom: 1px solid #e0e6ef; padding: 4px 7px; vertical-align: top; white-space: pre-wrap; }
+.dieu-khoan-itw td.so-dk { width: 30px; text-align: center; color: #fff; font-weight: 700; background: var(--itw-cam); white-space: nowrap; }
+.dieu-khoan-itw td.so-dk.tk { background: var(--itw-navy); }
+.ky-itw { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; text-align: center; margin-top: 18px; page-break-inside: avoid; }
+.ky-itw .dai-ky { background: var(--itw-xanh); color: #fff; font-weight: 700; padding: 4px 6px; }
+.ky-itw .ghi-ky { font-style: italic; color: #7f8c8d; font-size: 12px; margin-top: 2px; }
+.ky-itw .cho-ky { height: 70px; }
+.ky-itw .ten-ky { font-weight: 700; min-height: 18px; }
+.ky-itw .phu-ky { color: #555; font-size: 12px; }
+.lap-boi-itw { margin: 14px 0 0; font-size: 11.5px; color: #555; }
+@media (max-width: 900px) {
+  .dau-itw { flex-direction: column; align-items: flex-start; }
+  .thong-tin-itw { grid-template-columns: 1fr; }
+  .thong-tin-itw > span:nth-child(n) { text-align: left; }
+  table.tong-itw { min-width: 0; width: 100%; }
+}
