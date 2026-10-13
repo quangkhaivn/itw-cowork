@@ -311,7 +311,14 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
   if (dienThoai) hoacKhach.push({ phoneNormalized: dienThoai }, { contacts: { some: { phoneNormalized: dienThoai, status: "hoat-dong" } } });
   if (email) hoacKhach.push({ emailNormalized: email }, { contacts: { some: { emailNormalized: email, status: "hoat-dong" } } });
   if (maSoThue) hoacKhach.push({ taxCodeNormalized: maSoThue });
-  const khach = await tx.customer.findFirst({ where: { OR: hoacKhach }, select: { id: true, code: true, name: true, ownerId: true }, orderBy: { createdAt: "asc" } });
+  const chonKhach = { id: true, code: true, name: true, ownerId: true } as const;
+  // Khách đã gộp (gói K, KHN-12/13) không nhận bản ghi mới: ưu tiên khách còn dùng; chỉ trùng khách
+  // đã gộp thì đi theo `merged_into_id` sang khách giữ lại.
+  let khach = await tx.customer.findFirst({ where: { OR: hoacKhach, status: { not: "da-gop" } }, select: chonKhach, orderBy: { createdAt: "asc" } });
+  if (!khach && hoacKhach.length) {
+    const daGop = await tx.customer.findFirst({ where: { OR: hoacKhach, status: "da-gop" }, select: { mergedIntoId: true }, orderBy: { createdAt: "asc" } });
+    if (daGop?.mergedIntoId) khach = await tx.customer.findFirst({ where: { id: daGop.mergedIntoId, status: { not: "da-gop" } }, select: chonKhach });
+  }
 
   // 5. Chọn người nhận (MK-08).
   let nguoiNhan: string | null = null;

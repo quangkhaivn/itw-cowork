@@ -82,6 +82,7 @@ async function docHaiKhach(nc: NguCanh, giuLaiId: string, biGopId: string, tc: {
     id: true, code: true, name: true, taxCode: true, taxCodeNormalized: true, phone: true, phoneNormalized: true,
     email: true, emailNormalized: true, address: true, province: true, website: true, customerType: true,
     segment: true, industry: true, source: true, note: true, status: true, ownerId: true, journeyStageId: true,
+    campaignId: true, campaign: { select: { code: true, name: true } },
     owner: { select: { fullName: true } },
   } as const;
   const [giu, gop] = await Promise.all([
@@ -114,6 +115,8 @@ const TRUONG_BO_SUNG = [
   ["segment", "Phân khúc"],
   ["industry", "Ngành nghề"],
   ["source", "Nguồn"],
+  // Gói Marketing (MK-10): chiến dịch chạm đầu tiên — khách giữ lại chưa có thì nhận của khách bị gộp.
+  ["campaignId", "Chiến dịch marketing"],
 ] as const;
 
 export async function xemTruocGop(nc: NguCanh, giuLaiId: string, biGopId: string) {
@@ -126,7 +129,10 @@ export async function xemTruocGop(nc: NguCanh, giuLaiId: string, biGopId: string
     chuyen: Object.entries(dem)
       .filter(([k]) => k !== "customers.merged_into_id")
       .map(([k, n]) => ({ bang: k, so: n, giuNguyen: BANG_GIU_NGUYEN.has(k) })),
-    boSung: TRUONG_BO_SUNG.filter(([t]) => !giu[t] && gop[t]).map(([t, nhan]) => ({ truong: nhan, giaTri: String(gop[t]) })),
+    boSung: TRUONG_BO_SUNG.filter(([t]) => !giu[t] && gop[t]).map(([t, nhan]) => ({
+      truong: nhan,
+      giaTri: t === "campaignId" && gop.campaign ? `${gop.campaign.code} — ${gop.campaign.name}` : String(gop[t]),
+    })),
   };
 }
 

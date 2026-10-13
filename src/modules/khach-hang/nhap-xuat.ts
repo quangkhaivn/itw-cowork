@@ -59,13 +59,26 @@ const COT: CotCsv[] = [
   { truong: "ghiChu", ten: ["ghi chu", "ghi chú", "note"] },
   // Cột chỉ có khi xuất — nhập lại thì bỏ qua, không báo "cột lạ".
   { truong: "_diem", ten: ["diem", "điểm"] },
+  // Cờ nhận tin marketing của liên hệ (gói Marketing, MK-13): CHỈ XUẤT. Đồng ý phải do chính người
+  // đó tự tích (form / ghi nhận có bằng chứng) nên nhập CSV không bao giờ ghi cờ này.
+  { truong: "_nhanTin", ten: ["lien he nhan tin", "nhan tin marketing", "dong y nhan tin"] },
 ];
 
 const TIEU_DE_XUAT = [
   "Mã KH", "Tên", "MST", "Loại khách", "Phân khúc", "Ngành", "Nguồn", "Điện thoại", "Email", "Địa chỉ",
   "Tỉnh / thành", "Website", "Người phụ trách (email)", "Trạng thái", "Trạng thái hành trình", "Nhóm",
-  "Liên hệ chính", "ĐT liên hệ", "Email liên hệ", "Ngày sinh liên hệ", "Điểm", "Ghi chú",
+  "Liên hệ chính", "ĐT liên hệ", "Email liên hệ", "Ngày sinh liên hệ", "Liên hệ nhận tin", "Điểm", "Ghi chú",
 ];
+
+/** Cột chỉ có khi xuất — mẫu nhập không có. */
+const COT_CHI_XUAT = new Set(["Điểm", "Liên hệ nhận tin"]);
+
+/** MK-13: từ chối luôn thắng; còn lại chỉ "Đồng ý" khi cờ đồng ý đang bật. */
+function nhanNhanTin(l: { marketingOptIn: boolean; marketingOptOutAt: Date | null } | undefined): string {
+  if (!l) return "";
+  if (l.marketingOptOutAt) return "Từ chối";
+  return l.marketingOptIn ? "Đồng ý" : "";
+}
 
 const khoa = (s: string) => boDau(s).replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -302,7 +315,7 @@ export async function nhapKhachCsv(nc: NguCanh, d: z.infer<typeof LuocDoNhapKhac
 }
 
 export function mauCsvKhach(): string {
-  return taoCsv(TIEU_DE_XUAT.filter((t) => t !== "Điểm"), [
+  return taoCsv(TIEU_DE_XUAT.filter((t) => !COT_CHI_XUAT.has(t)), [
     ["", "Công ty TNHH Mẫu Nhập Liệu", "0312345678", "", "", "", "", "0909 123 456", "mua.hang@mau.vn", "12 Lê Lợi", "TP. Hồ Chí Minh", "", "", "Tiềm năng", "Khách mới", "", "Nguyễn Văn A", "0912 345 678", "a.nguyen@mau.vn", "15/08/1985", ""],
   ]);
 }
@@ -317,7 +330,7 @@ export async function xuatKhachCsv(nc: NguCanh, thamSo: Record<string, string>):
     const kq = await danhSachKhachHang(nc, { ...boLoc, trang });
     const lienHe = await nc.tx.contact.findMany({
       where: { customerId: { in: kq.dong.map((k) => k.id) }, status: "hoat-dong" },
-      select: { customerId: true, fullName: true, phone: true, email: true, birthDate: true, isPrimary: true },
+      select: { customerId: true, fullName: true, phone: true, email: true, birthDate: true, isPrimary: true, marketingOptIn: true, marketingOptOutAt: true },
       orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
     });
     const lhChinh = new Map<string, (typeof lienHe)[number]>();
@@ -329,7 +342,7 @@ export async function xuatKhachCsv(nc: NguCanh, thamSo: Record<string, string>):
         k.tinhThanh, k.website, nguoi.get(k.nguoiPhuTrach.id) ?? "", NHAN_TRANG_THAI_KHACH[k.trangThai] ?? k.trangThai,
         k.hanhTrinh?.ten ?? "", k.nhom.map((n) => n.ten).join(" | "),
         l?.fullName ?? "", l?.phone ?? "", l?.email ?? "", dinhDangNgayCsv(l?.birthDate ? l.birthDate.toISOString().slice(0, 10) : null),
-        k.diem ?? "", k.ghiChu,
+        nhanNhanTin(l), k.diem ?? "", k.ghiChu,
       ]);
     }
     if (kq.dong.length < boLoc.coTrang || dong.length >= kq.tong) break;

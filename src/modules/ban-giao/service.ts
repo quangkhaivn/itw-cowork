@@ -8,7 +8,7 @@ import { suaNguoiDung } from "@/modules/nguoi-dung/service";
 import { layHoSoQuyen } from "@/lib/phan-quyen";
 
 /**
- * Bàn giao khi nhân viên nghỉ việc — BUSINESS_RULES.md mục 21 (KHN-17). QĐ-53.
+ * Bàn giao khi nhân viên nghỉ việc — BUSINESS_RULES.md mục 21 (KHN-17). QĐ-53. Gồm cả việc marketing của gói M (mục 22).
  *
  * Một thao tác của người quản trị người dùng (`user.update`): chuyển mọi việc ĐANG DỞ của
  * người A sang người B rồi khóa tài khoản A — cùng MỘT giao dịch. Việc đã xong (tương tác đã
@@ -47,6 +47,10 @@ const BAO_GIA_CHUA_CHOT = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT", "VIE
 const DON_DANG_XU_LY = ["DRAFT", "CONFIRMED", "PARTIALLY_DELIVERED"];
 const PHIEU_MO = ["MOI", "DANG_XU_LY", "CHO_KHACH"];
 const BAO_TRI_CON = ["hieu-luc", "tam-dung"];
+// Marketing (gói M, BUSINESS_RULES mục 22): chiến dịch chưa kết thúc / hủy; form, nguồn webhook,
+// phân khúc đang dùng; landing nháp / đang xuất bản. Đã kết thúc, đã tắt, đã thu hồi, đã ẩn → lịch sử.
+const CHIEN_DICH_MO = ["ke-hoach", "cho-duyet", "dang-chay", "tam-dung"];
+const LANDING_DANG_DUNG = ["nhap", "xuat-ban"];
 
 /** Danh mục loại việc được bàn giao. Thêm loại mới: thêm một phần tử. */
 export const LOAI_BAN_GIAO: LoaiBanGiao[] = [
@@ -126,6 +130,61 @@ export const LOAI_BAN_GIAO: LoaiBanGiao[] = [
     quyenXem: ["service_desk.view", "sales.view"],
     dem: (tx, tu) => tx.renewal.count({ where: { ownerId: tu, status: "moi" } }),
     chuyen: async (tx, tu, sang, n) => (await tx.renewal.updateMany({ where: { ownerId: tu, status: "moi" }, data: { ownerId: sang, updatedBy: n } })).count,
+  },
+  {
+    ma: "chien-dich",
+    nhan: "Chiến dịch marketing chưa kết thúc",
+    quyenXem: ["marketing.view"],
+    dem: (tx, tu) => tx.marketingCampaign.count({ where: { ownerId: tu, status: { in: CHIEN_DICH_MO } } }),
+    chuyen: async (tx, tu, sang, n) =>
+      (await tx.marketingCampaign.updateMany({ where: { ownerId: tu, status: { in: CHIEN_DICH_MO } }, data: { ownerId: sang, updatedBy: n } })).count,
+  },
+  {
+    ma: "form-dang-ky",
+    nhan: "Form đăng ký đang mở",
+    quyenXem: ["marketing.view"],
+    dem: (tx, tu) => tx.marketingForm.count({ where: { ownerId: tu, status: "hoat-dong" } }),
+    chuyen: async (tx, tu, sang, n) => (await tx.marketingForm.updateMany({ where: { ownerId: tu, status: "hoat-dong" }, data: { ownerId: sang, updatedBy: n } })).count,
+  },
+  {
+    ma: "nguon-webhook",
+    nhan: "Nguồn webhook đang nhận lead",
+    quyenXem: ["marketing.view"],
+    dem: (tx, tu) => tx.marketingWebhookSource.count({ where: { ownerId: tu, status: "hoat-dong" } }),
+    chuyen: async (tx, tu, sang, n) =>
+      (await tx.marketingWebhookSource.updateMany({ where: { ownerId: tu, status: "hoat-dong" }, data: { ownerId: sang, updatedBy: n } })).count,
+  },
+  {
+    ma: "phan-khuc",
+    nhan: "Phân khúc đang dùng",
+    quyenXem: ["marketing.view"],
+    dem: (tx, tu) => tx.marketingSegment.count({ where: { ownerId: tu, status: "hoat-dong" } }),
+    chuyen: async (tx, tu, sang, n) => (await tx.marketingSegment.updateMany({ where: { ownerId: tu, status: "hoat-dong" }, data: { ownerId: sang, updatedBy: n } })).count,
+  },
+  {
+    ma: "landing",
+    nhan: "Landing page nháp / đang xuất bản",
+    quyenXem: ["marketing.view"],
+    dem: (tx, tu) => tx.landingPage.count({ where: { ownerId: tu, status: { in: LANDING_DANG_DUNG } } }),
+    chuyen: async (tx, tu, sang, n) =>
+      (await tx.landingPage.updateMany({ where: { ownerId: tu, status: { in: LANDING_DANG_DUNG } }, data: { ownerId: sang, updatedBy: n } })).count,
+  },
+  {
+    // Suất trong vòng chia lead (MK-08). Người nhận chưa có suất → suất chuyển nguyên sang người
+    // nhận, giữ thứ tự vòng; đã có → suất của người nghỉ chuyển "tạm dừng" (giữ dòng, không xóa).
+    // Người nhận vẫn phải có `crm.view` mới thật sự được chia (MK-08 kiểm lúc chia).
+    ma: "nhan-lead",
+    nhan: "Suất nhận lead vòng tròn",
+    quyenXem: ["crm.view"],
+    dem: (tx, tu) => tx.marketingLeadAssignee.count({ where: { userId: tu, status: "hoat-dong" } }),
+    chuyen: async (tx, tu, sang, n) => {
+      const suat = await tx.marketingLeadAssignee.findFirst({ where: { userId: tu, status: "hoat-dong" }, select: { id: true } });
+      if (!suat) return 0;
+      const daCo = await tx.marketingLeadAssignee.findFirst({ where: { userId: sang }, select: { id: true } });
+      // Người nhận đã có suất (kể cả đang tạm dừng — quản lý tự quyết) → chỉ dừng suất người nghỉ.
+      await tx.marketingLeadAssignee.update({ where: { id: suat.id }, data: daCo ? { status: "tam-dung", updatedBy: n } : { userId: sang, updatedBy: n } });
+      return 1;
+    },
   },
 ];
 

@@ -80,7 +80,10 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 22 (MK). Kiến trúc: `ARCHITEC
 
 ### Sau khi gộp hai gói
 
-- @@GOP@@
+- **Bàn giao khi nghỉ việc chuyển cả việc Marketing**: chiến dịch chưa kết thúc, form / nguồn webhook / phân khúc đang dùng, landing nháp / đang xuất bản, và suất nhận lead vòng tròn (người nhận chưa có suất thì nhận nguyên suất, đã có thì suất người nghỉ tạm dừng).
+- **Gộp khách mang theo chiến dịch chạm đầu tiên** sang khách giữ lại khi khách giữ lại chưa có; lead "trùng khách" (`matched_customer_id`) tự chuyển theo nhờ gộp đọc khóa ngoại từ catalog.
+- **Nhận lead trùng SĐT / email của khách đã gộp** gắn khách giữ lại và giao người phụ trách khách đó (trước khi sửa: gắn vào khách đã gộp).
+- Xuất CSV khách thêm cột **"Liên hệ nhận tin"** (Đồng ý / Từ chối); nhập CSV không bao giờ bật đồng ý nhận tin.
 
 ### Kiểm thử (bản gộp)
 
