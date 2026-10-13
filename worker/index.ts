@@ -33,9 +33,11 @@ const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("Thiếu DATABASE_URL.");
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
+// Redis chỉ giữ dấu "nhịp cuối" để theo dõi worker còn sống. Máy chủ thật luôn có REDIS_URL
+// (docker-compose.yml); bản chạy thử trên máy cá nhân không có Redis thì worker vẫn chạy, bỏ dấu nhịp.
 const redisUrl = process.env.REDIS_URL;
-if (!redisUrl) throw new Error("Thiếu REDIS_URL.");
-const redis = new Redis(redisUrl, { maxRetriesPerRequest: 3 });
+const redis = redisUrl ? new Redis(redisUrl, { maxRetriesPerRequest: 3 }) : null;
+if (!redis) console.warn("[worker] Không có REDIS_URL — bỏ ghi dấu nhịp cuối (chỉ chấp nhận trên máy chạy thử).");
 
 let dangChay = true;
 
@@ -71,7 +73,7 @@ async function motNhip() {
   const luc = new Date().toISOString();
   try {
     await prisma.$queryRaw`SELECT 1`;
-    await redis.set("cowork:worker:nhip-cuoi", luc, "EX", 300);
+    await redis?.set("cowork:worker:nhip-cuoi", luc, "EX", 300);
   } catch (loi) {
     console.error(`[worker] ${luc} — nhịp hỏng:`, loi);
     return;
@@ -121,7 +123,7 @@ for (const tinHieu of ["SIGTERM", "SIGINT"] as const) {
   process.on(tinHieu, async () => {
     console.log(`[worker] Nhận ${tinHieu}, đang dừng gọn.`);
     dangChay = false;
-    await Promise.allSettled([prisma.$disconnect(), redis.quit()]);
+    await Promise.allSettled([prisma.$disconnect(), redis?.quit()]);
     process.exit(0);
   });
 }
