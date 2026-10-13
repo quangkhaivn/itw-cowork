@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { NguCanh } from "@/lib/api";
+import type { ClientTenant } from "@/lib/db";
 import { idNguoiTrongPhamVi } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiNghiepVu } from "@/lib/loi";
 import { MUI_GIO } from "@/lib/dinh-dang";
@@ -167,4 +168,32 @@ export function homNayVN(luc: Date = new Date()): string {
 /** Bản ghi có thể có Decimal → chuỗi, để trả JSON và ghi Audit Log không mất độ chính xác. */
 export function tienVeChuoi(x: { toString(): string } | null | undefined): string | null {
   return x === null || x === undefined ? null : x.toString();
+}
+
+// ---------------------------------------------------------------------------
+// Khóa dò trùng lead (MK-07, LD-03)
+// ---------------------------------------------------------------------------
+
+/**
+ * Khóa tư vấn theo (tenant, SĐT / email / MST đã chuẩn hóa) trong suốt giao dịch, gọi TRƯỚC
+ * bước dò trùng. Hai lần gửi cùng lúc cùng một số điện thoại thì lần sau phải chờ lần trước
+ * commit rồi mới dò — và lúc đó thấy lead vừa tạo (READ COMMITTED chụp lại ảnh mỗi câu lệnh).
+ * Khóa theo thứ tự cố định (sắp xếp chuỗi khóa) để hai giao dịch giữ chéo SĐT / email không
+ * chờ nhau vòng tròn. Khóa tự nhả khi giao dịch kết thúc.
+ */
+export async function khoaDoTrungLead(
+  tx: ClientTenant,
+  tenantId: string,
+  k: { dienThoai?: string | null; email?: string | null; maSoThue?: string | null },
+): Promise<void> {
+  const ds = [
+    k.dienThoai && `lead-trung:${tenantId}:dt:${k.dienThoai}`,
+    k.email && `lead-trung:${tenantId}:em:${k.email}`,
+    k.maSoThue && `lead-trung:${tenantId}:mst:${k.maSoThue}`,
+  ]
+    .filter((x): x is string => Boolean(x))
+    .sort();
+  for (const khoa of ds) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${khoa}, 0))`;
+  }
 }

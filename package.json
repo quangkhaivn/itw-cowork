@@ -20,7 +20,7 @@
     "thu:su-kien": "tsx --env-file-if-exists=.env thu/thu-su-kien.ts",
     "thu:quan-tri": "tsx --env-file-if-exists=.env thu/thu-quan-tri.ts",
     "thu:http": "tsx --env-file-if-exists=.env thu/thu-http.ts",
-    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm && npm run thu:san-pham && npm run thu:bao-gia && npm run thu:don-hang && npm run thu:dich-vu && npm run thu:tai-chinh && npm run thu:tu-dong-hoa && npm run thu:tro-ly && npm run thu:mua-hang && npm run thu:cong-no-tra && npm run thu:tra-hang && npm run thu:chuyen-kho && npm run thu:dinh-kem && npm run thu:khach-nang-cao && npm run thu:qa-khach",
+    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm && npm run thu:san-pham && npm run thu:bao-gia && npm run thu:don-hang && npm run thu:dich-vu && npm run thu:tai-chinh && npm run thu:tu-dong-hoa && npm run thu:tro-ly && npm run thu:mua-hang && npm run thu:cong-no-tra && npm run thu:tra-hang && npm run thu:chuyen-kho && npm run thu:dinh-kem && npm run thu:khach-nang-cao && npm run thu:qa-khach && npm run thu:marketing && npm run thu:qa-marketing",
     "thu:tat-ca": "npm run thu:don-vi && npm run thu:tich-hop",
     "kiem-tra": "npm run typecheck && npm run lint && npm run thu:don-vi && npm run build",
     "thu:crm": "tsx --env-file-if-exists=.env thu/thu-crm.ts",
@@ -37,7 +37,10 @@
     "thu:chuyen-kho": "tsx --env-file-if-exists=.env thu/thu-chuyen-kho.ts",
     "thu:dinh-kem": "tsx --env-file-if-exists=.env thu/thu-dinh-kem.ts",
     "thu:khach-nang-cao": "tsx --env-file-if-exists=.env thu/thu-khach-nang-cao.ts",
-    "thu:qa-khach": "tsx --env-file-if-exists=.env thu/thu-qa-khach.ts"
+    "thu:qa-khach": "tsx --env-file-if-exists=.env thu/thu-qa-khach.ts",
+    "thu:marketing": "tsx --env-file-if-exists=.env thu/thu-marketing.ts",
+    "thu:qa-marketing": "tsx --env-file-if-exists=.env thu/thu-qa-marketing.ts",
+    "thu:qa-marketing-http": "tsx --env-file-if-exists=.env thu/thu-qa-marketing-http.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

@@ -13,12 +13,33 @@ import { cacHostHopLe, cungNguonGoc } from "@/lib/yeu-cau";
  * từng hành động (`xuLyApi` → `batBuocQuyen`) và cũng không thay thế RLS.
  */
 
-const DUONG_MO = ["/dang-nhap", "/api/dang-nhap", "/api/khoe"];
+const DUONG_MO = [
+  "/dang-nhap",
+  "/api/dang-nhap",
+  "/api/khoe",
+  // 0.16.0 — Marketing (QĐ-61). Trang form / landing công khai và API nhận lead không cần phiên;
+  // mỗi route tự giải tenant từ mã doanh nghiệp trên đường dẫn rồi mới chạy trong voiTenant.
+  "/f",
+  "/lp",
+  "/api/cong-khai",
+];
+
+/**
+ * Đường ghi KHÔNG kiểm Origin: webhook gọi từ máy chủ khác (Zapier, Make…) không có Origin.
+ * Không có cookie nào được dùng ở đây — xác thực bằng khóa bí mật trong tiêu đề (MK-12), nên
+ * CSRF (vốn lợi dụng cookie của trình duyệt) không áp dụng. Form công khai thì VẪN kiểm Origin:
+ * chỉ trang /f, /lp của chính hệ thống (kể cả khi nằm trong iframe) mới gửi được.
+ */
+const KHONG_KIEM_NGUON = ["/api/cong-khai/webhook/"];
 
 export async function proxy(req: NextRequest) {
   const duongDan = req.nextUrl.pathname;
 
-  if (duongDan.startsWith("/api/") && !cungNguonGoc(req.method, req.headers, cacHostHopLe(req.headers))) {
+  if (
+    duongDan.startsWith("/api/") &&
+    !KHONG_KIEM_NGUON.some((d) => duongDan.startsWith(d)) &&
+    !cungNguonGoc(req.method, req.headers, cacHostHopLe(req.headers))
+  ) {
     return NextResponse.json({ thongBao: "Yêu cầu bị từ chối: sai nguồn gốc." }, { status: 403 });
   }
 

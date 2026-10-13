@@ -5,7 +5,7 @@ import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { chuanHoaDienThoai, chuanHoaEmail, chuanHoaMaSoThue, chuanHoaTen } from "@/modules/crm/chuan-hoa";
-import { kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, tienVeChuoi, trongPhamVi } from "@/modules/crm/chung";
+import { khoaDoTrungLead, kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, tienVeChuoi, trongPhamVi } from "@/modules/crm/chung";
 import { LEAD_DANG_MO } from "@/modules/crm/hang-so";
 import { batBuocThayKhach, taoKhachHang, taoLienHe, timKhachCoTheTrung, type UngVienTrung } from "@/modules/khach-hang/service";
 import { taoCoHoi } from "@/modules/co-hoi/service";
@@ -237,6 +237,8 @@ export async function taoLead(nc: NguCanh, d: DuLieuTaoLead, rawPayload?: Record
   await kiemTraNguoiPhuTrach(nc, "crm.create", ownerId);
   await kiemTraMaDuLieuGoc(nc, "nguon_lead", d.nguon, "nguon");
 
+  // MK-07: cùng khóa với `nhanLead()` — lead tạo tay và lead từ form không lọt qua nhau khi cùng lúc.
+  await khoaDoTrungLead(nc.tx, nc.tenantId, k);
   const ungVien = await timTrungLead(nc, k);
   if (ungVien.length && !d.xacNhanKhongTrung) {
     throw new LoiNghiepVu(
@@ -438,6 +440,14 @@ export async function chuyenDoiLead(nc: NguCanh, id: string, d: DuLieuChuyenDoiL
       { tuLeadId: id },
     );
     coHoiId = ch.id;
+  }
+
+  // 3b. Marketing (MK-10): chiến dịch đi theo sang cơ hội; sang khách chỉ khi khách MỚI do
+  // chiến dịch mang về — khách cũ đã có lịch sử mua trước chiến dịch, gắn vào sẽ thổi phồng ROAS.
+  const { campaignId } = await nc.tx.lead.findUniqueOrThrow({ where: { id }, select: { campaignId: true } });
+  if (campaignId) {
+    if (khachMoi) await nc.tx.customer.updateMany({ where: { id: khachId, campaignId: null }, data: { campaignId } });
+    if (coHoiId) await nc.tx.opportunity.update({ where: { id: coHoiId }, data: { campaignId } });
   }
 
   // 4. Lịch sử của lead đi theo sang khách (dòng thời gian Customer 360 không sót).

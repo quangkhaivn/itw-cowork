@@ -2,12 +2,15 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.16.0 — (chưa phát hành) — Khách hàng nâng cao
+## 0.16.0 — (chưa phát hành)
 
-Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (KHN). Kiến trúc: `ARCHITECTURE.md` mục 7o.
-**Chưa triển khai lên máy thật.**
+Gộp hai gói: **Khách hàng nâng cao** (gói K) và **Marketing và thu lead** (gói M). **Chưa triển khai lên máy thật.**
 
-### Thêm
+### Khách hàng nâng cao
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (KHN, CSV-01). Kiến trúc: `ARCHITECTURE.md` mục 7o. Quyết định QĐ-46 → QĐ-56. Migration `20261012030000_khach_hang_nang_cao`.
+
+#### Thêm
 - **Hành trình khách hàng**: danh mục trạng thái riêng của doanh nghiệp (tên, màu, thứ tự, loại đang theo / thành công / thất bại, số ngày "đứng lâu" tùy chọn) — tách hẳn khỏi trạng thái giao dịch hiện có. Mỗi lần đổi ghi một dòng lịch sử chỉ-ghi-thêm: từ, sang, ai, lúc nào, tự động hay đổi tay.
 - **Tự chuyển bước theo nghiệp vụ**: tạo khách, mở cơ hội, gửi báo giá, thắng cơ hội, xác nhận đơn — chỉ tiến, không lùi; khách đã "thất bại" chỉ được báo giá / thắng cơ hội / đơn xác nhận kéo lại.
 - Trang **Hành trình khách hàng**: kéo thả xếp trạng thái (điện thoại dùng nút ↑↓), sửa màu / mốc / số ngày đứng lâu, và **phễu chuyển đổi** theo kỳ tính từ lịch sử (bước xa nhất từng chạm, tỷ lệ so với tổng và so với bước trước, số ngày trung bình).
@@ -22,25 +25,66 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (KHN). Kiến trúc: `ARCHITE
 - **Script nhập từ ITW CRM** `scripts/nhap-tu-itw-crm.ts <itwcrm.db> [--ghi]`: mặc định chạy thử và in báo cáo; nhập trạng thái hành trình, nhóm, khách, liên hệ (kèm ngày sinh), tương tác, trạng thái hiện tại; dò trùng MST / điện thoại; gắn nhóm nhãn "ITW CRM"; chạy lại không nhân đôi (QĐ-55). Đã thử với CSDL mẫu của ITW CRM 1.8 (31 khách, 30 liên hệ, 30 tương tác).
 - 6 bảng CSDL + 8 cột, 19 tệp route API, 5 màn hình mới (cùng danh sách khách, Customer 360 và trang người dùng được mở rộng), 3 mục menu.
 
-### Sửa
+#### Sửa
 - Quy tắc nhắc "Khách lâu chưa mua lại" lọc khách theo `status = 'hoat-dong'` — giá trị không tồn tại trên khách hàng, nên quy tắc chưa từng sinh việc nào. Nay lọc "không ngừng giao dịch, không đã gộp".
 - Thẻ chỉ số trong lưới bị lệch hàng (luật chung `.the + .the` đẩy thẻ thứ hai trở đi xuống 16px).
 
-### Sửa sau kiểm thử QA độc lập (`thu:qa-khach`, 135 kiểm chứng)
+#### Sửa sau kiểm thử QA độc lập (`thu:qa-khach`, 135 kiểm chứng)
 - **Xuất CSV chống chèn công thức** (CSV-01): ô bắt đầu bằng `= + - @`, tab, xuống dòng được thêm `'`. Sửa ở `taoCsv()` dùng chung nên xuất sản phẩm cũng an toàn.
 - **Nhập CSV hỏng từ ~150 dòng** vì hết hạn giao dịch 5 giây: route theo lô (nhập CSV khách + sản phẩm, hàng loạt, tính lại điểm) chạy với hạn 120 giây; cấu hình chấm điểm đọc một lần mỗi giao dịch (QĐ-56). 2.000 dòng xem trước ~45 giây.
 - **Gộp đồng thời tạo chuỗi gộp**: gộp nay khóa hai dòng khách theo thứ tự id rồi mới kiểm `da-gop`.
 - **Thanh tìm kiếm toàn cục trả khách đã gộp** — nay ẩn.
 - Gộp khách đóng việc hôm nay đang mở và chuyển thông báo chưa đọc của khách bị gộp; lọc nhanh "Đứng lâu" dùng chung hàm với máy quét; bàn giao báo rõ khi người nhận thiếu quyền xem một loại việc; script nhập ITW đi theo khách giữ lại khi trùng một khách đã gộp.
 
-### Quyết định đáng ghi
+#### Quyết định đáng ghi
 - **Trưởng phòng Kinh doanh được cấp `customer.approve`** (QĐ-46) để quản lý hành trình, nhóm, bộ lọc chung, gộp khách — không bắt cả phòng chờ Giám đốc.
 - **Gộp khách đọc danh sách bảng từ catalog PostgreSQL** (QĐ-51): bảng sau này có khóa ngoại tới khách tự được chuyển, không bị sót.
 - **Nhập CSV khách: mỗi dòng một SAVEPOINT, xem trước là chạy thật rồi cuộn ngược** (QĐ-54).
 - Chấm điểm khách chứ chưa chấm lead (QĐ-49).
 
-### Kiểm thử
+#### Kiểm thử
 - Thêm `thu:khach-nang-cao` (bài tích hợp) và `thu/don-vi/khach-nang-cao.test.ts` (29 bài đơn vị). Bài gộp khách đếm từng bảng có khóa ngoại tới khách (liệt kê bằng `information_schema`) trước và sau khi gộp.
+
+### Marketing và thu lead
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 22 (MK). Kiến trúc: `ARCHITECTURE.md` mục 7p. Quyết định QĐ-57 → QĐ-66. Migration `20261012044827_marketing_thu_lead`.
+
+#### Thêm
+- **Chiến dịch marketing** (`CD-2026-0001`): kênh, thời gian, ngân sách, người phụ trách, mã `utm_campaign`; chi phí thực tế theo ngày / khoản (hủy kèm lý do, không xóa). Chỉ số **CPL, ROAS, tỷ lệ đủ điều kiện, tỷ lệ chuyển đổi** — chưa có mẫu số thì để trống, không ghi 0.
+- **Duyệt ngân sách**: chiến dịch có ngân sách phải được Trưởng phòng Marketing / Giám đốc duyệt trước khi chạy; tăng ngân sách khi đang chạy thì tự về chờ duyệt. Chốt bằng CHECK trong CSDL.
+- **Một cửa nhận lead** `nhanLead()`: form công khai, landing page, webhook và nhập tay cùng chuẩn hóa, dò trùng (trùng lead đang mở → ghi thêm, không đẻ lead mới; trùng khách → lead mới gắn cảnh báo, giao người phụ trách khách), gắn chiến dịch theo UTM, **chia sale vòng tròn**, tạo việc “Gọi lại” có hạn theo Cấu hình, báo chuông. Mọi lần nhận — kể cả bị từ chối — vào nhật ký chỉ-ghi-thêm.
+- **Form đăng ký công khai** `/f/<mã doanh nghiệp>/<slug>`: chọn trường từ danh mục an toàn, câu hỏi đồng ý nhận tin (không tích sẵn), lời cảm ơn, nhận UTM, mã nhúng iframe; chống spam bằng giới hạn tốc độ, ô bẫy, trần độ dài.
+- **Webhook nhận lead** cho Facebook Lead Ads (qua Zapier / Make), Zalo, website khác: khóa bí mật theo nguồn, hiện một lần, đổi / thu hồi được; nhật ký nhận / từ chối.
+- **Phân khúc** lead hoặc liên hệ khách theo nguồn, chiến dịch, giai đoạn, phân khúc / ngành / loại khách, tỉnh thành, đã đồng ý nhận tin…; xem trước số lượng và mẫu. Cửa `danhSachTheoPhanKhuc()` cho gói Email marketing.
+- **Đồng ý / từ chối nhận tin** trên lead và liên hệ (`marketing_opt_in`, `marketing_opt_in_at`, `marketing_opt_out_at`, `marketing_consent_source`); ghi nhận trên trang lead.
+- **Landing page** `/lp/<mã doanh nghiệp>/<slug>` dựng từ 8 loại khối an toàn (tiêu đề, đoạn văn, ảnh https, lợi ích, nút gọi, form, hỏi đáp, lời khách), xuất bản / ẩn, **thử A/B** hai biến thể, thống kê lượt xem và tỷ lệ đăng ký.
+- Thực tập sinh Marketing bị **che SĐT / email** ở mọi màn hình và API marketing mới.
+- Khối **Marketing tháng này** trên Bảng điều hành (lead theo nguồn, CPL, chiến dịch nhiều lead nhất); khối **Nguồn marketing** trên trang lead.
+- Ngưỡng mới trong Cấu hình: `marketing.phut_goi_lai_lead` (chưa đặt).
+- 8 bảng CSDL + cột mới trên `leads`, `contacts`, `customers`, `opportunities`; 36 CHECK; 23 route API nội bộ + 2 route công khai; 16 màn hình nội bộ + 2 trang công khai (form, landing).
+
+#### Quyết định đáng ghi
+- **Một hàm nhận lead cho mọi kênh**, nhận `tx` thay vì phiên người dùng vì khách ngoài không đăng nhập (QĐ-57).
+- **Tenant giải từ mã doanh nghiệp trên đường dẫn trước khi chạm dữ liệu** (QĐ-61); chỉ trang form được nhúng iframe, POST vẫn kiểm Origin, không mở CORS (QĐ-62); webhook xác thực bằng khóa nên miễn kiểm Origin (QĐ-63).
+- **ROAS tính theo hóa đơn đã phát hành của khách mới** do chiến dịch mang về (QĐ-59).
+- **Che liên lạc theo quyền**, không theo tên vai trò (QĐ-65).
+
+#### Sửa sau kiểm thử độc lập (QA 12/10)
+- **Gửi đồng thời không còn đẻ hai lead** cho cùng một SĐT / email: khóa tư vấn theo giá trị chuẩn hóa trước bước dò trùng, áp cả cho lead sale tạo tay.
+- **Lead dự phòng chỉ về người có quyền xem lead**; Thực tập sinh Marketing không còn nhận lead. Mô tả việc "Gọi lại" **không chép SĐT / email** nữa.
+- **Từ chối nhận tin luôn thắng** qua mọi kênh công khai: không xóa lời từ chối, lead mới kế thừa lời từ chối, kèm ghi chú "cần xác nhận lại".
+- Ký tự NUL / điều khiển → 400 thay vì 500; slug / mã sai khuôn → 404 không truy vấn; trần thân yêu cầu tính theo byte; lượt xem form / landing có trần theo IP.
+
+#### Kiểm thử
+- 339 bài đơn vị (thêm 30), 997 bài tích hợp (thêm `thu:marketing` 103 bài và `thu:qa-marketing` 122 bài), 434 bài HTTP đầu-cuối + 107 bài `thu:qa-marketing-http` — tất cả đạt.
+
+### Sau khi gộp hai gói
+
+- @@GOP@@
+
+### Kiểm thử (bản gộp)
+
+- @@SO@@
 
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 

@@ -35,7 +35,12 @@ export type HanhDong =
   | "tinh-lai-diem"
   | "gop-khach"
   | "ban-giao"
-  | "xuat-csv";
+  | "xuat-csv"
+  // 0.16.0 — Marketing
+  | "duyet"
+  | "tu-choi-duyet"
+  | "huy"
+  | "doi-khoa";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

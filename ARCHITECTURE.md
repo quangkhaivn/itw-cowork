@@ -208,6 +208,16 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - **Nhập CSV** chạy mỗi dòng trong một SAVEPOINT qua đúng service thường; xem trước là chạy thật rồi `ROLLBACK TO SAVEPOINT` (QĐ-54).
 - Giao diện: danh sách khách (thẻ trạng thái, lọc nhanh, bộ lọc đã lưu, cột, đổi hành trình trên dòng, thanh hàng loạt), Customer 360 thẻ "Hành trình & điểm", trang `/crm/hanh-trinh` (kéo thả HTML5 + nút ↑↓ cho điện thoại, phễu), `/crm/nhom-khach`, `/crm/cham-diem`, `/crm/khach-hang/nhap-csv`, `/crm/khach-hang/gop`, khối "Bàn giao khi nghỉ việc" ở trang người dùng.
 
+## 7p. Marketing và thu lead (0.16.0)
+
+- Phân hệ: `src/modules/marketing/` — `hang-so.ts` (danh mục dùng chung trình duyệt), `tinh-toan.ts` (thuần: chỉ số CPL/ROAS, vòng đời chiến dịch, chia vòng tròn, che liên lạc, kiểm dữ liệu form), `luoc-do.ts`, `khoi-landing.ts` (danh mục khối + Zod), và service tách theo việc: `chien-dich.ts`, `nhan-lead.ts`, `form.ts`, `webhook.ts`, `phan-khuc.ts`, `landing.ts`, `cong-khai.ts`. `service.ts` xuất lại tất cả và giữ khối bảng điều hành.
+- **Một cửa nhận lead** `nhanLead(tx, tenantId, dữ liệu, tác nhân)` (QĐ-57): form công khai, landing page, webhook và nhập tay đều gọi đúng hàm này. Tác nhân không đăng nhập thì Business Event ghi `actorType = "system"`, Audit Log ghi IP.
+- **Đường công khai** (QĐ-61): `/f/<mã DN>/<slug>`, `/lp/<mã DN>/<slug>`, `/api/cong-khai/form|webhook/<mã DN>/…` mở trong `proxy.ts`. `chayNhanCongKhai()` giới hạn tốc độ → tra sổ `tenants` → `voiTenant()`; lần bị từ chối ghi `lead_captures` trong giao dịch riêng. Webhook miễn kiểm Origin vì xác thực bằng khóa, không bằng cookie (QĐ-63); form vẫn kiểm Origin. Chỉ `/f/*` được nhúng iframe (QĐ-62).
+- **Chỉ số** dùng chung một hàm `dauVaoChiSo()` + `tinhChiSoChienDich()` cho danh sách, chi tiết và khối Marketing trên bảng điều hành; doanh thu đọc từ hóa đơn đã phát hành (QĐ-29, QĐ-59).
+- Chuyển đổi lead (`lead/service.ts`) mang `campaign_id` sang cơ hội và sang khách mới — một chỗ sửa duy nhất ngoài phân hệ.
+- `danhSachTheoPhanKhuc(nc, phanKhucId, tuyChon)` là cửa cho gói Email marketing; mặc định chỉ trả người nhận được tin và che liên lạc theo quyền.
+- Landing page là Server Component dựng từ khối đã kiểm Zod (`src/components/marketing/KhoiLanding.tsx`), dùng chung cho trang công khai và khung xem trước; form công khai là một client component dùng chung (`FormDangKyCongKhai.tsx`).
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.
