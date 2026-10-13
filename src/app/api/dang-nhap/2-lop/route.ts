@@ -12,7 +12,8 @@ import {
 import { mocMuonHon } from "@/lib/phan-quyen";
 import { ghiSuKien, SU_KIEN } from "@/lib/su-kien";
 import { ghiKiemToan } from "@/lib/kiem-toan";
-import { demVaKiem } from "@/lib/gioi-han-toc-do";
+import { demVaKiem, xoaDem } from "@/lib/gioi-han-toc-do";
+import { LoiNghiepVu } from "@/lib/loi";
 import { layIpKhach } from "@/lib/yeu-cau";
 import { docCauHinh } from "@/modules/cau-hinh/service";
 import { kiemMaDangNhap } from "@/modules/xac-thuc-2-lop/service";
@@ -55,23 +56,52 @@ export async function POST(req: NextRequest) {
   const userAgent = req.headers.get("user-agent");
   const theoIp = await demVaKiem(`2-lop:ip:${ip ?? "khong-ro"}`, 30, CUA_SO_GIAY);
   if (!theoIp.choPhep) return biChan(theoIp.conLaiGiay);
-  const theoTk = await demVaKiem(`2-lop:tk:${phien.tenantId}:${phien.userId}`, 5, CUA_SO_GIAY);
+  const khoaTk = `2-lop:tk:${phien.tenantId}:${phien.userId}`;
+  const theoTk = await demVaKiem(khoaTk, 5, CUA_SO_GIAY);
   if (!theoTk.choPhep) return biChan(theoTk.conLaiGiay);
 
-  type KetQua = { loai: "ok"; phaiDoiMatKhau: boolean } | { loai: "sai" } | { loai: "het" } | { loai: "khoa"; conLaiGiay: number };
+  type KetQua =
+    | { loai: "ok"; phaiDoiMatKhau: boolean }
+    | { loai: "sai" }
+    | { loai: "het" }
+    | { loai: "khoa"; conLaiGiay: number }
+    | { loai: "loi-khoa-ma-hoa" };
 
   const ketQua = await voiTenant<KetQua>(phien.tenantId, async (tx) => {
     const u = await tx.user.findFirst({
       where: { id: phien.userId, status: "hoat-dong", isSystem: false },
-      select: { id: true, email: true, totpEnabledAt: true, lockedUntil: true, failedLoginCount: true, passwordChangedAt: true, securityChangedAt: true, mustChangePassword: true },
+      select: {
+        id: true,
+        email: true,
+        totpEnabledAt: true,
+        lockedUntil: true,
+        failedLoginCount: true,
+        passwordChangedAt: true,
+        securityChangedAt: true,
+        mustChangePassword: true,
+        lastLoginAt: true,
+      },
     });
     if (!u || !u.totpEnabledAt || !phienConHieuLuc(phien.kyLucMs, mocMuonHon(u.passwordChangedAt, u.securityChangedAt))) return { loai: "het" };
+    // Phiên tạm chỉ dùng được MỘT lần: đã có lần đăng nhập thành công sau lúc ký phiên tạm này
+    // (chính nó, hoặc một lần đăng nhập khác) thì phiên tạm hết giá trị.
+    if (u.lastLoginAt && phien.kyLucMs < u.lastLoginAt.getTime()) return { loai: "het" };
     const bayGio = new Date();
     if (u.lockedUntil && u.lockedUntil > bayGio) {
       return { loai: "khoa", conLaiGiay: Math.ceil((u.lockedUntil.getTime() - bayGio.getTime()) / 1000) };
     }
 
-    const loaiMa = await kiemMaDangNhap(tx, u.id, dauVao.data.ma);
+    let loaiMa: Awaited<ReturnType<typeof kiemMaDangNhap>>;
+    try {
+      loaiMa = await kiemMaDangNhap(tx, u.id, dauVao.data.ma);
+    } catch (e) {
+      // APP_ENC_KEY thiếu / sai / bản mã hỏng: người ngoài chỉ thấy câu chung, log máy chủ ghi rõ.
+      if (e instanceof LoiNghiepVu && e.ma === "khoa-ma-hoa-khong-khop") {
+        console.error(`[dang-nhap/2-lop] không kiểm được mã 2 lớp của người dùng ${u.id}: ${e.message}`);
+        return { loai: "loi-khoa-ma-hoa" };
+      }
+      throw e;
+    }
     if (!loaiMa) {
       const soLanToiDa = (await docCauHinh(tx, "bao_mat.so_lan_sai_toi_da")) ?? 5;
       const soPhutKhoa = (await docCauHinh(tx, "bao_mat.so_phut_khoa")) ?? 15;
@@ -106,8 +136,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ thongBao: HET_PHIEN, ma: "het-phien-tam" }, { status: 401 });
   }
   if (ketQua.loai === "khoa") return biChan(ketQua.conLaiGiay);
+  if (ketQua.loai === "loi-khoa-ma-hoa") {
+    return NextResponse.json(
+      { thongBao: "Hệ thống tạm thời không kiểm được mã xác thực. Báo Quản trị hệ thống.", ma: "khong-kiem-duoc-ma" },
+      { status: 503 },
+    );
+  }
   if (ketQua.loai === "sai") return NextResponse.json({ thongBao: THONG_BAO_SAI }, { status: 401 });
 
+  // Đúng mã thì xoá bộ đếm theo tài khoản, như bước mật khẩu — nếu không, lần đăng nhập đúng
+  // thứ 6 trong 15 phút bị 429 dù chưa hề sai.
+  await xoaDem(khoaTk);
   await xoaCookiePhienTam2Lop();
   await datCookiePhien(await kyPhien({ userId: phien.userId, tenantId: phien.tenantId, email: phien.email }));
   return NextResponse.json({ ok: true, chuyenDen: ketQua.phaiDoiMatKhau ? "/doi-mat-khau" : "/bang-dieu-khien" });

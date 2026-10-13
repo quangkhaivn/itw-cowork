@@ -25,8 +25,18 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (EM) và 22 (XT). Kiến trú
 - **Nguồn người nhận là chỗ cắm** (QĐ-70) — phân khúc của gói Marketing cắm vào sau, không sửa chiến dịch.
 - TOTP tự viết, chưa có mã QR (QĐ-71).
 
+### Sửa sau kiểm thử đối kháng (QA độc lập, 13/10)
+- **Phân loại lỗi SMTP**: chỉ đưa người nhận vào danh sách chặn khi lỗi ở RCPT có mã 5.1.x / 5.2.1 (hoặc 550/551/553 nói rõ người nhận không tồn tại). Hết hạn mức Gmail (5.4.5), M365 5.7.60 / 5.7.708, SPF/relay, mọi 4xx, mọi lỗi ở MAIL FROM / DATA → trả thư về hàng chờ, tự tạm dừng kèm lý do tiếng Việt. Trước đó một lần Gmail hết hạn mức chặn vĩnh viễn cả danh sách.
+- Nhiều worker cùng lúc không còn vượt tốc độ gửi: đếm + nhận việc dưới `pg_advisory_xact_lock`.
+- `APP_ENC_KEY` thiếu / sai / bản mã hỏng → lỗi 503 `khoa-ma-hoa-khong-khop` nói rõ phải làm gì (thư thử, bật 2 lớp); worker tự tạm dừng chiến dịch; bước 2 đăng nhập trả câu chung, log máy chủ ghi rõ.
+- Biến `{{constructor}}`, `{{__proto__}}`… không còn lọt danh sách trắng (`Object.hasOwn`).
+- Hồ sơ công ty mất địa chỉ sau khi duyệt → worker tự tạm dừng, không gửi thư thiếu chân thư.
+- Tắt 2 lớp / sinh lại mã khôi phục dùng chung hàng rào với bước 2 đăng nhập (giới hạn tốc độ + khóa tài khoản).
+- Đăng nhập 2 bước đúng thì xoá bộ đếm tốc độ; phiên tạm chỉ dùng được một lần.
+
 ### Kiểm thử
-- 376 bài đơn vị (thêm 67: vector chuẩn RFC 4226 / RFC 6238, mã hóa, khối an toàn, lọc người nhận, mã ký liên kết, lỗi SMTP), 906 bài tích hợp (thêm `thu:email` 91 bài — nodemailer thật vào máy chủ SMTP giả — và `thu:xac-thuc-2-lop` 43 bài) — tất cả đạt.
+- 386 bài đơn vị, 1.030 bài tích hợp (gồm `thu:qa-email` 124 bài của QA), 434 bài HTTP + 75 bài HTTP đối kháng (`thu:qa-email-http`) — tất cả đạt.
+- (Trước QA) 376 bài đơn vị (thêm 67: vector chuẩn RFC 4226 / RFC 6238, mã hóa, khối an toàn, lọc người nhận, mã ký liên kết, lỗi SMTP), 906 bài tích hợp (thêm `thu:email` 91 bài — nodemailer thật vào máy chủ SMTP giả — và `thu:xac-thuc-2-lop` 43 bài) — tất cả đạt.
 
 ## 0.15.0 — 22/09/2026 — Tệp đính kèm
 

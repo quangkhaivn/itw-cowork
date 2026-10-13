@@ -3,7 +3,7 @@ import type { ClientTenant } from "@/lib/db";
 import { batBuocQuyen } from "@/lib/phan-quyen";
 import { LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
-import { coKhoaMaHoa, giaiMa, maHoa } from "@/lib/ma-hoa";
+import { coKhoaMaHoa, giaiMaNghiepVu, maHoa } from "@/lib/ma-hoa";
 import { docHoSoCongTy } from "@/modules/ho-so-cong-ty/service";
 import type { DuLieuKetNoiEmail } from "./luoc-do";
 import { cauLoiGui, GOI_Y_KET_NOI, thoatHtml } from "./tinh-toan";
@@ -141,7 +141,9 @@ export async function docKetNoiDeGui(tx: ClientTenant, tenantId: string): Promis
       port: d.port,
       baoMat: d.security as CauHinhSmtp["baoMat"],
       tenDangNhap: d.username,
-      matKhau: d.passwordEnc ? giaiMa(d.passwordEnc, ngucanh(tenantId)) : null,
+      matKhau: d.passwordEnc
+        ? giaiMaNghiepVu(d.passwordEnc, ngucanh(tenantId), "mật khẩu SMTP", "nhập lại mật khẩu ở Quản trị → Kết nối email")
+        : null,
     },
     tu: { ten: d.fromName, email: d.fromEmail },
     traLoi: d.replyTo,

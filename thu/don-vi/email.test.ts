@@ -18,6 +18,7 @@ import {
   locNguoiNhan,
   LuocDoDanhSachKhoi,
   LuocDoTieuDeThu,
+  lyDoTamDung,
   phanLoaiLoiGui,
   thayBien,
   thieuChanThu,
@@ -70,6 +71,10 @@ describe("Khối an toàn (EM-03)", () => {
 });
 
 describe("Biến cá nhân hóa (EM-04)", () => {
+  it("thuộc tính Object.prototype không phải biến hợp lệ", () => {
+    assert.deepEqual(bienKhongHopLe("{{constructor}} {{toString}} {{__proto__}} {{hasOwnProperty}} {{valueOf}}"), ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]);
+    assert.equal(thayBien("X {{constructor}}", BIEN), "X {{constructor}}");
+  });
   it("thay biến danh sách trắng, chấp nhận khoảng trắng trong ngoặc", () => {
     assert.equal(thayBien("Chào {{ ten }} ở {{cong_ty}}", BIEN), "Chào An ở Cty A");
   });
@@ -174,13 +179,46 @@ describe("Mã ký liên kết công khai (EM-10, EM-11)", () => {
 });
 
 describe("Phân loại lỗi SMTP (EM-13)", () => {
-  it("sai mật khẩu / mất kết nối / 4xx → lỗi kết nối (trả về hàng chờ, tự tạm dừng)", () => {
-    assert.equal(phanLoaiLoiGui({ code: "EAUTH", responseCode: 535 }), "ket-noi");
+  const rcpt = (responseCode: number, response: string) => ({ code: "EENVELOPE", responseCode, command: "RCPT TO", response });
+  it("mất kết nối / sai đăng nhập → lỗi phía gửi (trả hàng chờ, tự tạm dừng)", () => {
+    assert.equal(phanLoaiLoiGui({ code: "EAUTH", responseCode: 535, command: "AUTH PLAIN" }), "ket-noi");
     assert.equal(phanLoaiLoiGui({ code: "ECONNECTION" }), "ket-noi");
-    assert.equal(phanLoaiLoiGui({ code: "EMESSAGE", responseCode: 421, command: "DATA" }), "ket-noi");
   });
-  it("4xx ở bước RCPT (greylisting) → lỗi riêng người nhận, không dừng chiến dịch", () =>
-    assert.equal(phanLoaiLoiGui({ code: "EENVELOPE", responseCode: 451, command: "RCPT TO" }), "nguoi-nhan"));
-  it("550 ở bước RCPT → email hỏng", () => assert.equal(phanLoaiLoiGui({ code: "EENVELOPE", responseCode: 550, command: "RCPT TO" }), "nguoi-nhan-hong"));
-  it("lỗi khác ở bước DATA → lỗi riêng thư", () => assert.equal(phanLoaiLoiGui({ code: "EMESSAGE", responseCode: 554, command: "DATA" }), "khac"));
+  it("mọi 4xx → tạm dừng, kể cả ở RCPT (Gmail 451 4.7.1 rate limit)", () => {
+    assert.equal(phanLoaiLoiGui(rcpt(451, "451 4.7.1 Rate limit exceeded, try again later")), "ket-noi");
+    assert.equal(phanLoaiLoiGui({ code: "EMESSAGE", responseCode: 421, command: "DATA", response: "421 4.7.0 Try again later" }), "ket-noi");
+  });
+  it("lỗi ở MAIL FROM (nodemailer cũng gắn EENVELOPE) → phía gửi, không đổ cho người nhận", () => {
+    assert.equal(phanLoaiLoiGui({ code: "EENVELOPE", responseCode: 550, command: "MAIL FROM", response: "550 5.4.5 Daily user sending limit exceeded" }), "ket-noi");
+    assert.equal(phanLoaiLoiGui({ code: "EENVELOPE", responseCode: 550 }), "ket-noi");
+  });
+  it("5xx ở DATA (M365 SubmissionQuotaExceeded) → phía gửi", () => {
+    assert.equal(phanLoaiLoiGui({ code: "EMESSAGE", responseCode: 554, command: "DATA", response: "554 5.2.0 STOREDRV.Submission.Exception:SubmissionQuotaExceededException" }), "ket-noi");
+  });
+  it("Gmail 550 5.4.5 quota ở RCPT → phía gửi, không chặn người nhận", () => assert.equal(phanLoaiLoiGui(rcpt(550, "550 5.4.5 Daily user sending quota exceeded")), "ket-noi"));
+  it("M365 5.7.60 SendAsDenied và 5.7.708 IP bị chặn → phía gửi", () => {
+    assert.equal(phanLoaiLoiGui(rcpt(550, "550 5.7.60 SMTP; Client does not have permissions to send as this sender")), "ket-noi");
+    assert.equal(phanLoaiLoiGui(rcpt(550, "550 5.7.708 Service unavailable. Access denied, traffic not accepted from this IP")), "ket-noi");
+  });
+  it("550 5.7.1 relay / SPF của bên gửi → phía gửi", () => assert.equal(phanLoaiLoiGui(rcpt(550, "550 5.7.1 Sender not authorized to relay (SPF fail)")), "ket-noi"));
+  it("Gmail 550 5.1.1 và M365 550 5.1.10 → email hỏng (vào danh sách chặn)", () => {
+    assert.equal(phanLoaiLoiGui(rcpt(550, "550-5.1.1 The email account that you tried to reach does not exist")), "nguoi-nhan-hong");
+    assert.equal(phanLoaiLoiGui(rcpt(550, "550 5.1.10 RESOLVER.ADR.RecipientNotFound; Recipient not found by SMTP address lookup")), "nguoi-nhan-hong");
+  });
+  it("550 không mã mở rộng: chỉ chặn khi câu trả lời nói rõ người nhận không tồn tại", () => {
+    assert.equal(phanLoaiLoiGui(rcpt(550, "550 No such user here")), "nguoi-nhan-hong");
+    assert.equal(phanLoaiLoiGui(rcpt(550, "550 Requested action not taken")), "nguoi-nhan");
+  });
+  it("552 5.2.2 hộp thư đầy (dù có chữ 'over quota') → Lỗi riêng người đó, không chặn", () => {
+    assert.equal(phanLoaiLoiGui(rcpt(552, "552 5.2.2 Mailbox full")), "nguoi-nhan");
+    assert.equal(phanLoaiLoiGui(rcpt(552, "552-5.2.2 The email account that you tried to reach is over quota")), "nguoi-nhan");
+  });
+  it("5.7.x chính sách bên nhận ở RCPT → Lỗi riêng người đó, không chặn", () =>
+    assert.equal(phanLoaiLoiGui(rcpt(550, "550 5.7.1 Delivery not authorized, message refused by recipient")), "nguoi-nhan"));
+  it("lỗi không phải SMTP → lỗi riêng thư", () => assert.equal(phanLoaiLoiGui({ message: "lỗi lạ" }), "khac"));
+  it("lý do tạm dừng tiếng Việt nói rõ phải làm gì", () => {
+    assert.match(lyDoTamDung(rcpt(550, "550 5.4.5 Daily user sending quota exceeded")), /hạn mức/);
+    assert.match(lyDoTamDung({ code: "EAUTH", responseCode: 535, response: "535 5.7.8 Authentication credentials invalid" }), /đăng nhập/);
+    assert.match(lyDoTamDung({ code: "ECONNECTION", message: "connect ECONNREFUSED" }), /kết nối/);
+  });
 });

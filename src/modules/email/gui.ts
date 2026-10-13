@@ -6,7 +6,8 @@ import { taoThongBao } from "@/modules/thong-bao/service";
 import { docKetNoiDeGui, type KetNoiDeGui } from "./ket-noi";
 import { urlAnhMo, urlBam, urlHuyMotCham, urlHuyNhanTin } from "./ma-lien-ket";
 import { docChanThu } from "./service";
-import { cauLoiGui, dungThu, LuocDoDanhSachKhoi, phanLoaiLoiGui } from "./tinh-toan";
+import { LoiNghiepVu } from "@/lib/loi";
+import { cauLoiGui, dungThu, lyDoTamDung, LuocDoDanhSachKhoi, phanLoaiLoiGui, thieuChanThu } from "./tinh-toan";
 import { taoVanChuyen, type VanChuyenThu } from "./van-chuyen";
 
 /**
@@ -22,7 +23,9 @@ import { taoVanChuyen, type VanChuyenThu } from "./van-chuyen";
  *     cho khách tệ hơn thiếu một thư. Khóa duy nhất (chiến dịch, email) chặn trùng ở CSDL.
  *
  * Tốc độ: `email.so_thu_moi_phut` (mặc định 10) đếm theo **CSDL** (thư đã nhận việc trong 60
- * giây qua), nên khởi động lại worker hay chạy hai worker cũng không vượt ngưỡng.
+ * giây qua). Bước đếm + nhận việc chạy dưới khóa `pg_advisory_xact_lock` theo doanh nghiệp, nên
+ * nhiều worker cùng lúc phải xếp hàng: worker sau chỉ đếm sau khi worker trước đã COMMIT phần việc
+ * vừa nhận — không ai vượt ngưỡng. Khởi động lại worker cũng không vượt, vì số đếm nằm trong CSDL.
  */
 
 export const PHUT_KET = 10;
@@ -88,6 +91,8 @@ async function tuTamDung(tx: ClientTenant, tenantId: string, lyDo: string) {
 /** Bước 1: dọn dòng kẹt, khép chiến dịch đã xong, đọc ngưỡng, nhận việc. */
 async function nhanViec(tenantId: string, bayGio: Date): Promise<{ viec: ViecGui[]; ketNoi: KetNoiDeGui | null; chan: Awaited<ReturnType<typeof docChanThu>>; xong: string[] }> {
   return voiTenant(tenantId, async (tx) => {
+    // Một worker một lúc cho mỗi doanh nghiệp (EM-14): khóa giữ tới hết giao dịch nhận việc.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`cowork:email-gui:${tenantId}`}))`;
     await tx.emailRecipient.updateMany({
       where: { status: "SENDING", attemptAt: { lt: new Date(bayGio.getTime() - PHUT_KET * 60_000) } },
       data: { status: "FAILED", reason: "Máy gửi dừng giữa chừng — không rõ thư đã đi hay chưa nên không gửi lại để tránh trùng." },
@@ -116,7 +121,25 @@ async function nhanViec(tenantId: string, bayGio: Date): Promise<{ viec: ViecGui
     const chan = await docChanThu(tx, tenantId);
     if (dangGui.length === xong.length) return { viec: [], ketNoi: null, chan, xong };
 
-    const ketNoi = await docKetNoiDeGui(tx, tenantId);
+    // EM-09 kiểm lại lúc gửi, không chỉ lúc duyệt: Hồ sơ công ty bị gỡ địa chỉ sau khi duyệt thì
+    // dừng, không gửi thư thiếu chân thư.
+    const thieu = thieuChanThu(chan);
+    if (thieu.length) {
+      await tuTamDung(tx, tenantId, `Hồ sơ công ty đang thiếu ${thieu.join(" và ")} — thư marketing bắt buộc có chân thư. Khai ở Quản trị → Hồ sơ công ty rồi bấm Tiếp tục.`);
+      return { viec: [], ketNoi: null, chan, xong };
+    }
+
+    let ketNoi: KetNoiDeGui | null;
+    try {
+      ketNoi = await docKetNoiDeGui(tx, tenantId);
+    } catch (e) {
+      // APP_ENC_KEY thiếu / sai / bản mã hỏng: dừng chiến dịch kèm lý do, không ném lỗi mỗi phút.
+      if (e instanceof LoiNghiepVu && e.ma === "khoa-ma-hoa-khong-khop") {
+        await tuTamDung(tx, tenantId, e.message);
+        return { viec: [], ketNoi: null, chan, xong };
+      }
+      throw e;
+    }
     if (!ketNoi) {
       await tuTamDung(tx, tenantId, "Chưa cấu hình kết nối email.");
       return { viec: [], ketNoi: null, chan, xong };
@@ -265,7 +288,7 @@ export async function guiLoThu(tenantId: string, bayGio: Date = new Date()): Pro
           const conLai = viec.slice(i).map((x) => x.id);
           await voiTenant(tenantId, async (tx) => {
             await tx.emailRecipient.updateMany({ where: { id: { in: conLai }, status: "SENDING" }, data: { status: "QUEUED", attemptAt: null } });
-            await tuTamDung(tx, tenantId, `Hộp thư gửi báo lỗi — ${cau}`);
+            await tuTamDung(tx, tenantId, lyDoTamDung(loi));
           });
           kq.traLai += conLai.length;
           kq.tamDung = true;

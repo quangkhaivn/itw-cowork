@@ -29,13 +29,14 @@ const MAU_BIEN = /\{\{\s*([a-zA-Z_]+)\s*\}\}/g;
 /** Các biến không nằm trong danh sách trắng xuất hiện trong chuỗi. */
 export function bienKhongHopLe(s: string): string[] {
   const ra = new Set<string>();
-  for (const m of s.matchAll(MAU_BIEN)) if (!(m[1] in BIEN_CA_NHAN)) ra.add(m[1]);
+  for (const m of s.matchAll(MAU_BIEN)) if (!Object.hasOwn(BIEN_CA_NHAN, m[1])) ra.add(m[1]);
   return [...ra];
 }
 
 /** Thay biến bằng giá trị (chưa thoát HTML — thoát ở bước dựng). */
 export function thayBien(s: string, gt: GiaTriBien): string {
-  return s.replace(MAU_BIEN, (toanBo, ten: string) => (ten in BIEN_CA_NHAN ? gt[ten as TenBien] ?? "" : toanBo));
+  // Object.hasOwn, không dùng `in`: "constructor", "__proto__", "toString" nằm trên Object.prototype.
+  return s.replace(MAU_BIEN, (toanBo, ten: string) => (Object.hasOwn(BIEN_CA_NHAN, ten) ? (Object.hasOwn(gt, ten) ? String(gt[ten as TenBien] ?? "") : "") : toanBo));
 }
 
 /** URL chỉ nhận https và không chứa biến/khoảng trắng. Trả null nếu không hợp lệ. */
@@ -369,28 +370,79 @@ export function chuyenHopLe(tu: string, den: TrangThaiChienDich): boolean {
 
 export type LoaiLoiGui = "ket-noi" | "nguoi-nhan-hong" | "nguoi-nhan" | "khac";
 
+export interface LoiSmtp {
+  code?: string;
+  responseCode?: number;
+  /** Lệnh SMTP bị từ chối, nodemailer ghi: "MAIL FROM", "RCPT TO", "DATA", "AUTH PLAIN"… */
+  command?: string;
+  response?: string;
+  message?: string;
+}
+
+/** Mã trạng thái mở rộng RFC 3463 trong câu trả lời ("550 5.1.1 …" → [5, 1, 1]). */
+export function maMoRong(loi: LoiSmtp): [number, number, number] | null {
+  const m = /\b([245])\.(\d{1,3})\.(\d{1,3})\b/.exec(loi.response ?? loi.message ?? "");
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+/** Câu trả lời cho thấy lỗi nằm ở **phía gửi** (hạn mức, tốc độ, SPF/DKIM, relay, quyền gửi, IP bị chặn). */
+const PHIA_GUI =
+  /quota|\blimit|\brate\b|too many|throttl|relay|spf|dkim|dmarc|sender|sendas|send as|authent|not authorized to send|reputation|blocklist|blacklist|block ?list|traffic not accepted|ip address|your ip|policy.*sender/i;
+/** Câu trả lời nói rõ người nhận không tồn tại (dùng khi máy chủ không gửi mã mở rộng). */
+const KHONG_TON_TAI =
+  /user unknown|unknown user|no such (user|mailbox|recipient)|does not exist|doesn't exist|recipient not found|address not found|invalid recipient|mailbox unavailable|mailbox not found|unrouteable|no mailbox|not a valid mailbox/i;
+
 /**
- * Phân loại lỗi gửi từ thông tin của nodemailer (mã lỗi + mã phản hồi SMTP):
- *  - `ket-noi`: không vào được hộp thư gửi (sai mật khẩu, mất mạng, 4xx ngoài bước RCPT). Thư CHƯA đi
- *    → người nhận quay về hàng chờ, chiến dịch tự tạm dừng chờ người sửa (EM-13).
- *  - `nguoi-nhan-hong`: máy chủ nhận nói địa chỉ không tồn tại (550/551/553 ở bước RCPT) →
- *    ghi lỗi + đưa vào danh sách chặn "email hỏng".
- *  - `nguoi-nhan` / `khac`: lỗi của riêng thư này → ghi lỗi, đi tiếp người khác.
+ * Phân loại lỗi gửi (EM-13). Nguyên tắc: **chỉ đổ lỗi cho người nhận khi chắc chắn**; còn lại coi
+ * là lỗi của hộp thư gửi — dừng cả chiến dịch, trả thư về hàng chờ, chờ người xử lý. Đổ nhầm sang
+ * người nhận nghĩa là cả danh sách vào sổ chặn vĩnh viễn chỉ vì Gmail hết hạn mức trong ngày.
+ *
+ *  - `ket-noi`: không vào được / bị từ chối ở phía gửi — mất kết nối, sai đăng nhập, **mọi 4xx**,
+ *    mọi lỗi ở MAIL FROM hoặc DATA (nodemailer gắn `EENVELOPE` cho cả lỗi MAIL FROM nên **không**
+ *    dựa vào `code`, chỉ dựa vào `command`), và ở RCPT mà mã 5.4.x / 5.7.x hoặc câu trả lời
+ *    nói về hạn mức, SPF, relay, quyền gửi (Gmail 5.4.5, M365 5.7.60 SendAsDenied, 5.7.708…).
+ *  - `nguoi-nhan-hong`: ở RCPT, mã 5.1.x / 5.2.1, hoặc 550/551/553 không mã mở rộng mà câu trả lời
+ *    nói rõ người nhận không tồn tại → Lỗi + danh sách chặn "email hỏng".
+ *  - `nguoi-nhan`: ở RCPT, lỗi vĩnh viễn của riêng người đó (5.2.2 hộp thư đầy, 5.7.x chính sách bên
+ *    nhận…) → Lỗi cho người đó, **không** vào danh sách chặn.
+ *  - `khac`: lỗi không phải SMTP (không có mã) → Lỗi cho thư đó.
  */
-export function phanLoaiLoiGui(loi: { code?: string; responseCode?: number; command?: string }): LoaiLoiGui {
+export function phanLoaiLoiGui(loi: LoiSmtp): LoaiLoiGui {
   const ma = loi.code ?? "";
   const rc = loi.responseCode ?? 0;
   if (["EAUTH", "ECONNECTION", "ETIMEDOUT", "ESOCKET", "EDNS", "ETLS", "ECONNREFUSED", "EPROTOCOL", "ENOAUTH", "EOAUTH2"].includes(ma)) return "ket-noi";
-  const laRcpt = (loi.command ?? "").toUpperCase().startsWith("RCPT") || ma === "EENVELOPE";
-  // 4xx ở bước RCPT (greylisting, hộp thư đầy) là chuyện của riêng người nhận đó — không dừng cả chiến dịch.
-  if (rc >= 400 && rc < 500 && !laRcpt) return "ket-noi";
-  if (laRcpt && [550, 551, 553].includes(rc)) return "nguoi-nhan-hong";
-  if (laRcpt) return "nguoi-nhan";
-  return "khac";
+  if (rc >= 400 && rc < 500) return "ket-noi";
+  const lenh = (loi.command ?? "").toUpperCase();
+  const laRcpt = lenh.startsWith("RCPT");
+  if (!laRcpt) return rc >= 500 || ma === "EENVELOPE" || ma === "EMESSAGE" ? "ket-noi" : "khac";
+
+  const cau = `${loi.response ?? ""} ${loi.message ?? ""}`;
+  const mr = maMoRong(loi);
+  if (mr && mr[0] === 4) return "ket-noi";
+  if (mr && mr[1] === 2 && mr[2] === 2) return "nguoi-nhan"; // 5.2.2 hộp thư đầy — chuyện tạm của người nhận
+  if (mr && (mr[1] === 1 || (mr[1] === 2 && mr[2] === 1))) return "nguoi-nhan-hong";
+  if (mr && mr[1] === 7 && (mr[2] === 60 || mr[2] === 708)) return "ket-noi";
+  if (PHIA_GUI.test(cau)) return "ket-noi";
+  if (mr && mr[1] === 4) return mr[2] === 1 ? "nguoi-nhan" : "ket-noi";
+  if (mr && mr[1] === 7) return "nguoi-nhan";
+  if (!mr && [550, 551, 553].includes(rc) && KHONG_TON_TAI.test(cau)) return "nguoi-nhan-hong";
+  return "nguoi-nhan";
+}
+
+/** Lý do tạm dừng chiến dịch, tiếng Việt, cho người vận hành biết phải làm gì. */
+export function lyDoTamDung(loi: LoiSmtp): string {
+  const cau = `${loi.response ?? ""} ${loi.message ?? ""}`;
+  const chiTiet = cauLoiGui(loi);
+  if (loi.code === "EAUTH" || loi.responseCode === 535) return `Hộp thư gửi từ chối đăng nhập — kiểm tài khoản / mật khẩu ứng dụng ở Kết nối email. (${chiTiet})`;
+  if (/quota|\blimit|\brate\b|too many|throttl/i.test(cau)) return `Hộp thư gửi đã chạm hạn mức gửi — chờ hạn mức hồi lại (thường 24 giờ) hoặc giảm tốc độ ở Cấu hình, rồi bấm Tiếp tục. (${chiTiet})`;
+  if (/relay|spf|dkim|dmarc|sender|sendas|send as|not authorized/i.test(cau)) return `Máy chủ thư từ chối vì quyền / chính sách bên gửi (SPF, DKIM, relay, quyền gửi thay) — kiểm cấu hình tên miền và tài khoản gửi. (${chiTiet})`;
+  if ((loi.responseCode ?? 0) >= 400 && (loi.responseCode ?? 0) < 500) return `Máy chủ thư báo lỗi tạm thời — thử Tiếp tục sau ít phút. (${chiTiet})`;
+  if (!loi.responseCode) return `Không kết nối được máy chủ SMTP — kiểm máy chủ, cổng, mạng ra ngoài của máy chủ. (${chiTiet})`;
+  return `Hộp thư gửi bị máy chủ thư từ chối — kiểm lại kết nối email trước khi tiếp tục. (${chiTiet})`;
 }
 
 /** Câu lỗi gọn cho người đọc — không đưa nguyên dấu vết kỹ thuật dài ra giao diện. */
-export function cauLoiGui(loi: { code?: string; responseCode?: number; response?: string; message?: string }): string {
+export function cauLoiGui(loi: LoiSmtp): string {
   const ma = [loi.code, loi.responseCode].filter(Boolean).join(" ");
   const noiDung = (loi.response || loi.message || "Lỗi không rõ").replace(/\s+/g, " ").slice(0, 300);
   if (loi.code === "EAUTH") return `Hộp thư gửi từ chối đăng nhập (${ma}). Kiểm tài khoản / mật khẩu ứng dụng.`;

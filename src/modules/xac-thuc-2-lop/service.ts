@@ -4,8 +4,13 @@ import type { ClientTenant } from "@/lib/db";
 import { batBuocQuyen, KHOA_BAT_BUOC_2_LOP } from "@/lib/phan-quyen";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
-import { coKhoaMaHoa, giaiMa, hmac, maHoa } from "@/lib/ma-hoa";
+import { coKhoaMaHoa, giaiMaNghiepVu, hmac, maHoa } from "@/lib/ma-hoa";
 import { kiemTraMatKhau } from "@/lib/xac-thuc";
+import { voiTenant } from "@/lib/db";
+import { demVaKiem } from "@/lib/gioi-han-toc-do";
+import { ghiSuKien } from "@/lib/su-kien";
+import { ghiKiemToan } from "@/lib/kiem-toan";
+import { docCauHinh } from "@/modules/cau-hinh/service";
 import { chuanHoaMaKhoiPhuc, kiemMaTotp, nhomKhoa, sinhKhoaTotp, sinhMaKhoiPhuc, uriOtpauth } from "@/lib/totp";
 
 /**
@@ -83,7 +88,7 @@ export async function xacNhan2Lop(nc: NguCanh, ma: string) {
   const u = await nc.tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { totpPendingEnc: true, totpEnabledAt: true } });
   if (!u?.totpPendingEnc) throw new LoiNghiepVu("Chưa bắt đầu bật 2 lớp hoặc đã bật xong. Bấm Bật lại từ đầu.", 409, "chua-bat-dau");
   if (u.totpEnabledAt) throw new LoiNghiepVu("Xác thực 2 lớp đang bật.", 409, "da-bat-2-lop");
-  const khoa = giaiMa(u.totpPendingEnc, nguCanhKhoa(nc.hoSo.userId));
+  const khoa = giaiMaNghiepVu(u.totpPendingEnc, nguCanhKhoa(nc.hoSo.userId), "khóa xác thực 2 lớp", "bấm Bật lại từ đầu");
   const buoc = kiemMaTotp(khoa, ma);
   if (buoc === null) throw new LoiNghiepVu("Mã không đúng. Kiểm giờ trên điện thoại và nhập mã đang hiện.", 422, "sai-ma");
   const luc = new Date();
@@ -97,10 +102,55 @@ export async function xacNhan2Lop(nc: NguCanh, ma: string) {
   return { maKhoiPhuc };
 }
 
-/** Kiểm một mã của chính người đang đăng nhập (TOTP hoặc mã khôi phục). Dùng cho tắt / sinh lại mã. */
+/**
+ * Kiểm một mã của chính người đang đăng nhập (TOTP hoặc mã khôi phục) — dùng cho tắt 2 lớp và sinh
+ * lại mã khôi phục. **Cùng hàng rào với bước 2 đăng nhập** (XT-05): giới hạn tốc độ theo tài khoản
+ * (`demVaKiem`, chung khóa với route bước 2) và cộng `failed_login_count` / khóa tạm theo Cấu hình.
+ * Không có hàng rào này, người cầm một phiên lấy cắp dò được mã để sinh mã khôi phục mới.
+ *
+ * Bộ đếm sai ghi trong **giao dịch riêng**: lỗi ném ra làm giao dịch của yêu cầu cuộn ngược, nếu
+ * ghi chung thì số lần sai biến mất. Bị khóa / bị chặn tốc độ thì từ chối **không kiểm mã**, cùng
+ * mã lỗi `sai-ma` để không lộ lần nào đoán trúng.
+ */
 async function kiemMaCuaToi(nc: NguCanh, ma: string): Promise<boolean> {
-  const kq = await kiemMaDangNhap(nc.tx, nc.hoSo.userId, ma);
-  return kq !== null;
+  await chanNeuBiKhoa(nc);
+  if ((await kiemMaDangNhap(nc.tx, nc.hoSo.userId, ma)) !== null) return true;
+  await ghiLanSai(nc);
+  return false;
+}
+
+/** Đang bị khóa tạm hoặc vượt tốc độ thử mã → từ chối ngay, không kiểm gì. */
+async function chanNeuBiKhoa(nc: NguCanh): Promise<void> {
+  const u = await nc.tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { lockedUntil: true } });
+  const bayGio = new Date();
+  if (u?.lockedUntil && u.lockedUntil > bayGio) {
+    const phut = Math.max(1, Math.ceil((u.lockedUntil.getTime() - bayGio.getTime()) / 60_000));
+    throw new LoiNghiepVu(`Nhập sai mã quá nhiều lần — tài khoản bị khóa tạm. Thử lại sau khoảng ${phut} phút.`, 429, "sai-ma");
+  }
+  const gh = await demVaKiem(`2-lop:tk:${nc.tenantId}:${nc.hoSo.userId}`, 5, 15 * 60);
+  if (!gh.choPhep) {
+    throw new LoiNghiepVu(`Nhập mã quá nhiều lần. Thử lại sau khoảng ${Math.max(1, Math.ceil(gh.conLaiGiay / 60))} phút.`, 429, "sai-ma");
+  }
+}
+
+/** Cộng một lần sai vào bộ đếm khóa tài khoản — giao dịch riêng để không bị cuộn ngược. */
+async function ghiLanSai(nc: NguCanh): Promise<void> {
+  await voiTenant(nc.tenantId, async (tx) => {
+    const soLanToiDa = (await docCauHinh(tx, "bao_mat.so_lan_sai_toi_da")) ?? 5;
+    const soPhutKhoa = (await docCauHinh(tx, "bao_mat.so_phut_khoa")) ?? 15;
+    const dong = await tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { failedLoginCount: true } });
+    const soLanSai = (dong?.failedLoginCount ?? 0) + 1;
+    const khoa = soLanSai >= soLanToiDa;
+    await tx.user.update({
+      where: { id: nc.hoSo.userId },
+      data: { failedLoginCount: khoa ? 0 : soLanSai, ...(khoa && { lockedUntil: new Date(Date.now() + soPhutKhoa * 60_000) }) },
+    });
+    await ghiSuKien(tx, { eventType: SU_KIEN.TWO_FACTOR_FAILED, actorType: "user", actorId: nc.hoSo.userId, objectType: "user", objectId: nc.hoSo.userId, payload: { lanSai: soLanSai, trongPhien: true } });
+    await ghiKiemToan(tx, { actorId: nc.hoSo.userId, actorEmail: nc.hoSo.email, action: "xac-thuc-2-lop-that-bai", objectType: "user", objectId: nc.hoSo.userId, ipAddress: nc.ip, userAgent: nc.userAgent });
+    if (khoa) {
+      await ghiSuKien(tx, { eventType: SU_KIEN.USER_LOCKED, actorType: "system", objectType: "user", objectId: nc.hoSo.userId, payload: { soPhut: soPhutKhoa, soLanSai, buoc: "2-lop-trong-phien" } });
+    }
+  });
 }
 
 export async function tat2Lop(nc: NguCanh, matKhau: string, ma: string) {
@@ -111,9 +161,13 @@ export async function tat2Lop(nc: NguCanh, matKhau: string, ma: string) {
     throw new LoiNghiepVu("Vai trò của bạn bắt buộc xác thực 2 lớp nên không tắt được. Đổi điện thoại thì nhờ quản trị đặt lại.", 403, "bat-buoc-2-lop");
   }
   // Cả mật khẩu lẫn mã: người cầm máy đang mở sẵn không tự gỡ được lớp bảo vệ.
+  await chanNeuBiKhoa(nc);
   const dungMk = await kiemTraMatKhau(matKhau, u.passwordHash);
-  const dungMa = dungMk && (await kiemMaCuaToi(nc, ma));
-  if (!dungMk || !dungMa) throw new LoiNghiepVu("Mật khẩu hoặc mã xác thực không đúng.", 422, "sai-ma");
+  const dungMa = dungMk && (await kiemMaDangNhap(nc.tx, nc.hoSo.userId, ma)) !== null;
+  if (!dungMk || !dungMa) {
+    await ghiLanSai(nc);
+    throw new LoiNghiepVu("Mật khẩu hoặc mã xác thực không đúng.", 422, "sai-ma");
+  }
   await nc.tx.user.update({
     where: { id: nc.hoSo.userId },
     data: { totpSecretEnc: null, totpPendingEnc: null, totpEnabledAt: null, totpLastStep: null, securityChangedAt: new Date(), updatedBy: nc.hoSo.userId },
@@ -146,7 +200,7 @@ export async function kiemMaDangNhap(tx: ClientTenant, userId: string, ma: strin
   if (!u?.totpSecretEnc) return null;
   const sach = ma.replace(/\s/g, "");
   if (/^\d{6}$/.test(sach)) {
-    const khoa = giaiMa(u.totpSecretEnc, nguCanhKhoa(userId));
+    const khoa = giaiMaNghiepVu(u.totpSecretEnc, nguCanhKhoa(userId), "khóa xác thực 2 lớp", "nhờ quản trị đặt lại 2 lớp cho người này");
     const buoc = kiemMaTotp(khoa, sach, { buocDaDung: u.totpLastStep === null ? null : Number(u.totpLastStep) });
     if (buoc === null) return null;
     // Cập nhật có điều kiện: hai yêu cầu song song cùng mã thì chỉ một cái thắng.

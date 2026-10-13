@@ -1,3 +1,4 @@
+import { LoiNghiepVu } from "./loi";
 import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
 
 /**
@@ -68,4 +69,25 @@ export function hmac(mucDich: string, duLieu: string | Buffer, khoa: Buffer = do
 /** So sánh hai bộ byte trong thời gian không phụ thuộc nội dung. */
 export function bangNhau(a: Buffer, b: Buffer): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Giải mã cho nghiệp vụ: lỗi khóa (thiếu `APP_ENC_KEY`, khóa đã bị đổi, bản mã hỏng) thành
+ * `LoiNghiepVu` 503 mã `khoa-ma-hoa-khong-khop` với câu tiếng Việt nói phải làm gì — thay vì một
+ * lỗi giải mã thô thành 500 "Hệ thống gặp lỗi". Không đưa bản mã hay chi tiết mật mã vào câu lỗi.
+ */
+export function giaiMaNghiepVu(chuoi: string, ngucanh: string, viec: string, cachSua: string): string {
+  try {
+    return giaiMa(chuoi, ngucanh);
+  } catch (e) {
+    const thieuKhoa = e instanceof LoiKhoaMaHoa;
+    console.error(`[ma-hoa] không giải mã được ${viec} (ngữ cảnh ${ngucanh.split(":")[0]}): ${thieuKhoa ? e.message : "khóa không khớp hoặc bản mã hỏng"}`);
+    throw new LoiNghiepVu(
+      thieuKhoa
+        ? `Máy chủ chưa đặt APP_ENC_KEY (hoặc đặt sai độ dài) nên không giải mã được ${viec}. Báo quản trị máy chủ đặt lại đúng khóa đã dùng khi lưu.`
+        : `Không giải mã được ${viec}: APP_ENC_KEY trên máy chủ không khớp với khóa lúc lưu, hoặc dữ liệu mã hóa đã hỏng. Kiểm lại APP_ENC_KEY; nếu khóa cũ đã mất thì ${cachSua}.`,
+      503,
+      "khoa-ma-hoa-khong-khop",
+    );
+  }
 }
