@@ -1,3 +1,7 @@
 * text=auto eol=lf
 *.png binary
 *.ico binary
+
+# Bộ chạy thử trên Windows (may-ca-nhan/): .bat bắt buộc CRLF; .ps1 giữ CRLF + BOM UTF-8 để Windows PowerShell 5.1 đọc đúng tiếng Việt
+*.bat text eol=crlf
+*.ps1 text eol=crlf
