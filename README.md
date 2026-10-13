@@ -31,6 +31,10 @@ Chi tiết: [`ARCHITECTURE.md`](ARCHITECTURE.md). Cơ sở dữ liệu: [`DATABA
 | Kiểm thử | `node:test` qua `tsx` + bài thử tích hợp trên CSDL thật + bài thử HTTP đầu-cuối |
 | Triển khai | Docker Compose: app, worker, db, redis, nginx |
 
+## Chạy thử trên máy Windows (không cần biết lập trình)
+
+Bấm đúp `may-ca-nhan/TAI-VE-VA-CAI-DAT.bat` (cần Git, Node.js 22, Docker Desktop) — dựng CSDL trong Docker, nạp dữ liệu mẫu DEMO và mở http://127.0.0.1:3000. Hướng dẫn: [`may-ca-nhan/HUONG-DAN.md`](may-ca-nhan/HUONG-DAN.md).
+
 ## Cài đặt trên máy phát triển
 
 Yêu cầu: Node 20+ (đã dùng 24), PostgreSQL 16 (Docker hoặc bản cài; máy trạm không có Docker thì xem mục "Không có Docker" trong [`DEPLOYMENT.md`](DEPLOYMENT.md)).

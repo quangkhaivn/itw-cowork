@@ -11,3 +11,6 @@ src/generated/
 tsconfig.tsbuildinfo
 next-env.d.ts
 .pgdata/
+
+# Bộ chạy thử trên máy cá nhân: tệp thông tin đăng nhập sinh ra lúc cài (có mật khẩu)
+THONG-TIN-DANG-NHAP.txt
