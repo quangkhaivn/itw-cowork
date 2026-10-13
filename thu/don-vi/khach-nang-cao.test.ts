@@ -15,6 +15,7 @@ import { trungNgaySinh } from "../../src/modules/nhac-viec/tinh-toan";
 import { QUY_TAC } from "../../src/modules/nhac-viec/quy-tac";
 import { DANH_MUC_CAU_HINH } from "../../src/modules/cau-hinh/danh-muc";
 import { VAI_TRO } from "../../src/lib/vai-tro";
+import { docCsv, taoCsv, voHieuCongThuc } from "../../src/lib/csv";
 
 const T = (id: string, sortOrder: number, kind = "mo") => ({ id, sortOrder, kind });
 
@@ -222,5 +223,22 @@ describe("Quy tắc nhắc việc và quyền mới", () => {
     assert.ok(quyen("sales-manager")!.includes("customer.approve"));
     assert.ok(!quyen("sales")!.includes("customer.approve"));
     assert.ok(!quyen("ai-assistant")!.some((q) => q.endsWith(".approve")));
+  });
+});
+
+describe("Xuất CSV chống chèn công thức (CSV-01)", () => {
+  it("ô chuỗi bắt đầu bằng = + - @ tab CR được thêm dấu '", () => {
+    for (const s of ["=cmd|' /C calc'!A0", "+SUM(1)", "-2+3", "@SUM(1)", "\tx", "\rx"]) assert.equal(voHieuCongThuc(s), `'${s}`);
+    assert.equal(voHieuCongThuc("Công ty A"), "Công ty A");
+    assert.equal(voHieuCongThuc(""), "");
+  });
+  it("taoCsv vô hiệu ô nguy hiểm nhưng giữ nguyên ô SỐ (kể cả số âm)", () => {
+    const csv = taoCsv(["A", "B", "C"], [["=HYPERLINK(\"x\")", -5, "+84 909"]]);
+    const dong = csv.replace(/^﻿/, "").split("\r\n")[1];
+    assert.equal(dong, `"'=HYPERLINK(""x"")",-5,'+84 909`);
+  });
+  it("đọc lại tệp đã xuất: điện thoại có dấu ' vẫn chuẩn hóa được", () => {
+    const bang = docCsv(taoCsv(["Điện thoại"], [["+84 909 123 456"]]));
+    assert.equal(bang[1][0], "'+84 909 123 456");
   });
 });

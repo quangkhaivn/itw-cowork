@@ -183,9 +183,12 @@ async function nhap(nc: NguCanh, tx: ClientTenant, db: DatabaseSync): Promise<Ba
       } catch {
         dt = null;
       }
-      const trung =
-        (mst && (await tx.customer.findFirst({ where: { taxCodeNormalized: mst }, select: { id: true, code: true } }))) ||
-        (dt && (await tx.customer.findFirst({ where: { OR: [{ phoneNormalized: dt }, { contacts: { some: { phoneNormalized: dt } } }] }, select: { id: true, code: true } })));
+      const chonTrung = { id: true, code: true, status: true, mergedInto: { select: { id: true, code: true } } } as const;
+      const timThay =
+        (mst && (await tx.customer.findFirst({ where: { taxCodeNormalized: mst }, select: chonTrung }))) ||
+        (dt && (await tx.customer.findFirst({ where: { OR: [{ phoneNormalized: dt }, { contacts: { some: { phoneNormalized: dt } } }] }, select: chonTrung, orderBy: { status: "asc" } })));
+      // Khách trùng mà đã gộp → đi theo khách giữ lại (merged_into_id luôn trỏ thẳng, không chuỗi — KHN-12).
+      const trung = timThay ? (timThay.status === "da-gop" && timThay.mergedInto ? timThay.mergedInto : timThay) : null;
       const nhomCua = [nhomNhan, ...(thanhVien.get(Number(k.id)) ?? []).map((g) => nhomItw.get(g)).filter((g): g is string => Boolean(g))];
       if (trung) {
         bc.khachTrung.push({ ma: k.code, ten: k.name, lyDo: mst && trung ? "Trùng MST hoặc điện thoại" : "Trùng điện thoại", vao: trung.code });

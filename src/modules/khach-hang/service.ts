@@ -12,6 +12,7 @@ import { LuocDoSuaLienHe } from "./luoc-do";
 import type { z } from "zod";
 import { docCauHinh } from "@/modules/cau-hinh/service";
 import { khiCoSuKienKhach } from "./su-kien-khach";
+import { khachDungLau } from "@/modules/hanh-trinh/service";
 
 /**
  * Phân hệ Khách hàng — nghiệp vụ. Luật: BUSINESS_RULES.md mục 3 (KH-01 → KH-07).
@@ -291,13 +292,10 @@ export async function dieuKienLocKhach(
       dieuKien.push({ interactions: { none: { status: "hoat-dong" } } });
       break;
     case "dung-lau": {
-      // Ngưỡng nằm trên từng trạng thái (KHN-14) nên so cột với cột — dùng SQL có tham số.
-      const ids = await nc.tx.$queryRaw<{ id: string }[]>`
-        SELECT c.id::text AS id FROM customers c JOIN customer_journey_stages s ON s.id = c.journey_stage_id
-        WHERE s.stale_days IS NOT NULL AND c.journey_stage_changed_at IS NOT NULL
-          AND c.journey_stage_changed_at < now() - make_interval(days => s.stale_days)
-      `;
-      dieuKien.push({ id: { in: ids.map((x) => x.id) } });
+      // Cùng một hàm với máy quét nhắc việc (ngày lịch giờ VN, bỏ khách ngừng / đã gộp, bỏ trạng
+      // thái đã ngừng) — lọc nhanh và chuông nhắc không bao giờ nói hai điều khác nhau.
+      const ds = await khachDungLau(nc.tx);
+      dieuKien.push({ id: { in: ds.map((x) => x.id) } });
       if (!(await nc.tx.customerJourneyStage.count({ where: { staleDays: { not: null } } }))) {
         canhBao = "Chưa trạng thái hành trình nào đặt số ngày “đứng lâu” — đặt ở trang Hành trình khách hàng.";
       }

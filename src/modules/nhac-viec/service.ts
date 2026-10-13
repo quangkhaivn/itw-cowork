@@ -21,7 +21,7 @@ import {
   tomTatViec,
   trungNgaySinh,
 } from "./tinh-toan";
-import { laDungLau, soNgayDung } from "@/modules/hanh-trinh/tinh-toan";
+import { khachDungLau } from "@/modules/hanh-trinh/service";
 
 /**
  * Bản quét nhắc việc — mục 21–22 prompt 20/09. Luật: BUSINESS_RULES.md mục 13.
@@ -382,24 +382,10 @@ async function quetKhachLauChuaMuaLai(tx: ClientTenant, homNay: string, soThang:
  * thì thôi — không nhắc lặp mỗi sáng cho cùng một lần đứng lâu.
  */
 async function quetKhachDungLau(tx: ClientTenant, homNay: string): Promise<ViecMoi[]> {
-  const ds = await tx.customer.findMany({
-    where: {
-      status: { notIn: ["da-gop", "ngung-giao-dich"] },
-      journeyStageChangedAt: { not: null },
-      journeyStage: { staleDays: { not: null }, status: "hoat-dong" },
-    },
-    select: {
-      id: true, code: true, name: true, ownerId: true, journeyStageChangedAt: true,
-      journeyStage: { select: { name: true, staleDays: true } },
-    },
-  });
   const ra: ViecMoi[] = [];
-  for (const k of ds) {
-    const vao = homNayVN(k.journeyStageChangedAt!);
-    const soNgay = soNgayDung(vao, homNay);
-    if (!laDungLau(soNgay, k.journeyStage!.staleDays)) continue;
+  for (const k of await khachDungLau(tx, homNay)) {
     const daNhac = await tx.dailyActionItem.findFirst({
-      where: { ruleCode: "khach-dung-lau", objectType: "customer", objectId: k.id, forDate: { gte: ngayVeDate(vao), lt: ngayVeDate(homNay) } },
+      where: { ruleCode: "khach-dung-lau", objectType: "customer", objectId: k.id, forDate: { gte: ngayVeDate(k.vao), lt: ngayVeDate(homNay) } },
       select: { id: true },
     });
     if (daNhac) continue;
@@ -407,8 +393,8 @@ async function quetKhachDungLau(tx: ClientTenant, homNay: string): Promise<ViecM
       nguoiId: k.ownerId,
       maQuyTac: "khach-dung-lau",
       mucDo: "canh-bao",
-      tieuDe: `${k.name} đứng lâu ở "${k.journeyStage!.name}"`,
-      lyDo: `Đã ${soNgay} ngày ở trạng thái này (từ ${ngayGon(vao)}), ngưỡng nhắc ${k.journeyStage!.staleDays} ngày.`,
+      tieuDe: `${k.name} đứng lâu ở "${k.tenTrangThai}"`,
+      lyDo: `Đã ${k.soNgay} ngày ở trạng thái này (từ ${ngayGon(k.vao)}), ngưỡng nhắc ${k.nguong} ngày.`,
       duongDan: `/crm/khach-hang/${k.id}?tab=hanh-trinh`,
       doiTuong: "customer",
       doiTuongId: k.id,

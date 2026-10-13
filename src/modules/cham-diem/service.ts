@@ -21,7 +21,23 @@ import { chamDiem, chuanHoaDiemNguon, hangDiem, type CauHinhDiem, type DuKienDie
 /** Khóa `tenant_settings` giữ bảng điểm theo nguồn khách (cách làm của QĐ-22: tiền tố riêng). */
 export const KHOA_DIEM_NGUON = "cham_diem.nguon";
 
-export async function docCauHinhDiem(tx: ClientTenant): Promise<CauHinhDiem> {
+/**
+ * Cấu hình điểm đọc MỘT lần mỗi giao dịch: nhập CSV 2.000 dòng gọi tính lại điểm 2.000 lần, mỗi
+ * lần 15 khóa cấu hình — đọc lại mỗi lần là 30.000 truy vấn thừa. Khóa theo đối tượng `tx` nên hết
+ * giao dịch là hết bộ nhớ đệm; lưu bảng điểm nguồn trong cùng giao dịch thì xóa đệm.
+ */
+const DEM_CAU_HINH = new WeakMap<object, Promise<CauHinhDiem>>();
+
+export function docCauHinhDiem(tx: ClientTenant): Promise<CauHinhDiem> {
+  let p = DEM_CAU_HINH.get(tx);
+  if (!p) {
+    p = docCauHinhDiemTuCsdl(tx);
+    DEM_CAU_HINH.set(tx, p);
+  }
+  return p;
+}
+
+async function docCauHinhDiemTuCsdl(tx: ClientTenant): Promise<CauHinhDiem> {
   const so = async (k: string) => (await docCauHinh(tx, `diem_khach.${k}`)) ?? 0;
   const dong = await tx.tenantSetting.findFirst({ where: { key: KHOA_DIEM_NGUON, status: "hoat-dong" }, select: { value: true } });
   return {
@@ -218,6 +234,7 @@ export async function luuDiemNguon(nc: NguCanh, diem: Record<string, number | nu
     moi[ma] = d;
   }
   const cu = await nc.tx.tenantSetting.findFirst({ where: { key: KHOA_DIEM_NGUON }, select: { value: true } });
+  DEM_CAU_HINH.delete(nc.tx);
   await nc.tx.tenantSetting.upsert({
     where: { tenantId_key: { tenantId: nc.tenantId, key: KHOA_DIEM_NGUON } },
     update: { value: moi, status: "hoat-dong", updatedBy: nc.hoSo.userId },

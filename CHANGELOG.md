@@ -26,6 +26,13 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 21 (KHN). Kiến trúc: `ARCHITE
 - Quy tắc nhắc "Khách lâu chưa mua lại" lọc khách theo `status = 'hoat-dong'` — giá trị không tồn tại trên khách hàng, nên quy tắc chưa từng sinh việc nào. Nay lọc "không ngừng giao dịch, không đã gộp".
 - Thẻ chỉ số trong lưới bị lệch hàng (luật chung `.the + .the` đẩy thẻ thứ hai trở đi xuống 16px).
 
+### Sửa sau kiểm thử QA độc lập (`thu:qa-khach`, 135 kiểm chứng)
+- **Xuất CSV chống chèn công thức** (CSV-01): ô bắt đầu bằng `= + - @`, tab, xuống dòng được thêm `'`. Sửa ở `taoCsv()` dùng chung nên xuất sản phẩm cũng an toàn.
+- **Nhập CSV hỏng từ ~150 dòng** vì hết hạn giao dịch 5 giây: route theo lô (nhập CSV khách + sản phẩm, hàng loạt, tính lại điểm) chạy với hạn 120 giây; cấu hình chấm điểm đọc một lần mỗi giao dịch (QĐ-56). 2.000 dòng xem trước ~45 giây.
+- **Gộp đồng thời tạo chuỗi gộp**: gộp nay khóa hai dòng khách theo thứ tự id rồi mới kiểm `da-gop`.
+- **Thanh tìm kiếm toàn cục trả khách đã gộp** — nay ẩn.
+- Gộp khách đóng việc hôm nay đang mở và chuyển thông báo chưa đọc của khách bị gộp; lọc nhanh "Đứng lâu" dùng chung hàm với máy quét; bàn giao báo rõ khi người nhận thiếu quyền xem một loại việc; script nhập ITW đi theo khách giữ lại khi trùng một khách đã gộp.
+
 ### Quyết định đáng ghi
 - **Trưởng phòng Kinh doanh được cấp `customer.approve`** (QĐ-46) để quản lý hành trình, nhóm, bộ lọc chung, gộp khách — không bắt cả phòng chờ Giám đốc.
 - **Gộp khách đọc danh sách bảng từ catalog PostgreSQL** (QĐ-51): bảng sau này có khóa ngoại tới khách tự được chuyển, không bị sót.

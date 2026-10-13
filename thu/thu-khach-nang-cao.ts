@@ -401,7 +401,12 @@ async function main() {
   await nemLoi("KHN-11: hai khách khác mã số thuế không gộp được", "nghiep-vu", () => voi(T, tp, (nc) => gopKhach(nc, { giuLaiId: kKhacMst.id, biGopId: gop.id, lyDo: "Thử" })), "khac-ma-so-thue");
   const xt = await voi(T, tp, (nc) => xemTruocGop(nc, giu.id, gop.id));
   dat("Xem trước gộp liệt kê số bản ghi từng bảng và trường sẽ bổ sung", xt.chuyen.find((c) => c.bang === "opportunities.customer_id")?.so === 1 && xt.boSung.some((b) => b.truong === "Mã số thuế"));
+  const viecGop = await chu.dailyActionItem.create({
+    data: { tenantId: T, userId: nv1, forDate: new Date(`${HOM_NAY}T00:00:00Z`), ruleCode: "khach-dung-lau", severity: "canh-bao", title: "Việc về khách bị gộp", reason: "thử", link: `/crm/khach-hang/${gop.id}`, objectType: "customer", objectId: gop.id },
+  });
   const kqGop = await voi(T, tp, (nc) => gopKhach(nc, { giuLaiId: giu.id, biGopId: gop.id, lyDo: "Cùng một công ty nhập hai lần" }));
+  const viecGopSau = await chu.dailyActionItem.findUniqueOrThrow({ where: { id: viecGop.id } });
+  dat("Gộp đóng việc hôm nay đang mở của khách bị gộp (bỏ qua, có lý do)", viecGopSau.status === "bo-qua" && Boolean(viecGopSau.skipReason?.includes(giu.ma)));
   const sauGiu = await demFk(giu.id);
   const sauGop = await demFk(gop.id);
   let khongMat = true;
@@ -499,6 +504,12 @@ async function main() {
   await nemLoi("Không bàn giao cho người đã ngừng hoạt động", "nghiep-vu", () => voi(T, gd, (nc) => banGiao(nc, nghiViec, { nguoiNhanId: kyThuat, khoaTaiKhoan: true })), "nguoi-nhan-ngung");
   const kqBg = await voi(T, gd, (nc) => banGiao(nc, nghiViec, { nguoiNhanId: nv2, khoaTaiKhoan: true, ghiChu: "Nghỉ việc 30/10" }));
   dat("Bàn giao chuyển đủ số việc như xem trước", kqBg.tong === xtbg.tong && kqBg.daKhoa, JSON.stringify(kqBg));
+  dat("Người nhận (sale) xem được mọi loại việc vừa nhận → không có cảnh báo thiếu quyền", kqBg.thieuQuyenXem.length === 0);
+  const nghiViec2 = await nguoi("nghi-viec-2", "sales", tp);
+  await voi(T, nghiViec2, (nc) => taoLead(nc, LuocDoTaoLead.parse({ hoTen: "Lead người nghỉ 2", dienThoai: "0988000998" })));
+  const keToan = await nguoi("ke-toan", "finance");
+  const kqKt = await voi(T, gd, (nc) => banGiao(nc, nghiViec2, { nguoiNhanId: keToan, khoaTaiKhoan: false }));
+  dat("KHN-17: người nhận không có quyền xem lead (kế toán) → vẫn chuyển nhưng báo rõ thiếu quyền", kqKt.tong === 1 && kqKt.thieuQuyenXem.some((x) => x.startsWith("Lead")), JSON.stringify(kqKt.thieuQuyenXem));
   dat("Khách, cơ hội mở chuyển sang người nhận", (await chu.customer.findUniqueOrThrow({ where: { id: kNv.id } })).ownerId === nv2 && (await chu.opportunity.findUniqueOrThrow({ where: { id: chMo.id } })).ownerId === nv2);
   dat("Cơ hội đã đóng giữ nguyên người làm (lịch sử không bị viết lại)", (await chu.opportunity.findUniqueOrThrow({ where: { id: chDong.id } })).ownerId === nghiViec);
   dat("Tài khoản người nghỉ bị khóa", (await chu.user.findUniqueOrThrow({ where: { id: nghiViec } })).status === "ngung-hoat-dong");

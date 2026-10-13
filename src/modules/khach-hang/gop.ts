@@ -68,9 +68,15 @@ async function demThamChieu(tx: ClientTenant, khachId: string, ds: ThamChieuKhac
   return kq;
 }
 
-async function docHaiKhach(nc: NguCanh, giuLaiId: string, biGopId: string) {
+async function docHaiKhach(nc: NguCanh, giuLaiId: string, biGopId: string, tc: { khoa?: boolean } = {}) {
   batBuocQuyen(nc.hoSo, "customer.approve", { objectType: "customer", objectId: biGopId });
   if (giuLaiId === biGopId) throw new LoiNghiepVu("Chọn hai khách khác nhau.", 400, "cung-khach");
+  if (tc.khoa) {
+    // Chống gộp đồng thời tạo chuỗi gộp (C→B trong lúc B→A): khóa hai dòng khách THEO THỨ TỰ id
+    // (tránh khóa chéo), rồi mới đọc và kiểm `da-gop` — lần đọc sau khóa thấy trạng thái đã chốt
+    // của giao dịch gộp kia. Giữ khóa tới hết giao dịch.
+    await nc.tx.$queryRaw`SELECT id FROM customers WHERE id = ANY(${[giuLaiId, biGopId]}::uuid[]) ORDER BY id FOR UPDATE`;
+  }
   const phamVi = await locTheoPhamVi(nc, "customer.update");
   const chon = {
     id: true, code: true, name: true, taxCode: true, taxCodeNormalized: true, phone: true, phoneNormalized: true,
@@ -125,7 +131,7 @@ export async function xemTruocGop(nc: NguCanh, giuLaiId: string, biGopId: string
 }
 
 export async function gopKhach(nc: NguCanh, d: z.infer<typeof LuocDoGopKhach>) {
-  const { giu, gop } = await docHaiKhach(nc, d.giuLaiId, d.biGopId);
+  const { giu, gop } = await docHaiKhach(nc, d.giuLaiId, d.biGopId, { khoa: true });
   const ds = await cotThamChieuKhach(nc.tx);
   const truoc = await demThamChieu(nc.tx, gop.id, ds);
 
@@ -152,6 +158,22 @@ export async function gopKhach(nc: NguCanh, d: z.infer<typeof LuocDoGopKhach>) {
   }
   // Khách từng gộp vào khách bị gộp → trỏ thẳng sang khách giữ lại (không để chuỗi gộp).
   daChuyen["customers.merged_into_id"] = (await nc.tx.customer.updateMany({ where: { mergedIntoId: gop.id }, data: { mergedIntoId: giu.id } })).count;
+
+  // 3b. Việc hôm nay đang mở về khách bị gộp → đóng (bỏ qua, ghi lý do); thông báo chưa đọc → trỏ sang
+  //     khách giữ lại. Không chuyển việc sang khách giữ lại: khóa chống trùng theo ngày có thể đụng
+  //     việc cùng loại của khách giữ lại, và bản quét hôm sau tự sinh lại việc nếu vẫn cần.
+  daChuyen["daily_action_items.dong"] = (
+    await nc.tx.dailyActionItem.updateMany({
+      where: { objectType: "customer", objectId: gop.id, status: "mo" },
+      data: { status: "bo-qua", resolvedAt: new Date(), resolvedBy: nc.hoSo.userId, skipReason: `Khách đã gộp vào ${giu.code}` },
+    })
+  ).count;
+  daChuyen["notifications.object_id"] = (
+    await nc.tx.notification.updateMany({
+      where: { objectType: "customer", objectId: gop.id, readAt: null },
+      data: { objectId: giu.id, link: `/crm/khach-hang/${giu.id}` },
+    })
+  ).count;
 
   // 4. Bổ sung thông tin còn trống. MST là duy nhất nên phải gỡ khỏi khách bị gộp trước.
   const boSung: Record<string, string> = {};

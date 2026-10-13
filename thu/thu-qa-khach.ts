@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { voiTenant } from "../src/lib/db";
+import { voiTenant, HAN_GIAO_DICH_THEO_LO_MS, type TuyChonGiaoDich } from "../src/lib/db";
 import { taoNguCanh, type NguCanh } from "../src/lib/api";
 import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "../src/lib/loi";
@@ -56,13 +56,20 @@ const HOM_NAY = homNayVN();
 const NGAY_MAI = congNgay(HOM_NAY, 1);
 const ITW_DB = process.env.QA_ITW_DB ?? "/tmp/claude-0/-home-user/cba7550c-49b8-53c6-8684-345cc56cbba2/scratchpad/qa-khach-itw/itwcrm.db";
 
-async function voi<T>(tenantId: string, userId: string, viec: (nc: NguCanh) => Promise<T>): Promise<T> {
+async function voi<T>(tenantId: string, userId: string, viec: (nc: NguCanh) => Promise<T>, tuyChon: TuyChonGiaoDich = {}): Promise<T> {
   return voiTenant(tenantId, async (tx) => {
     const hoSo = await layHoSoQuyen(tx, userId);
     if (!hoSo) throw new Error(`Không đọc được hồ sơ quyền của ${userId}`);
     return viec(taoNguCanh(tx, tenantId, hoSo, "127.0.0.1", "thu-qa-khach"));
-  });
+  }, tuyChon);
 }
+
+/**
+ * Sửa sau QA (QĐ-56): route nhập CSV, hàng loạt, tính lại toàn bộ chạy với hạn giao dịch
+ * `HAN_GIAO_DICH_THEO_LO_MS` (khai ở `xuLyApi(..., { hanGiaoDichMs })`). Bài hiệu năng gọi
+ * service với ĐÚNG hạn đó để vẫn là "cùng đường với API"; các assert giữ nguyên.
+ */
+const HAN_ROUTE_THEO_LO: TuyChonGiaoDich = { timeoutMs: HAN_GIAO_DICH_THEO_LO_MS };
 
 type KieuLoi = "nghiep-vu" | "quyen" | "khong-thay" | "dinh-dang";
 async function nemLoi(ten: string, kieu: KieuLoi, khoi: () => Promise<unknown>, ma?: string) {
@@ -354,15 +361,16 @@ async function main() {
     await choDaKhoa;
     const gopCB = voi(T, gd, (nc) => gopKhach(nc, { giuLaiId: kBb.id, biGopId: kC.id, lyDo: "Đua: C vào B" })).then(() => "ok", (e: unknown) => (e instanceof Error ? e.message : String(e)));
     await new Promise((r) => setTimeout(r, 600));
-    let kqBA = "ok";
-    try {
-      await voi(T, gd, (nc) => gopKhach(nc, { giuLaiId: kA.id, biGopId: kBb.id, lyDo: "Đua: B vào A" }));
-    } catch (e) {
-      kqBA = e instanceof Error ? e.message : String(e);
-    }
+    // Sửa sau QA: gộp nay KHÓA hai dòng khách (FOR UPDATE) nên B→A phải CHỜ C→B (đang giữ khóa B)
+    // xong mới chạy — đó chính là cách sửa. Bản gốc chờ B→A xong rồi mới thả khóa liên hệ của C,
+    // tức là tự tạo vòng chờ trong bài thử (B→A chờ C→B, C→B chờ phiên giữ khóa, phiên giữ khóa chờ
+    // B→A). Ở đây B→A chạy song song, thả khóa sau một nhịp; các khẳng định bên dưới giữ nguyên.
+    const gopBA = voi(T, gd, (nc) => gopKhach(nc, { giuLaiId: kA.id, biGopId: kBb.id, lyDo: "Đua: B vào A" })).then(() => "ok", (e: unknown) => (e instanceof Error ? e.message : String(e)));
+    await new Promise((r) => setTimeout(r, 600));
     thaKhoa();
     await giuKhoa;
     const kqCB = await gopCB;
+    const kqBA = await gopBA;
     const c = await chu.customer.findUniqueOrThrow({ where: { id: kC.id } });
     const b = await chu.customer.findUniqueOrThrow({ where: { id: kBb.id } });
     const chSau = await chu.opportunity.findUniqueOrThrow({ where: { id: chC.id }, select: { customerId: true } });
@@ -538,7 +546,7 @@ async function main() {
   });
 
   // ------------------------------------------------------------------
-  await phan("Hiệu năng trong hạn giao dịch 5 giây (Prisma mặc định, cùng đường với API)", async () => {
+  await phan("Hiệu năng trong hạn giao dịch của route theo lô (cùng đường với API)", async () => {
     const F = await dungTenant("qa-khn-f", "QA Hiệu năng F");
     const gdF = await F.nguoi("gd-f", "ceo");
     const nvF = await F.nguoi("nv-f", "sales");
@@ -550,25 +558,25 @@ async function main() {
     const dmF = await voi(F.T, gdF, (nc) => danhSachTrangThaiHanhTrinh(nc));
     let t0 = Date.now();
     try {
-      const r = await voi(F.T, gdF, (nc) => thaoTacHangLoat(nc, { ids: ids500, thaoTac: "doi-hanh-trinh", giaTri: dmF[1].id }));
+      const r = await voi(F.T, gdF, (nc) => thaoTacHangLoat(nc, { ids: ids500, thaoTac: "doi-hanh-trinh", giaTri: dmF[1].id }), HAN_ROUTE_THEO_LO);
       const tg = ms(t0);
       dat(`Đổi hành trình hàng loạt 500 khách xong trong một giao dịch (${tg} ms)`, r.soDoi === 500);
-      if (tg > 3500) console.log(`    ⚠ CẢNH BÁO: ${tg} ms — sát hạn 5.000 ms của giao dịch; máy thật tải cao có thể hỏng.`);
+      if (tg > 3500) console.log(`    ⚠ CẢNH BÁO: ${tg} ms — quá 3,5 giây.`);
     } catch (e) {
       dat(`Đổi hành trình hàng loạt 500 khách (giới hạn lô cho phép) KHÔNG được hỏng vì hết hạn giao dịch`, false, `${ms(t0)} ms — ${e instanceof Error ? e.message.slice(0, 160) : e}`);
     }
     t0 = Date.now();
     try {
-      const r = await voi(F.T, gdF, (nc) => thaoTacHangLoat(nc, { ids: ids500, thaoTac: "doi-phu-trach", giaTri: nvF }));
+      const r = await voi(F.T, gdF, (nc) => thaoTacHangLoat(nc, { ids: ids500, thaoTac: "doi-phu-trach", giaTri: nvF }), HAN_ROUTE_THEO_LO);
       const tg = ms(t0);
       dat(`Đổi người phụ trách hàng loạt 500 khách xong (${tg} ms)`, r.soDoi === 500);
-      if (tg > 3500) console.log(`    ⚠ CẢNH BÁO: ${tg} ms — sát hạn 5.000 ms của giao dịch; máy thật tải cao có thể hỏng.`);
+      if (tg > 3500) console.log(`    ⚠ CẢNH BÁO: ${tg} ms — quá 3,5 giây.`);
     } catch (e) {
       dat(`Đổi người phụ trách hàng loạt 500 khách KHÔNG được hỏng vì hết hạn giao dịch`, false, `${ms(t0)} ms — ${e instanceof Error ? e.message.slice(0, 160) : e}`);
     }
     t0 = Date.now();
     try {
-      const r = await voi(F.T, gdF, (nc) => tinhLaiToanBo(nc));
+      const r = await voi(F.T, gdF, (nc) => tinhLaiToanBo(nc), HAN_ROUTE_THEO_LO);
       dat(`Tính lại toàn bộ ${N} khách xong (${ms(t0)} ms)`, r.soKhach === N);
     } catch (e) {
       dat(`Tính lại toàn bộ ${N} khách KHÔNG được hỏng vì hết hạn giao dịch`, false, `${ms(t0)} ms — ${e instanceof Error ? e.message.slice(0, 160) : e}`);
@@ -580,7 +588,7 @@ async function main() {
       const csv = ["Tên,Điện thoại", ...Array.from({ length: soDong }, (_, i) => `QA Nhập lô ${soDong} số ${i} ${DAU},09${String(40_000_000 + soDong * 10 + i).padStart(8, "0")}`)].join("\n");
       t0 = Date.now();
       try {
-        const r = await voi(F2.T, gdF2, (nc) => nhapKhachCsv(nc, { tenTep: `lo-${soDong}.csv`, noiDung: csv, ghiThat: false, xacNhanTrung: true }));
+        const r = await voi(F2.T, gdF2, (nc) => nhapKhachCsv(nc, { tenTep: `lo-${soDong}.csv`, noiDung: csv, ghiThat: false, xacNhanTrung: true }), HAN_ROUTE_THEO_LO);
         dat(`Xem trước nhập CSV ${soDong} dòng xong (${ms(t0)} ms, ${r.soTao} tạo, ${r.soLoi} lỗi)`, r.soTao + r.soLoi === soDong);
       } catch (e) {
         dat(`Xem trước nhập CSV ${soDong} dòng (trong giới hạn 5.000 dòng) KHÔNG được hỏng vì hết hạn giao dịch`, false, `${ms(t0)} ms — ${e instanceof Error ? e.message.slice(0, 160) : e}`);

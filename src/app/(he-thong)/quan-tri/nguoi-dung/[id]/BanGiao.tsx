@@ -92,9 +92,12 @@ export default function BanGiao({ nguoiId, hoTen, nguoiNhan }: { nguoiId: string
               className="nut chinh"
               disabled={dangGui || !nhanId}
               onClick={async () => {
-                const r = await goi<{ tong: number; daKhoa: boolean }>(`/api/v1/nguoi-dung/${nguoiId}/ban-giao`, "POST", { nguoiNhanId: nhanId, khoaTaiKhoan: khoa, ghiChu });
+                const r = await goi<{ tong: number; daKhoa: boolean; thieuQuyenXem: string[] }>(`/api/v1/nguoi-dung/${nguoiId}/ban-giao`, "POST", { nguoiNhanId: nhanId, khoaTaiKhoan: khoa, ghiChu });
                 if (r) {
-                  datXong(`Đã chuyển ${dinhDangSo(r.tong)} việc${r.daKhoa ? " và khóa tài khoản" : ""}.`);
+                  datXong(
+                    `Đã chuyển ${dinhDangSo(r.tong)} việc${r.daKhoa ? " và khóa tài khoản" : ""}.` +
+                      (r.thieuQuyenXem.length ? ` Lưu ý: người nhận chưa có quyền xem ${r.thieuQuyenXem.join("; ")} — cấp vai trò phù hợp hoặc phân lại.` : ""),
+                  );
                   datXt(null);
                   router.refresh();
                 }

@@ -8,7 +8,7 @@ import { homNayVN, locTheoPhamVi } from "@/modules/crm/chung";
 import { congNgay } from "@/modules/nhac-viec/tinh-toan";
 import { dauNgayVN } from "@/lib/dinh-dang";
 import { NHAN_MOC, type MaMoc } from "./moc";
-import { coTuChuyen, tinhPheu } from "./tinh-toan";
+import { coTuChuyen, laDungLau, soNgayDung, tinhPheu } from "./tinh-toan";
 import type { DuLieuDoiHanhTrinh, DuLieuSuaTrangThaiHanhTrinh, DuLieuTrangThaiHanhTrinh } from "./luoc-do";
 
 /**
@@ -372,4 +372,47 @@ export async function tongQuanHanhTrinh(nc: NguCanh, d: { tu?: string; den?: str
     pheu,
     quyen: { quanLy: coQuyen(nc.hoSo, "customer.approve") },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Khách đứng lâu (KHN-14) — MỘT cách tính cho cả lọc nhanh "Đứng lâu" và máy quét nhắc việc
+// ---------------------------------------------------------------------------
+
+export interface KhachDungLau {
+  id: string;
+  code: string;
+  name: string;
+  ownerId: string;
+  /** Ngày vào trạng thái (giờ Việt Nam). */
+  vao: string;
+  soNgay: number;
+  tenTrangThai: string;
+  nguong: number;
+}
+
+/**
+ * Khách đang đứng lâu tính tới ngày `homNay` (giờ VN): trạng thái còn dùng và có đặt số ngày,
+ * khách không ngừng giao dịch / không đã gộp, số ngày theo LỊCH Việt Nam ≥ ngưỡng. Không lọc
+ * theo phạm vi — người gọi tự áp (lọc danh sách áp phạm vi xem; máy quét chạy với tư cách hệ thống).
+ */
+export async function khachDungLau(tx: ClientTenant, homNay: string = homNayVN()): Promise<KhachDungLau[]> {
+  const ds = await tx.customer.findMany({
+    where: {
+      status: { notIn: ["da-gop", "ngung-giao-dich"] },
+      journeyStageChangedAt: { not: null },
+      journeyStage: { staleDays: { not: null }, status: "hoat-dong" },
+    },
+    select: {
+      id: true, code: true, name: true, ownerId: true, journeyStageChangedAt: true,
+      journeyStage: { select: { name: true, staleDays: true } },
+    },
+  });
+  const ra: KhachDungLau[] = [];
+  for (const k of ds) {
+    const vao = homNayVN(k.journeyStageChangedAt!);
+    const soNgay = soNgayDung(vao, homNay);
+    if (!laDungLau(soNgay, k.journeyStage!.staleDays)) continue;
+    ra.push({ id: k.id, code: k.code, name: k.name, ownerId: k.ownerId, vao, soNgay, tenTrangThai: k.journeyStage!.name, nguong: k.journeyStage!.staleDays! });
+  }
+  return ra;
 }
