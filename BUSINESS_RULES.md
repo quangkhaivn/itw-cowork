@@ -363,7 +363,7 @@ Hàng đi trước (quyền `inventory.update`), tiền chốt sau (quyền `fin
 
 | # | Luật | Chặn ở |
 |---|---|---|
-| TH-01 | Số phiếu `TH-<năm>-0001` (khách trả) và `TM-<năm>-0001` (trả nhà cung cấp), cấp nguyên tử. Lập từ một **đơn** để đối chiếu, hoặc lập lẻ khi không có đơn | [SV] · [CSDL] duy nhất · [TH] |
+| TH-01 | Số phiếu `TH-<năm>-0001` (khách trả) và `TM-<năm>-0001` (trả nhà cung cấp), cấp nguyên tử. Lập từ một **đơn** để đối chiếu, hoặc lập lẻ khi không có đơn (**0.16.1:** chiều khách trả bắt buộc theo đơn — TV-BH-10) | [SV] · [CSDL] duy nhất · [TH] |
 | TH-02 | **Mọi phiếu phải ghi rõ vì sao trả.** Không có lý do thì không có phiếu | [CSDL] CHECK · [SV] lược đồ · [TH] |
 | TH-03 | Không trả quá phần **đã thật sự giao** (chiều bán) hoặc **đã thật sự nhận** (chiều mua), trừ đi phần đã trả bằng các phiếu trước. Phiếu đã hủy không tính | [SV] · [TH] |
 | TH-04 | **Xác nhận** là lúc hàng thật sự đi qua kho: hàng còn dùng được cộng lại tồn, máy đổi được xuất ra, sê-ri đổi trạng thái. Xác nhận rồi thì khóa sửa và khóa hủy | [CSDL] CHECK · [SV] · [TH] |
@@ -547,3 +547,24 @@ Mã 6 số đổi mỗi 30 giây (TOTP, RFC 6238) từ ứng dụng xác thực 
 | XT-06 | Vai trò bắt buộc 2 lớp do người có `setting.update` chọn. **Chưa đặt = không bắt buộc ai.** Người bị bắt mà chưa bật thì sau đăng nhập chỉ vào được trang bật 2 lớp; API trả 403 `phai-bat-2-lop` | [SV] `layHoSoQuyen` + `xuLyApi` + `yeuCauDangNhap` · [TH] |
 | XT-07 | Bật, tắt, đặt lại đều **thu hồi mọi phiên khác** (như đổi mật khẩu). Tắt cần cả mật khẩu và một mã. Vai trò bắt buộc thì không tự tắt được | [SV] · [TH] |
 | XT-08 | Quản trị (`user.update`) đặt lại 2 lớp cho người khác, bắt buộc ghi lý do, ghi kiểm toán; không tự đặt lại cho chính mình | [SV] · [TH] |
+
+## 25. Toàn vẹn chuỗi bán hàng (0.16.1)
+
+Báo giá → đơn → xuất kho → bảo hành → trả hàng → hỗ trợ là một chuỗi: một mắt xích ghi sai (bấm hai lần, hai người cùng làm, gắn nhầm khách) thì kho, công nợ và bảo hành lệch theo. Mục này chốt các luật giữ chuỗi đó nhất quán. Quyết định QĐ-77 → QĐ-81; kiến trúc mục 7s; migration `20261014081000_toan_ven_ban_hang`; bài thử `npm run thu:toan-ven-ban-hang`.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| TV-BH-01 | **Mọi bước đổi trạng thái chứng từ khóa dòng chứng từ trước, rồi mới đọc trạng thái** (`khoaChungTu`, QĐ-77/78): xác nhận / hủy / sửa / xuất đơn; tạo đơn từ báo giá; sửa, ra phiên bản, xin duyệt, duyệt, gửi, chốt báo giá; xuất / nhận / hủy chuyển kho; xác nhận / chốt tiền / hủy phiếu trả hàng cả hai chiều (chốt tiền khóa phiếu trả **rồi** các hóa đơn được giảm trừ, tăng dần theo id — cùng thứ tự với thu / chi tiền, nên chốt giảm trừ và thu tiền cùng lúc không cùng xóa một khoản nợ); lập phiếu trả (khóa các dòng đơn); chuyển đổi, sửa, loại lead; đổi trạng thái / sửa / giao phiếu hỗ trợ; hủy bảo hành. Hai yêu cầu cùng lúc: yêu cầu sau chờ, thấy trạng thái mới và bị chặn — **đúng một yêu cầu thành công** | [SV] · [TH] song song |
+| TV-BH-02 | Xuất hàng chuyển sê-ri sang `da-ban` bằng **cập nhật có điều kiện** (`trong-kho` + đúng kho xuất). Hai đơn khác nhau cùng xuất một sê-ri → chỉ một đơn được, đơn kia nhận lỗi `serial-da-dung` | [SV] · [TH] song song |
+| TV-BH-03 | Số đã giao **cộng nguyên tử** trên CSDL (không ghi đè bằng số đọc lúc trước). Một dòng đơn chỉ xuất hiện một lần trong một phiếu xuất; một sê-ri chỉ khai một lần trong phiếu. Đã giao không bao giờ vượt số đặt | [CSDL] CHECK `sales_order_items_da_giao_check` · [SV] lược đồ + service · [TH] |
+| TV-BH-04 | **Giữ chỗ không bị kẹt.** Xuất từ kho B phần hàng đang giữ ở kho A → nhả giữ chỗ ở A đúng bằng phần giao không lấy từ chỗ đã giữ ở B. Đơn **giao đủ** hoặc **hủy** → nhả **mọi** phần còn giữ của đơn ở **mọi** kho. Giữ chỗ luôn đọc từ sổ cái (`ref_type = 'don-hang'`), tổng sổ cái = số giữ chỗ đang lưu | [SV] `ghiSoKho` · [TH] đối soát |
+| TV-BH-05 | Sê-ri đổi trạng thái có điều kiện ở **mọi** chứng từ: nhận trả (phải đang `da-ban`), giao máy đổi (phải `trong-kho` đúng kho), xuất chuyển kho (phải `trong-kho` ở kho nguồn) | [SV] · [TH] |
+| TV-BH-06 | **Khách trả máy (trả hàng thường, đã xác nhận) → bảo hành của lần bán đó kết thúc**: trạng thái `huy` (đã hết hạn thì giữ `het-han`), ghi lý do kèm số phiếu, **nhả sê-ri** (`serial_number_id` = NULL, số sê-ri dạng chữ vẫn ở cột `serial`). Máy về kho bán lại được và khách mới nhận bảo hành mới. Hủy bảo hành bằng tay cũng nhả sê-ri. Đổi máy vẫn theo TH-10 (bảo hành đi theo máy mới) | [CSDL] CHECK `warranties_huy_nha_serial_check` · [SV] · [TH] |
+| TV-BH-07 | **Không hủy đơn còn hóa đơn chưa hủy** (nháp hoặc đã phát hành): thông báo liệt kê số hóa đơn, "Hủy hóa đơn trước". Dự án còn mở gắn với đơn **chỉ được cảnh báo** (trả về `canhBao.duAnDangMo`), không tự đóng | [SV] · [TH] |
+| TV-BH-08 | **Một báo giá chỉ có một đơn chưa hủy**, bất kể phiên bản. Tạo đơn lần hai trả về đúng đơn đã có; báo giá đã có đơn đang chạy thì **không ra phiên bản mới** (`bao-gia-da-co-don`) — hủy đơn trước. Màn hình ẩn nút "Tạo phiên bản mới" khi đã có đơn | [CSDL] chỉ mục riêng phần `sales_orders_bao_gia_dang_hoat_dong_key` · [SV] · [TH] |
+| TV-BH-09 | Khách **chấp nhận báo giá** hoặc **có đơn từ báo giá** → cơ hội gắn kèm tự sang **Thắng** (xác suất 100, ghi thời điểm đóng, kiểm toán `doi-giai-doan`, sự kiện `OPPORTUNITY_WON`, mốc hành trình `co-hoi-thang`) trong cùng giao dịch. Cơ hội đã Thắng / Thua thì để nguyên — không tự lật Thua thành Thắng | [SV] · [TH] |
+| TV-BH-10 | **Trả hàng (chiều bán) luôn theo đơn** (QĐ-81, thay phần "lập lẻ" của TH-01): phiếu phải ghi đơn của chính khách; mọi dòng gắn một dòng của **đơn đó**; mặt hàng trên dòng trả là mặt hàng của dòng đơn. Nhiều dòng trả cùng một dòng đơn (tách hàng tốt / lỗi) **cộng lại** rồi mới so với phần đã giao trừ đã trả; dòng lặp y hệt và sê-ri khai hai lần bị chặn. Sê-ri nhận trả phải được bán **cho chính khách này, theo đúng dòng đơn** đó. Phiếu **đổi máy không tính là đã trả** (khách vẫn giữ một máy) | [SV] · [TH] |
+| TV-BH-11 | Phiếu hỗ trợ chỉ gắn **đồ của chính khách trên phiếu**: sê-ri (bán theo đơn của khách hoặc có bảo hành đứng tên khách), đơn hàng, dự án, bảo hành, liên hệ — lúc lập và lúc sửa | [SV] · [TH] |
+| TV-BH-12 | **Mở lại phiếu đã xử lý xong** (Đã xử lý xong → Đang xử lý) xóa `resolved_at` để nhắc trễ hạn SLA chạy lại; mốc xử lý xong **lần đầu** giữ ở `first_resolved_at`; diễn biến ghi loại `mo-lai`, sự kiện `SERVICE_TICKET_REOPENED` | [CSDL] CHECK loại diễn biến · [SV] · [TH] |
+
+**Việc người dùng cần biết**: khách trả hàng nay phải mở phiếu từ nút "Khách trả hàng" trên trang đơn hàng. Hàng bán trước khi dùng Cowork (không có đơn trong hệ thống) chưa lập được phiếu trả — tạm ghi bằng điều chỉnh tồn có lý do; Giám đốc quyết định có mở lại đường "trả lẻ" có kiểm soát hay không (QĐ-81).

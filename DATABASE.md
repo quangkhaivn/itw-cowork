@@ -53,16 +53,16 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `quotation_items` | Bảng hàng của một phiên bản | Phase 4. CHECK `quantity > 0`, chiết khấu và VAT 0–100; chụp `sku`, `unit_cost`, `supplier_id` lúc lập |
 | `quotation_approvals` | Lịch sử xin duyệt / quyết duyệt | Phase 4. Chụp biên và ngưỡng lúc xin; CHECK đã quyết thì phải có người quyết và thời điểm |
 | `warehouses` | Kho hàng | Phase 5. Duy nhất `(tenant_id, code)`; một kho đánh dấu mặc định |
-| `sales_orders` | Đơn hàng bán | Phase 5. Số `DH-2026-0001`; giữ `quotation_version_id` để truy ngược; CHECK trạng thái, tiền ≥ 0, đã xác nhận / đã hủy phải có người và thời điểm |
+| `sales_orders` | Đơn hàng bán | Phase 5. Số `DH-2026-0001`; giữ `quotation_version_id` để truy ngược; CHECK trạng thái, tiền ≥ 0, đã xác nhận / đã hủy phải có người và thời điểm. 0.16.1: chỉ mục riêng phần `sales_orders_bao_gia_dang_hoat_dong_key` — một báo giá tối đa một đơn chưa hủy |
 | `sales_order_items` | Dòng hàng của đơn | Phase 5. CHECK `delivered_qty <= quantity`; giữ `quotation_item_id` |
 | `inventory_balances` | Số dư tồn theo (kho, sản phẩm) | Phase 5. Duy nhất `(tenant_id, warehouse_id, product_id)`; CHECK không âm và `reserved <= on_hand` |
 | `inventory_transactions` | Sổ cái kho | Phase 5. **Chỉ ghi thêm** (trigger `chan_sua_inventory_transactions`); ghi cả số dư sau giao dịch để đối soát |
 | `deliveries`, `delivery_items` | Phiếu xuất giao hàng | Phase 5. Số `XK-2026-0001`; ghi sổ kho ngay khi lập |
 | `serial_numbers` | Số sê-ri từng máy | Phase 5. Duy nhất `(tenant_id, product_id, serial)`; CHECK còn trong kho thì phải biết kho nào, đã bán thì phải gắn dòng đơn |
-| `warranties` | Bảo hành từng máy | Phase 6. Sinh khi xuất kho; một sê-ri một phiếu (`serial_number_id` duy nhất); CHECK hạn ≥ ngày bắt đầu, đã hủy phải có thời điểm |
+| `warranties` | Bảo hành từng máy | Phase 6. Sinh khi xuất kho; một sê-ri một phiếu (`serial_number_id` duy nhất); CHECK hạn ≥ ngày bắt đầu, đã hủy phải có thời điểm. 0.16.1: đã hủy thì `serial_number_id` NULL (CHECK `warranties_huy_nha_serial_check`), số sê-ri giữ ở `serial` |
 | `projects`, `project_milestones` | Dự án triển khai và hạng mục | Phase 6. Mã `DA-2026-0001`; CHECK nghiệm thu phải có người và thời điểm, hủy phải có lý do, hạng mục xong phải có thời điểm |
-| `support_tickets` | Phiếu hỗ trợ (bảo hành, sự cố, yêu cầu, bảo trì) | Phase 6. Số `HT-2026-0001`; chụp hạn SLA lúc mở; CHECK hoàn thành phải có cách xử lý và thời điểm |
-| `support_ticket_events` | Diễn biến xử lý phiếu | Phase 6. **Chỉ ghi thêm** (trigger `chan_sua_support_ticket_events`) |
+| `support_tickets` | Phiếu hỗ trợ (bảo hành, sự cố, yêu cầu, bảo trì) | Phase 6. Số `HT-2026-0001`; chụp hạn SLA lúc mở; CHECK hoàn thành phải có cách xử lý và thời điểm. 0.16.1: `first_resolved_at` (mốc xong lần đầu, giữ khi mở lại) |
+| `support_ticket_events` | Diễn biến xử lý phiếu | Phase 6. **Chỉ ghi thêm** (trigger `chan_sua_support_ticket_events`). 0.16.1: thêm loại `mo-lai` |
 | `invoices`, `invoice_items` | Hóa đơn bán ra và dòng hàng | Phase 7. Số `HD-2026-0001`; dòng giữ `order_item_id` để truy ngược về dòng đơn; CHECK: đã phát hành phải có ngày phát hành + người phát hành + hạn thanh toán, đã hủy phải có thời điểm và lý do |
 | `payments`, `payment_allocations` | Phiếu thu và phần trừ cho từng hóa đơn | Phase 7. Số `PT-2026-0001`; một phiếu trừ được nhiều hóa đơn; CHECK số tiền > 0, hủy phải có thời điểm và lý do. **Công nợ không lưu cột nào** — tính từ hai bảng này (QĐ-09, TC-06) |
 | `notifications` | Thông báo trong ứng dụng (chuông) | Phase 8. Chỉ của một người; `dedupe_key` duy nhất theo (tenant, người) nên bản quét chạy lại không nhân đôi chuông |

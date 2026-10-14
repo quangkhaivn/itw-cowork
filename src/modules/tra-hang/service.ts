@@ -901,6 +901,9 @@ export async function chotGiamTruBan(nc: NguCanh, id: string, d: DuLieuChotGiamT
   }
 
   const ids = d.phanBo.map((x) => x.hoaDonId);
+  // Khóa hóa đơn (tăng dần theo id, sau phiếu trả) trước khi đọc phần còn nợ — cùng thứ tự khóa
+  // với thu tiền bên tài chính, nên chốt giảm trừ và thu tiền cùng lúc không cùng trừ một khoản nợ.
+  await khoaChungTu(nc.tx, "invoices", ids);
   const hoaDon = await nc.tx.invoice.findMany({
     where: { id: { in: ids } },
     select: {
@@ -1080,6 +1083,7 @@ export async function taoTraHangMua(nc: NguCanh, d: DuLieuTaoTraHangMua) {
 /** Xác nhận: hàng thật sự ra khỏi kho để gửi trả nhà cung cấp. */
 export async function xacNhanTraHangMua(nc: NguCanh, id: string, d: DuLieuXacNhanTraHang) {
   batBuocQuyen(nc.hoSo, "inventory.update", { objectType: "purchase_return", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_returns", id);
   const p = await docTraMua(nc, id);
   if (!xacNhanDuoc(p.status)) throw new LoiNghiepVu("Chỉ xác nhận được phiếu còn nháp.", 409, "sai-trang-thai");
   if (p.warehouse.status !== "hoat-dong") throw new LoiNghiepVu("Kho của phiếu đã ngừng hoạt động.", 409, "kho-ngung");
@@ -1151,11 +1155,13 @@ export async function xacNhanTraHangMua(nc: NguCanh, id: string, d: DuLieuXacNha
 /** Chốt tiền: giảm trừ vào hóa đơn nhà cung cấp còn nợ (TH-07). */
 export async function chotGiamTruMua(nc: NguCanh, id: string, d: DuLieuChotGiamTru) {
   batBuocQuyen(nc.hoSo, "finance.approve", { objectType: "purchase_return", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_returns", id);
   const p = await docTraMua(nc, id);
   const tong = dong(p.total.toString());
   if (!chotTienDuoc(p.status, tong)) throw new LoiNghiepVu("Chỉ chốt tiền cho phiếu đã trả hàng đi.", 409, "sai-trang-thai");
 
   const ids = d.phanBo.map((x) => x.hoaDonId);
+  await khoaChungTu(nc.tx, "supplier_bills", ids);
   const hoaDon = await nc.tx.supplierBill.findMany({
     where: { id: { in: ids } },
     select: {
@@ -1205,6 +1211,7 @@ export async function chotGiamTruMua(nc: NguCanh, id: string, d: DuLieuChotGiamT
 
 export async function huyTraHangMua(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "purchasing.update", { objectType: "purchase_return", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_returns", id);
   const p = await docTraMua(nc, id);
   if (!huyDuoc(p.status)) {
     throw new LoiNghiepVu("Hàng đã ra khỏi kho rồi — không hủy phiếu được. Lập phiếu nhập hoặc điều chỉnh tồn kèm lý do.", 409, "sai-trang-thai");

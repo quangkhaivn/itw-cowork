@@ -14,13 +14,13 @@ import { chiTietBaoGia, chotBaoGia, guiKhach, quyetDuyet, taoBaoGia, taoPhienBan
 import { LuocDoTaoBaoGia } from "../src/modules/bao-gia/luoc-do";
 import { taoCoHoi } from "../src/modules/co-hoi/service";
 import { LuocDoTaoCoHoi } from "../src/modules/co-hoi/luoc-do";
-import { huyHoaDon, taoHoaDon } from "../src/modules/tai-chinh/service";
-import { LuocDoTaoHoaDon } from "../src/modules/tai-chinh/luoc-do";
+import { huyHoaDon, phatHanhHoaDon, taoHoaDon, thuTien } from "../src/modules/tai-chinh/service";
+import { LuocDoPhatHanh, LuocDoTaoHoaDon, LuocDoThuTien } from "../src/modules/tai-chinh/luoc-do";
 import { taoDuAn } from "../src/modules/du-an/service";
 import { LuocDoTaoDuAn } from "../src/modules/du-an/luoc-do";
 import { huyBaoHanh } from "../src/modules/bao-hanh/service";
-import { taoTraHangBan, xacNhanTraHangBan } from "../src/modules/tra-hang/service";
-import { LuocDoTaoTraHangBan, LuocDoXacNhanTraHang } from "../src/modules/tra-hang/luoc-do";
+import { chotGiamTruBan, taoTraHangBan, xacNhanTraHangBan } from "../src/modules/tra-hang/service";
+import { LuocDoChotGiamTru, LuocDoTaoTraHangBan, LuocDoXacNhanTraHang } from "../src/modules/tra-hang/luoc-do";
 import { nhanChuyenKho, taoChuyenKho, xuatChuyenKho } from "../src/modules/chuyen-kho/service";
 import { LuocDoNhanChuyenKho, LuocDoTaoChuyenKho, LuocDoXuatChuyenKho } from "../src/modules/chuyen-kho/luoc-do";
 import { chuyenDoiLead, taoLead } from "../src/modules/lead/service";
@@ -456,6 +456,28 @@ async function main() {
   );
   dat("TV-BH-01: hai phiếu trả cùng lúc vượt đã giao — đúng một phiếu lập được", traSongSong.soThanhCong === 1, `${traSongSong.soThanhCong}; ${traSongSong.loi.map(maLoi).join(",")}`);
   dat("Phiếu còn lại bị chặn vì trả quá số lượng", traSongSong.loi.length === 1 && maLoi(traSongSong.loi[0]) === "tra-qua-so-luong", traSongSong.loi.map(maLoi).join(","));
+
+  // ------------------------------------------------------------------
+  console.log("\n— TV-BH-01: chốt giảm trừ trả hàng đua với thu tiền trên cùng hóa đơn —");
+  const d10 = await donMoi([{ sp: spPk, sl: "10", gia: "300000" }]);
+  await voi(T, gd, (nc) => xacNhanDon(nc, d10.id, { khoId: khoA.id, ghiChu: null }));
+  const [dongD10] = await dongCua(d10.id);
+  await voi(T, gd, (nc) => taoPhieuXuat(nc, d10.id, LuocDoTaoPhieuXuat.parse({ khoId: khoA.id, dong: [{ dongDonId: dongD10.id, soLuong: "10" }] })));
+  const hd10 = await voi(T, gd, (nc) => taoHoaDon(nc, LuocDoTaoHoaDon.parse({ donHangId: d10.id })));
+  await voi(T, gd, (nc) => phatHanhHoaDon(nc, hd10.id, LuocDoPhatHanh.parse({ hanThanhToan: HOM_NAY })));
+  const tr10 = await traDon(khach.id, d10.id, [{ dongDonId: dongD10.id, ten: "Bàn phím", soLuong: "2", donGia: "300000" }]);
+  await voi(T, gd, (nc) => xacNhanTraHangBan(nc, tr10.id, LuocDoXacNhanTraHang.parse({})));
+  const tongHd10 = Number((await chu.invoice.findUniqueOrThrow({ where: { id: hd10.id }, select: { total: true } })).total);
+  const giaTriTra = Number((await chu.salesReturn.findUniqueOrThrow({ where: { id: tr10.id }, select: { total: true } })).total);
+  const duaTien = await haiCungLuc<unknown>(
+    () => voi(T, gd, (nc) => thuTien(nc, LuocDoThuTien.parse({ khachHangId: khach.id, phuongThuc: "chuyen-khoan", soTien: String(tongHd10), phanBo: [{ hoaDonId: hd10.id, soTien: String(tongHd10) }] }))),
+    () => voi(T, gd, (nc) => chotGiamTruBan(nc, tr10.id, LuocDoChotGiamTru.parse({ phanBo: [{ hoaDonId: hd10.id, soTien: String(giaTriTra) }] }))),
+  );
+  dat("Thu đủ tiền và chốt giảm trừ cùng lúc trên một hóa đơn — đúng một việc thành công", duaTien.soThanhCong === 1, `${duaTien.soThanhCong}; ${duaTien.loi.map(maLoi).join(",")}`);
+  const daThu10 = await chu.paymentAllocation.aggregate({ where: { invoiceId: hd10.id, payment: { status: "hoat-dong" } }, _sum: { amount: true } });
+  const daGiam10 = await chu.salesReturnAllocation.aggregate({ where: { invoiceId: hd10.id, salesReturn: { status: "SETTLED" } }, _sum: { amount: true } });
+  const tongXoaNo = Number(daThu10._sum.amount ?? 0) + Number(daGiam10._sum.amount ?? 0);
+  dat("Tiền thu + giảm trừ không vượt giá trị hóa đơn", tongXoaNo <= tongHd10, `${tongXoaNo} / ${tongHd10}`);
 
   // ------------------------------------------------------------------
   console.log("\n— TV-BH-11: phiếu hỗ trợ chỉ gắn thứ của chính khách —");

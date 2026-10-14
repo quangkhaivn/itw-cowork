@@ -5,11 +5,23 @@
 -- ---------------------------------------------------------------------------
 -- TV-BH-08 (QĐ-80): một báo giá chỉ có MỘT đơn hàng đang hoạt động (chưa hủy), bất kể phiên bản.
 -- Lớp chặn cuối cho trường hợp hai yêu cầu cùng tạo đơn; service đã khóa dòng báo giá trước.
--- Trước khi áp trên máy thật, kiểm không có báo giá nào đang có 2 đơn chưa hủy:
---   SELECT quotation_id, count(*) FROM sales_orders
---   WHERE quotation_id IS NOT NULL AND status <> 'CANCELLED' GROUP BY 1 HAVING count(*) > 1;
--- Có dòng nào thì hủy đơn thừa bằng nghiệp vụ trước rồi mới áp migration.
+-- Dữ liệu cũ đã có báo giá mang 2 đơn chưa hủy thì dừng với thông báo rõ ràng: hủy đơn thừa
+-- bằng nghiệp vụ (có lý do) rồi chạy lại migration.
 -- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  so_trung integer;
+BEGIN
+  SELECT count(*) INTO so_trung FROM (
+    SELECT quotation_id FROM sales_orders
+    WHERE quotation_id IS NOT NULL AND status <> 'CANCELLED'
+    GROUP BY quotation_id HAVING count(*) > 1
+  ) t;
+  IF so_trung > 0 THEN
+    RAISE EXCEPTION 'Có % báo giá đang có hơn một đơn hàng chưa hủy. Hủy đơn thừa (ghi lý do) rồi chạy lại migration — xem CHANGELOG 0.16.1.', so_trung;
+  END IF;
+END $$;
+
 CREATE UNIQUE INDEX "sales_orders_bao_gia_dang_hoat_dong_key"
     ON "sales_orders" ("quotation_id")
     WHERE "quotation_id" IS NOT NULL AND "status" <> 'CANCELLED';
