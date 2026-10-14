@@ -120,6 +120,29 @@ CREATE POLICY doc_danh_muc_quyen ON public.permissions
 GRANT SELECT ON public.permissions TO cowork_app;
 
 -- --------------------------------------------------------------------------
+-- 5b. Bảng `system_heartbeats` (0.16.1): nhịp sống worker và sao lưu — toàn hệ
+--     thống, không có tenant_id, không chứa dữ liệu nghiệp vụ. Ứng dụng đọc được
+--     mọi dòng (màn hình Tự động hóa, /api/khoe) nhưng CHỈ ghi được dòng tên
+--     'worker…' — dòng 'sao-luu' do scripts/sao-luu.sh ghi bằng vai chủ sở hữu, để
+--     một lỗi ở ứng dụng không thể "báo sao lưu ổn" thay cho script. Không cấp DELETE.
+-- --------------------------------------------------------------------------
+ALTER TABLE public.system_heartbeats ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS doc_nhip ON public.system_heartbeats;
+CREATE POLICY doc_nhip ON public.system_heartbeats
+    FOR SELECT
+    USING (true);
+DROP POLICY IF EXISTS them_nhip_worker ON public.system_heartbeats;
+CREATE POLICY them_nhip_worker ON public.system_heartbeats
+    FOR INSERT
+    WITH CHECK (name LIKE 'worker%');
+DROP POLICY IF EXISTS sua_nhip_worker ON public.system_heartbeats;
+CREATE POLICY sua_nhip_worker ON public.system_heartbeats
+    FOR UPDATE
+    USING (name LIKE 'worker%')
+    WITH CHECK (name LIKE 'worker%');
+GRANT SELECT, INSERT, UPDATE ON public.system_heartbeats TO cowork_app;
+
+-- --------------------------------------------------------------------------
 -- 6. Bảng ghi lịch sử migration của Prisma: ứng dụng không cần đụng tới.
 -- --------------------------------------------------------------------------
 REVOKE ALL ON public._prisma_migrations FROM cowork_app;

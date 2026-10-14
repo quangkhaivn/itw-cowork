@@ -499,7 +499,9 @@ export async function chayQuet(tx: ClientTenant, tenantId: string, tc: TuyChonQu
   const theoNguoi = new Map<string, { mucDo: string; trangThai: string }[]>();
   let soViec = 0;
 
-  try {
+  // Không bọc try/catch ghi "hỏng" ở đây: lỗi làm cả giao dịch cuộn ngược, dòng ghi trong đó
+  // cũng mất theo. Lần chạy hỏng được ghi ở `quetBenVung` bằng giao dịch riêng (QĐ-86).
+  {
     for (const q of QUY_TAC) {
       const t = trangThai.find((x) => x.ma === q.ma)!;
       if (!t.chay) {
@@ -507,38 +509,32 @@ export async function chayQuet(tx: ClientTenant, tenantId: string, tc: TuyChonQu
         continue;
       }
       const viec = await chayMotQuyTac(tx, tenantId, q, homNay, t.nguong);
-      let dem = 0;
-      for (const v of viec) {
-        if (!v.nguoiId) continue;
-        const da = await tx.dailyActionItem.findFirst({
-          where: {
-            userId: v.nguoiId,
-            forDate: ngayVeDate(homNay),
-            ruleCode: v.maQuyTac,
-            objectType: v.doiTuong,
-            objectId: v.doiTuongId,
-          },
-          select: { id: true },
-        });
-        if (da) continue;
-        await tx.dailyActionItem.create({
-          data: {
-            tenantId,
-            userId: v.nguoiId,
-            forDate: ngayVeDate(homNay),
-            ruleCode: v.maQuyTac,
-            severity: v.mucDo,
-            title: v.tieuDe,
-            reason: v.lyDo,
-            link: v.duongDan,
-            objectType: v.doiTuong,
-            objectId: v.doiTuongId,
-          },
-        });
-        dem += 1;
-        const cua = theoNguoi.get(v.nguoiId) ?? [];
-        cua.push({ mucDo: v.mucDo, trangThai: "mo" });
-        theoNguoi.set(v.nguoiId, cua);
+      // Ghi cả lô bằng MỘT câu lệnh, dựa vào khóa duy nhất (người + ngày + quy tắc + đối tượng) để
+      // bỏ dòng đã có — thay vì đọc rồi ghi từng dòng (0.16.1, QĐ-86). Chỉ dòng mới thật sự được trả về.
+      const moi = viec.filter((v): v is ViecMoi & { nguoiId: string } => Boolean(v.nguoiId));
+      const daTao = moi.length
+        ? await tx.dailyActionItem.createManyAndReturn({
+            data: moi.map((v) => ({
+              tenantId,
+              userId: v.nguoiId,
+              forDate: ngayVeDate(homNay),
+              ruleCode: v.maQuyTac,
+              severity: v.mucDo,
+              title: v.tieuDe,
+              reason: v.lyDo,
+              link: v.duongDan,
+              objectType: v.doiTuong,
+              objectId: v.doiTuongId,
+            })),
+            skipDuplicates: true,
+            select: { userId: true, severity: true },
+          })
+        : [];
+      const dem = daTao.length;
+      for (const d of daTao) {
+        const cua = theoNguoi.get(d.userId) ?? [];
+        cua.push({ mucDo: d.severity, trangThai: "mo" });
+        theoNguoi.set(d.userId, cua);
       }
       soViec += dem;
       ketQua.push({ ma: q.ma, chay: true, lyDoBoQua: "", soViec: dem });
@@ -589,17 +585,6 @@ export async function chayQuet(tx: ClientTenant, tenantId: string, tc: TuyChonQu
       soThongBao,
       quyTac: ketQua,
     };
-  } catch (loi) {
-    await tx.jobRun.update({
-      where: { id: run.id },
-      data: {
-        status: "hong",
-        finishedAt: new Date(),
-        error: loi instanceof Error ? loi.message : String(loi),
-        detail: { quyTac: ketQua } as unknown as Prisma.InputJsonValue,
-      },
-    });
-    throw loi;
   }
 }
 
