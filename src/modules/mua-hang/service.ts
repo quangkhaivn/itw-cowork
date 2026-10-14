@@ -6,6 +6,7 @@ import { SU_KIEN } from "@/lib/su-kien";
 import { capSoChungTu, type KieuSo } from "@/lib/so-chung-tu";
 import { homNayVN, kiemTraMaDuLieuGoc, ngayVeDate } from "@/modules/crm/chung";
 import { batBuocThayKho, ghiSoKho } from "@/modules/kho/service";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import {
   donMuaDaDong,
   donMuaSuaDuoc,
@@ -223,6 +224,7 @@ export async function taoDeNghi(nc: NguCanh, d: DuLieuTaoDeNghi) {
 
 export async function suaDeNghi(nc: NguCanh, id: string, d: DuLieuSuaDeNghi) {
   batBuocQuyen(nc.hoSo, "purchasing.update", { objectType: "purchase_request", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_requests", id);
   const dn = await docDeNghi(nc, id);
   if (!deNghiSuaDuoc(dn.status)) throw new LoiNghiepVu("Chỉ sửa được đề nghị đang ở trạng thái Nháp.", 409, "sai-trang-thai");
 
@@ -245,6 +247,7 @@ export async function suaDeNghi(nc: NguCanh, id: string, d: DuLieuSuaDeNghi) {
 
 export async function xinDuyetDeNghi(nc: NguCanh, id: string) {
   batBuocQuyen(nc.hoSo, "purchasing.update", { objectType: "purchase_request", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_requests", id);
   const dn = await docDeNghi(nc, id);
   if (dn.status !== "DRAFT") throw new LoiNghiepVu("Chỉ xin duyệt được đề nghị đang ở trạng thái Nháp.", 409, "sai-trang-thai");
   if (dn.items.length === 0) throw new LoiNghiepVu("Đề nghị chưa có dòng hàng nào.", 409, "chua-co-hang");
@@ -257,6 +260,7 @@ export async function xinDuyetDeNghi(nc: NguCanh, id: string) {
 /** MH-02: duyệt hoặc từ chối. Người đề nghị KHÔNG tự duyệt trừ khi có quyền duyệt toàn công ty. */
 export async function quyetDuyetDeNghi(nc: NguCanh, id: string, d: DuLieuQuyetDuyetDeNghi) {
   batBuocQuyen(nc.hoSo, "purchasing.approve", { objectType: "purchase_request", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_requests", id);
   const dn = await docDeNghi(nc, id);
   if (dn.status !== "PENDING_APPROVAL") throw new LoiNghiepVu("Đề nghị này không ở trạng thái chờ duyệt.", 409, "sai-trang-thai");
 
@@ -299,6 +303,7 @@ export async function quyetDuyetDeNghi(nc: NguCanh, id: string, d: DuLieuQuyetDu
 
 export async function huyDeNghi(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "purchasing.update", { objectType: "purchase_request", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_requests", id);
   const dn = await docDeNghi(nc, id);
   if (dn.status === "CANCELLED") throw new LoiNghiepVu("Đề nghị này đã hủy rồi.", 409, "da-huy");
   if (dn.status === "ORDERED") throw new LoiNghiepVu("Đề nghị đã chuyển thành đơn mua — hủy đơn mua trước.", 409, "da-dat-hang");
@@ -457,6 +462,19 @@ export async function chiTietDonMua(nc: NguCanh, id: string) {
   };
 }
 
+/**
+ * TV-TC-09: dòng đơn mua chỉ được trỏ về dòng của **chính đề nghị** mà đơn lập từ đó. Trỏ
+ * sang dòng của đề nghị khác làm đối chiếu "đề nghị → đặt" sai mà không ai thấy.
+ */
+function kiemDongDeNghi(dong: DuLieuTaoDonMua["dong"], deNghi: { number: string; items: { id: string }[] } | null) {
+  const hopLe = new Set(deNghi?.items.map((x) => x.id) ?? []);
+  for (const [i, d] of dong.entries()) {
+    if (!d.deNghiDongId) continue;
+    if (!deNghi) throw new LoiDinhDang("dong", `Dòng ${i + 1} trỏ tới một dòng đề nghị mua, nhưng đơn này không lập từ đề nghị nào.`);
+    if (!hopLe.has(d.deNghiDongId)) throw new LoiDinhDang("dong", `Dòng ${i + 1} trỏ tới dòng không thuộc đề nghị ${deNghi.number}.`);
+  }
+}
+
 async function ghiDongDonMua(nc: NguCanh, donMuaId: string, dong: DuLieuTaoDonMua["dong"]) {
   await nc.tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: donMuaId } });
   const sanPhamIds = dong.map((d) => d.sanPhamId).filter((x): x is string => Boolean(x));
@@ -507,12 +525,16 @@ export async function taoDonMua(nc: NguCanh, d: DuLieuTaoDonMua) {
   if (kho.trangThai !== "hoat-dong") throw new LoiNghiepVu("Kho này đã ngừng hoạt động.", 409, "kho-ngung");
   await kiemTraMaDuLieuGoc(nc, "dieu_khoan_thanh_toan", d.dieuKhoanThanhToan, "dieuKhoanThanhToan");
 
-  let deNghi: { id: string; number: string } | null = null;
+  let deNghi: { id: string; number: string; items: { id: string }[] } | null = null;
   if (d.deNghiId) {
+    // TV-TC-08: khóa đề nghị trước khi đọc trạng thái — hai người cùng bấm "Lập đơn mua" từ
+    // một đề nghị thì người sau thấy "Đã đặt hàng" chứ không sinh đơn thứ hai.
+    await khoaChungTu(nc.tx, "purchase_requests", d.deNghiId);
     const dn = await docDeNghi(nc, d.deNghiId);
     if (dn.status !== "APPROVED") throw new LoiNghiepVu("Chỉ đặt hàng từ đề nghị đã được duyệt (MH-03).", 409, "de-nghi-chua-duyet");
-    deNghi = { id: dn.id, number: dn.number };
+    deNghi = { id: dn.id, number: dn.number, items: dn.items };
   }
+  kiemDongDeNghi(d.dong, deNghi);
 
   const so = await capSoChungTu(nc.tx, KIEU_SO_DON_MUA);
   const o = await nc.tx.purchaseOrder.create({
@@ -555,6 +577,7 @@ export async function taoDonMua(nc: NguCanh, d: DuLieuTaoDonMua) {
 
 export async function suaDonMua(nc: NguCanh, id: string, d: DuLieuSuaDonMua) {
   batBuocQuyen(nc.hoSo, "purchasing.update", { objectType: "purchase_order", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_orders", id);
   const o = await docDonMua(nc, id);
   if (!donMuaSuaDuoc(o.status)) {
     throw new LoiNghiepVu("Đơn đã gửi nhà cung cấp thì không sửa dòng hàng nữa (MH-04).", 409, "sai-trang-thai");
@@ -577,6 +600,10 @@ export async function suaDonMua(nc: NguCanh, id: string, d: DuLieuSuaDonMua) {
   });
   if (d.dong) {
     if (d.dong.length === 0) throw new LoiDinhDang("dong", "Đơn mua phải có ít nhất một dòng.");
+    const deNghi = o.request
+      ? { number: o.request.number, items: await nc.tx.purchaseRequestItem.findMany({ where: { requestId: o.request.id }, select: { id: true } }) }
+      : null;
+    kiemDongDeNghi(d.dong, deNghi);
     await ghiDongDonMua(nc, id, d.dong);
   }
   await nc.kiemToan({ action: "sua", objectType: "purchase_order", objectId: id, after: { soDong: d.dong?.length ?? o.items.length } });
@@ -585,6 +612,7 @@ export async function suaDonMua(nc: NguCanh, id: string, d: DuLieuSuaDonMua) {
 
 export async function guiDonMua(nc: NguCanh, id: string) {
   batBuocQuyen(nc.hoSo, "purchasing.update", { objectType: "purchase_order", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_orders", id);
   const o = await docDonMua(nc, id);
   if (o.status !== "DRAFT") throw new LoiNghiepVu("Chỉ gửi được đơn đang ở trạng thái Nháp.", 409, "sai-trang-thai");
   if (o.items.length === 0) throw new LoiNghiepVu("Đơn mua chưa có dòng hàng nào.", 409, "chua-co-hang");
@@ -597,6 +625,7 @@ export async function guiDonMua(nc: NguCanh, id: string) {
 
 export async function xacNhanDonMua(nc: NguCanh, id: string) {
   batBuocQuyen(nc.hoSo, "purchasing.update", { objectType: "purchase_order", objectId: id });
+  await khoaChungTu(nc.tx, "purchase_orders", id);
   const o = await docDonMua(nc, id);
   if (o.status !== "SENT") throw new LoiNghiepVu("Chỉ xác nhận được đơn đã gửi nhà cung cấp.", 409, "sai-trang-thai");
 
@@ -605,8 +634,17 @@ export async function xacNhanDonMua(nc: NguCanh, id: string) {
   return { id, trangThai: "CONFIRMED" };
 }
 
+/**
+ * MH-08: hủy đơn mua. Khóa theo thứ tự **đề nghị → đơn mua** (cùng thứ tự với `taoDonMua`)
+ * để không khóa chéo. Hủy xong thì đề nghị gốc quay về "Đã duyệt" để đặt lại được
+ * (TV-TC-08). Đơn đã có hóa đơn nhà cung cấp còn hiệu lực thì phải hủy hóa đơn trước
+ * (TV-TC-10) — không để một khoản nợ phải trả treo trên đơn đã hủy.
+ */
 export async function huyDonMua(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "purchasing.update", { objectType: "purchase_order", objectId: id });
+  const truoc = await docDonMua(nc, id);
+  if (truoc.request) await khoaChungTu(nc.tx, "purchase_requests", truoc.request.id);
+  await khoaChungTu(nc.tx, "purchase_orders", id);
   const o = await docDonMua(nc, id);
   if (donMuaDaDong(o.status)) throw new LoiNghiepVu("Đơn đã đóng thì không hủy được.", 409, "sai-trang-thai");
 
@@ -620,13 +658,46 @@ export async function huyDonMua(nc: NguCanh, id: string, lyDo: string) {
     );
   }
 
+  const hoaDonMua = await nc.tx.supplierBill.findMany({
+    where: { purchaseOrderId: id, status: { not: "CANCELLED" } },
+    select: { number: true },
+  });
+  if (hoaDonMua.length > 0) {
+    const so = hoaDonMua.map((x) => x.number).join(", ");
+    throw new LoiNghiepVu(
+      `Đơn mua đã có hóa đơn nhà cung cấp ${so} — hủy hóa đơn đó ở Công nợ phải trả trước rồi mới hủy đơn mua.`,
+      409,
+      "da-co-hoa-don-ncc",
+      { hoaDon: hoaDonMua.map((x) => x.number) },
+    );
+  }
+
   await nc.tx.purchaseOrder.update({
     where: { id },
     data: { status: "CANCELLED", cancelledAt: new Date(), cancelReason: lyDo, updatedBy: nc.hoSo.userId },
   });
   await nc.kiemToan({ action: "sua", objectType: "purchase_order", objectId: id, before: { trangThai: o.status }, after: { trangThai: "CANCELLED", lyDo } });
   await nc.suKien({ eventType: SU_KIEN.PURCHASE_ORDER_CANCELLED, objectType: "purchase_order", objectId: id, payload: { so: o.number, lyDo } });
-  return { id, trangThai: "CANCELLED" };
+
+  // TV-TC-08: đề nghị gốc quay về "Đã duyệt" — nhu cầu mua vẫn còn, chỉ là đơn này hỏng.
+  // Chỉ trả về khi không còn đơn mua nào khác đang hiệu lực từ cùng đề nghị.
+  let deNghiMoLai: string | null = null;
+  if (o.request) {
+    const dn = await nc.tx.purchaseRequest.findFirst({ where: { id: o.request.id }, select: { id: true, number: true, status: true } });
+    const conDonKhac = await nc.tx.purchaseOrder.count({ where: { requestId: o.request.id, id: { not: id }, status: { not: "CANCELLED" } } });
+    if (dn && dn.status === "ORDERED" && conDonKhac === 0) {
+      await nc.tx.purchaseRequest.update({ where: { id: dn.id }, data: { status: "APPROVED", updatedBy: nc.hoSo.userId } });
+      await nc.kiemToan({
+        action: "sua",
+        objectType: "purchase_request",
+        objectId: dn.id,
+        before: { trangThai: "ORDERED" },
+        after: { trangThai: "APPROVED", lyDo: `Đơn mua ${o.number} bị hủy: ${lyDo}` },
+      });
+      deNghiMoLai = dn.number;
+    }
+  }
+  return { id, trangThai: "CANCELLED", deNghiMoLai };
 }
 
 // ---------------------------------------------------------------------------
@@ -643,6 +714,8 @@ export async function huyDonMua(nc: NguCanh, id: string, lyDo: string) {
  */
 export async function nhanHang(nc: NguCanh, id: string, d: DuLieuNhanHang) {
   batBuocQuyen(nc.hoSo, "inventory.update", { objectType: "goods_receipt", objectId: id });
+  // TV-TC-08: khóa đơn mua — hai phiếu nhận cùng lúc thì phiếu sau đọc số đã nhận mới.
+  await khoaChungTu(nc.tx, "purchase_orders", id);
   const o = await docDonMua(nc, id);
   if (!nhanDuocHang(o.status)) {
     throw new LoiNghiepVu("Chỉ nhận hàng cho đơn đã gửi nhà cung cấp và chưa nhận đủ.", 409, "sai-trang-thai");

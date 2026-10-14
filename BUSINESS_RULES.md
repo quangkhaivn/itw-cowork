@@ -547,3 +547,20 @@ Mã 6 số đổi mỗi 30 giây (TOTP, RFC 6238) từ ứng dụng xác thực 
 | XT-06 | Vai trò bắt buộc 2 lớp do người có `setting.update` chọn. **Chưa đặt = không bắt buộc ai.** Người bị bắt mà chưa bật thì sau đăng nhập chỉ vào được trang bật 2 lớp; API trả 403 `phai-bat-2-lop` | [SV] `layHoSoQuyen` + `xuLyApi` + `yeuCauDangNhap` · [TH] |
 | XT-07 | Bật, tắt, đặt lại đều **thu hồi mọi phiên khác** (như đổi mật khẩu). Tắt cần cả mật khẩu và một mã. Vai trò bắt buộc thì không tự tắt được | [SV] · [TH] |
 | XT-08 | Quản trị (`user.update`) đặt lại 2 lớp cho người khác, bắt buộc ghi lý do, ghi kiểm toán; không tự đặt lại cho chính mình | [SV] · [TH] |
+
+## 26. Toàn vẹn tài chính và mua hàng (0.16.1)
+
+Các luật ở mục 11, 16, 17 đã đúng khi **một người bấm một lần**. Mục này bịt các lỗ khi **hai yêu cầu chạy cùng lúc** (hai kế toán, hoặc một cú bấm đúp) và vài chỗ dữ liệu lệch nhau giữa chứng từ. Cách khóa: `khoaChungTu()` (QĐ-77) — `SELECT … FOR UPDATE` dòng chứng từ **trước** khi đọc trạng thái, nhiều dòng thì theo thứ tự id tăng dần.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| TV-TC-01 | **Thu / chi không vượt nợ kể cả khi chạy cùng lúc.** Phiếu thu (phiếu chi) khóa mọi hóa đơn được phân bổ rồi mới đọc phần còn nợ: hai phiếu cùng lúc cho một hóa đơn thì phiếu sau chờ phiếu trước xong rồi đọc lại. Một hóa đơn chỉ được chọn **một lần** trong một phiếu | [SV] khóa dòng · [TH] đồng thời |
+| TV-TC-02 | **Hủy hóa đơn, phát hành / ghi nhận, hủy phiếu thu / chi đều khóa chứng từ trước khi đọc.** Hủy hóa đơn chạy đua với thu tiền thì đúng một việc thắng — không có tiền thu treo trên hóa đơn đã hủy. Hủy một phiếu hai lần cùng lúc thì một lần ghi, lần kia báo "đã hủy" | [SV] · [TH] đồng thời |
+| TV-TC-03 | **Không hủy hóa đơn đã có giảm trừ trả hàng đã chốt** (cả chiều bán lẫn chiều mua). Phiếu trả hàng đã chốt tiền không gỡ được (TH-04), nên hủy hóa đơn sẽ bỏ khoản giảm trừ lơ lửng. Thông báo nêu số phiếu trả hàng; nút Hủy trên màn hình ẩn luôn | [SV] · [TH] |
+| TV-TC-04 | **Một đơn — một hóa đơn còn hiệu lực, kể cả khi bấm cùng lúc** (TC-02, CT-02). Lập hóa đơn từ đơn khóa dòng đơn hàng / đơn mua trước khi dò hóa đơn đã có; yêu cầu thứ hai nhận lại đúng hóa đơn của yêu cầu thứ nhất (`daCoTruoc: true`). Chốt cuối ở CSDL: chỉ mục duy nhất riêng phần trên hóa đơn chưa hủy. Lập hóa đơn **từng phần không có** — xem QĐ-83 | [SV] · [CSDL] `invoices_mot_hieu_luc_moi_don`, `supplier_bills_mot_hieu_luc_moi_don` · [TH] |
+| TV-TC-05 | **Hóa đơn chỉ gắn dự án của chính khách đó**; dự án đã gắn một đơn hàng thì chỉ gắn vào hóa đơn của đúng đơn đó. Chọn khách (nhà cung cấp) khác với khách (nhà cung cấp) của đơn thì từ chối, không lặng lẽ lấy theo đơn | [SV] · [TH] |
+| TV-TC-06 | Công nợ vẫn **tính lúc đọc** (TC-06, CT-06) — không thêm cột số dư nào. Khóa dòng thay cho cột số dư: đúng một nguồn số, và đúng khi chạy song song | [SV] |
+| TV-TC-07 | Hủy hóa đơn nhà cung cấp và hủy phiếu chi **ghi sự kiện** (`SUPPLIER_BILL_CANCELLED`, `SUPPLIER_PAYMENT_CANCELLED`) như bên bán — trước đây chỉ có nhật ký kiểm toán | [SV] · [TH] |
+| TV-TC-08 | **Hủy đơn mua trả đề nghị gốc về "Đã duyệt"** để đặt lại được (nhu cầu mua vẫn còn), có nhật ký kiểm toán trên đề nghị. Mọi bước đổi trạng thái đề nghị (xin duyệt, duyệt / từ chối, sửa, hủy, lập đơn mua) và đơn mua (sửa, gửi, xác nhận, hủy, nhận hàng) khóa dòng trước khi đọc: hai người cùng lập đơn từ một đề nghị thì chỉ một đơn; nhận đủ hàng hai lần cùng lúc thì một phiếu nhận, lần kia báo lỗi nghiệp vụ | [SV] · [TH] đồng thời |
+| TV-TC-09 | Dòng đơn mua chỉ được trỏ về **dòng của chính đề nghị** mà đơn lập từ đó; đơn không lập từ đề nghị thì không trỏ dòng đề nghị nào | [SV] · [TH] |
+| TV-TC-10 | **Không hủy đơn mua còn hóa đơn nhà cung cấp còn hiệu lực** — hủy hóa đơn ở Công nợ phải trả trước, để không có khoản phải trả treo trên đơn đã hủy | [SV] · [TH] |

@@ -237,6 +237,24 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - **Thu hồi phiên**: `layHoSoQuyen().doiMatKhauLuc` = mốc muộn hơn của `password_changed_at` và `security_changed_at` — mọi chỗ đang so phiên với lần đổi mật khẩu tự động tính cả đổi thiết lập 2 lớp, không phải sửa từng chỗ.
 - **Bắt buộc theo vai trò**: danh sách mã vai trò lưu ở `tenant_settings` khóa `bao_mat.vai_tro_bat_buoc_2_lop` (mảng — màn hình Cấu hình chỉ nhận số, QĐ-73). `layHoSoQuyen()` tính `phaiBat2Lop`; `xuLyApi` chặn (trừ route có `choPhepKhiPhaiBat2Lop`), `yeuCauDangNhap()` đưa sang `/bat-xac-thuc-2-lop`.
 
+## 7t. Khóa chứng từ tiền (0.16.1)
+
+- Nền: `src/lib/khoa-chung-tu.ts` — `khoaChungTu(tx, bang, ids)` chạy `SELECT … FOR UPDATE` trên danh sách trắng bảng, khóa nhiều dòng theo id tăng dần (QĐ-77). Không có tầng khóa nào khác (không advisory lock, không SERIALIZABLE).
+- **Khóa trước, đọc sau.** Mọi hàm ghi tiền và mọi bước đổi trạng thái chứng từ mua gọi `khoaChungTu` *trước* khi đọc trạng thái hay số đã thu. Ở READ COMMITTED, câu lệnh đọc sau khi chờ khóa thấy dữ liệu mới nhất — nên kiểm "còn nợ bao nhiêu" luôn đúng mà công nợ vẫn **tính lúc đọc** (TC-06), không cần cột số dư (QĐ-82).
+- **Thứ tự khóa** (để không khóa chéo): đề nghị mua → đơn mua; đơn hàng → hóa đơn; phiếu thu / phiếu chi → hóa đơn. Phiếu thu mới chỉ khóa hóa đơn (phiếu chưa tồn tại). Hủy hóa đơn chỉ khóa hóa đơn.
+  | Hàm | Khóa |
+  |---|---|
+  | `taoHoaDon` (từ đơn) / `taoHoaDonMua` (từ đơn mua) | `sales_orders` / `purchase_orders` |
+  | `phatHanhHoaDon`, `huyHoaDon` / `ghiNhanHoaDonMua`, `huyHoaDonMua` | `invoices` / `supplier_bills` |
+  | `thuTien` / `chiTien` | mọi `invoices` / `supplier_bills` trong phân bổ |
+  | `huyPhieuThu` / `huyPhieuChi` | `payments` rồi `invoices` / `supplier_payments` rồi `supplier_bills` |
+  | xin duyệt, duyệt, sửa, hủy đề nghị; `taoDonMua` từ đề nghị | `purchase_requests` |
+  | sửa, gửi, xác nhận đơn mua; `nhanHang` | `purchase_orders` |
+  | `huyDonMua` | `purchase_requests` (nếu có) rồi `purchase_orders` |
+- **Chốt cuối ở CSDL** cho luật "một đơn — một hóa đơn còn hiệu lực": hai chỉ mục duy nhất riêng phần (migration `20261014085000_toan_ven_tai_chinh`). Prisma không khai được chỉ mục riêng phần nên chỉ ghi chú ở `schema.prisma` (cùng cách `job_runs_lich_moi_ngay`).
+- Bài thử `thu:toan-ven-tai-chinh` chạy **hai giao dịch `voiTenant` thật** (hai kết nối) bằng `Promise.allSettled`; gỡ khóa ra thì các bài đồng thời hỏng (đã kiểm khi viết).
+- **Còn ngoài phạm vi gói này**: chốt giảm trừ trả hàng (`tra-hang`) cũng đọc phần còn nợ của hóa đơn — phân hệ đó phải khóa `invoices` / `supplier_bills` bằng đúng hàm này thì mới khép kín với thu / chi.
+
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

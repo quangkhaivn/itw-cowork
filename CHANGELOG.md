@@ -2,6 +2,27 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.16.1 (chưa phát hành)
+
+### Toàn vẹn dữ liệu — tài chính và mua hàng
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 26 (TV-TC-01 → TV-TC-10). Kiến trúc: `ARCHITECTURE.md` mục 7t. Quyết định QĐ-82 → QĐ-85. Migration `20261014085000_toan_ven_tai_chinh`. Bài thử mới `npm run thu:toan-ven-tai-chinh` (60 kiểm chứng, đã nối vào `thu:tich-hop`).
+
+#### Sửa
+- **Thu tiền / chi tiền vượt công nợ khi hai yêu cầu chạy cùng lúc** (hai kế toán, hoặc bấm đúp): phiếu thu / phiếu chi nay khóa các hóa đơn được phân bổ trước khi đọc phần còn nợ. Một hóa đơn lặp hai lần trong cùng một phiếu cũng bị từ chối rõ ràng (trước đây lỗi CSDL khó hiểu).
+- **Hủy hóa đơn chạy đua với thu tiền** có thể để lại tiền thu trên hóa đơn đã hủy — nay khóa hóa đơn. Hủy một phiếu thu / chi hai lần cùng lúc không còn ghi hai sự kiện.
+- **Hủy được hóa đơn đã có giảm trừ trả hàng đã chốt**, làm khoản giảm trừ lơ lửng — nay chặn kèm số phiếu trả hàng, nút Hủy ẩn (cả chiều bán lẫn chiều mua).
+- **Hai hóa đơn còn hiệu lực cho một đơn hàng / đơn mua** khi bấm lập cùng lúc — nay khóa đơn trước, và thêm chỉ mục duy nhất riêng phần ở CSDL.
+- **Hóa đơn gắn được dự án của khách khác**; chọn khách khác với khách của đơn thì bị lặng lẽ đổi theo đơn — nay từ chối. Tương tự nhà cung cấp trên hóa đơn từ đơn mua.
+- **Hủy đơn mua làm đề nghị gốc kẹt ở "Đã đặt hàng"** mãi mãi — nay đề nghị quay về "Đã duyệt" để đặt lại. Dòng đơn mua trỏ được sang dòng của đề nghị khác — nay chặn.
+- **Hủy được đơn mua đang có hóa đơn nhà cung cấp** — nay phải hủy hóa đơn trước.
+- Đề nghị mua và đơn mua khóa dòng ở mọi bước đổi trạng thái (duyệt, lập đơn, gửi, xác nhận, hủy, nhận hàng): hai người cùng lập đơn từ một đề nghị, hay nhận đủ hàng hai lần cùng lúc, không còn sinh chứng từ thừa.
+- Hủy hóa đơn nhà cung cấp và hủy phiếu chi nay ghi sự kiện như bên bán.
+
+#### Triển khai
+- Migration chỉ thêm hai chỉ mục; nếu dữ liệu cũ đã có đơn nào mang hơn một hóa đơn còn hiệu lực, migration **dừng** và báo số lượng. Kiểm trước:
+  `SELECT sales_order_id, count(*) FROM invoices WHERE sales_order_id IS NOT NULL AND status <> 'CANCELLED' GROUP BY 1 HAVING count(*) > 1;` (và tương tự `supplier_bills.purchase_order_id`). Hủy hóa đơn thừa kèm lý do rồi chạy lại. Chạy lại `rls.sql` như mọi lần.
+
 ## 0.16.0 — 13/10/2026 — Tích hợp CRM: khách hàng nâng cao, marketing & thu lead, email marketing, xác thực 2 lớp
 
 Gộp ba gói: **Khách hàng nâng cao** (gói K), **Marketing và thu lead** (gói M), **Email marketing + xác thực 2 lớp + bản in báo giá** (gói E). **Chưa triển khai lên máy thật.** Cần biến môi trường mới `APP_ENC_KEY` (app và worker).

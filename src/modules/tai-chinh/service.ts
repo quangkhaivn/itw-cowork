@@ -11,6 +11,7 @@ import { tinhBaoGia, type DongBaoGia } from "@/modules/bao-gia/tinh-toan";
 import { congNo, dong, hanThanhToanGoiY, nhomTuoiNo, soNgayQuaHan, tongHopTuoiNo } from "./tinh-toan";
 import type { BoLocHoaDon, BoLocPhieuThu, DuLieuPhatHanh, DuLieuTaoHoaDon, DuLieuThuTien } from "./luoc-do";
 import { taoThongBao } from "@/modules/thong-bao/service";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
 
 /**
  * Tài chính quản trị — mục 19 prompt 20/09. Luật: BUSINESS_RULES.md mục 11.
@@ -53,6 +54,11 @@ function daThuCua(hd: { allocations: { amount: Prisma.Decimal; payment: { status
  */
 function daGiamTruCua(hd: { returnAllocations: { amount: Prisma.Decimal; salesReturn: { status: string } }[] }): number {
   return hd.returnAllocations.filter((a) => a.salesReturn.status === "SETTLED").reduce((s, a) => s + Number(a.amount), 0);
+}
+
+/** Các phiếu khách trả đã chốt tiền vào hóa đơn này — còn thì hủy hóa đơn sẽ bỏ rơi khoản giảm trừ (TV-TC-03). */
+function phieuTraDaChotCua(hd: { returnAllocations: { salesReturn: { status: string; number: string } }[] }): string[] {
+  return [...new Set(hd.returnAllocations.filter((a) => a.salesReturn.status === "SETTLED").map((a) => a.salesReturn.number))];
 }
 
 function hoaDonRa(hd: BanGhi, homNay: string) {
@@ -193,7 +199,7 @@ export async function chiTietHoaDon(nc: NguCanh, id: string) {
     quyen: {
       sua: duocGhi && hoaDon.trangThai === "DRAFT",
       phatHanh: coQuyen(nc.hoSo, "finance.approve") && hoaDon.trangThai === "DRAFT" && hoaDon.dong.length > 0,
-      huy: coQuyen(nc.hoSo, "finance.approve") && hoaDon.trangThai !== "CANCELLED" && hoaDon.daThu === 0,
+      huy: coQuyen(nc.hoSo, "finance.approve") && hoaDon.trangThai !== "CANCELLED" && hoaDon.daThu === 0 && hoaDon.daGiamTru === 0,
       thuTien: duocGhi && hoaDon.trangThai === "ISSUED" && hoaDon.conNo > 0,
     },
   };
@@ -337,7 +343,11 @@ function tongVeCot(tinh: ReturnType<typeof tinhBaoGia>) {
 
 /**
  * Lập hóa đơn. Hai đường: từ **đơn hàng** (chép dòng, giữ liên kết từng dòng) hoặc
- * nhập tay cho khách. Một đơn chỉ có một hóa đơn còn hiệu lực (TC-01).
+ * nhập tay cho khách. Một đơn chỉ có một hóa đơn còn hiệu lực (TC-02).
+ *
+ * Lập từ đơn: khóa dòng đơn hàng TRƯỚC khi dò hóa đơn đã có (TV-TC-04) — hai lần bấm cùng
+ * lúc thì lần sau chờ lần trước commit rồi trả đúng hóa đơn đó. Chỉ mục riêng phần
+ * `invoices_mot_hieu_luc_moi_don` là chốt cuối ở CSDL.
  */
 export async function taoHoaDon(nc: NguCanh, d: DuLieuTaoHoaDon) {
   batBuocQuyen(nc.hoSo, "finance.create", { objectType: "invoice" });
@@ -348,6 +358,7 @@ export async function taoHoaDon(nc: NguCanh, d: DuLieuTaoHoaDon) {
   let tinh: ReturnType<typeof tinhBaoGia>;
 
   if (d.donHangId) {
+    await khoaChungTu(nc.tx, "sales_orders", d.donHangId);
     const don = await nc.tx.salesOrder.findFirst({
       where: { id: d.donHangId },
       select: {
@@ -358,6 +369,9 @@ export async function taoHoaDon(nc: NguCanh, d: DuLieuTaoHoaDon) {
     if (!don) throw new LoiDinhDang("donHangId", "Không tìm thấy đơn hàng.");
     if (don.status === "DRAFT") throw new LoiNghiepVu("Đơn còn nháp — xác nhận đơn trước khi xuất hóa đơn.", 409, "don-con-nhap");
     if (don.status === "CANCELLED") throw new LoiNghiepVu("Đơn đã hủy thì không xuất hóa đơn.", 409, "don-da-huy");
+    if (d.khachHangId && d.khachHangId !== don.customerId) {
+      throw new LoiDinhDang("khachHangId", `Đơn ${don.number} là của khách khác — bỏ chọn khách hoặc chọn đúng đơn của khách này.`);
+    }
 
     const daCo = await nc.tx.invoice.findFirst({ where: { salesOrderId: don.id, status: { not: "CANCELLED" } }, select: { id: true, number: true } });
     if (daCo) return { id: daCo.id, so: daCo.number, daCoTruoc: true };
@@ -404,6 +418,21 @@ export async function taoHoaDon(nc: NguCanh, d: DuLieuTaoHoaDon) {
   }
 
   const khach = await batBuocThayKhach(nc, khachHangId);
+
+  // TV-TC-05 (G9): dự án gắn vào hóa đơn phải là dự án của chính khách đó, và nếu dự án đã
+  // gắn một đơn hàng thì phải là đúng đơn đang lập hóa đơn — không để doanh thu một khách
+  // đổ nhầm vào dự án của khách khác.
+  if (d.duAnId) {
+    const duAn = await nc.tx.project.findFirst({ where: { id: d.duAnId }, select: { id: true, code: true, customerId: true, salesOrderId: true } });
+    if (!duAn) throw new LoiDinhDang("duAnId", "Không tìm thấy dự án.");
+    if (duAn.customerId !== khach.id) {
+      throw new LoiDinhDang("duAnId", `Dự án ${duAn.code} là của khách khác — chọn dự án của chính khách trên hóa đơn.`);
+    }
+    if (donHang && duAn.salesOrderId && duAn.salesOrderId !== donHang.id) {
+      throw new LoiDinhDang("duAnId", `Dự án ${duAn.code} gắn với một đơn hàng khác, không phải đơn ${donHang.number}.`);
+    }
+  }
+
   const so = await capSoChungTu(nc.tx, KIEU_SO.hoaDon);
   const hd = await nc.tx.invoice.create({
     data: {
@@ -431,6 +460,7 @@ export async function taoHoaDon(nc: NguCanh, d: DuLieuTaoHoaDon) {
 /** Phát hành hóa đơn: chốt số tiền, đặt hạn thanh toán, từ đây mới tính công nợ (TC-03). */
 export async function phatHanhHoaDon(nc: NguCanh, id: string, d: DuLieuPhatHanh) {
   batBuocQuyen(nc.hoSo, "finance.approve", { objectType: "invoice", objectId: id });
+  await khoaChungTu(nc.tx, "invoices", id);
   const hd = await docHoaDon(nc, id);
   if (hd.status !== "DRAFT") throw new LoiNghiepVu("Chỉ phát hành hóa đơn đang ở trạng thái Nháp.", 409, "sai-trang-thai");
   if (hd.items.length === 0) throw new LoiNghiepVu("Hóa đơn chưa có dòng nào.", 409, "hoa-don-rong");
@@ -460,14 +490,28 @@ export async function phatHanhHoaDon(nc: NguCanh, id: string, d: DuLieuPhatHanh)
   return { id, trangThai: "ISSUED", ngayPhatHanh, hanThanhToan: han };
 }
 
-/** Hủy hóa đơn — chỉ khi chưa thu đồng nào, và luôn phải ghi lý do (TC-08). */
+/**
+ * Hủy hóa đơn — chỉ khi chưa thu đồng nào **và** chưa có phiếu khách trả nào chốt tiền vào
+ * nó, và luôn phải ghi lý do (TC-08, TV-TC-03). Khóa dòng hóa đơn trước khi đọc để một
+ * phiếu thu chạy cùng lúc không lọt vào giữa (TV-TC-02).
+ */
 export async function huyHoaDon(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "finance.approve", { objectType: "invoice", objectId: id });
+  await khoaChungTu(nc.tx, "invoices", id);
   const hd = await docHoaDon(nc, id);
   if (hd.status === "CANCELLED") throw new LoiNghiepVu("Hóa đơn này đã hủy rồi.", 409, "da-huy");
   const daThu = daThuCua(hd);
   if (daThu > 0) {
     throw new LoiNghiepVu(`Hóa đơn đã thu ${dong(daThu).toLocaleString("vi-VN")} ₫ — hủy phiếu thu trước rồi mới hủy hóa đơn.`, 409, "da-co-tien-thu", { daThu: dong(daThu) });
+  }
+  const daGiamTru = daGiamTruCua(hd);
+  if (daGiamTru > 0) {
+    const phieu = phieuTraDaChotCua(hd);
+    throw new LoiNghiepVu(
+      `Hóa đơn đã được giảm trừ ${dong(daGiamTru).toLocaleString("vi-VN")} ₫ bằng hàng khách trả (${phieu.join(", ")}). ` +
+        "Phiếu trả hàng đã chốt tiền thì không gỡ được, nên hóa đơn phải giữ lại để khoản giảm trừ còn chỗ bám. Nếu số liệu sai, xử lý bằng chứng từ điều chỉnh thay vì hủy hóa đơn.",
+      409, "da-co-giam-tru", { daGiamTru: dong(daGiamTru), phieuTra: phieu },
+    );
   }
 
   await nc.tx.invoice.update({ where: { id }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelReason: lyDo, updatedBy: nc.hoSo.userId } });
@@ -498,7 +542,14 @@ export async function thuTien(nc: NguCanh, d: DuLieuThuTien) {
     );
   }
 
+  // TV-TC-01: khóa mọi hóa đơn được phân bổ (thứ tự id tăng dần) TRƯỚC khi đọc phần còn nợ.
+  // Hai phiếu thu cùng lúc cho một hóa đơn — kể cả bấm đúp — thì phiếu sau chờ phiếu trước
+  // commit rồi mới đọc lại số đã thu, nên không thu vượt.
   const ids = d.phanBo.map((p) => p.hoaDonId);
+  if (new Set(ids).size !== ids.length) {
+    throw new LoiDinhDang("phanBo", "Mỗi hóa đơn chỉ được chọn một lần trong một phiếu thu — gộp số tiền vào một dòng.");
+  }
+  await khoaChungTu(nc.tx, "invoices", ids);
   const hoaDon = await nc.tx.invoice.findMany({
     where: { AND: [{ id: { in: ids } }, await dieuKienXemHoaDon(nc)] },
     select: { id: true, number: true, customerId: true, ownerId: true, status: true, total: true, allocations: { select: { amount: true, payment: { select: { status: true } } } }, returnAllocations: { select: { amount: true, salesReturn: { select: { status: true } } } } },
@@ -561,11 +612,17 @@ export async function thuTien(nc: NguCanh, d: DuLieuThuTien) {
   return { id: pt.id, so, soTien: tien };
 }
 
-/** Hủy phiếu thu (ghi nhầm, séc không thanh toán). Giữ bản ghi kèm lý do (TC-09). */
+/**
+ * Hủy phiếu thu (ghi nhầm, séc không thanh toán). Giữ bản ghi kèm lý do (TC-09).
+ * Khóa phiếu thu rồi các hóa đơn nó phân bổ (TV-TC-02): hai lần hủy cùng lúc chỉ một lần
+ * ghi, và không chen giữa một phiếu thu / hủy hóa đơn đang chạy trên cùng hóa đơn.
+ */
 export async function huyPhieuThu(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "finance.approve", { objectType: "payment", objectId: id });
-  const pt = await nc.tx.payment.findFirst({ where: { id }, select: { id: true, number: true, status: true, amount: true } });
+  await khoaChungTu(nc.tx, "payments", id);
+  const pt = await nc.tx.payment.findFirst({ where: { id }, select: { id: true, number: true, status: true, amount: true, allocations: { select: { invoiceId: true } } } });
   if (!pt) throw new LoiKhongTimThay("Phiếu thu");
+  await khoaChungTu(nc.tx, "invoices", pt.allocations.map((a) => a.invoiceId));
   if (pt.status === "huy") throw new LoiNghiepVu("Phiếu thu này đã hủy rồi.", 409, "da-huy");
 
   await nc.tx.payment.update({ where: { id }, data: { status: "huy", cancelledAt: new Date(), cancelReason: lyDo } });
