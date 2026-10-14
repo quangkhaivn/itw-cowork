@@ -6,6 +6,7 @@ import { dinhDangNgay, dinhDangNgayGio, dinhDangSo } from "@/lib/dinh-dang";
 import { docDuLieu, yeuCauQuyen } from "@/lib/trang";
 import { NHAN_MUC_DO } from "@/modules/nhac-viec/quy-tac";
 import { xemTuDongHoa } from "@/modules/nhac-viec/service";
+import { cacCanhBaoVanHanh, GIO_SAO_LUU_TRE, PHUT_WORKER_TRE } from "@/modules/van-hanh/tinh-toan";
 import { CongTacQuyTac, NutChayQuet } from "./TacVuTuDongHoa";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,10 @@ export default async function TrangTuDongHoa() {
 
   const sanSang = kq.quyTac.filter((q) => q.chay).length;
   const nhom = [...new Set(kq.quyTac.map((q) => q.nhom))];
+  const vh = kq.vanHanh;
+  const canhBao = cacCanhBaoVanHanh(vh, (d) => dinhDangNgayGio(d));
+  const tepSaoLuu = typeof vh.saoLuu.info.tep === "string" ? vh.saoLuu.info.tep : null;
+  const raNgoai = typeof vh.saoLuu.info.raNgoai === "string" ? vh.saoLuu.info.raNgoai : null;
 
   return (
     <>
@@ -38,6 +43,35 @@ export default async function TrangTuDongHoa() {
         moTa="Mỗi sáng hệ thống quét các quy tắc dưới đây rồi lập danh sách Việc hôm nay cho từng người. Quy tắc thiếu ngưỡng thì không chạy — hệ thống không tự chọn con số thay bạn."
         hanhDong={kq.duocSua ? <NutChayQuet /> : undefined}
       />
+
+      {/* 0.16.1 — băng đỏ khi worker đứng, bản quét hỏng hoặc sao lưu quá hạn (QĐ-87, QĐ-88). */}
+      {canhBao.map((c) => (
+        <div className="hop-thong-bao loi" role="alert" key={c}>
+          <strong>Cần xử lý:</strong> {c}
+        </div>
+      ))}
+
+      <div className="luoi-chi-so">
+        <div className={`the chi-so ${vh.worker.trangThai === "ok" ? "" : "loi"}`}>
+          <div className="nhan">Tiến trình nền (worker)</div>
+          <div className="gia-tri" style={{ fontSize: 18 }}>
+            {vh.worker.trangThai === "ok" ? "Đang chạy" : vh.worker.trangThai === "tre" ? "Không báo nhịp" : "Chưa có nhịp"}
+          </div>
+          <div className="ghi-chu">
+            {vh.worker.lanCuoi ? `Nhịp cuối ${dinhDangNgayGio(vh.worker.lanCuoi)}` : "Worker ghi nhịp mỗi phút"} · báo đỏ sau {PHUT_WORKER_TRE} phút
+          </div>
+        </div>
+        <div className={`the chi-so ${vh.saoLuu.trangThai === "ok" ? "" : vh.saoLuu.trangThai === "hong" ? "canh-bao" : "loi"}`}>
+          <div className="nhan">Sao lưu thành công gần nhất</div>
+          <div className="gia-tri" style={{ fontSize: 18 }}>
+            {vh.saoLuu.lanThanhCongCuoi ? dinhDangNgayGio(vh.saoLuu.lanThanhCongCuoi) : "Chưa có"}
+          </div>
+          <div className="ghi-chu">
+            {tepSaoLuu ? `${tepSaoLuu} · ` : ""}
+            {raNgoai === "da-chep" ? "đã chép ra ngoài máy" : raNgoai === "chua-cau-hinh" ? "CHƯA chép ra ngoài máy" : raNgoai === "hong" ? "chép ra ngoài HỎNG" : "báo đỏ sau " + GIO_SAO_LUU_TRE + " giờ"}
+          </div>
+        </div>
+      </div>
 
       <div className="luoi-chi-so">
         <div className={`the chi-so ${sanSang < kq.quyTac.length ? "canh-bao" : ""}`}>

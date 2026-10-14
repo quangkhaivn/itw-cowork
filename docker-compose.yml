@@ -49,6 +49,13 @@ services:
       APP_URL: ${APP_URL}
       # 0.16.0: khóa mã hóa mật khẩu SMTP + khóa TOTP, và ký liên kết huỷ nhận tin.
       APP_ENC_KEY: ${APP_ENC_KEY}
+      # Trợ lý AI (Phase 9). Trước 0.16.1 ba biến này không được chuyển vào container nên trợ lý
+      # trên máy thật luôn báo "chưa cấu hình" dù .env đã có khóa. Để trống = trợ lý báo chưa cấu hình.
+      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      AI_MODEL: ${AI_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # 0.16.1: hạn một lần gọi mô hình AI, giây (mặc định 60, trần 300).
+      AI_HAN_GOI_GIAY: ${AI_HAN_GOI_GIAY:-60}
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -75,6 +82,15 @@ services:
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
+    # 0.16.1 (QĐ-87): worker ghi nhịp vào bảng system_heartbeats mỗi phút; quá 5 phút không có nhịp
+    # (vòng lặp treo, mất CSDL) thì container chuyển "unhealthy" — xem bằng `docker compose ps`.
+    # Docker KHÔNG tự khởi động lại container unhealthy; màn hình Quản trị → Tự động hóa báo đỏ.
+    healthcheck:
+      test: ["CMD", "node_modules/.bin/tsx", "worker/kiem-tra-song.ts"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
     networks: [cowork]
 
   nginx:

@@ -54,7 +54,7 @@ export function taoNguCanh(
   };
 }
 
-interface TuyChonApi {
+export interface TuyChonApi {
   /** Quyền bắt buộc cho cả route. Kiểm thêm quyền chi tiết bên trong service nếu cần. */
   quyen?: string;
   /** Cho phép gọi khi người dùng đang bị bắt đổi mật khẩu (chỉ route đổi mật khẩu). */
@@ -73,7 +73,7 @@ export function xuLyApi<P extends Record<string, string> = Record<string, never>
 ) {
   return async (req: NextRequest, ctx: NguCanhRoute<P>): Promise<NextResponse> => {
     const phien = await layPhienHienTai();
-    if (!phien) return traLoi(401, "Chưa đăng nhập hoặc phiên đã hết hạn.");
+    if (!phien) return traLoiChuaDangNhap();
 
     const ip = layIpKhach(req.headers);
     const userAgent = req.headers.get("user-agent");
@@ -87,16 +87,7 @@ export function xuLyApi<P extends Record<string, string> = Record<string, never>
         if ((khoa === "id" || khoa.endsWith("Id")) && !LA_UUID.test(String(giaTri))) throw new LoiKhongTimThay();
       }
       const ketQua = await voiTenant(phien.tenantId, async (tx) => {
-        const hoSo = await layHoSoQuyen(tx, phien.userId);
-        if (!hoSo || !phienConHieuLuc(phien.kyLucMs, hoSo.doiMatKhauLuc)) throw new LoiChuaDangNhap();
-        hoSoDaDoc = hoSo;
-        if (hoSo.phaiDoiMatKhau && !tuyChon.choPhepKhiPhaiDoiMatKhau) {
-          throw new LoiNghiepVu("Bạn phải đổi mật khẩu trước khi tiếp tục.", 403, "phai-doi-mat-khau");
-        }
-        if (hoSo.phaiBat2Lop && !tuyChon.choPhepKhiPhaiBat2Lop && !tuyChon.choPhepKhiPhaiDoiMatKhau) {
-          throw new LoiNghiepVu("Vai trò của bạn bắt buộc xác thực 2 lớp. Bật 2 lớp trước khi tiếp tục.", 403, "phai-bat-2-lop");
-        }
-        if (tuyChon.quyen) batBuocQuyen(hoSo, tuyChon.quyen);
+        const hoSo = await kiemHoSoTrongGiaoDich(tx, phien, tuyChon, (h) => (hoSoDaDoc = h));
         return xuLy(taoNguCanh(tx, phien.tenantId, hoSo, ip, userAgent), req, thamSo);
       }, { timeoutMs: tuyChon.hanGiaoDichMs });
       // Route trả tệp (tải tệp đính kèm) tự dựng phản hồi nhị phân; mọi route khác
@@ -104,22 +95,57 @@ export function xuLyApi<P extends Record<string, string> = Record<string, never>
       if (ketQua instanceof NextResponse) return ketQua;
       return NextResponse.json(ketQua ?? { ok: true });
     } catch (loi) {
-      if (loi instanceof LoiThieuQuyen) {
-        const hoSo = hoSoDaDoc as HoSoQuyen | null;
-        // Giao dịch chính đã cuộn ngược; ghi vết từ chối trong giao dịch riêng.
-        await voiTenant(phien.tenantId, (tx) =>
-          ghiTuChoiQuyen(
-            tx,
-            { userId: phien.userId, email: phien.email, vaiTro: hoSo?.vaiTro.map((v) => v.code) },
-            loi,
-            { ipAddress: ip, userAgent },
-          ),
-        ).catch((e) => console.error("[api] không ghi được vết từ chối quyền:", e));
-        return traLoi(403, "Bạn không có quyền thực hiện thao tác này.", { quyenThieu: loi.maQuyen });
-      }
-      return anhXaLoi(loi);
+      return xuLyLoiApi(loi, phien, hoSoDaDoc, ip, userAgent);
     }
   };
+}
+
+type PhienApi = NonNullable<Awaited<ReturnType<typeof layPhienHienTai>>>;
+
+/**
+ * Bước kiểm chung của mọi API, chạy TRONG giao dịch tenant: hồ sơ quyền còn hiệu lực, không bị
+ * bắt đổi mật khẩu / bật 2 lớp, có quyền của route. Dùng chung cho `xuLyApi` và
+ * `xuLyApiNhieuBuoc` (src/lib/api-nhieu-buoc.ts) để hai đường không lệch nhau.
+ */
+export async function kiemHoSoTrongGiaoDich(
+  tx: ClientTenant,
+  phien: PhienApi,
+  tuyChon: Pick<TuyChonApi, "quyen" | "choPhepKhiPhaiDoiMatKhau" | "choPhepKhiPhaiBat2Lop">,
+  khiDocDuoc?: (hoSo: HoSoQuyen) => void,
+): Promise<HoSoQuyen> {
+  const hoSo = await layHoSoQuyen(tx, phien.userId);
+  if (!hoSo || !phienConHieuLuc(phien.kyLucMs, hoSo.doiMatKhauLuc)) throw new LoiChuaDangNhap();
+  khiDocDuoc?.(hoSo);
+  if (hoSo.phaiDoiMatKhau && !tuyChon.choPhepKhiPhaiDoiMatKhau) {
+    throw new LoiNghiepVu("Bạn phải đổi mật khẩu trước khi tiếp tục.", 403, "phai-doi-mat-khau");
+  }
+  if (hoSo.phaiBat2Lop && !tuyChon.choPhepKhiPhaiBat2Lop && !tuyChon.choPhepKhiPhaiDoiMatKhau) {
+    throw new LoiNghiepVu("Vai trò của bạn bắt buộc xác thực 2 lớp. Bật 2 lớp trước khi tiếp tục.", 403, "phai-bat-2-lop");
+  }
+  if (tuyChon.quyen) batBuocQuyen(hoSo, tuyChon.quyen);
+  return hoSo;
+}
+
+/** Đổi lỗi thành phản hồi; thiếu quyền thì ghi vết từ chối trong giao dịch riêng (giao dịch chính đã cuộn ngược). */
+export async function xuLyLoiApi(
+  loi: unknown,
+  phien: PhienApi,
+  hoSo: HoSoQuyen | null,
+  ip: string | null,
+  userAgent: string | null,
+): Promise<NextResponse> {
+  if (loi instanceof LoiThieuQuyen) {
+    await voiTenant(phien.tenantId, (tx) =>
+      ghiTuChoiQuyen(
+        tx,
+        { userId: phien.userId, email: phien.email, vaiTro: hoSo?.vaiTro.map((v) => v.code) },
+        loi,
+        { ipAddress: ip, userAgent },
+      ),
+    ).catch((e) => console.error("[api] không ghi được vết từ chối quyền:", e));
+    return traLoi(403, "Bạn không có quyền thực hiện thao tác này.", { quyenThieu: loi.maQuyen });
+  }
+  return anhXaLoi(loi);
 }
 
 export class LoiChuaDangNhap extends Error {
@@ -127,6 +153,10 @@ export class LoiChuaDangNhap extends Error {
     super("Chưa đăng nhập.");
     this.name = "LoiChuaDangNhap";
   }
+}
+
+export function traLoiChuaDangNhap(): NextResponse {
+  return traLoi(401, "Chưa đăng nhập hoặc phiên đã hết hạn.");
 }
 
 function traLoi(status: number, thongBao: string, them: Record<string, unknown> = {}) {

@@ -1872,6 +1872,22 @@ model JobRun {
   @@map("job_runs")
 }
 
+/// 0.16.1 — nhịp sống của tiến trình hệ thống (QĐ-87, QĐ-88). Bảng TOÀN HỆ THỐNG, không có
+/// tenant_id: 'worker' do worker ghi mỗi phút (vai cowork_app), 'sao-luu' do scripts/sao-luu.sh
+/// ghi bằng vai chủ sở hữu. Ứng dụng chỉ được ghi dòng 'worker…' (prisma/rls.sql mục 5b).
+model SystemHeartbeat {
+  name     String    @id @db.VarChar(50)
+  lastAt   DateTime  @default(now()) @map("last_at") @db.Timestamptz(6)
+  /// Lần ghi gần nhất thành công hay hỏng.
+  ok       Boolean   @default(true)
+  /// Lần thành công gần nhất — với sao lưu, đây là mốc màn hình dùng để báo đỏ sau 26 giờ.
+  lastOkAt DateTime? @map("last_ok_at") @db.Timestamptz(6)
+  /// Chi tiết ngắn (phiên bản, tên tệp, lỗi). Không chứa bí mật.
+  info     Json      @default("{}")
+
+  @@map("system_heartbeats")
+}
+
 /// "Việc hôm nay" — một dòng là một việc bản quét đề nghị cho một người trong một ngày.
 /// Đây là GỢI Ý, không phải công việc chính thức (`tasks`); người dùng đánh dấu xong
 /// hoặc bỏ qua, và dòng vẫn ở lại để đo xem quy tắc có hữu ích không.

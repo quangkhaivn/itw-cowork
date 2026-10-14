@@ -1,17 +1,19 @@
 import type { Prisma } from "@/generated/prisma/client";
-import type { ClientTenant } from "@/lib/db";
+import { HAN_GIAO_DICH_THEO_LO_MS, voiTenant, type ClientTenant } from "@/lib/db";
 import type { NguCanh } from "@/lib/api";
+import { thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
 import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
-import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
+import { laLoiTrung, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { docCauHinh } from "@/modules/cau-hinh/service";
-import { taoThongBao } from "@/modules/thong-bao/service";
+import { baoChoNguoiCoQuyen, taoThongBao } from "@/modules/thong-bao/service";
 import { congNo } from "@/modules/tai-chinh/tinh-toan";
 import { MA_TAC_VU_QUET, QUY_TAC, timQuyTac, type DinhNghiaQuyTac } from "./quy-tac";
 import {
   cauTomTatHangNgay,
   congNgay,
+  daToiGioChay,
   congThang,
   kiemTraDieuKien,
   kyBaoTriKeTiep,
@@ -22,6 +24,8 @@ import {
   trungNgaySinh,
 } from "./tinh-toan";
 import { khachDungLau } from "@/modules/hanh-trinh/service";
+import { docTinhTrangVanHanh } from "@/modules/van-hanh/nhip";
+import { cauLoiGon, demHongLienTiep, NGUONG_BAO_HONG, quyetDinhThuLai, SO_LAN_THU_TOI_DA } from "@/modules/van-hanh/tinh-toan";
 
 /**
  * Bản quét nhắc việc — mục 21–22 prompt 20/09. Luật: BUSINESS_RULES.md mục 13.
@@ -499,30 +503,21 @@ export async function chayQuet(tx: ClientTenant, tenantId: string, tc: TuyChonQu
   const theoNguoi = new Map<string, { mucDo: string; trangThai: string }[]>();
   let soViec = 0;
 
-  try {
-    for (const q of QUY_TAC) {
-      const t = trangThai.find((x) => x.ma === q.ma)!;
-      if (!t.chay) {
-        ketQua.push({ ma: q.ma, chay: false, lyDoBoQua: t.lyDoBoQua, soViec: 0 });
-        continue;
-      }
-      const viec = await chayMotQuyTac(tx, tenantId, q, homNay, t.nguong);
-      let dem = 0;
-      for (const v of viec) {
-        if (!v.nguoiId) continue;
-        const da = await tx.dailyActionItem.findFirst({
-          where: {
-            userId: v.nguoiId,
-            forDate: ngayVeDate(homNay),
-            ruleCode: v.maQuyTac,
-            objectType: v.doiTuong,
-            objectId: v.doiTuongId,
-          },
-          select: { id: true },
-        });
-        if (da) continue;
-        await tx.dailyActionItem.create({
-          data: {
+  // Không bọc try/catch ghi "hỏng" ở đây: lỗi làm cả giao dịch cuộn ngược, dòng ghi trong đó
+  // cũng mất theo. Lần chạy hỏng được ghi ở `quetBenVung` bằng giao dịch riêng (QĐ-86).
+  for (const q of QUY_TAC) {
+    const t = trangThai.find((x) => x.ma === q.ma)!;
+    if (!t.chay) {
+      ketQua.push({ ma: q.ma, chay: false, lyDoBoQua: t.lyDoBoQua, soViec: 0 });
+      continue;
+    }
+    const viec = await chayMotQuyTac(tx, tenantId, q, homNay, t.nguong);
+    // Ghi cả lô bằng MỘT câu lệnh, dựa vào khóa duy nhất (người + ngày + quy tắc + đối tượng) để
+    // bỏ dòng đã có — thay vì đọc rồi ghi từng dòng (0.16.1, QĐ-86). Chỉ dòng mới thật sự được trả về.
+    const moi = viec.filter((v): v is ViecMoi & { nguoiId: string } => Boolean(v.nguoiId));
+    const daTao = moi.length
+      ? await tx.dailyActionItem.createManyAndReturn({
+          data: moi.map((v) => ({
             tenantId,
             userId: v.nguoiId,
             forDate: ngayVeDate(homNay),
@@ -533,72 +528,234 @@ export async function chayQuet(tx: ClientTenant, tenantId: string, tc: TuyChonQu
             link: v.duongDan,
             objectType: v.doiTuong,
             objectId: v.doiTuongId,
-          },
-        });
-        dem += 1;
-        const cua = theoNguoi.get(v.nguoiId) ?? [];
-        cua.push({ mucDo: v.mucDo, trangThai: "mo" });
-        theoNguoi.set(v.nguoiId, cua);
-      }
-      soViec += dem;
-      ketQua.push({ ma: q.ma, chay: true, lyDoBoQua: "", soViec: dem });
-      await tx.automationRule.upsert({
-        where: { tenantId_code: { tenantId, code: q.ma } },
-        update: { lastRunAt: new Date() },
-        create: { tenantId, code: q.ma, enabled: true, lastRunAt: new Date() },
-      });
+          })),
+          skipDuplicates: true,
+          select: { userId: true, severity: true },
+        })
+      : [];
+    const dem = daTao.length;
+    for (const d of daTao) {
+      const cua = theoNguoi.get(d.userId) ?? [];
+      cua.push({ mucDo: d.severity, trangThai: "mo" });
+      theoNguoi.set(d.userId, cua);
     }
-
-    // Một thông báo tóm tắt cho mỗi người CÓ việc. Không có việc thì không rung chuông.
-    let soThongBao = 0;
-    for (const [nguoiId, ds] of theoNguoi) {
-      const cau = cauTomTatHangNgay(tomTatViec(ds));
-      if (!cau) continue;
-      const tao = await taoThongBao(tx, tenantId, {
-        nguoiNhanId: nguoiId,
-        loai: "viec-hom-nay",
-        mucDo: ds.some((v) => v.mucDo === "khan") ? "khan" : "canh-bao",
-        tieuDe: cau,
-        noiDung: "Mở màn hình Việc hôm nay để xem chi tiết và đánh dấu đã xử lý.",
-        duongDan: "/viec-hom-nay",
-        khoaChongTrung: `viec-hom-nay:${homNay}`,
-      });
-      if (tao) soThongBao += 1;
-    }
-
-    const chay = ketQua.filter((k) => k.chay).length;
-    await tx.jobRun.update({
-      where: { id: run.id },
-      data: {
-        status: "xong",
-        finishedAt: new Date(),
-        rulesRun: chay,
-        rulesSkipped: ketQua.length - chay,
-        itemsCreated: soViec,
-        notifsCreated: soThongBao,
-        detail: { quyTac: ketQua } as unknown as Prisma.InputJsonValue,
-      },
+    soViec += dem;
+    ketQua.push({ ma: q.ma, chay: true, lyDoBoQua: "", soViec: dem });
+    await tx.automationRule.upsert({
+      where: { tenantId_code: { tenantId, code: q.ma } },
+      update: { lastRunAt: new Date() },
+      create: { tenantId, code: q.ma, enabled: true, lastRunAt: new Date() },
     });
+  }
 
-    return {
-      jobRunId: run.id,
-      ngay: homNay,
-      soQuyTacChay: chay,
-      soQuyTacBoQua: ketQua.length - chay,
-      soViec,
-      soThongBao,
-      quyTac: ketQua,
-    };
+  // Một thông báo tóm tắt cho mỗi người CÓ việc. Không có việc thì không rung chuông.
+  let soThongBao = 0;
+  for (const [nguoiId, ds] of theoNguoi) {
+    const cau = cauTomTatHangNgay(tomTatViec(ds));
+    if (!cau) continue;
+    const tao = await taoThongBao(tx, tenantId, {
+      nguoiNhanId: nguoiId,
+      loai: "viec-hom-nay",
+      mucDo: ds.some((v) => v.mucDo === "khan") ? "khan" : "canh-bao",
+      tieuDe: cau,
+      noiDung: "Mở màn hình Việc hôm nay để xem chi tiết và đánh dấu đã xử lý.",
+      duongDan: "/viec-hom-nay",
+      khoaChongTrung: `viec-hom-nay:${homNay}`,
+    });
+    if (tao) soThongBao += 1;
+  }
+
+  const chay = ketQua.filter((k) => k.chay).length;
+  await tx.jobRun.update({
+    where: { id: run.id },
+    data: {
+      status: "xong",
+      finishedAt: new Date(),
+      rulesRun: chay,
+      rulesSkipped: ketQua.length - chay,
+      itemsCreated: soViec,
+      notifsCreated: soThongBao,
+      detail: { quyTac: ketQua } as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  return {
+    jobRunId: run.id,
+    ngay: homNay,
+    soQuyTacChay: chay,
+    soQuyTacBoQua: ketQua.length - chay,
+    soViec,
+    soThongBao,
+    quyTac: ketQua,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Quét bền vững (0.16.1, QĐ-86) — dùng cho worker và nút "Chạy quét ngay"
+// ---------------------------------------------------------------------------
+
+export interface TuyChonQuetBenVung extends TuyChonQuet {
+  /** Hạn giao dịch quét (ms). Mặc định `HAN_GIAO_DICH_THEO_LO_MS`; bài thử đặt rất nhỏ để giả lập hỏng. */
+  hanGiaoDichMs?: number;
+}
+
+/** Bản quét hỏng — đã ghi vào `job_runs` bằng giao dịch riêng trước khi ném. */
+export class LoiQuetHong extends LoiNghiepVu {
+  constructor(
+    readonly jobRunId: string | null,
+    readonly loiGoc: string,
+    readonly soLanHongLienTiep: number,
+  ) {
+    super(
+      `Bản quét nhắc việc hỏng: ${loiGoc} Lần chạy hỏng đã ghi vào Lịch sử chạy nền; thử lại sau ít phút hoặc báo quản trị.`,
+      503,
+      "quet-hong",
+    );
+    this.name = "LoiQuetHong";
+  }
+}
+
+/** Lần quét theo lịch bị một lần chạy khác (worker thứ hai, khởi động lại) giành trước — không phải hỏng. */
+export class LoiQuetDaCoLanKhac extends Error {
+  constructor() {
+    super("Hôm nay đã có một lần quét theo lịch khác chạy xong hoặc đang chạy.");
+    this.name = "LoiQuetDaCoLanKhac";
+  }
+}
+
+const DIEU_KIEN_LICH = (homNay: string) => ({
+  jobCode: MA_TAC_VU_QUET,
+  forDate: ngayVeDate(homNay),
+  trigger: "lich",
+});
+
+/**
+ * Chạy bản quét cho MỘT doanh nghiệp trong giao dịch riêng có hạn dài (bản quét là thao tác theo lô —
+ * QĐ-56), và nếu hỏng thì:
+ *  1. ghi một dòng `job_runs` trạng thái `hong` bằng **giao dịch khác** — giao dịch quét đã cuộn ngược,
+ *     ghi trong đó là mất (lỗi cũ: lần hỏng biến mất, worker thử lại mỗi phút mãi mãi);
+ *  2. đếm số lần hỏng liên tiếp; từ `NGUONG_BAO_HONG` lần thì báo người có `setting.update`
+ *     (chống trùng theo ngày), hết lượt thử trong ngày thì báo mức khẩn;
+ *  3. ném `LoiQuetHong` (503) để nút "Chạy quét ngay" hiện câu rõ ràng.
+ */
+export async function quetBenVung(tenantId: string, tc: TuyChonQuetBenVung = {}): Promise<KetQuaQuet> {
+  const homNay = tc.ngay ?? homNayVN();
+  const trigger = tc.trigger ?? "lich";
+  try {
+    return await voiTenant(tenantId, (tx) => chayQuet(tx, tenantId, { ...tc, ngay: homNay, trigger }), {
+      timeoutMs: tc.hanGiaoDichMs ?? HAN_GIAO_DICH_THEO_LO_MS,
+    });
   } catch (loi) {
-    await tx.jobRun.update({
-      where: { id: run.id },
+    if (trigger === "lich" && laLoiTrung(loi)) {
+      const daCo = await voiTenant(tenantId, (tx) =>
+        tx.jobRun.findFirst({ where: { ...DIEU_KIEN_LICH(homNay), status: { not: "hong" } }, select: { id: true } }),
+      ).catch(() => null);
+      if (daCo) throw new LoiQuetDaCoLanKhac();
+    }
+    const cau = cauLoiGon(loi);
+    let jobRunId: string | null = null;
+    let lienTiep = 0;
+    try {
+      ({ jobRunId, lienTiep } = await ghiLanQuetHong(tenantId, homNay, trigger, tc.nguoiChayId ?? null, cau));
+    } catch (loiGhi) {
+      // CSDL hỏng hẳn thì không ghi được gì — để nhật ký worker giữ dấu vết, đừng nuốt lỗi gốc.
+      console.error("[nhac-viec] không ghi được lần quét hỏng:", loiGhi);
+    }
+    throw new LoiQuetHong(jobRunId, cau, lienTiep);
+  }
+}
+
+async function ghiLanQuetHong(
+  tenantId: string,
+  homNay: string,
+  trigger: "lich" | "tay",
+  nguoiChayId: string | null,
+  cau: string,
+): Promise<{ jobRunId: string; lienTiep: number }> {
+  return voiTenant(tenantId, async (tx) => {
+    const run = await tx.jobRun.create({
       data: {
+        tenantId,
+        jobCode: MA_TAC_VU_QUET,
+        forDate: ngayVeDate(homNay),
+        trigger,
         status: "hong",
         finishedAt: new Date(),
-        error: loi instanceof Error ? loi.message : String(loi),
-        detail: { quyTac: ketQua } as unknown as Prisma.InputJsonValue,
+        error: cau,
+        startedBy: nguoiChayId,
       },
+      select: { id: true },
     });
+    const ganDay = await tx.jobRun.findMany({
+      where: { jobCode: MA_TAC_VU_QUET },
+      orderBy: { startedAt: "desc" },
+      take: 20,
+      select: { status: true },
+    });
+    const lienTiep = demHongLienTiep(ganDay.map((r) => r.status));
+    const soHongHomNay =
+      trigger === "lich" ? await tx.jobRun.count({ where: { ...DIEU_KIEN_LICH(homNay), status: "hong" } }) : 0;
+    const hetLuot = trigger === "lich" && soHongHomNay >= SO_LAN_THU_TOI_DA;
+
+    if (lienTiep >= NGUONG_BAO_HONG || hetLuot) {
+      await baoChoNguoiCoQuyen(tx, tenantId, "setting.update", {
+        loai: "he-thong-quet-hong",
+        mucDo: hetLuot ? "khan" : "canh-bao",
+        tieuDe: hetLuot
+          ? `Quét nhắc việc ngày ${ngayGon(homNay)} hỏng ${soHongHomNay} lần — đã ngừng tự thử lại`
+          : `Quét nhắc việc hỏng ${lienTiep} lần liên tiếp`,
+        noiDung: `Lỗi gần nhất: ${cau} Việc hôm nay của mọi người có thể đang thiếu. Mở Tự động hóa để xem và bấm Chạy quét ngay khi đã xử lý.`,
+        duongDan: "/quan-tri/tu-dong-hoa",
+        khoaChongTrung: hetLuot ? `quet-hong-het-luot:${homNay}` : `quet-hong:${homNay}`,
+      });
+    }
+    return { jobRunId: run.id, lienTiep };
+  });
+}
+
+export type KetQuaQuetTheoLich =
+  | { trangThai: "chua-dat-gio" | "chua-toi-gio" | "da-quet" }
+  | { trangThai: "cho-thu-lai"; lyDo: string }
+  | { trangThai: "xong"; ketQua: KetQuaQuet }
+  | { trangThai: "hong"; loi: LoiQuetHong };
+
+/** Khóa cấu hình giờ quét hằng ngày. Chưa đặt thì KHÔNG tự quét — Giám đốc chọn giờ. */
+export const KHOA_GIO_QUET = "tu_dong.gio_quet_hang_ngay";
+
+/**
+ * Một nhịp của worker cho MỘT doanh nghiệp: đã tới giờ chưa, hôm nay đã quét xong chưa, đã hỏng
+ * mấy lần và có phải chờ giãn cách không — rồi mới quét. Bước kiểm chạy trong giao dịch ngắn
+ * riêng, bản quét trong giao dịch dài riêng (`quetBenVung`).
+ */
+export async function quetTheoLich(
+  tenantId: string,
+  gioHienTai: number,
+  tc: { ngay?: string; bayGio?: Date; hanGiaoDichMs?: number } = {},
+): Promise<KetQuaQuetTheoLich> {
+  const homNay = tc.ngay ?? homNayVN();
+  const kiem = await voiTenant(tenantId, async (tx) => {
+    const gioQuet = await docCauHinh(tx, KHOA_GIO_QUET);
+    if (gioQuet === null) return { trangThai: "chua-dat-gio" as const };
+    if (!daToiGioChay(gioHienTai, gioQuet)) return { trangThai: "chua-toi-gio" as const };
+    const ds = await tx.jobRun.findMany({
+      where: DIEU_KIEN_LICH(homNay),
+      orderBy: { startedAt: "desc" },
+      select: { status: true, finishedAt: true },
+    });
+    if (ds.some((r) => r.status !== "hong")) return { trangThai: "da-quet" as const };
+    const hong = ds.filter((r) => r.status === "hong");
+    const qd = quyetDinhThuLai(hong.length, hong[0]?.finishedAt ?? null, tc.bayGio ?? new Date());
+    if (!qd.chay) return { trangThai: "cho-thu-lai" as const, lyDo: qd.lyDo };
+    return null;
+  });
+  if (kiem) return kiem;
+
+  try {
+    const ketQua = await quetBenVung(tenantId, { ngay: homNay, trigger: "lich", hanGiaoDichMs: tc.hanGiaoDichMs });
+    return { trangThai: "xong", ketQua };
+  } catch (loi) {
+    if (loi instanceof LoiQuetDaCoLanKhac) return { trangThai: "da-quet" };
+    if (loi instanceof LoiQuetHong) return { trangThai: "hong", loi };
     throw loi;
   }
 }
@@ -694,6 +851,7 @@ export async function xemTuDongHoa(nc: NguCanh) {
   return {
     quyTac,
     duocSua: coQuyen(nc.hoSo, "setting.update"),
+    vanHanh: await xemVanHanhTrongGiaoDich(nc),
     lanChay: lanChay.map((l) => ({
       id: l.id,
       maTacVu: l.jobCode,
@@ -708,6 +866,36 @@ export async function xemTuDongHoa(nc: NguCanh) {
       soThongBao: l.notifsCreated,
       loi: l.error,
     })),
+  };
+}
+
+/**
+ * Tình trạng vận hành cho người quản trị (0.16.1): worker còn nhịp không, sao lưu đêm qua thế nào,
+ * bản quét nhắc việc đang hỏng liên tiếp mấy lần. Bản CHI TIẾT — chỉ trả qua API/màn hình cần
+ * `setting.view`; `/api/khoe` công khai chỉ nói "ok / trễ".
+ */
+export async function xemVanHanh(nc: NguCanh) {
+  batBuocQuyen(nc.hoSo, "setting.view");
+  return xemVanHanhTrongGiaoDich(nc);
+}
+
+async function xemVanHanhTrongGiaoDich(nc: NguCanh) {
+  const tt = await docTinhTrangVanHanh(nc.tx);
+  const ganDay = await nc.tx.jobRun.findMany({
+    where: { jobCode: MA_TAC_VU_QUET },
+    orderBy: { startedAt: "desc" },
+    take: 20,
+    select: { status: true, error: true, finishedAt: true },
+  });
+  const quetHongLienTiep = demHongLienTiep(ganDay.map((r) => r.status));
+  return {
+    ...tt,
+    quet: {
+      hongLienTiep: quetHongLienTiep,
+      lanCuoiHong: ganDay[0]?.status === "hong",
+      loiCuoi: ganDay[0]?.status === "hong" ? ganDay[0].error : null,
+      lucCuoi: ganDay[0]?.finishedAt ?? null,
+    },
   };
 }
 
@@ -730,15 +918,31 @@ export async function batTatQuyTac(nc: NguCanh, ma: string, bat: boolean) {
   return { ma, bat };
 }
 
-/** Nút "Chạy quét ngay" — cần quyền sửa cấu hình, và luôn ghi lại là chạy tay. */
-export async function chayQuetTay(nc: NguCanh) {
-  batBuocQuyen(nc.hoSo, "setting.update", { objectType: "job_run" });
-  const kq = await chayQuet(nc.tx, nc.tenantId, { trigger: "tay", nguoiChayId: nc.hoSo.userId });
-  await nc.kiemToan({
-    action: "tao",
-    objectType: "job_run",
-    objectId: kq.jobRunId,
-    after: { ngay: kq.ngay, soViec: kq.soViec, soThongBao: kq.soThongBao },
+/**
+ * Nút "Chạy quét ngay" — cần quyền sửa cấu hình, và luôn ghi lại là chạy tay.
+ *
+ * Nhận `BuocGiaoDich` (route dùng `xuLyApiNhieuBuoc`): kiểm quyền ở giao dịch ngắn, quét ở giao dịch
+ * dài riêng, ghi nhật ký ở giao dịch thứ ba — để lần hỏng vẫn được ghi lại thay vì cuộn ngược cùng
+ * yêu cầu (QĐ-86). Chạy tay không bị giãn cách: người bấm chủ động muốn thử lại.
+ */
+export async function chayQuetTay(x: NguCanh | BuocGiaoDich, tc: { hanGiaoDichMs?: number } = {}) {
+  const nb = thanhBuoc(x);
+  const { tenantId, userId } = await nb.giaoDich(async (nc) => {
+    batBuocQuyen(nc.hoSo, "setting.update", { objectType: "job_run" });
+    return { tenantId: nc.tenantId, userId: nc.hoSo.userId };
   });
+  // Đường tương thích (một NguCanh duy nhất, bài thử cũ): quét ngay trong giao dịch đang có.
+  const kq =
+    "giaoDich" in x
+      ? await quetBenVung(tenantId, { trigger: "tay", nguoiChayId: userId, hanGiaoDichMs: tc.hanGiaoDichMs })
+      : await chayQuet(x.tx, tenantId, { trigger: "tay", nguoiChayId: userId });
+  await nb.giaoDich((nc) =>
+    nc.kiemToan({
+      action: "tao",
+      objectType: "job_run",
+      objectId: kq.jobRunId,
+      after: { ngay: kq.ngay, soViec: kq.soViec, soThongBao: kq.soThongBao },
+    }),
+  );
   return kq;
 }
