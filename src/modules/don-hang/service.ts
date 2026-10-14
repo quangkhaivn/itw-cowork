@@ -2,12 +2,13 @@ import type { Prisma } from "@/generated/prisma/client";
 import { khiCoSuKienKhach } from "@/modules/khach-hang/su-kien-khach";
 import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
-import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
+import { LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { SU_KIEN } from "@/lib/su-kien";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, ngayVeDate, trongPhamVi } from "@/modules/crm/chung";
 import { batBuocThayKhach } from "@/modules/khach-hang/service";
-import { dieuKienXemBaoGia } from "@/modules/bao-gia/service";
+import { dieuKienXemBaoGia, donDangHoatDongCuaBaoGia, thangCoHoiTheoBaoGia } from "@/modules/bao-gia/service";
 import { tinhBaoGia, type DongBaoGia } from "@/modules/bao-gia/tinh-toan";
 import { ghiSoKho, batBuocThayKho } from "@/modules/kho/service";
 import { sinhBaoHanhKhiGiao } from "@/modules/bao-hanh/service";
@@ -322,10 +323,13 @@ export async function taoDonHang(nc: NguCanh, d: DuLieuTaoDon) {
 
 /**
  * Tạo đơn từ một báo giá khách đã chấp nhận — một thao tác, không nhập lại (DH-01).
- * Mỗi phiên bản báo giá chỉ sinh một đơn; gọi lại trả về đúng đơn đã có.
+ * Mỗi BÁO GIÁ (không phải mỗi phiên bản) chỉ có một đơn chưa hủy (TV-BH-08): gọi lại trả về
+ * đúng đơn đã có. Khóa dòng báo giá trước khi kiểm, nên bấm hai lần cùng lúc vẫn ra một đơn
+ * (TV-BH-01); chỉ mục riêng phần `sales_orders_bao_gia_dang_hoat_dong_key` là lớp chặn cuối.
  */
 export async function taoDonTuBaoGia(nc: NguCanh, baoGiaId: string) {
   batBuocQuyen(nc.hoSo, "order.create", { objectType: "sales_order" });
+  await khoaChungTu(nc.tx, "quotations", baoGiaId);
   const bg = await nc.tx.quotation.findFirst({
     where: { AND: [{ id: baoGiaId }, await dieuKienXemBaoGia(nc)] },
     select: {
@@ -343,11 +347,14 @@ export async function taoDonTuBaoGia(nc: NguCanh, baoGiaId: string) {
     throw new LoiNghiepVu("Chỉ tạo đơn từ báo giá khách đã chấp nhận.", 409, "bao-gia-chua-chot");
   }
 
-  const daCo = await nc.tx.salesOrder.findFirst({
-    where: { quotationVersionId: bg.currentVersion.id, status: { not: "CANCELLED" } },
-    select: { id: true, number: true },
-  });
-  if (daCo) return { id: daCo.id, so: daCo.number, daCoTruoc: true };
+  const daCo = await donDangHoatDongCuaBaoGia(nc, bg.id);
+  if (daCo) {
+    if (daCo.quotationVersionId === bg.currentVersion.id) return { id: daCo.id, so: daCo.number, daCoTruoc: true };
+    throw new LoiNghiepVu(
+      `Báo giá đã có đơn hàng ${daCo.number} đang hoạt động (từ phiên bản khác). Hủy đơn đó trước khi lập đơn mới.`,
+      409, "bao-gia-da-co-don", { donHangId: daCo.id, donHang: daCo.number },
+    );
+  }
 
   const khach = await batBuocThayKhach(nc, bg.customerId);
   const so = await capSoChungTu(nc.tx, KIEU_SO.donHang);
@@ -358,26 +365,27 @@ export async function taoDonTuBaoGia(nc: NguCanh, baoGiaId: string) {
     })),
   );
 
-  const don = await nc.tx.salesOrder.create({
+  const pb = bg.currentVersion;
+  const taoDon = () => nc.tx.salesOrder.create({
     data: {
       tenantId: nc.tenantId,
       number: so,
       customerId: bg.customerId,
       contactId: bg.contactId,
       quotationId: bg.id,
-      quotationVersionId: bg.currentVersion.id,
+      quotationVersionId: pb.id,
       opportunityId: bg.opportunityId,
       ownerId: bg.ownerId,
       orderDate: new Date(),
       deliveryAddress: khach.diaChi || null,
-      paymentTerms: bg.currentVersion.paymentTerms,
-      deliveryTerms: bg.currentVersion.deliveryTerms,
-      notes: bg.currentVersion.notes,
+      paymentTerms: pb.paymentTerms,
+      deliveryTerms: pb.deliveryTerms,
+      notes: pb.notes,
       ...tongVeCot(tinh),
       createdBy: nc.hoSo.userId,
       updatedBy: nc.hoSo.userId,
       items: {
-        create: bg.currentVersion.items.map((i, k) => ({
+        create: pb.items.map((i, k) => ({
           tenantId: nc.tenantId,
           lineNo: k + 1,
           productId: i.productId,
@@ -398,13 +406,23 @@ export async function taoDonTuBaoGia(nc: NguCanh, baoGiaId: string) {
     },
     select: { id: true, number: true },
   });
+  let don: Awaited<ReturnType<typeof taoDon>>;
+  try {
+    don = await taoDon();
+  } catch (e) {
+    if (laLoiTrung(e)) throw new LoiNghiepVu("Báo giá này vừa được lập đơn bởi người khác. Tải lại trang để xem đơn.", 409, "bao-gia-da-co-don");
+    throw e;
+  }
 
   await nc.kiemToan({ action: "tao", objectType: "sales_order", objectId: don.id, after: { so, tuBaoGia: bg.number, soDong: bg.currentVersion.items.length } });
   await nc.suKien({ eventType: SU_KIEN.ORDER_CREATED, objectType: "sales_order", objectId: don.id, payload: { so, baoGiaId: bg.id, baoGia: bg.number } });
+  // TV-BH-09: có đơn từ báo giá = thắng thương vụ.
+  await thangCoHoiTheoBaoGia(nc, bg.opportunityId, { baoGia: bg.number, donHang: so });
   return { id: don.id, so, daCoTruoc: false };
 }
 
 export async function suaDonHang(nc: NguCanh, id: string, d: DuLieuSuaDon) {
+  await khoaChungTu(nc.tx, "sales_orders", id);
   const truoc = await docDon(nc, id);
   await batBuocSuaDuoc(nc, truoc);
   if (!duocSuaDong(truoc.status)) {
@@ -447,6 +465,8 @@ export async function suaDonHang(nc: NguCanh, id: string, d: DuLieuSuaDon) {
 /** Xác nhận đơn: giữ chỗ hàng trong kho cho từng dòng có quản lý tồn (DH-04). */
 export async function xacNhanDon(nc: NguCanh, id: string, d: { khoId: string; ghiChu: string | null }) {
   batBuocQuyen(nc.hoSo, "order.approve", { objectType: "sales_order", objectId: id });
+  // TV-BH-01: khóa dòng đơn rồi mới đọc trạng thái — bấm hai lần cùng lúc không giữ chỗ hai lần.
+  await khoaChungTu(nc.tx, "sales_orders", id);
   const don = await docDon(nc, id);
   if (don.status !== "DRAFT") throw new LoiNghiepVu("Chỉ xác nhận đơn đang ở trạng thái Nháp.", 409, "sai-trang-thai");
   if (don.items.length === 0) throw new LoiNghiepVu("Đơn chưa có dòng hàng nào.", 409, "don-rong");
@@ -480,20 +500,21 @@ export async function xacNhanDon(nc: NguCanh, id: string, d: { khoId: string; gh
   return { id, trangThai: "CONFIRMED" };
 }
 
-/** Hủy đơn: nhả toàn bộ phần còn giữ chỗ (DH-07). Hàng đã xuất thì không tự thu về. */
-export async function huyDon(nc: NguCanh, id: string, lyDo: string) {
-  batBuocQuyen(nc.hoSo, "order.approve", { objectType: "sales_order", objectId: id });
-  const don = await docDon(nc, id);
-  if (don.status === "CANCELLED") throw new LoiNghiepVu("Đơn này đã hủy rồi.", 409, "da-huy");
-  if (don.status === "DELIVERED") throw new LoiNghiepVu("Đơn đã giao đủ thì không hủy. Dùng nghiệp vụ trả hàng khi có (Phase 6).", 409, "da-giao-du");
-
+/**
+ * Nhả MỌI phần giữ chỗ còn lại của đơn, ở mọi kho (TV-BH-04). Đọc từ sổ cái (`refType` =
+ * `don-hang`, `refId` = đơn) nên không cần biết lúc xác nhận đã giữ ở kho nào. Gọi khi đơn
+ * hủy hoặc vừa giao đủ — đơn đã đóng thì không còn lý do giữ hàng của người khác.
+ */
+async function nhaHetGiuCho(nc: NguCanh, id: string, soChungTu: string, lyDo: string, ghiChu: string | null) {
   const giuCho = await nc.tx.inventoryTransaction.groupBy({
     by: ["warehouseId", "productId"],
     where: { refType: "don-hang", refId: id },
     _sum: { reservedDelta: true },
+    orderBy: [{ warehouseId: "asc" }, { productId: "asc" }],
   });
+  let daNha = 0;
   for (const g of giuCho) {
-    const con = Number(g._sum.reservedDelta ?? 0);
+    const con = Math.round(Number(g._sum.reservedDelta ?? 0) * 1000) / 1000;
     if (con <= 0) continue;
     await ghiSoKho(nc, {
       khoId: g.warehouseId,
@@ -502,11 +523,49 @@ export async function huyDon(nc: NguCanh, id: string, lyDo: string) {
       soLuong: con,
       loaiChungTu: "don-hang",
       chungTuId: id,
-      soChungTu: don.number,
-      lyDo: "Hủy đơn — nhả hàng giữ chỗ",
-      ghiChu: lyDo,
+      soChungTu,
+      lyDo,
+      ghiChu,
     });
+    daNha += con;
   }
+  return daNha;
+}
+
+/**
+ * Hủy đơn: nhả toàn bộ phần còn giữ chỗ (DH-07). Hàng đã xuất thì không tự thu về.
+ *
+ * TV-BH-07: đơn còn hóa đơn chưa hủy thì KHÔNG hủy được — hủy hóa đơn trước (nghiệp vụ của
+ * kế toán), nếu không công nợ còn treo trên một đơn không tồn tại. Dự án đang mở gắn với đơn
+ * chỉ được cảnh báo (trả về `canhBao.duAnDangMo`), không tự đóng — đóng dự án là quyết định
+ * của quản lý dự án.
+ */
+export async function huyDon(nc: NguCanh, id: string, lyDo: string) {
+  batBuocQuyen(nc.hoSo, "order.approve", { objectType: "sales_order", objectId: id });
+  await khoaChungTu(nc.tx, "sales_orders", id);
+  const don = await docDon(nc, id);
+  if (don.status === "CANCELLED") throw new LoiNghiepVu("Đơn này đã hủy rồi.", 409, "da-huy");
+  if (don.status === "DELIVERED") throw new LoiNghiepVu("Đơn đã giao đủ thì không hủy. Dùng nghiệp vụ trả hàng khi có (Phase 6).", 409, "da-giao-du");
+
+  // Đọc thẳng bảng hóa đơn trong cùng giao dịch: kiểm ở máy chủ, không phụ thuộc người hủy có quyền xem tài chính.
+  const hoaDon = await nc.tx.invoice.findMany({
+    where: { salesOrderId: id, status: { not: "CANCELLED" } },
+    select: { id: true, number: true, status: true },
+    orderBy: { number: "asc" },
+  });
+  if (hoaDon.length > 0) {
+    throw new LoiNghiepVu(
+      `Đơn ${don.number} còn ${hoaDon.length} hóa đơn chưa hủy (${hoaDon.map((h) => h.number).join(", ")}). Hủy hóa đơn trước rồi mới hủy đơn.`,
+      409, "con-hoa-don", { hoaDon: hoaDon.map((h) => ({ id: h.id, so: h.number, trangThai: h.status })) },
+    );
+  }
+  const duAnDangMo = await nc.tx.project.findMany({
+    where: { salesOrderId: id, status: { notIn: ["ACCEPTED", "CANCELLED"] } },
+    select: { id: true, code: true, name: true, status: true },
+    orderBy: { code: "asc" },
+  });
+
+  await nhaHetGiuCho(nc, id, don.number, "Hủy đơn — nhả hàng giữ chỗ", lyDo);
 
   await nc.tx.salesOrder.update({
     where: { id },
@@ -515,15 +574,32 @@ export async function huyDon(nc: NguCanh, id: string, lyDo: string) {
   await nc.kiemToan({ action: "sua", objectType: "sales_order", objectId: id, before: { trangThai: don.status }, after: { trangThai: "CANCELLED", lyDo } });
   await nc.suKien({ eventType: SU_KIEN.ORDER_CANCELLED, objectType: "sales_order", objectId: id, payload: { so: don.number, lyDo } });
   await nc.suKien({ eventType: SU_KIEN.STOCK_RELEASED, objectType: "inventory", objectId: id, payload: { so: don.number } });
-  return { id, trangThai: "CANCELLED" };
+  return {
+    id,
+    trangThai: "CANCELLED",
+    canhBao: { duAnDangMo: duAnDangMo.map((p) => ({ id: p.id, ma: p.code, ten: p.name, trangThai: p.status })) },
+  };
 }
+
+const lam3 = (x: number) => Math.round(x * 1000) / 1000;
 
 /**
  * Lập phiếu xuất cho đơn: trừ tồn, nhả phần giữ chỗ tương ứng, cộng số đã giao,
  * và tự đặt lại trạng thái đơn theo tiến độ (DH-05, DH-06).
+ *
+ * 0.16.1 (BUSINESS_RULES.md mục 25):
+ *   - TV-BH-01: khóa dòng đơn trước khi đọc số đã giao — hai phiếu xuất cùng lúc xếp hàng,
+ *     phiếu sau thấy số đã giao mới nên không giao vượt.
+ *   - TV-BH-02: sê-ri chuyển `da-ban` bằng cập nhật CÓ ĐIỀU KIỆN (`trong-kho` + đúng kho) —
+ *     hai đơn khác nhau cùng xuất một sê-ri thì chỉ một đơn được.
+ *   - TV-BH-03: số đã giao cộng nguyên tử (`increment`); một dòng đơn chỉ xuất hiện một lần
+ *     trong một phiếu, sê-ri không trùng trong phiếu.
+ *   - TV-BH-04: xuất từ kho B mà hàng được giữ ở kho A thì nhả giữ chỗ ở A tương ứng; đơn
+ *     giao đủ thì nhả mọi phần giữ chỗ còn sót ở mọi kho.
  */
 export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXuat) {
   batBuocQuyen(nc.hoSo, "inventory.update", { objectType: "delivery", objectId: id });
+  await khoaChungTu(nc.tx, "sales_orders", id);
   const don = await docDon(nc, id);
   if (!["CONFIRMED", "PARTIALLY_DELIVERED"].includes(don.status)) {
     throw new LoiNghiepVu("Chỉ xuất hàng cho đơn đã xác nhận và chưa giao xong.", 409, "sai-trang-thai");
@@ -531,13 +607,34 @@ export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXua
   const kho = await batBuocThayKho(nc, d.khoId);
   if (kho.trangThai !== "hoat-dong") throw new LoiNghiepVu("Kho này đã ngừng hoạt động.", 409, "kho-ngung");
 
+  const dongDaGap = new Set<string>();
+  for (const x of d.dong) {
+    if (dongDaGap.has(x.dongDonId)) {
+      throw new LoiNghiepVu("Một dòng hàng xuất hiện hai lần trong cùng phiếu xuất — gộp lại thành một dòng.", 400, "dong-trung", { dongDonId: x.dongDonId });
+    }
+    dongDaGap.add(x.dongDonId);
+  }
+  const serialDaGap = new Set<string>();
+  for (const serial of d.dong.flatMap((x) => x.serial)) {
+    const khoa = serial.trim().toUpperCase();
+    if (serialDaGap.has(khoa)) throw new LoiNghiepVu(`Số sê-ri ${serial} khai hai lần trong cùng phiếu xuất.`, 400, "serial-trung-trong-phieu", { serial });
+    serialDaGap.add(khoa);
+  }
+
   const theoDong = new Map(don.items.map((x) => [x.id, x]));
+  // Phần còn giữ chỗ cho đơn này theo (sản phẩm → kho) — đọc từ sổ cái nên không sợ lệch.
   const giuCho = await nc.tx.inventoryTransaction.groupBy({
-    by: ["productId"],
-    where: { refType: "don-hang", refId: id, warehouseId: d.khoId },
+    by: ["productId", "warehouseId"],
+    where: { refType: "don-hang", refId: id },
     _sum: { reservedDelta: true },
   });
-  const conGiuCho = new Map(giuCho.map((g) => [g.productId, Number(g._sum.reservedDelta ?? 0)]));
+  const conGiuCho = new Map<string, Map<string, number>>();
+  for (const g of giuCho) {
+    const con = lam3(Number(g._sum.reservedDelta ?? 0));
+    if (con <= 0) continue;
+    if (!conGiuCho.has(g.productId)) conGiuCho.set(g.productId, new Map());
+    conGiuCho.get(g.productId)!.set(g.warehouseId, con);
+  }
 
   const so = await capSoChungTu(nc.tx, KIEU_SO.phieuXuat);
   const phieu = await nc.tx.delivery.create({
@@ -558,7 +655,7 @@ export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXua
     }
 
     // Kiểm sê-ri trước khi đụng tồn kho — lỗi sê-ri phải nói rõ là lỗi sê-ri.
-    const serialSeDung: string[] = [];
+    const serialSeDung: { id: string; serial: string }[] = [];
     if (goc.product?.requiresSerial) {
       if (dong.serial.length !== sl) {
         throw new LoiNghiepVu(`${goc.name} quản lý theo số sê-ri: cần đúng ${sl} sê-ri, đang có ${dong.serial.length}.`, 400, "thieu-serial", { dongDonId: goc.id, canCo: sl });
@@ -566,17 +663,18 @@ export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXua
       for (const serial of dong.serial) {
         const s = await nc.tx.serialNumber.findFirst({
           where: { productId: goc.productId ?? undefined, serial: serial.trim() },
-          select: { id: true, status: true, warehouseId: true },
+          select: { id: true, serial: true, status: true, warehouseId: true },
         });
         if (!s) throw new LoiNghiepVu(`Số sê-ri ${serial} chưa có trong kho — nhập kho trước khi xuất.`, 409, "serial-khong-co", { serial });
         if (s.status !== "trong-kho") throw new LoiNghiepVu(`Số sê-ri ${serial} không còn trong kho (đang ở trạng thái ${s.status}).`, 409, "serial-da-dung", { serial });
         if (s.warehouseId !== d.khoId) throw new LoiNghiepVu(`Số sê-ri ${serial} đang nằm ở kho khác.`, 409, "serial-khac-kho", { serial });
-        serialSeDung.push(s.id);
+        serialSeDung.push({ id: s.id, serial: s.serial });
       }
     }
 
     if (goc.productId && goc.product?.quanLyTon) {
-      const nhaGiuCho = Math.min(sl, Math.max(0, conGiuCho.get(goc.productId) ?? 0));
+      const theoKho = conGiuCho.get(goc.productId) ?? new Map<string, number>();
+      const nhaGiuCho = lam3(Math.min(sl, Math.max(0, theoKho.get(d.khoId) ?? 0)));
       await ghiSoKho(nc, {
         khoId: d.khoId,
         sanPhamId: goc.productId,
@@ -590,30 +688,53 @@ export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXua
         lyDo: `Giao hàng cho đơn ${don.number}`,
         ghiChu: d.ghiChu || null,
       });
-      conGiuCho.set(goc.productId, Math.max(0, (conGiuCho.get(goc.productId) ?? 0) - nhaGiuCho));
+      if (theoKho.has(d.khoId)) theoKho.set(d.khoId, lam3((theoKho.get(d.khoId) ?? 0) - nhaGiuCho));
+
+      // TV-BH-04: phần giao không lấy từ chỗ đã giữ ở kho này thì nhả giữ chỗ ở kho đã giữ.
+      let canNha = lam3(sl - nhaGiuCho);
+      const khoKhac = [...theoKho.entries()].filter(([k, v]) => k !== d.khoId && v > 0).sort(([a], [b]) => (a < b ? -1 : 1));
+      for (const [khoGiu, soGiu] of khoKhac) {
+        if (canNha <= 0) break;
+        const n = lam3(Math.min(canNha, soGiu));
+        await ghiSoKho(nc, {
+          khoId: khoGiu,
+          sanPhamId: goc.productId,
+          loai: "nha-giu-cho",
+          soLuong: n,
+          loaiChungTu: "don-hang",
+          chungTuId: id,
+          soChungTu: so,
+          lyDo: `Đơn ${don.number} giao từ ${kho.ten} — nhả hàng đã giữ ở kho này`,
+          ghiChu: d.ghiChu || null,
+        });
+        theoKho.set(khoGiu, lam3(soGiu - n));
+        canNha = lam3(canNha - n);
+      }
     }
 
-    for (const serialId of serialSeDung) {
-      await nc.tx.serialNumber.update({
-        where: { id: serialId },
+    for (const s of serialSeDung) {
+      // TV-BH-02: chỉ chuyển nếu sê-ri VẪN còn trong kho này — đơn khác vừa lấy thì dừng.
+      const kq = await nc.tx.serialNumber.updateMany({
+        where: { id: s.id, status: "trong-kho", warehouseId: d.khoId },
         data: { status: "da-ban", warehouseId: null, salesOrderItemId: goc.id, deliveryId: phieu.id },
       });
+      if (kq.count !== 1) {
+        throw new LoiNghiepVu(`Số sê-ri ${s.serial} vừa được xuất cho chứng từ khác — tải lại rồi chọn sê-ri khác.`, 409, "serial-da-dung", { serial: s.serial });
+      }
     }
 
     await nc.tx.deliveryItem.create({
-      data: { tenantId: nc.tenantId, deliveryId: phieu.id, orderItemId: goc.id, productId: goc.productId, quantity: String(sl) },
+      data: { tenantId: nc.tenantId, deliveryId: phieu.id, orderItemId: goc.id, productId: goc.productId, quantity: dong.soLuong },
     });
+    // TV-BH-03: cộng nguyên tử trên CSDL, không ghi đè bằng số đọc lúc trước (CHECK chặn vượt số đặt).
     await nc.tx.salesOrderItem.update({
       where: { id: goc.id },
-      data: { deliveredQty: String(Number(goc.deliveredQty) + sl) },
+      data: { deliveredQty: { increment: dong.soLuong } },
     });
 
     // Giao hàng là lúc bảo hành bắt đầu tính (BH-01). Mỗi sê-ri một phiếu bảo hành.
     const soThangBaoHanh = goc.product?.warrantyMonths ?? 0;
     if (goc.productId && soThangBaoHanh > 0) {
-      const serialDaXuat = serialSeDung.length
-        ? await nc.tx.serialNumber.findMany({ where: { id: { in: serialSeDung } }, select: { id: true, serial: true } })
-        : [];
       await sinhBaoHanhKhiGiao(nc, {
         khachHangId: don.customer.id,
         sanPhamId: goc.productId,
@@ -623,8 +744,8 @@ export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXua
         donHangId: id,
         dongDonId: goc.id,
         phieuXuatId: phieu.id,
-        serial: serialDaXuat,
-        soLuongKhongSerial: serialDaXuat.length ? 0 : sl,
+        serial: serialSeDung,
+        soLuongKhongSerial: serialSeDung.length ? 0 : sl,
       });
     }
   }
@@ -639,11 +760,14 @@ export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXua
       updatedBy: nc.hoSo.userId,
     },
   });
+  // TV-BH-04: giao đủ rồi thì không còn lý do giữ hàng — nhả mọi phần còn sót ở mọi kho.
+  const nhaConSot = tienDo.xongHet ? await nhaHetGiuCho(nc, id, don.number, "Đơn đã giao đủ — nhả phần giữ chỗ còn lại", d.ghiChu || null) : 0;
 
   await nc.kiemToan({ action: "tao", objectType: "delivery", objectId: phieu.id, after: { so, donHang: don.number, soDong: d.dong.length } });
   await nc.suKien({ eventType: SU_KIEN.DELIVERY_COMPLETED, objectType: "delivery", objectId: phieu.id, payload: { so, donHang: don.number, khoId: d.khoId } });
   if (tienDo.xongHet) {
     await nc.suKien({ eventType: SU_KIEN.ORDER_COMPLETED, objectType: "sales_order", objectId: id, payload: { so: don.number } });
+    if (nhaConSot > 0) await nc.suKien({ eventType: SU_KIEN.STOCK_RELEASED, objectType: "inventory", objectId: id, payload: { so: don.number, soLuong: nhaConSot } });
   }
   return { id: phieu.id, so, trangThaiDon: tienDo.trangThaiMoi, tienDo };
 }

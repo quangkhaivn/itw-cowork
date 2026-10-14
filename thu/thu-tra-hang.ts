@@ -394,23 +394,36 @@ async function main() {
   // ------------------------------------------------------------------
   console.log("\n— TH-05: sê-ri phải là máy đã bán ra —");
 
+  // 0.16.1 (TV-BH-10): trả hàng luôn theo đơn — phiếu "trả lẻ" ngoài đơn bị chặn từ lúc lập.
+  await nemLoi("TV-BH-10: phiếu trả không theo đơn bị chặn", "dinh-dang", () =>
+    voi(T, cskh, (nc) =>
+      taoTraHangBan(nc, LuocDoTaoTraHangBan.parse({
+        khachHangId: khach.id, khoId: kho.id,
+        lyDo: "Thử trả lẻ ngoài đơn",
+        dong: [{ sanPhamId: spMay.id, ten: "Laptop văn phòng", soLuong: "1", donGia: "20000000", serial: [SR.c] }],
+      })),
+    ),
+  );
+
+  // Đổi máy không tính là "đã trả" (khách vẫn giữ một máy) nên dòng máy còn trả được 1.
   const p3 = await voi(T, cskh, (nc) =>
     taoTraHangBan(nc, LuocDoTaoTraHangBan.parse({
-      khachHangId: khach.id, khoId: kho.id,
+      khachHangId: khach.id, donHangId: don.id, khoId: kho.id,
       lyDo: "Thử sê-ri chưa bán cho ai",
-      dong: [{ sanPhamId: spMay.id, ten: "Laptop văn phòng", soLuong: "1", donGia: "20000000", serial: [SR.c] }],
+      dong: [{ dongDonId: dongMay.id, sanPhamId: spMay.id, ten: "Laptop văn phòng", soLuong: "1", donGia: "20000000", serial: [SR.c] }],
     })),
   );
   await nemLoi("Sê-ri còn trong kho (chưa bán cho ai) không nhận trả được", "nghiep-vu", () =>
     voi(T, thukho, (nc) => xacNhanTraHangBan(nc, p3.id, LuocDoXacNhanTraHang.parse({}))),
     "serial-chua-ban",
   );
+  await voi(T, cskh, (nc) => huyTraHangBan(nc, p3.id, "Khai nhầm sê-ri"));
 
   const p4 = await voi(T, cskh, (nc) =>
     taoTraHangBan(nc, LuocDoTaoTraHangBan.parse({
-      khachHangId: khach.id, khoId: kho.id,
+      khachHangId: khach.id, donHangId: don.id, khoId: kho.id,
       lyDo: "Thử thiếu sê-ri",
-      dong: [{ sanPhamId: spMay.id, ten: "Laptop văn phòng", soLuong: "1", donGia: "20000000" }],
+      dong: [{ dongDonId: dongMay.id, sanPhamId: spMay.id, ten: "Laptop văn phòng", soLuong: "1", donGia: "20000000" }],
     })),
   );
   await nemLoi("Hàng theo sê-ri mà không khai sê-ri thì không xác nhận được", "nghiep-vu", () =>
@@ -433,7 +446,11 @@ async function main() {
     JSON.stringify(goiYPk),
   );
   const goiYMay = goiY.dong.find((x) => x.sanPhamId === spMay.id)!;
-  dat("Phiếu đã hủy không bị tính vào phần đã trả", goiYMay.daTra === 1 && goiYMay.conTraDuoc === 0, JSON.stringify(goiYMay));
+  dat(
+    "Phiếu đã hủy và phiếu đổi máy không bị tính vào phần đã trả (TV-BH-10)",
+    goiYMay.daTra === 0 && goiYMay.conTraDuoc === 1,
+    JSON.stringify(goiYMay),
+  );
 
   // ------------------------------------------------------------------
   console.log("\n— Danh sách và phạm vi —");

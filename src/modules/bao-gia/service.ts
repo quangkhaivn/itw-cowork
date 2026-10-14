@@ -12,6 +12,7 @@ import { batBuocThayCoHoi } from "@/modules/co-hoi/service";
 import { canDuyet, chuaGui, daChot, hetHieuLuc, tinhBaoGia, type DongBaoGia } from "./tinh-toan";
 import type { BoLocBaoGia, DuLieuDongBaoGia, DuLieuSuaPhienBan, DuLieuTaoBaoGia } from "./luoc-do";
 import { baoChoNguoiCoQuyen } from "@/modules/thong-bao/service";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
 
 /**
  * Phân hệ Báo giá — mục 10–14 prompt 20/09. Luật: BUSINESS_RULES.md mục 5.
@@ -249,7 +250,8 @@ export async function chiTietBaoGia(nc: NguCanh, id: string) {
     nguongBienLoiNhuan: nguong,
     quyen: {
       sua: duocSua && pb !== null && chuaGui(pb.trangThai),
-      taoBanMoi: duocSua && pb !== null && !chuaGui(pb.trangThai),
+      // TV-BH-08: báo giá đã có đơn đang chạy thì không ra phiên bản mới (sẽ sinh đơn thứ hai).
+      taoBanMoi: duocSua && pb !== null && !chuaGui(pb.trangThai) && donHang === null,
       xinDuyet: duocSua && pb?.trangThai === "DRAFT",
       duyet: coQuyen(nc.hoSo, "quotation.approve") && !tuDuyet,
       tuDuyetBiChan: tuDuyet,
@@ -398,7 +400,59 @@ export async function taoBaoGia(nc: NguCanh, d: DuLieuTaoBaoGia) {
   return { id: q.id, so, phienBanId: v.id };
 }
 
+// ---------------------------------------------------------------------------
+// 0.16.1 — toàn vẹn báo giá → đơn → cơ hội (BUSINESS_RULES.md mục 25)
+// ---------------------------------------------------------------------------
+
+/** Đơn hàng chưa hủy của một báo giá (mọi phiên bản). Một báo giá chỉ có tối đa một (TV-BH-08). */
+export async function donDangHoatDongCuaBaoGia(nc: NguCanh, baoGiaId: string) {
+  return nc.tx.salesOrder.findFirst({
+    where: { quotationId: baoGiaId, status: { not: "CANCELLED" } },
+    select: { id: true, number: true, status: true, quotationVersionId: true },
+  });
+}
+
+/**
+ * TV-BH-09: khách chấp nhận báo giá (hoặc đơn sinh từ báo giá) thì cơ hội gắn kèm sang Thắng
+ * trong CÙNG giao dịch. Làm như nhánh WON của `doiGiaiDoan()` (xác suất 100, ghi closed_at,
+ * kiểm toán `doi-giai-doan`, sự kiện OPPORTUNITY_WON, mốc hành trình `co-hoi-thang`) nhưng
+ * không đòi quyền sửa cơ hội: người chốt báo giá có thể không phụ trách cơ hội đó.
+ *
+ * Cơ hội đã Thắng / Thua thì để nguyên — Thua rồi mà khách quay lại là việc của người quản lý
+ * mở lại bằng tay (CH-06), không tự lật kết quả. Cập nhật có điều kiện nên hai yêu cầu cùng
+ * lúc chỉ một yêu cầu ghi sự kiện.
+ */
+export async function thangCoHoiTheoBaoGia(nc: NguCanh, coHoiId: string | null | undefined, nguon: { baoGia: string; donHang?: string }) {
+  if (!coHoiId) return false;
+  const truoc = await nc.tx.opportunity.findFirst({
+    where: { id: coHoiId },
+    select: { id: true, stage: true, probability: true, customerId: true, estimatedValue: true },
+  });
+  if (!truoc || truoc.stage === "WON" || truoc.stage === "LOST") return false;
+  const kq = await nc.tx.opportunity.updateMany({
+    where: { id: coHoiId, stage: { notIn: ["WON", "LOST"] } },
+    data: { stage: "WON", probability: 100, closedAt: new Date(), lostReason: null, lostNote: null, updatedBy: nc.hoSo.userId },
+  });
+  if (kq.count !== 1) return false;
+  await nc.kiemToan({
+    action: "doi-giai-doan",
+    objectType: "opportunity",
+    objectId: coHoiId,
+    before: { giaiDoan: truoc.stage, xacSuat: truoc.probability },
+    after: { giaiDoan: "WON", xacSuat: 100, tuDong: true, ...nguon },
+  });
+  await nc.suKien({
+    eventType: SU_KIEN.OPPORTUNITY_WON,
+    objectType: "opportunity",
+    objectId: coHoiId,
+    payload: { tu: truoc.stage, den: "WON", giaTri: truoc.estimatedValue.toString(), tuDong: true, ...nguon },
+  });
+  await khiCoSuKienKhach(nc, truoc.customerId, "co-hoi-thang");
+  return true;
+}
+
 export async function suaPhienBan(nc: NguCanh, id: string, d: DuLieuSuaPhienBan) {
+  await khoaChungTu(nc.tx, "quotations", id);
   const q = await docBaoGiaDuocSua(nc, id);
   const v = q.currentVersion;
   if (!v) throw new LoiNghiepVu("Báo giá chưa có phiên bản nào.", 409);
@@ -454,10 +508,19 @@ export async function suaPhienBan(nc: NguCanh, id: string, d: DuLieuSuaPhienBan)
 
 /** BG-02: sửa bản đã gửi = chép sang phiên bản mới; bản cũ thành SUPERSEDED. */
 export async function taoPhienBanMoi(nc: NguCanh, id: string) {
+  await khoaChungTu(nc.tx, "quotations", id);
   const q = await docBaoGiaDuocSua(nc, id);
   const v = q.currentVersion;
   if (!v) throw new LoiNghiepVu("Báo giá chưa có phiên bản nào.", 409);
   if (chuaGui(v.status)) throw new LoiNghiepVu("Phiên bản hiện tại chưa gửi — sửa thẳng, không cần bản mới.", 409, "chua-gui");
+  // TV-BH-08: bản mới quay về Nháp rồi được chấp nhận lại sẽ sinh đơn thứ hai cho cùng một thương vụ.
+  const don = await donDangHoatDongCuaBaoGia(nc, id);
+  if (don) {
+    throw new LoiNghiepVu(
+      `Báo giá đã có đơn hàng ${don.number} đang hoạt động — không tạo phiên bản mới được. Hủy đơn đó trước nếu khách đổi yêu cầu.`,
+      409, "bao-gia-da-co-don", { donHangId: don.id, donHang: don.number },
+    );
+  }
 
   const moi = await nc.tx.quotationVersion.create({
     data: {
@@ -515,6 +578,7 @@ export async function taoPhienBanMoi(nc: NguCanh, id: string) {
 
 /** BG-03: xin duyệt khi biên lợi nhuận dưới ngưỡng (hoặc ngưỡng chưa đặt). */
 export async function xinDuyet(nc: NguCanh, id: string, ghiChu: string | null) {
+  await khoaChungTu(nc.tx, "quotations", id);
   const q = await docBaoGiaDuocSua(nc, id);
   const v = q.currentVersion;
   if (!v || v.status !== "DRAFT") throw new LoiNghiepVu("Chỉ xin duyệt được bản nháp.", 409, "khong-phai-nhap");
@@ -564,6 +628,7 @@ export async function xinDuyet(nc: NguCanh, id: string, ghiChu: string | null) {
 /** BG-05: duyệt hoặc từ chối. Người lập KHÔNG tự duyệt trừ khi có quyền duyệt phạm vi toàn công ty. */
 export async function quyetDuyet(nc: NguCanh, id: string, d: { quyetDinh: "cho-duyet" | "tu-choi"; ghiChu: string | null }) {
   batBuocQuyen(nc.hoSo, "quotation.approve", { objectType: "quotation", objectId: id });
+  await khoaChungTu(nc.tx, "quotations", id);
   const q = await docBaoGia(nc, id);
   const v = q.currentVersion;
   if (!v || v.status !== "PENDING_APPROVAL") throw new LoiNghiepVu("Báo giá này không ở trạng thái chờ duyệt.", 409, "khong-cho-duyet");
@@ -595,6 +660,7 @@ export async function quyetDuyet(nc: NguCanh, id: string, d: { quyetDinh: "cho-d
 
 /** BG-04: gửi khách. Dưới ngưỡng mà chưa duyệt thì bị chặn ở đây. */
 export async function guiKhach(nc: NguCanh, id: string, d: { kenh: string; ghiChu: string | null }) {
+  await khoaChungTu(nc.tx, "quotations", id);
   const q = await docBaoGiaDuocSua(nc, id);
   const v = q.currentVersion;
   if (!v) throw new LoiNghiepVu("Báo giá chưa có phiên bản nào.", 409);
@@ -630,6 +696,7 @@ export async function guiKhach(nc: NguCanh, id: string, d: { kenh: string; ghiCh
 
 /** BG-06: khách trả lời — chấp nhận, từ chối, hoặc đang thương lượng. */
 export async function chotBaoGia(nc: NguCanh, id: string, d: { ketQua: "ACCEPTED" | "REJECTED" | "NEGOTIATING"; ghiChu: string | null }) {
+  await khoaChungTu(nc.tx, "quotations", id);
   const q = await docBaoGiaDuocSua(nc, id);
   const v = q.currentVersion;
   if (!v || !["SENT", "VIEWED", "NEGOTIATING"].includes(v.status)) {
@@ -648,6 +715,7 @@ export async function chotBaoGia(nc: NguCanh, id: string, d: { ketQua: "ACCEPTED
     objectId: id,
     payload: { phienBan: v.versionNo, tongCong: v.total.toString() },
   });
+  if (d.ketQua === "ACCEPTED") await thangCoHoiTheoBaoGia(nc, q.opportunity?.id, { baoGia: q.number });
   return chiTietBaoGia(nc, id);
 }
 

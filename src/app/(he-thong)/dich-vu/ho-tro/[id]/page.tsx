@@ -25,6 +25,7 @@ const NHAN_DIEN_BIEN: Record<string, string> = {
   "phan-hoi-khach": "Đã liên hệ khách",
   "hoan-thanh": "Xử lý xong",
   dong: "Đóng phiếu",
+  "mo-lai": "Mở lại phiếu",
 };
 
 export default async function TrangChiTietPhieu({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: ThamSoTrang }) {
