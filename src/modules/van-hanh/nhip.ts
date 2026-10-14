@@ -14,6 +14,7 @@ export type ClientNhip = Pick<ClientTenant, "$executeRaw" | "systemHeartbeat">;
 
 export const TEN_NHIP_WORKER = "worker";
 export const TEN_NHIP_SAO_LUU = "sao-luu";
+export const TEN_NHIP_THU_PHUC_HOI = "thu-phuc-hoi";
 
 /** Ghi một nhịp: upsert theo tên. `ok = false` giữ nguyên mốc thành công cũ. */
 export async function ghiNhip(client: ClientNhip, ten: string, info: Record<string, unknown> = {}, ok = true): Promise<void> {
@@ -37,6 +38,8 @@ export interface TinhTrangVanHanh {
     ok: boolean | null;
     info: Record<string, unknown>;
   };
+  /** Lần chạy scripts/thu-phuc-hoi.sh gần nhất — null nếu chưa chạy lần nào. */
+  thuPhucHoi: { lanCuoi: Date | null; ok: boolean | null; lanThanhCongCuoi: Date | null; info: Record<string, unknown> };
 }
 
 function laDoiTuong(x: unknown): Record<string, unknown> {
@@ -48,6 +51,7 @@ export async function docTinhTrangVanHanh(client: ClientNhip, bayGio: Date = new
   const ds = await client.systemHeartbeat.findMany({ select: { name: true, lastAt: true, ok: true, lastOkAt: true, info: true } });
   const w = ds.find((d) => d.name === TEN_NHIP_WORKER) ?? null;
   const s = ds.find((d) => d.name === TEN_NHIP_SAO_LUU) ?? null;
+  const p = ds.find((d) => d.name === TEN_NHIP_THU_PHUC_HOI) ?? null;
   return {
     worker: {
       trangThai: danhGiaNhipWorker(w?.lastAt ?? null, bayGio),
@@ -60,6 +64,12 @@ export async function docTinhTrangVanHanh(client: ClientNhip, bayGio: Date = new
       lanThanhCongCuoi: s?.lastOkAt ?? null,
       ok: s?.ok ?? null,
       info: laDoiTuong(s?.info),
+    },
+    thuPhucHoi: {
+      lanCuoi: p?.lastAt ?? null,
+      ok: p?.ok ?? null,
+      lanThanhCongCuoi: p?.lastOkAt ?? null,
+      info: laDoiTuong(p?.info),
     },
   };
 }

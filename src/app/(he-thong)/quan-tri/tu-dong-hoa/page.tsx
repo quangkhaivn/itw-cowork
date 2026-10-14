@@ -68,7 +68,11 @@ export default async function TrangTuDongHoa() {
           </div>
           <div className="ghi-chu">
             {tepSaoLuu ? `${tepSaoLuu} · ` : ""}
-            {raNgoai === "da-chep" ? "đã chép ra ngoài máy" : raNgoai === "chua-cau-hinh" ? "CHƯA chép ra ngoài máy" : raNgoai === "hong" ? "chép ra ngoài HỎNG" : "báo đỏ sau " + GIO_SAO_LUU_TRE + " giờ"}
+            {raNgoai === "da-chep" ? "đã chép ra ngoài máy" : raNgoai === "chua-cau-hinh" ? "CHƯA chép ra ngoài máy" : `báo đỏ sau ${GIO_SAO_LUU_TRE} giờ`}
+            {" · "}
+            {vh.thuPhucHoi.lanThanhCongCuoi
+              ? `thử phục hồi đạt ${dinhDangNgayGio(vh.thuPhucHoi.lanThanhCongCuoi)}`
+              : "chưa thử phục hồi lần nào"}
           </div>
         </div>
       </div>

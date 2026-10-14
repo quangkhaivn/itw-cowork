@@ -1,5 +1,6 @@
 import { voiTenant } from "../src/lib/db";
 import { taoNguCanh, type NguCanh } from "../src/lib/api";
+import { buocChoNguoiDung, type BuocGiaoDich } from "../src/lib/api-nhieu-buoc";
 import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "../src/lib/loi";
 import { taoKhachHang } from "../src/modules/khach-hang/service";
@@ -41,6 +42,18 @@ async function voi<T>(tenantId: string, userId: string, viec: (nc: NguCanh) => P
     const hoSo = await layHoSoQuyen(tx, userId);
     if (!hoSo) throw new Error(`Không đọc được hồ sơ quyền của ${userId}`);
     return viec(taoNguCanh(tx, tenantId, hoSo, "127.0.0.1", "thu-tro-ly"));
+  });
+}
+
+/**
+ * Như route thật từ 0.16.1 (`xuLyApiNhieuBuoc`, QĐ-89): mỗi bước của lượt hỏi là một giao dịch ngắn
+ * riêng, gọi mô hình nằm ngoài giao dịch.
+ */
+function buoc(tenantId: string, userId: string): BuocGiaoDich {
+  return buocChoNguoiDung(tenantId, async (tx) => {
+    const hoSo = await layHoSoQuyen(tx, userId);
+    if (!hoSo) throw new Error(`Không đọc được hồ sơ quyền của ${userId}`);
+    return hoSo;
   });
 }
 
@@ -143,7 +156,7 @@ async function main() {
   await nemLoi(
     "AI-06: hỏi khi chưa cấu hình bị chặn, không sinh câu trả lời",
     "nghiep-vu",
-    () => voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: "Khách nào nợ nhiều nhất?" })),
+    () => hoiDap(buoc(T, nvA), { cauHoi: "Khách nào nợ nhiều nhất?" }),
     "ai-chua-cau-hinh",
   );
   dat("Không tạo hội thoại rỗng khi bị chặn", (await chu.aiConversation.count({ where: { tenantId: T } })) === 0);
@@ -158,7 +171,7 @@ async function main() {
   ]);
   datNhaCungCapThu(kb1);
 
-  const luot1 = await voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: `Tìm giúp tôi khách Của A ${DAU}` }));
+  const luot1 = await hoiDap(buoc(T, nvA), { cauHoi: `Tìm giúp tôi khách Của A ${DAU}` });
   dat("Trả lời lấy từ khối văn bản của mô hình", luot1.traLoi === "Tôi tìm thấy 1 khách khớp.", luot1.traLoi);
   dat("Chạy 2 vòng: một vòng gọi công cụ, một vòng trả lời", luot1.soVong === 2, String(luot1.soVong));
   dat("Ghi lại đúng công cụ đã gọi", luot1.congCuDaGoi.length === 1 && luot1.congCuDaGoi[0].ten === "tim_khach_hang" && luot1.congCuDaGoi[0].ketCuc === "ok", JSON.stringify(luot1.congCuDaGoi));
@@ -189,7 +202,7 @@ async function main() {
     vanBan("Đã tra xong."),
   ]);
   datNhaCungCapThu(kb2);
-  await voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: `Khách Phía B ${DAU} thế nào?` }));
+  await hoiDap(buoc(T, nvA), { cauHoi: `Khách Phía B ${DAU} thế nào?` });
   const ketQuaB = kb2.daGoi[1].tinNhan.find((t) => t.vaiTro === "ket-qua-cong-cu");
   dat(
     "AI-01: nhân viên A hỏi về khách của B thì công cụ trả RỖNG",
@@ -202,7 +215,7 @@ async function main() {
     vanBan("Đã tra xong."),
   ]);
   datNhaCungCapThu(kb3);
-  await voi(T, gd, (nc) => hoiDap(nc, { cauHoi: `Khách Phía B ${DAU} thế nào?` }));
+  await hoiDap(buoc(T, gd), { cauHoi: `Khách Phía B ${DAU} thế nào?` });
   const ketQuaGd = kb3.daGoi[1].tinNhan.find((t) => t.vaiTro === "ket-qua-cong-cu");
   dat("Giám đốc phạm vi toàn công ty thì thấy khách của B", String(ketQuaGd?.noiDung).includes(khachB.ma));
 
@@ -214,7 +227,7 @@ async function main() {
     vanBan("Tôi không tra được công nợ."),
   ]);
   datNhaCungCapThu(kb4);
-  const luot4 = await voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: "Công nợ đang bao nhiêu?" }));
+  const luot4 = await hoiDap(buoc(T, nvA), { cauHoi: "Công nợ đang bao nhiêu?" });
   dat("Gọi công cụ ngoài quyền bị chặn", luot4.congCuDaGoi[0]?.ketCuc === "thieu-quyen", JSON.stringify(luot4.congCuDaGoi));
   const baoThieu = kb4.daGoi[1].tinNhan.find((t) => t.vaiTro === "ket-qua-cong-cu");
   dat("Mô hình nhận câu KHÔNG CÓ QUYỀN kèm lời dặn đừng đoán", /KHÔNG CÓ QUYỀN/.test(String(baoThieu?.noiDung)) && /đừng đoán/i.test(String(baoThieu?.noiDung)));
@@ -235,7 +248,7 @@ async function main() {
     vanBan("Tôi gọi nhầm công cụ."),
   ]);
   datNhaCungCapThu(kb5);
-  const luot5 = await voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: "Thử công cụ lạ" }));
+  const luot5 = await hoiDap(buoc(T, nvA), { cauHoi: "Thử công cụ lạ" });
   dat("Công cụ không có thật bị bắt là tham số sai, không làm sập lượt", luot5.congCuDaGoi[0]?.ketCuc === "tham-so-sai");
   dat("Tham số rỗng bị lược đồ Zod chặn", luot5.congCuDaGoi[1]?.ketCuc === "tham-so-sai", JSON.stringify(luot5.congCuDaGoi));
   dat("Lượt vẫn kết thúc bằng câu trả lời", luot5.traLoi === "Tôi gọi nhầm công cụ.");
@@ -245,7 +258,7 @@ async function main() {
 
   const kbVongLap = taoNhaCungCapKichBan([goiCongCu("tim_khach_hang", { tuKhoa: "a" })]);
   datNhaCungCapThu(kbVongLap);
-  const luotTran = await voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: "Câu hỏi làm mô hình gọi mãi" }));
+  const luotTran = await hoiDap(buoc(T, nvA), { cauHoi: "Câu hỏi làm mô hình gọi mãi" });
   dat("AI-05: chạm trần thì dừng", luotTran.vuotTran === true && luotTran.soVong === 6, String(luotTran.soVong));
   dat("AI-05: nói thật là đã dừng giữa chừng, không ghép câu giả vờ đã xong", /dừng ở đây thay vì đoán/.test(luotTran.traLoi));
 
@@ -263,7 +276,7 @@ async function main() {
     vanBan("Tôi đã đặt đề xuất, bạn bấm Đồng ý nhé."),
   ]);
   datNhaCungCapThu(kbDx);
-  const luotDx = await voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: "Dựng báo giá 2 laptop cho khách Của A" }));
+  const luotDx = await hoiDap(buoc(T, nvA), { cauHoi: "Dựng báo giá 2 laptop cho khách Của A" });
   dat("Công cụ đề xuất chạy được", luotDx.congCuDaGoi[0]?.ketCuc === "ok", JSON.stringify(luotDx.congCuDaGoi));
 
   const ctDx = await voi(T, nvA, (nc) => chiTietHoiThoai(nc, luotDx.hoiThoaiId));
@@ -300,7 +313,7 @@ async function main() {
     vanBan("Đã đặt đề xuất."),
   ]);
   datNhaCungCapThu(kbDx2);
-  const luotDx2 = await voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: "Nhắc tôi gọi lại khách" }));
+  const luotDx2 = await hoiDap(buoc(T, nvA), { cauHoi: "Nhắc tôi gọi lại khách" });
   const ctDx2 = await voi(T, nvA, (nc) => chiTietHoiThoai(nc, luotDx2.hoiThoaiId));
   const dx2 = ctDx2.deXuat[0].id;
   const { LuocDoTuChoiDeXuat } = await import("../src/modules/tro-ly/luoc-do");
@@ -313,7 +326,7 @@ async function main() {
   // Thủ kho không có quyền tạo báo giá → không được mời công cụ đề xuất loại đó.
   const kbKho = taoNhaCungCapKichBan([vanBan("Chào anh.")]);
   datNhaCungCapThu(kbKho);
-  await voi(T, thuKho, (nc) => hoiDap(nc, { cauHoi: "Chào trợ lý" }));
+  await hoiDap(buoc(T, thuKho), { cauHoi: "Chào trợ lý" });
   const congCuKhoDaMoi = kbKho.daGoi[0].congCu;
   const dxKho = congCuKhoDaMoi.find((c) => c.ten === "de_xuat_hanh_dong");
   dat("Thủ kho có quyền tạo việc nên vẫn được mời công cụ đề xuất", Boolean(dxKho));
@@ -337,7 +350,7 @@ async function main() {
   const dong = await voi(T, nvA, (nc) => dongHoiThoai(nc, luot1.hoiThoaiId));
   dat("Đóng được hội thoại", dong.trangThai === "da-dong");
   datNhaCungCapThu(taoNhaCungCapKichBan([vanBan("x")]));
-  await nemLoi("Hội thoại đã đóng thì không hỏi thêm", "nghiep-vu", () => voi(T, nvA, (nc) => hoiDap(nc, { hoiThoaiId: luot1.hoiThoaiId, cauHoi: "Thêm câu nữa" })), "hoi-thoai-da-dong");
+  await nemLoi("Hội thoại đã đóng thì không hỏi thêm", "nghiep-vu", () => hoiDap(buoc(T, nvA), { hoiThoaiId: luot1.hoiThoaiId, cauHoi: "Thêm câu nữa" }), "hoi-thoai-da-dong");
 
   // ------------------------------------------------------------------
   console.log("\n— Lịch sử hỏi đáp là bằng chứng: chỉ ghi thêm —");
@@ -369,7 +382,7 @@ async function main() {
       throw new Error("mất kết nối tới nhà cung cấp");
     },
   });
-  const luotHong = await voi(T, nvA, (nc) => hoiDap(nc, { cauHoi: "Doanh thu tháng này bao nhiêu?" }));
+  const luotHong = await hoiDap(buoc(T, nvA), { cauHoi: "Doanh thu tháng này bao nhiêu?" });
   dat("Gọi mô hình hỏng thì trả lời nói rõ chưa gọi được", /chưa gọi được mô hình/.test(luotHong.traLoi), luotHong.traLoi);
   dat("Câu trả lời KHÔNG chứa con số nào", !/\d/.test(luotHong.traLoi.replace(/[^\d]/g, "")) || !/\d{3,}/.test(luotHong.traLoi));
   const tinHong = await chu.aiMessage.findFirst({ where: { tenantId: T, error: { not: null } }, select: { error: true } });

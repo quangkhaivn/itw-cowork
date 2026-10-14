@@ -140,7 +140,51 @@ echo ""
 echo "=== Xong. Đang chạy bản $PHIEN_BAN (mã bản dựng $MA_BAN_DUNG) ==="
 echo "Xem lại bất cứ lúc nào: Quản trị → Cấu hình, hoặc GET /api/v1/phien-ban sau khi đăng nhập."
 echo ""
+echo "=== Lịch sao lưu (0.16.1) ==="
+# Cài /etc/cron.d/cowork-sao-luu — CHỈ khi chạy bằng root trên máy chủ có cron. Ghi lại mỗi lần triển
+# khai (idempotent): nội dung giống thì không đụng, khác thì thay và in rõ. Sửa lịch ở ĐÂY, đừng sửa
+# tay tệp trong /etc/cron.d (lần triển khai sau sẽ ghi đè).
+THU_MUC_DU_AN="$(pwd)"
+if [ "$(id -u)" -eq 0 ] && [ -d /etc/cron.d ]; then
+  TEP_CRON=/etc/cron.d/cowork-sao-luu
+  CRON_MOI="$(mktemp)"
+  {
+    echo "# Cài bởi $THU_MUC_DU_AN/trien-khai.sh — sửa ở đó, không sửa tay (bị ghi đè lần triển khai sau)."
+    echo "SHELL=/bin/bash"
+    echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    echo "# Sao lưu CSDL + tệp đính kèm + .env mã hóa, chép ra ngoài máy (rclone) — 02:15 mỗi đêm."
+    echo "15 2 * * * root cd $THU_MUC_DU_AN && ./scripts/sao-luu.sh >> /var/log/cowork-sao-luu.log 2>&1"
+    if [ "${THU_PHUC_HOI_HANG_TUAN:-0}" = "1" ]; then
+      echo "# Thử phục hồi bản mới nhất vào CSDL tạm — 03:30 Chủ nhật (THU_PHUC_HOI_HANG_TUAN=1 trong .env)."
+      echo "30 3 * * 0 root cd $THU_MUC_DU_AN && ./scripts/thu-phuc-hoi.sh >> /var/log/cowork-thu-phuc-hoi.log 2>&1"
+    else
+      echo "# Thử phục hồi hằng tuần: đặt THU_PHUC_HOI_HANG_TUAN=1 trong .env rồi chạy lại trien-khai.sh."
+    fi
+  } > "$CRON_MOI"
+  if [ -f "$TEP_CRON" ] && cmp -s "$CRON_MOI" "$TEP_CRON"; then
+    echo "lịch sao lưu đã đúng: $TEP_CRON"
+    rm -f "$CRON_MOI"
+  else
+    install -m 644 -o root -g root "$CRON_MOI" "$TEP_CRON"
+    rm -f "$CRON_MOI"
+    echo "✓ đã cài/cập nhật lịch sao lưu: $TEP_CRON"
+    sed 's/^/    /' "$TEP_CRON"
+  fi
+  # Xoay vòng nhật ký để /var/log không đầy dần.
+  if [ -d /etc/logrotate.d ]; then
+    TEP_XOAY=/etc/logrotate.d/cowork-sao-luu
+    XOAY_MOI="$(mktemp)"
+    printf '%s\n' "/var/log/cowork-sao-luu.log /var/log/cowork-thu-phuc-hoi.log {" "    monthly" "    rotate 12" "    compress" "    missingok" "    notifempty" "}" > "$XOAY_MOI"
+    if [ -f "$TEP_XOAY" ] && cmp -s "$XOAY_MOI" "$TEP_XOAY"; then rm -f "$XOAY_MOI"; else install -m 644 "$XOAY_MOI" "$TEP_XOAY"; rm -f "$XOAY_MOI"; echo "✓ đã cài xoay vòng nhật ký: $TEP_XOAY"; fi
+  fi
+  [ -n "${RCLONE_REMOTE:-}" ] || echo "⚠⚠ RCLONE_REMOTE chưa đặt — bản sao lưu chỉ nằm trên máy chủ này. Xem DEPLOYMENT.md mục Sao lưu."
+  [ -n "${ALERT_WEBHOOK_URL:-}${ALERT_EMAIL:-}" ] || echo "⚠⚠ ALERT_WEBHOOK_URL / ALERT_EMAIL chưa đặt — sao lưu hỏng sẽ không báo cho ai."
+else
+  echo "không chạy bằng root (hoặc không có /etc/cron.d) — bỏ qua cài lịch sao lưu. Trên máy chủ thật hãy chạy bằng root."
+fi
+
+echo ""
 echo "=== Kiểm tra: ==="
 docker compose ps
 echo ""
-echo "Sức khỏe: curl -s http://127.0.0.1:8080/khoe"
+echo "Sức khỏe: curl -s http://127.0.0.1:8080/khoe   (\"worker\":\"ok\" sau khoảng 1 phút)"

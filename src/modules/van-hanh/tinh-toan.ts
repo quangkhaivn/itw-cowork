@@ -92,6 +92,7 @@ export interface DauVaoCanhBao {
   worker: { trangThai: TrangThaiNhip; lanCuoi: Date | null };
   saoLuu: { trangThai: TrangThaiSaoLuu; lanCuoi: Date | null; lanThanhCongCuoi: Date | null; info: Record<string, unknown> };
   quet: { hongLienTiep: number; loiCuoi: string | null };
+  thuPhucHoi?: { lanCuoi: Date | null; ok: boolean | null; info: Record<string, unknown> };
 }
 
 /**
@@ -121,6 +122,16 @@ export function cacCanhBaoVanHanh(d: DauVaoCanhBao, dinhDang: (x: Date) => strin
     );
   } else if (d.saoLuu.trangThai === "hong") {
     ra.push(`Lần sao lưu gần nhất (${dinhDang(d.saoLuu.lanCuoi!)}) hỏng.${loiSaoLuu} Bản tốt gần nhất: ${dinhDang(d.saoLuu.lanThanhCongCuoi!)}.`);
+  }
+  if (d.saoLuu.trangThai !== "chua-co") {
+    const thieu: string[] = [];
+    if (d.saoLuu.info.raNgoai === "chua-cau-hinh") thieu.push("chưa chép ra ngoài máy chủ (RCLONE_REMOTE) — mất máy chủ là mất cả bản sao lưu");
+    if (d.saoLuu.info.env === "bo-qua") thieu.push("chưa sao lưu .env (thiếu mật khẩu sao lưu) — mất APP_ENC_KEY là mất mật khẩu SMTP và 2 lớp đã lưu");
+    if (thieu.length) ra.push(`Sao lưu chưa đủ an toàn: ${thieu.join("; ")}. Xem DEPLOYMENT.md mục Sao lưu.`);
+  }
+  if (d.thuPhucHoi?.ok === false) {
+    const loi = typeof d.thuPhucHoi.info.loi === "string" ? ` ${d.thuPhucHoi.info.loi}.` : "";
+    ra.push(`Lần thử phục hồi gần nhất${d.thuPhucHoi.lanCuoi ? ` (${dinhDang(d.thuPhucHoi.lanCuoi)})` : ""} HỎNG — bản sao lưu có thể không dùng được.${loi}`);
   }
   return ra;
 }
