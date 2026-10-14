@@ -224,6 +224,9 @@ export const SU_KIEN = {
   TWO_FACTOR_FAILED: "TWO_FACTOR_FAILED",
   TWO_FACTOR_POLICY_CHANGED: "TWO_FACTOR_POLICY_CHANGED",
   RECOVERY_CODE_USED: "RECOVERY_CODE_USED",
+
+  // --- Bổ sung 0.16.1 (Toàn vẹn chuỗi bán hàng) ---
+  SERVICE_TICKET_REOPENED: "SERVICE_TICKET_REOPENED",
 } as const;
 
 export type MaSuKien = (typeof SU_KIEN)[keyof typeof SU_KIEN];
