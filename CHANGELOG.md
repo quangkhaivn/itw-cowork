@@ -2,7 +2,7 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.16.1 (chưa phát hành)
+## 0.16.1 — 19/10/2026 — Toàn vẹn dữ liệu: khóa chứng từ, lan truyền trạng thái, vận hành bền vững
 
 ### Toàn vẹn dữ liệu — tài chính và mua hàng
 
