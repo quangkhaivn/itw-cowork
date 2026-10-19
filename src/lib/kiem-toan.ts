@@ -48,7 +48,12 @@ export type HanhDong =
   | "tat-2-lop"
   | "dat-lai-2-lop"
   | "xac-thuc-2-lop-that-bai"
-  | "dung-ma-khoi-phuc";
+  | "dung-ma-khoi-phuc"
+  // 0.17.0 — danh sách kiểm tra của công việc
+  | "them-muc-kiem-tra"
+  | "tich-muc-kiem-tra"
+  | "bo-tich-muc-kiem-tra"
+  | "go-muc-kiem-tra";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

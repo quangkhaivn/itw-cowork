@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import DauTrang from "@/components/ui/DauTrang";
+import { NHAN_MUC_DO_HO_SO } from "@/modules/khach-hang/ho-so";
 import TrongRong from "@/components/ui/TrongRong";
 import BieuTuong from "@/components/ui/BieuTuong";
 import GhiTuongTac from "@/components/crm/GhiTuongTac";
@@ -18,6 +19,7 @@ import {
   NHAN_TRANG_THAI_VIEC,
   NHAN_TUONG_TAC,
   NHAN_UU_TIEN,
+  NHAN_DANH_GIA_KET_QUA,
 } from "@/modules/crm/hang-so";
 import { khach360, LOAI_DU_LIEU_KHACH, quyenGiaoDienKhach } from "@/modules/khach-hang/service";
 import FormKhachHang from "../FormKhachHang";
@@ -68,7 +70,7 @@ export default async function TrangKhach360({ params, searchParams }: { params: 
     }
   });
   if (!duLieu) notFound();
-  const { khach, lienHe, coHoi, tuongTac, viec, dongThoiGian, thongKe, quyen, quyenUi, tenDuLieu, nguoiViec, choSua, danhMucHT, lichSuHT, nhomKhach, tatCaNhom, diem } = duLieu;
+  const { khach, lienHe, coHoi, tuongTac, viec, dongThoiGian, thongKe, hoSo, quyen, quyenUi, tenDuLieu, nguoiViec, choSua, danhMucHT, lichSuHT, nhomKhach, tatCaNhom, diem } = duLieu;
   const daGop = khach.trangThai === "da-gop";
   const suaDuoc = quyenUi.sua && !daGop;
   const tab: The = THE.includes(tabYeuCau) && (tabYeuCau !== "sua" || quyenUi.sua) ? tabYeuCau : "tong-quan";
@@ -208,10 +210,48 @@ export default async function TrangKhach360({ params, searchParams }: { params: 
             </div>
           </div>
 
+          {hoSo.mucDo !== "day-du" && (
+            <section className="the">
+              <div className="dau">
+                <h2>Độ đầy đủ hồ sơ: {hoSo.diem}%</h2>
+                <span className={`huy-hieu ${hoSo.mucDo === "thieu-bat-buoc" ? "canh-bao" : ""}`}>{NHAN_MUC_DO_HO_SO[hoSo.mucDo]}</span>
+              </div>
+              <div className="than">
+                {hoSo.thieuBatBuoc.length > 0 && (
+                  <p style={{ marginTop: 0 }}>
+                    <strong>Thiếu bắt buộc:</strong> {hoSo.thieuBatBuoc.join(", ")}. Hồ sơ thiếu thì báo giá, hóa đơn và chăm sóc sau bán dễ sai người, sai thông tin.
+                  </p>
+                )}
+                {hoSo.thieuNenCo.length > 0 && (
+                  <p className="phu" style={{ marginTop: 0 }}>
+                    Nên bổ sung: {hoSo.thieuNenCo.join(", ")}.
+                  </p>
+                )}
+                <ul className="ds-van-de phu nho" style={{ marginBottom: 0 }}>
+                  {hoSo.truong
+                    .filter((t) => !t.co)
+                    .map((t) => (
+                      <li key={t.ma}>
+                        {t.nhan}: {t.goiY}
+                      </li>
+                    ))}
+                </ul>
+                {suaDuoc && (
+                  <p style={{ marginBottom: 0 }}>
+                    <Link className="nut nho" href={`/crm/khach-hang/${khach.id}?tab=sua`}>
+                      Bổ sung hồ sơ
+                    </Link>
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
           <div className="luoi-the">
             <section className="the">
               <div className="dau">
                 <h2>Thông tin</h2>
+                {hoSo.mucDo === "day-du" && <span className="huy-hieu tot">Hồ sơ đầy đủ</span>}
               </div>
               <dl className="bang-thong-tin">
                 <dt>Loại khách</dt>
@@ -469,10 +509,15 @@ export default async function TrangKhach360({ params, searchParams }: { params: 
                 {viec.map((v) => (
                   <tr key={v.id} className={v.trangThai === "xong" || v.trangThai === "huy" ? "mo" : undefined}>
                     <td>
-                      <Link href={`/cong-viec?id=${v.id}&cheDo=tat-ca&trangThai=tat-ca`}>{v.tieuDe}</Link>
+                      <Link href={`/cong-viec/${v.id}`}>{v.tieuDe}</Link>
                       <div className="dong-phu">
                         {v.nguoi} · {NHAN_UU_TIEN[v.uuTien]}
                       </div>
+                      {v.ketQua && (
+                        <div className="dong-phu">
+                          <strong>Kết quả{v.danhGia ? ` (${NHAN_DANH_GIA_KET_QUA[v.danhGia] ?? v.danhGia})` : ""}:</strong> {v.ketQua}
+                        </div>
+                      )}
                     </td>
                     <td className="so nho">{v.han ? dinhDangNgayGio(v.han) : "Không hạn"}</td>
                     <td>

@@ -82,6 +82,8 @@ export const SU_KIEN = {
   OPPORTUNITY_REOPENED: "OPPORTUNITY_REOPENED",
   TASK_UPDATED: "TASK_UPDATED",
   TASK_COMPLETED: "TASK_COMPLETED",
+  /** 0.17.0 — giao việc cho người khác hoặc chuyển người phụ trách (CV-08). */
+  TASK_ASSIGNED: "TASK_ASSIGNED",
 
   // --- Bổ sung 20/09 (Phase 3 — sản phẩm và bảng giá) ---
   PRODUCT_CREATED: "PRODUCT_CREATED",

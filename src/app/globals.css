@@ -550,6 +550,22 @@ ol.thanh-giai-doan li[data-trang-thai="hien-tai"][data-giai-doan="LOST"] button 
 
 .o-tim span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* 0.17.0 — Công việc thông suốt: danh sách kiểm tra, đánh giá kết quả */
+.ds-kiem-tra { list-style: none; margin: 0; padding: 0; }
+.ds-kiem-tra li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 16px; border-top: 1px solid var(--vien); }
+.ds-kiem-tra li:first-child { border-top: 0; }
+.ds-kiem-tra input[type="checkbox"] { width: 17px; height: 17px; margin-top: 2px; flex: none; cursor: pointer; }
+.ds-kiem-tra .nhan-muc { flex: 1 1 auto; min-width: 0; }
+.ds-kiem-tra li.da-tich .nhan-muc > span:first-child { text-decoration: line-through; color: var(--chu-mo); }
+.them-muc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--vien); }
+.them-muc input[type="text"] { flex: 1 1 240px; }
+.chon-danh-gia { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.chon-danh-gia label { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--vien); border-radius: var(--bo-goc); cursor: pointer; font-weight: 500; }
+.chon-danh-gia label:has(input:checked) { border-color: var(--chinh); background: var(--chinh-nhat); }
+.chon-danh-gia input { margin-top: 3px; }
+.ds-van-de { margin: 6px 0 0; padding-left: 18px; }
+@media (max-width: 560px) { .chon-danh-gia { grid-template-columns: 1fr; } }
+
 @media (max-width: 1100px) {
   .luoi-ben-phai { grid-template-columns: 1fr; }
   /* Màn hẹp: cột thao tác (xử lý lead, công việc) lên trước form dài. */
@@ -759,6 +775,8 @@ table.bang-in .mo-ta-in { color: #555; font-size: 12px; margin-top: 2px; white-s
 
 /* Thẻ chỉ số trong lưới: luật chung `.the + .the` đẩy thẻ thứ hai trở đi xuống 16px, làm lệch hàng. */
 .luoi-chi-so > .the + .the { margin-top: 0; }
+/* Cùng lỗi trong lưới hai cột `.luoi-the` (Customer 360, chi tiết công việc): khe đã do `gap` lo. */
+.luoi-the > .the + .the { margin-top: 0; }
 
 .cham-mau { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--mau, var(--chu-nhat)); flex-shrink: 0; }
 .nhan-mau { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--vien); white-space: nowrap; }

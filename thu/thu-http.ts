@@ -312,8 +312,28 @@ async function main() {
 
   const taoViec = await goi("/api/v1/cong-viec", { phuongThuc: "POST", cookie: cookieQT, than: { tieuDe: "Gọi lại khách HTTP", khachHangId: idKh, han: "2020-01-01T09:00" } });
   dat("Tạo công việc gắn khách", taoViec.status === 200 && taoViec.json.quaHan === true);
-  const xongViec = await goi(`/api/v1/cong-viec/${taoViec.json.id}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { trangThai: "xong" } });
-  dat("Hoàn thành công việc", xongViec.status === 200 && Boolean(xongViec.json.xongLuc));
+  // 0.17.0 — CV-05/CV-06: thiếu kết quả thì API trả 422 kèm danh sách vấn đề; đủ thì xong.
+  const idViec = taoViec.json.id;
+  const cvXongThieu = await goi(`/api/v1/cong-viec/${idViec}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { trangThai: "xong" } });
+  dat("Hoàn thành thiếu kết quả: 422 + mã chua-du-dieu-kien-xong", cvXongThieu.status === 422 && cvXongThieu.json.ma === "chua-du-dieu-kien-xong" && Array.isArray((cvXongThieu.json.chiTiet as { loi?: unknown } | undefined)?.loi));
+  const cvXemTruoc = await goi(`/api/v1/cong-viec/${idViec}/kiem-tra?ketQua=${encodeURIComponent("Đã gọi, khách hẹn thứ Hai.")}&danhGia=dat`, { cookie: cookieQT });
+  dat("Xem trước kiểm tra: đủ điều kiện", cvXemTruoc.status === 200 && cvXemTruoc.json.duocXong === true);
+  const cvThemMuc = await goi(`/api/v1/cong-viec/${idViec}/muc-kiem-tra`, { phuongThuc: "POST", cookie: cookieQT, than: { nhan: "Ghi số điện thoại người nhận", batBuoc: true } });
+  dat("Thêm mục kiểm tra qua API", cvThemMuc.status === 200 && typeof cvThemMuc.json.id === "string");
+  const cvChuaTich = await goi(`/api/v1/cong-viec/${idViec}/kiem-tra?ketQua=${encodeURIComponent("Đã gọi, khách hẹn thứ Hai.")}&danhGia=dat`, { cookie: cookieQT });
+  dat("Mục bắt buộc chưa tích thì xem trước báo chưa xong được", cvChuaTich.json.duocXong === false);
+  const tich = await goi(`/api/v1/cong-viec/muc-kiem-tra/${cvThemMuc.json.id}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { daTich: true } });
+  dat("Tích mục kiểm tra qua API", tich.status === 200 && tich.json.daTich === true);
+  const cvMucSai = await goi(`/api/v1/cong-viec/muc-kiem-tra/khong-phai-uuid`, { phuongThuc: "PATCH", cookie: cookieQT, than: { daTich: true } });
+  dat("Mã mục không phải uuid: 404", cvMucSai.status === 404);
+  const xongViec = await goi(`/api/v1/cong-viec/${idViec}`, { phuongThuc: "PATCH", cookie: cookieQT, than: { trangThai: "xong", ketQua: "Đã gọi, khách hẹn thứ Hai.", danhGia: "dat" } });
+  dat("Hoàn thành công việc", xongViec.status === 200 && Boolean(xongViec.json.xongLuc) && xongViec.json.ketQua === "Đã gọi, khách hẹn thứ Hai.");
+  const cvChiTiet = await goi(`/api/v1/cong-viec/${idViec}`, { cookie: cookieQT });
+  dat("Chi tiết công việc qua API", cvChiTiet.status === 200 && (cvChiTiet.json.viec as { danhGia?: string }).danhGia === "dat" && (cvChiTiet.json.mucKiemTra as unknown[]).length === 1);
+  const cvTrang = await goi(`/cong-viec/${idViec}`, { cookie: cookieQT });
+  dat("Trang chi tiết công việc mở được", cvTrang.status === 200 && cvTrang.text.includes("Gọi lại khách HTTP") && cvTrang.text.includes("Kết quả"));
+  const cvNvXem = await goi(`/api/v1/cong-viec/${idViec}`, { cookie: dnNv.cookie });
+  dat("Nhân viên không xem được việc của quản trị qua API (404)", cvNvXem.status === 404);
 
   // Phạm vi: nhân viên "own" không thấy khách của quản trị, kể cả gõ thẳng đường dẫn.
   const nvXemKh = await goi(`/api/v1/khach-hang/${idKh}`, { cookie: dnNv.cookie });

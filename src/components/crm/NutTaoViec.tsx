@@ -30,7 +30,7 @@ export default function NutTaoViec({
   const router = useRouter();
   const hop = useRef<HTMLDialogElement>(null);
   const { goi, dangGui, loi, datLoi } = useGoiApi();
-  const rong = { tieuDe: "", moTa: "", uuTien: "trung-binh", han: "", nguoiPhuTrachId: toiId };
+  const rong = { tieuDe: "", moTa: "", uuTien: "trung-binh", han: "", nguoiPhuTrachId: toiId, kiemTra: "" };
   const [gt, datGt] = useState(rong);
 
   useEffect(() => {
@@ -39,7 +39,15 @@ export default function NutTaoViec({
 
   async function gui(e: React.FormEvent) {
     e.preventDefault();
-    const kq = await goi("/api/v1/cong-viec", "POST", { ...gt, ...ganKem });
+    // 0.17.0 (CV-07): mỗi dòng là một mục kiểm tra bắt buộc; dòng bắt đầu bằng "?" là không bắt buộc.
+    const mucKiemTra = gt.kiemTra
+      .split("\n")
+      .map((d) => d.trim())
+      .filter((d) => d.replace(/^\?\s*/, "").length >= 2)
+      .map((d) => (d.startsWith("?") ? { nhan: d.replace(/^\?\s*/, ""), batBuoc: false } : { nhan: d, batBuoc: true }));
+    const { kiemTra: _bo, ...duLieu } = gt;
+    void _bo;
+    const kq = await goi("/api/v1/cong-viec", "POST", { ...duLieu, ...ganKem, mucKiemTra });
     if (kq) {
       hop.current?.close();
       datGt(rong);
@@ -102,6 +110,19 @@ export default function NutTaoViec({
               <label htmlFor="cv-mota">Ghi chú</label>
               <textarea id="cv-mota" value={gt.moTa} onChange={(e) => datGt({ ...gt, moTa: e.target.value })} rows={3} />
             </div>
+            <div className="truong">
+              <label htmlFor="cv-kiemtra">Kiểm tra trước khi xong</label>
+              <textarea
+                id="cv-kiemtra"
+                value={gt.kiemTra}
+                onChange={(e) => datGt({ ...gt, kiemTra: e.target.value })}
+                rows={3}
+                placeholder={"Mỗi dòng một mục, ví dụ:\nChụp ảnh hiện trường\nKhách ký biên bản nghiệm thu\n? Gửi hướng dẫn sử dụng (dấu ? = không bắt buộc)"}
+              />
+              <span className="goi-y">Mục bắt buộc chưa tích thì người làm không đánh dấu xong được. Để trống nếu không cần.</span>
+              {loiCua(loi, "mucKiemTra") && <span className="loi-truong">{loiCua(loi, "mucKiemTra")}</span>}
+            </div>
+            {gt.nguoiPhuTrachId !== toiId && <p className="goi-y" style={{ margin: 0 }}>Người được giao nhận thông báo ngay; khi họ xong, bạn nhận thông báo kèm kết quả.</p>}
           </div>
           <div className="chan-form">
             <button type="button" className="nut" onClick={() => hop.current?.close()}>

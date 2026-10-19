@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync } from "node:fs";
+import { copyFileSync, mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "../src/generated/prisma/client";
@@ -598,6 +598,12 @@ async function main() {
 
   // ------------------------------------------------------------------
   await phan("Script scripts/nhap-tu-itw-crm.ts", async () => {
+    // CSDL mẫu ITW CRM không nằm trong kho mã (dữ liệu khách thật đã ẩn danh). Máy không có
+    // tệp thì BỎ QUA có báo rõ — không tính là hỏng, cũng không tính là đạt.
+    if (!existsSync(ITW_DB)) {
+      console.log(`  ⚠ BỎ QUA phần này: không có CSDL mẫu ITW CRM tại ${ITW_DB}. Đặt QA_ITW_DB=<đường dẫn itwcrm.db> để chạy.`);
+      return;
+    }
     const G = await dungTenant("qa-khn-g", "QA Nhập ITW G");
     await G.nguoi("gd-g", "ceo");
     const email = `gd-g.qa-khn-g.${DAU}@thu.test`;

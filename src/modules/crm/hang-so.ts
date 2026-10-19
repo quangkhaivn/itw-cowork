@@ -96,6 +96,15 @@ export const NHAN_TRANG_THAI_VIEC: Record<string, string> = {
   xong: "Xong",
   huy: "Đã hủy",
 };
+/** 0.17.0 — đánh giá kết quả công việc (CV-04). */
+export const DANH_GIA_KET_QUA = ["dat", "mot-phan", "khong-dat", "can-theo-doi"] as const;
+export type DanhGiaKetQua = (typeof DANH_GIA_KET_QUA)[number];
+export const NHAN_DANH_GIA_KET_QUA: Record<string, string> = {
+  dat: "Đạt",
+  "mot-phan": "Đạt một phần",
+  "khong-dat": "Không đạt",
+  "can-theo-doi": "Cần làm tiếp",
+};
 export const UU_TIEN = ["thap", "trung-binh", "cao", "khan"] as const;
 export type UuTien = (typeof UU_TIEN)[number];
 export const NHAN_UU_TIEN: Record<string, string> = {

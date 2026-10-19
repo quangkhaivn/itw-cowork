@@ -6,7 +6,8 @@ import { SU_KIEN } from "@/lib/su-kien";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { chuanHoaDienThoai, chuanHoaEmail, chuanHoaMaSoThue, chuanHoaTen } from "@/modules/crm/chuan-hoa";
 import { homNayVN, kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, ngayVeDate, tienVeChuoi, trongPhamVi } from "@/modules/crm/chung";
-import { CO_HOI_DANG_MO, NHAN_GIAI_DOAN, NHAN_TUONG_TAC, tinhPipeline } from "@/modules/crm/hang-so";
+import { CO_HOI_DANG_MO, NHAN_DANH_GIA_KET_QUA, NHAN_GIAI_DOAN, NHAN_TUONG_TAC, tinhPipeline } from "@/modules/crm/hang-so";
+import { danhGiaHoSoKhach } from "./ho-so";
 import type { BoLocKhachHang, DuLieuLienHe, DuLieuSuaKhachHang, DuLieuTaoKhachHang } from "./luoc-do";
 import { LuocDoSuaLienHe } from "./luoc-do";
 import type { z } from "zod";
@@ -718,6 +719,7 @@ export async function khach360(nc: NguCanh, id: string) {
           where: { customerId: id },
           select: {
             id: true, title: true, status: true, priority: true, dueAt: true, completedAt: true, createdAt: true,
+            result: true, outcome: true,
             owner: { select: { fullName: true } },
           },
           orderBy: [{ status: "asc" }, { dueAt: "asc" }],
@@ -762,8 +764,19 @@ export async function khach360(nc: NguCanh, id: string) {
       return ds;
     }),
     ...viec.flatMap((v) => {
-      const ds: MucDongThoiGian[] = [{ thoiDiem: v.createdAt, loai: "viec", tieuDe: `Giao việc: ${v.title}`, nguoi: v.owner.fullName, href: `/cong-viec?id=${v.id}` }];
-      if (v.completedAt) ds.push({ thoiDiem: v.completedAt, loai: "viec-xong", tieuDe: `Hoàn thành: ${v.title}`, nguoi: v.owner.fullName, href: `/cong-viec?id=${v.id}` });
+      const ds: MucDongThoiGian[] = [{ thoiDiem: v.createdAt, loai: "viec", tieuDe: `Giao việc: ${v.title}`, nguoi: v.owner.fullName, href: `/cong-viec/${v.id}` }];
+      // 0.17.0 (CV-04): kết quả công việc hiện ngay trên dòng thời gian của khách — người sau
+      // mở hồ sơ khách là biết lần trước đã làm gì, khách nói gì.
+      if (v.completedAt) {
+        ds.push({
+          thoiDiem: v.completedAt,
+          loai: "viec-xong",
+          tieuDe: `Hoàn thành${v.outcome ? ` (${NHAN_DANH_GIA_KET_QUA[v.outcome] ?? v.outcome})` : ""}: ${v.title}`,
+          moTa: v.result,
+          nguoi: v.owner.fullName,
+          href: `/cong-viec/${v.id}`,
+        });
+      }
       return ds;
     }),
   ].sort((a, b) => b.thoiDiem.getTime() - a.thoiDiem.getTime());
@@ -804,8 +817,22 @@ export async function khach360(nc: NguCanh, id: string) {
       uuTien: v.priority,
       han: v.dueAt,
       nguoi: v.owner.fullName,
+      ketQua: v.result,
+      danhGia: v.outcome,
     })),
     dongThoiGian: dongThoiGian.slice(0, 100),
+    // 0.17.0 (HS-01): độ đầy đủ hồ sơ, tính lúc đọc từ chính các trường — không lưu điểm.
+    hoSo: danhGiaHoSoKhach({
+      loaiKhach: khach.loaiKhach,
+      maSoThue: khach.maSoThue,
+      dienThoai: khach.dienThoai,
+      email: khach.email,
+      diaChi: khach.diaChi,
+      tinhThanh: khach.tinhThanh,
+      nganh: khach.nganh,
+      nguon: khach.nguon,
+      soLienHe: lienHe.filter((l) => l.status === "hoat-dong").length,
+    }),
     thongKe: {
       soCoHoiMo: pipeline.soLuong,
       giaTriPipeline: pipeline.tong,
