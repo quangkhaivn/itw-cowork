@@ -1,6 +1,6 @@
 # Triển khai — TGTH Business Cowork
 
-Cập nhật: 27/09/2026.
+Cập nhật: 14/10/2026 (0.16.1 — vận hành bền vững: sao lưu ra ngoài máy, thử phục hồi, nhịp worker, giới hạn tốc độ ở nginx).
 
 ## Môi trường
 
@@ -84,34 +84,104 @@ Script chạy lại nhiều lần được. Hỏng ở bước nào thì sửa n
 
 ## Sao lưu và phục hồi
 
-**Sao lưu:** `./scripts/sao-luu.sh` → `/root/cowork-sao-luu/cowork-<UTC>.dump` (pg_dump định dạng custom, quyền 600, giữ 14 ngày). Script đọc lại mục lục tệp sau khi ghi; đọc không được thì báo hỏng.
+Từ 0.16.1 (QĐ-88). Script: `scripts/sao-luu.sh` (sao lưu), `scripts/thu-phuc-hoi.sh` (thử phục hồi vào CSDL tạm), hàm chung `scripts/van-hanh-chung.sh`.
 
-Chạy hằng ngày bằng cron:
+### Mỗi lần sao lưu sinh ra gì
+
+Cùng một mốc thời gian UTC `<LUC>` (ví dụ `20261015T021500Z`), trong `$THU_MUC_SAO_LUU` (mặc định `/root/cowork-sao-luu`, quyền 700, tệp 600):
+
+| Tệp | Nội dung | Kiểm sau khi ghi |
+|---|---|---|
+| `cowork-<LUC>.dump` | `pg_dump --format=custom --no-owner` | `pg_restore --list` đọc hết, thấy dữ liệu `users`, `audit_logs` |
+| `cowork-dinh-kem-<LUC>.tar.gz` | thư mục tệp đính kèm `$THU_MUC_DINH_KEM` (mặc định `data/dinh-kem`, chính là thư mục gắn vào container `app`). **Luôn có**, kể cả khi rỗng | `tar -tzf` liệt kê được |
+| `cowork-env-<LUC>.env.gpg` | `.env` mã hóa đối xứng AES-256 bằng gpg (chứa `APP_ENC_KEY`, `AUTH_SECRET`, mật khẩu CSDL). Chỉ có khi đã đặt mật khẩu sao lưu | giải mã thử, so khớp từng byte với `.env` |
+
+Kết quả ghi vào bảng `system_heartbeats` (dòng `sao-luu`, bằng vai chủ sở hữu — ứng dụng không ghi được dòng này) và `$THU_MUC_SAO_LUU/trang-thai.json`. Màn hình **Quản trị → Tự động hóa** hiện lần sao lưu thành công gần nhất và **báo đỏ** khi quá 26 giờ, khi lần gần nhất hỏng, khi chưa chép ra ngoài máy hoặc chưa sao lưu `.env`.
+
+Hỏng ở bất kỳ bước nào: script thoát mã khác 0, ghi trạng thái hỏng, **gửi báo động** (xem dưới). Hai lần sao lưu không chạy chồng nhau (`flock`). Giữ trên máy `GIU_NGAY` ngày (mặc định 14), ngoài máy `GIU_NGAY_NGOAI` ngày (mặc định 30).
+
+### Lịch chạy
+
+`./trien-khai.sh` (chạy bằng root) tự cài `/etc/cron.d/cowork-sao-luu` — ghi lại mỗi lần triển khai, giống thì không đụng:
 ```
-# /etc/cron.d/cowork-sao-luu
 15 2 * * * root cd /root/cowork-itw && ./scripts/sao-luu.sh >> /var/log/cowork-sao-luu.log 2>&1
+# chỉ khi .env có THU_PHUC_HOI_HANG_TUAN=1:
+30 3 * * 0 root cd /root/cowork-itw && ./scripts/thu-phuc-hoi.sh >> /var/log/cowork-thu-phuc-hoi.log 2>&1
 ```
+kèm `/etc/logrotate.d/cowork-sao-luu`. Muốn đổi giờ thì sửa trong `trien-khai.sh`, **không** sửa tay tệp cron (bị ghi đè). `trien-khai.sh` vẫn tự sao lưu trước khi migrate như cũ.
 
-> **Giới hạn hiện tại:** bản sao lưu nằm trên cùng máy chủ. Mất máy chủ (hỏng ổ, nhà cung cấp sự cố, bị xâm nhập) là mất cả dữ liệu lẫn bản sao lưu. Cần Giám đốc chọn nơi cất ngoài máy (Google Drive của công ty, một VPS khác, hoặc kho đối tượng S3) rồi đặt biến `CHEP_RA_NGOAI` — việc `VD-068`.
+### Thiết lập một lần trên máy chủ thật (Giám đốc / người vận hành)
 
-**Phục hồi** (thử định kỳ, ít nhất mỗi quý, trên một CSDL tạm — không phục hồi đè lên CSDL thật khi chưa chắc):
+**1. Mật khẩu sao lưu** (mã hóa bản `.env`):
 ```bash
-cd /root/cowork-itw && set -a && . ./.env && set +a
-# 1. Phục hồi thử vào CSDL tạm để kiểm tra
-docker compose exec -T db createdb -U "$POSTGRES_USER" cowork_khoi_phuc_thu
-docker compose exec -T db pg_restore -U "$POSTGRES_USER" -d cowork_khoi_phuc_thu --no-owner < /root/cowork-sao-luu/<tệp>.dump
-docker compose exec -T db psql -U "$POSTGRES_USER" -d cowork_khoi_phuc_thu -c "select count(*) from users; select max(created_at) from audit_logs;"
-docker compose exec -T db dropdb -U "$POSTGRES_USER" cowork_khoi_phuc_thu
-
-# 2. Phục hồi thật (sự cố): dừng app + worker, phục hồi, chạy lại rls.sql, khởi động
-docker compose stop app worker
-docker compose exec -T db psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE $POSTGRES_DB WITH (FORCE)"
-docker compose exec -T db createdb -U "$POSTGRES_USER" "$POSTGRES_DB"
-docker compose exec -T db pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner < /root/cowork-sao-luu/<tệp>.dump
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" < prisma/rls.sql
-docker compose up -d
+openssl rand -base64 32 > /root/.cowork-sao-luu-mat-khau
+chmod 600 /root/.cowork-sao-luu-mat-khau
+cat /root/.cowork-sao-luu-mat-khau   # chép vào trình quản lý mật khẩu của công ty NGAY BÂY GIỜ
 ```
-`--no-owner` làm mọi bảng thuộc vai đang phục hồi (chủ sở hữu) — đúng mô hình, vì ứng dụng dùng `cowork_app`. Chạy lại `rls.sql` để cấp lại quyền cho `cowork_app`.
+Script đọc `BACKUP_PASSPHRASE` (nếu đặt) hoặc tệp `BACKUP_PASSPHRASE_FILE` (mặc định `/root/.cowork-sao-luu-mat-khau`). **Không** đặt mật khẩu này trong `.env`: bản `.env` mã hóa bằng chính mật khẩu nằm trong nó thì mất máy chủ là không mở được. Lưu ít nhất hai nơi ngoài máy chủ (trình quản lý mật khẩu + giấy niêm phong trong két). Mất mật khẩu = các bản `.env.gpg` vô dụng (bản CSDL và tệp đính kèm vẫn dùng được). Máy chủ cần `gpg` (`dnf install gnupg2`, AlmaLinux có sẵn).
+
+**2. Chép ra ngoài máy bằng rclone** — bắt buộc trên thực tế: không có bước này, mất máy chủ là mất cả bản sao lưu.
+```bash
+dnf install -y rclone            # hoặc: curl https://rclone.org/install.sh | bash
+rclone config                    # tạo remote, ví dụ "gdrive" (Google Drive của công ty) hoặc "b2" (Backblaze B2)
+```
+- **Google Drive**: chọn `drive`, phạm vi `drive.file`; máy chủ không có trình duyệt thì chạy `rclone authorize "drive"` trên máy trạm rồi dán mã vào. Nên dùng một tài khoản Google riêng của công ty cho sao lưu, không dùng tài khoản cá nhân.
+- **Backblaze B2 / S3**: tạo application key **chỉ có quyền trên một bucket**; bật Object Lock / lifecycle nếu muốn chống xóa.
+- **Bắt buộc bọc thêm một remote `crypt`** trên remote vừa tạo (`rclone config` → `crypt`, trỏ tới `gdrive:cowork-sao-luu`), mật khẩu crypt lưu cùng chỗ mật khẩu sao lưu ở bước 1. Bản CSDL chứa dữ liệu khách hàng (Nghị định 13/2023) — không đưa lên dịch vụ ngoài ở dạng đọc được.
+- Thêm vào `.env`: `RCLONE_REMOTE=cowork-crypt:` (tên remote crypt), tùy chọn `GIU_NGAY_NGOAI=60`.
+- Thử ngay: `./scripts/sao-luu.sh` phải in `✓ đã chép ra ngoài máy và kiểm kích thước`; rồi `THU_PHUC_HOI_TU_NGOAI=1 ./scripts/thu-phuc-hoi.sh` (tải bộ mới nhất từ ngoài về và phục hồi thử).
+- **Giữ bản sao `~/.config/rclone/rclone.conf`** cùng chỗ mật khẩu: máy chủ mới cần nó (hoặc cấu hình lại) để tải bản sao lưu về.
+- Đã đặt `RCLONE_REMOTE` mà máy chủ không có `rclone` → sao lưu báo **hỏng** (có chủ đích). Biến cũ `CHEP_RA_NGOAI` không còn dùng.
+
+**3. Kênh báo động** — thêm vào `.env` ít nhất một:
+- `ALERT_WEBHOOK_URL=https://…` — script POST JSON `{"text": "...", "content": "..."}`: hợp với Slack / Google Chat / Discord incoming webhook (Telegram cần một dịch vụ chuyển tiếp).
+- `ALERT_EMAIL=giamdoc@…` — gửi qua `sendmail` của máy chủ (cần cài `postfix` hoặc `msmtp-mta` có cấu hình gửi ra ngoài).
+
+Thử: `ALERT_WEBHOOK_URL=… THU_MUC_DINH_KEM=/khong/co ./scripts/sao-luu.sh` → phải nhận được tin "SAO LƯU HỎNG" (sau đó chạy lại bình thường để trạng thái về xanh).
+
+**4.** Chạy lại `./trien-khai.sh` (hoặc chỉ `./scripts/sao-luu.sh`) và mở *Quản trị → Tự động hóa*: thẻ "Sao lưu thành công gần nhất" có giờ, không còn băng đỏ. Tùy chọn: `THU_PHUC_HOI_HANG_TUAN=1` trong `.env` rồi chạy lại `trien-khai.sh` để cài lịch thử phục hồi hằng tuần.
+
+### Thử phục hồi (định kỳ — hằng tuần qua cron, hoặc ít nhất mỗi tháng chạy tay)
+
+```bash
+cd /root/cowork-itw && ./scripts/thu-phuc-hoi.sh                    # bộ mới nhất trên máy
+THU_PHUC_HOI_TU_NGOAI=1 ./scripts/thu-phuc-hoi.sh                    # bộ mới nhất ở nơi ngoài máy
+TEP_DUMP=/root/cowork-sao-luu/cowork-<LUC>.dump ./scripts/thu-phuc-hoi.sh   # một bộ cụ thể
+```
+Script phục hồi vào CSDL tạm `cowork_thu_phuc_hoi_<thời điểm>`, kiểm số dòng (doanh nghiệp, người dùng, nhật ký kiểm toán…), migration cuối, giải nén gói đính kèm và đếm tệp, giải mã bản `.env` (có `APP_ENC_KEY`), rồi **xóa CSDL tạm kể cả khi hỏng**. Kết quả ghi dòng `thu-phuc-hoi` trong `system_heartbeats` (hiện trên thẻ sao lưu ở màn hình Tự động hóa); hỏng thì báo động. Không đụng CSDL thật.
+
+### Phục hồi thật (sự cố)
+
+Trên máy chủ cũ còn dùng được thì lấy bộ trong `/root/cowork-sao-luu`; máy chủ mới thì cài Docker + rclone, chép `rclone.conf` về, rồi:
+```bash
+mkdir -p /root/khoi-phuc && cd /root/khoi-phuc
+rclone copy --include 'cowork-<LUC>*' --include 'cowork-dinh-kem-<LUC>*' --include 'cowork-env-<LUC>*' cowork-crypt: .
+```
+
+1. **`.env`** (máy chủ mới; máy cũ còn `.env` thì bỏ bước này):
+   ```bash
+   gpg --decrypt cowork-env-<LUC>.env.gpg > /root/cowork-itw/.env   # nhập mật khẩu sao lưu
+   chmod 600 /root/cowork-itw/.env
+   ```
+   `APP_ENC_KEY` **phải** là giá trị cũ — khóa khác thì mật khẩu SMTP và 2 lớp đã lưu không giải mã được.
+2. **CSDL**:
+   ```bash
+   cd /root/cowork-itw && set -a && . ./.env && set +a
+   docker compose stop app worker
+   docker compose up -d db
+   docker compose exec -T db psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE IF EXISTS $POSTGRES_DB WITH (FORCE)"
+   docker compose exec -T db createdb -U "$POSTGRES_USER" "$POSTGRES_DB"
+   docker compose exec -T db pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner < /root/khoi-phuc/cowork-<LUC>.dump
+   ```
+3. **Tệp đính kèm** (gói chứa thư mục `dinh-kem/…`):
+   ```bash
+   mv data/dinh-kem "data/dinh-kem.cu-$(date +%s)" 2>/dev/null || true
+   tar -xzf /root/khoi-phuc/cowork-dinh-kem-<LUC>.tar.gz -C data/
+   ```
+4. `./trien-khai.sh` — dựng lại vai `cowork_app`, chạy migration còn thiếu, `rls.sql` (cấp lại quyền cho `cowork_app`), khởi động. `--no-owner` làm mọi bảng thuộc vai chủ sở hữu — đúng mô hình.
+5. Kiểm: đăng nhập, mở một chứng từ có tệp đính kèm, *Quản trị → Kết nối email → Gửi thư thử* (chứng minh `APP_ENC_KEY` đúng), *Quản trị → Tự động hóa* không còn băng đỏ sau 1–2 phút.
+
+Máy phát triển / bài thử: `SAO_LUU_KHONG_DOCKER=1` cho cả hai script chạy `pg_dump`/`psql` trực tiếp bằng `DATABASE_URL_OWNER` thay vì `docker compose exec db`; `THU_MUC_SAO_LUU`, `THU_MUC_DINH_KEM`, `TEP_ENV` đổi được nơi đọc/ghi.
 
 ## Chiến lược migration
 
@@ -120,6 +190,13 @@ docker compose up -d
 - Dữ liệu chuyển đổi một lần viết thẳng trong migration (như bản 19/09 gán phạm vi dữ liệu cho quyền cũ).
 - Trước khi triển khai migration có sửa dữ liệu: **diễn tập nâng cấp** — dựng CSDL giống hệt bản đang chạy (migration cũ + seed cũ), áp migration mới + seed mới, kiểm kết quả. Bản 19/09 đã diễn tập đúng như vậy.
 - Không bao giờ chạy `prisma db push` hay `migrate dev` trên máy thật.
+
+### Nâng cấp lên 0.16.1 (vận hành bền vững)
+
+- Migration `20261014090001_van_hanh_ben_vung`: thêm bảng toàn hệ thống `system_heartbeats` (nhịp worker, trạng thái sao lưu / thử phục hồi) và thay chỉ mục riêng phần `job_runs_lich_moi_ngay` (lần quét theo lịch **hỏng** không còn chiếm chỗ "một lần mỗi ngày"). Không sửa dữ liệu cũ. Chạy lại `rls.sql` như mọi lần (mục 5b cấp quyền bảng mới: ứng dụng đọc mọi dòng, chỉ ghi dòng `worker…`).
+- `nginx/` thêm tệp `cowork-proxy.inc` (đuôi `.inc` để không bị nạp tự động ở cấp http). `trien-khai.sh` đã `nginx -t` + reload.
+- Biến `.env` mới (đều tùy chọn nhưng **nên đặt**): `RCLONE_REMOTE`, `GIU_NGAY_NGOAI`, `ALERT_WEBHOOK_URL`, `ALERT_EMAIL`, `THU_PHUC_HOI_HANG_TUAN`, `AI_HAN_GOI_GIAY`. Mật khẩu sao lưu để ở `/root/.cowork-sao-luu-mat-khau`, **không** trong `.env`. Xem mục "Sao lưu và phục hồi".
+- Chạy `./trien-khai.sh` **bằng root** để cài `/etc/cron.d/cowork-sao-luu`. Sau 1–2 phút mở *Quản trị → Tự động hóa*: băng đỏ còn lại cho biết việc nào chưa làm (rclone, mật khẩu sao lưu…).
 
 ### Nâng cấp lên 0.16.0 (khách hàng nâng cao, marketing & thu lead, email marketing, xác thực 2 lớp)
 
@@ -140,12 +217,16 @@ docker compose up -d
 ## Nhật ký, lỗi, sức khỏe
 
 - `docker compose logs -f app` / `worker`. Lỗi ngoài dự kiến của API ghi dòng `[api] lỗi ngoài dự kiến`; trang lỗi hiện mã `digest` để tra log.
-- Sức khỏe: `GET /khoe` (qua nginx) hoặc `/api/khoe` — kiểm kết nối CSDL, không lộ chi tiết lỗi.
+- Sức khỏe: `GET /khoe` (qua nginx) hoặc `/api/khoe` — kiểm kết nối CSDL, không lộ chi tiết lỗi. Từ 0.16.1 có thêm `"worker": "ok" | "tre"` (nhịp cuối của worker quá 5 phút / chưa có). Chi tiết (giờ nhịp, sao lưu, thử phục hồi, bản quét hỏng) chỉ ở `GET /api/v1/tu-dong-hoa/van-hanh` (quyền `setting.view`) và màn hình *Quản trị → Tự động hóa*.
+- **Worker** (0.16.1): mỗi phút ghi nhịp vào bảng `system_heartbeats`; container `worker` có healthcheck (`worker/kiem-tra-song.ts`) — `docker compose ps` hiện `unhealthy` khi quá 5 phút không có nhịp. Docker **không** tự khởi động lại container unhealthy: xem `docker compose logs worker --tail 100` rồi `docker compose restart worker`. Redis hỏng không còn làm worker bỏ nhịp.
+- **Bản quét nhắc việc hỏng** (0.16.1): ghi dòng "Hỏng" kèm lỗi vào Lịch sử chạy nền; worker tự thử lại sau 15 → 30 → 60 → 120 phút, tối đa 5 lần/ngày; hỏng 2 lần liên tiếp thì chuông báo người có quyền sửa cấu hình, hết lượt thì báo mức khẩn. Sửa xong nguyên nhân thì bấm *Chạy quét ngay*.
 - Nhật ký nghiệp vụ và an ninh: màn hình **Quản trị → Nhật ký kiểm toán**.
 
 ## Bẫy đã gặp trên máy chủ này
 
-- **nginx máy chủ PHẢI ghi đè `X-Real-IP` bằng `$remote_addr`** (`proxy_set_header X-Real-IP $remote_addr;` trong `/etc/nginx/conf.d/cowork.conf`). nginx trong Docker (`nginx/cowork.conf`) cố ý chuyển nguyên `$http_x_real_ip` nó nhận được, và ứng dụng tin tiêu đề này cho giới hạn tốc độ đăng nhập, form công khai, webhook (0.16.0). Nếu nginx máy chủ chỉ chuyển tiếp giá trị khách gửi, ai cũng lách được giới hạn bằng cách tự đặt `X-Real-IP`. Cổng 8080 phải chỉ mở trên `127.0.0.1` (đang vậy trong `docker-compose.yml`). Kiểm: `grep -n X-Real-IP /etc/nginx/conf.d/cowork.conf`.
+- **nginx máy chủ PHẢI ghi đè `X-Real-IP` bằng `$remote_addr`** (`proxy_set_header X-Real-IP $remote_addr;` trong `/etc/nginx/conf.d/cowork.conf`). Từ 0.16.1 nginx trong Docker (`nginx/cowork.conf`) dùng module realip: chỉ tin `X-Real-IP` khi yêu cầu đến từ dải nội bộ (127.0.0.1, 10/8, 172.16/12, 192.168/16 — tức nginx máy chủ qua cổng Docker), đặt `$remote_addr` = IP thật, rồi **ghi đè** cả `X-Real-IP` lẫn `X-Forwarded-For` gửi vào app bằng giá trị đó (chuỗi `X-Forwarded-For` khách tự gửi không lọt vào nữa). Nếu nginx máy chủ chỉ chuyển tiếp giá trị khách gửi, ai cũng lách được giới hạn bằng cách tự đặt `X-Real-IP`; nếu nginx máy chủ **không** đặt tiêu đề này thì mọi khách chung một IP (IP cổng Docker) và `limit_req` chặn nhầm cả công ty. Cổng 8080 phải chỉ mở trên `127.0.0.1` (đang vậy trong `docker-compose.yml`). Kiểm: `grep -n X-Real-IP /etc/nginx/conf.d/cowork.conf`.
+- **Giới hạn tốc độ ở nginx** (0.16.1, QĐ-90): `/api/dang-nhap*` 20 lần/phút/IP (dồn tối đa 10), `/api/cong-khai/` 120 lần/phút/IP (dồn 60), theo dõi mở/bấm thư 1.200 lần/phút; vượt trả 429. Đây là lớp chặn khi Redis hỏng — trần **rộng hơn** trần của ứng dụng, luật chi tiết vẫn ở ứng dụng. Redis hỏng thì ứng dụng đếm tạm trong bộ nhớ từng tiến trình thay vì cho qua hết. Nhật ký nginx ghi `limiting requests` ở mức warn khi chặn. `/api/v1/tro-ly/hoi` có `proxy_read_timeout 300s` (một lượt hỏi có thể gọi mô hình vài vòng).
+- **Trợ lý AI trên máy thật** (0.16.1): trước đây `docker-compose.yml` không chuyển `AI_PROVIDER`, `AI_MODEL`, `ANTHROPIC_API_KEY` vào container `app`, nên trợ lý luôn báo "chưa cấu hình" dù `.env` có khóa. Nay đã chuyển, kèm `AI_HAN_GOI_GIAY` (hạn một lần gọi mô hình, mặc định 60).
 - 0.16.0: trang `/f/*` được nhúng iframe nhờ CSP `frame-ancestors` (QĐ-62) dù nginx máy chủ gửi `X-Frame-Options: SAMEORIGIN`; sau khi triển khai, thử nhúng một form vào một trang https khác một lần.
 - nginx máy chủ là **1.20.1**: viết `listen 443 ssl http2;`, không dùng `http2 on;`.
 - Chứng chỉ Let's Encrypt từng hết hạn vì `certbot-renew.timer` bật nhưng chưa được start. Kiểm `systemctl list-timers certbot*`.

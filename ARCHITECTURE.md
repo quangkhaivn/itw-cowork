@@ -237,9 +237,19 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - **Thu hồi phiên**: `layHoSoQuyen().doiMatKhauLuc` = mốc muộn hơn của `password_changed_at` và `security_changed_at` — mọi chỗ đang so phiên với lần đổi mật khẩu tự động tính cả đổi thiết lập 2 lớp, không phải sửa từng chỗ.
 - **Bắt buộc theo vai trò**: danh sách mã vai trò lưu ở `tenant_settings` khóa `bao_mat.vai_tro_bat_buoc_2_lop` (mảng — màn hình Cấu hình chỉ nhận số, QĐ-73). `layHoSoQuyen()` tính `phaiBat2Lop`; `xuLyApi` chặn (trừ route có `choPhepKhiPhaiBat2Lop`), `yeuCauDangNhap()` đưa sang `/bat-xac-thuc-2-lop`.
 
+## 7u. Vận hành bền vững (0.16.1)
+
+Quyết định QĐ-86 → QĐ-90. Migration `20261014090001_van_hanh_ben_vung`. Bài thử `npm run thu:van-hanh`, `thu/don-vi/van-hanh.test.ts`.
+
+- **Bản quét nhắc việc bền vững** (`src/modules/nhac-viec/service.ts`): `chayQuet(tx, …)` giữ nguyên là phần chạy trong một giao dịch; ghi việc bằng **một** `createManyAndReturn({ skipDuplicates })` mỗi quy tắc, dựa vào khóa duy nhất (người + ngày + quy tắc + đối tượng) thay vì đọc rồi ghi từng dòng. `quetBenVung(tenantId, …)` mở giao dịch hạn `HAN_GIAO_DICH_THEO_LO_MS`; hỏng thì ghi dòng `job_runs` trạng thái `hong` bằng **giao dịch riêng** (giao dịch quét đã cuộn ngược), đếm hỏng liên tiếp, từ 2 lần thì `baoChoNguoiCoQuyen(…, "setting.update")` (chống trùng theo ngày), rồi ném `LoiQuetHong` (503). `quetTheoLich()` (worker) kiểm giờ, đã xong chưa, và giãn cách 15 → 30 → 60 → 120 phút, tối đa 5 lần hỏng/ngày (`src/modules/van-hanh/tinh-toan.ts`). Chỉ mục `job_runs_lich_moi_ngay` nay chỉ phủ dòng `status <> 'hong'`.
+- **Nhịp sống** (`src/modules/van-hanh/nhip.ts`, bảng `system_heartbeats`, toàn hệ thống, không `tenant_id`): worker ghi dòng `worker` mỗi phút (`worker/nhip.ts` — PostgreSQL và Redis mỗi nơi một `try`, Redis có hạn 2 giây); `scripts/sao-luu.sh` ghi `sao-luu`, `scripts/thu-phuc-hoi.sh` ghi `thu-phuc-hoi` bằng vai chủ sở hữu. RLS: `cowork_app` đọc mọi dòng, chỉ INSERT/UPDATE dòng `worker%`. Healthcheck Docker: `worker/kiem-tra-song.ts`. `/api/khoe` công khai chỉ thêm `worker: ok|tre`; chi tiết ở `GET /api/v1/tu-dong-hoa/van-hanh` (`setting.view`) và băng đỏ trên *Quản trị → Tự động hóa* (`cacCanhBaoVanHanh`).
+- **Gọi mạng ngoài giao dịch** (`src/lib/api-nhieu-buoc.ts`): `xuLyApiNhieuBuoc` đưa cho service một `BuocGiaoDich` — mỗi `nb.giaoDich(nc => …)` là một giao dịch ngắn, kiểm lại phiên + quyền (dùng chung `kiemHoSoTrongGiaoDich` với `xuLyApi`). Dùng cho `POST /api/v1/tro-ly/hoi` (ghi câu hỏi → gọi mô hình có hạn `AI_HAN_GOI_GIAY` → mỗi công cụ một giao dịch → ghi câu trả lời), `POST /api/v1/email/ket-noi/gui-thu` (đọc cấu hình → gửi SMTP → ghi kết quả) và `POST /api/v1/tu-dong-hoa/chay`. Service nhận `NguCanh | BuocGiaoDich`; `thanhBuoc(nc)` giữ đường cũ cho bài thử. Các bước không cuộn ngược cùng nhau — service sắp thứ tự ghi để hỏng giữa chừng vẫn có nghĩa.
+- **Sao lưu**: `scripts/sao-luu.sh` sinh dump + gói đính kèm (`THU_MUC_DINH_KEM`) + `.env` mã hóa gpg cùng mốc, đọc lại từng phần, chép ra `RCLONE_REMOTE` và kiểm kích thước, ghi trạng thái, hỏng thì báo động (`ALERT_WEBHOOK_URL` / `ALERT_EMAIL`, `scripts/van-hanh-chung.sh`). `trien-khai.sh` cài cron 02:15. Chi tiết: DEPLOYMENT.md.
+- **Giới hạn tốc độ**: Redis hỏng → `demVaKiem` đếm bằng bộ nhớ tiến trình; nginx trong Docker có `limit_req` cho `/api/dang-nhap*`, `/api/cong-khai/` và lấy IP thật bằng module realip (chỉ tin dải nội bộ), ghi đè `X-Real-IP`/`X-Forwarded-For` gửi vào app.
+
 ## 8. Tác vụ nền
 
-`worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.
+`worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo. 0.16.1: nhịp sống vào PostgreSQL, quét hỏng thì ghi riêng và thử lại có giãn cách (mục 7u).
 
 ## 9. Việc chưa làm có chủ đích
 
