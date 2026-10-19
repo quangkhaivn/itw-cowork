@@ -133,6 +133,27 @@ export interface YeuCauGhiSo {
 }
 
 /**
+ * Khóa TRƯỚC mọi dòng số dư (kho, sản phẩm) một chứng từ sắp ghi, theo thứ tự id dòng số dư.
+ *
+ * `ghiSoKho()` khóa từng dòng theo thứ tự dòng hàng của chứng từ: đơn [chuột, phím] và đơn
+ * [phím, chuột] xác nhận cùng lúc thì khóa chéo nhau (deadlock — QA 0.16.1 dựng lại được 7/8
+ * lần). Gọi hàm này ngay sau khi khóa dòng chứng từ (thứ tự "chứng từ → số dư" của ARCHITECTURE
+ * 7s) thì mọi chứng từ dùng nó khóa số dư cùng một thứ tự. `ghiSoKho()` khóa lại dòng đã khóa
+ * trong cùng giao dịch là vô hại. Cặp chưa có dòng số dư thì bỏ qua (dòng mới tạo khi ghi).
+ */
+export async function khoaSoDuKho(nc: NguCanh, cap: { khoId: string; sanPhamId: string | null | undefined }[]) {
+  const ds = cap.filter((c): c is { khoId: string; sanPhamId: string } => Boolean(c.sanPhamId));
+  if (ds.length === 0) return;
+  await nc.tx.$queryRaw`
+    SELECT b.id FROM inventory_balances b
+    JOIN unnest(${ds.map((c) => c.khoId)}::uuid[], ${ds.map((c) => c.sanPhamId)}::uuid[]) AS c(kho, sp)
+      ON b.warehouse_id = c.kho AND b.product_id = c.sp
+    ORDER BY b.id
+    FOR UPDATE OF b
+  `;
+}
+
+/**
  * Ghi một giao dịch kho và cập nhật số dư trong cùng một giao dịch CSDL.
  *
  * Không kiểm quyền ở đây: hàm này là lõi dùng chung, người gọi (nhập kho, xuất kho,

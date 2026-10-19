@@ -6,7 +6,7 @@ import { batBuocQuyen, ghiTuChoiQuyen, layHoSoQuyen, LoiThieuQuyen, type HoSoQuy
 import { ghiKiemToan, type ThamSoGhiKiemToan } from "./kiem-toan";
 import { ghiSuKien, type ThamSoGhiSuKien } from "./su-kien";
 import { layIpKhach } from "./yeu-cau";
-import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "./loi";
+import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu, laLoiHetHanGiaoDich, laLoiTranhChap } from "./loi";
 
 /**
  * Lớp bọc chung cho mọi API nghiệp vụ.
@@ -152,6 +152,14 @@ export function anhXaLoi(loi: unknown): NextResponse {
   // Lỗi trùng khóa duy nhất của PostgreSQL mà service chưa tự bắt.
   if (typeof loi === "object" && loi && "code" in loi && (loi as { code: unknown }).code === "P2002") {
     return traLoi(409, "Dữ liệu bị trùng với một bản ghi đã có.");
+  }
+  // Hai yêu cầu tranh nhau cùng dòng dữ liệu (khóa chéo / tuần tự hóa) — cả giao dịch đã cuộn
+  // ngược, không ghi gì; người dùng thử lại là được (TV-BH-01, QA 0.16.1).
+  if (laLoiTranhChap(loi)) {
+    return traLoi(409, "Có người khác đang thao tác trên cùng chứng từ hoặc mặt hàng. Không có gì được ghi — tải lại trang rồi thử lại.", { ma: "tranh-chap-dong-thoi" });
+  }
+  if (laLoiHetHanGiaoDich(loi)) {
+    return traLoi(503, "Hệ thống đang bận, thao tác chưa được ghi. Thử lại sau ít giây.", { ma: "he-thong-ban" });
   }
   // Giá trị sai kiểu với cột (uuid không hợp lệ trong thân yêu cầu…) — lỗi của dữ liệu vào, không phải của máy chủ.
   if (typeof loi === "object" && loi && "code" in loi && (loi as { code: unknown }).code === "P2007") {

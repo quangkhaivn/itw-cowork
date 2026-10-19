@@ -224,6 +224,8 @@ export async function traTheoSerial(nc: NguCanh, serial: string) {
 /** Sửa thời hạn bảo hành (nhập sai số tháng, hãng đổi chính sách…). Luôn phải có lý do (BH-04). */
 export async function suaBaoHanh(nc: NguCanh, id: string, d: z.infer<typeof LuocDoSuaBaoHanh>) {
   batBuocQuyen(nc.hoSo, "service_desk.update", { objectType: "warranty", objectId: id });
+  // Khóa như hủy bảo hành (TV-BH-01): sửa đua hủy thì bên sau thấy "huy" và bị chặn (QA 0.16.1).
+  await khoaChungTu(nc.tx, "warranties", id);
   const w = await nc.tx.warranty.findFirst({ where: { id }, select: { id: true, months: true, startDate: true, endDate: true, status: true, note: true } });
   if (!w) throw new LoiKhongTimThay("Bảo hành");
   if (w.status === "huy") throw new LoiNghiepVu("Bảo hành đã hủy thì không sửa được nữa.", 409, "da-huy");
@@ -283,16 +285,23 @@ export async function huyBaoHanh(nc: NguCanh, id: string, lyDo: string) {
  */
 export async function ketThucBaoHanhKhiTraHang(nc: NguCanh, serialIds: string[], soPhieu: string): Promise<string[]> {
   if (serialIds.length === 0) return [];
-  const ds = await nc.tx.warranty.findMany({
-    where: { serialNumberId: { in: serialIds } },
-    select: { id: true, status: true, serial: true, note: true, serialNumberId: true },
-    orderBy: { id: "asc" },
-  });
-  if (ds.length === 0) return [];
-  await khoaChungTu(nc.tx, "warranties", ds.map((w) => w.id));
+  const timBaoHanh = () =>
+    nc.tx.warranty.findMany({
+      where: { serialNumberId: { in: serialIds } },
+      select: { id: true, status: true, serial: true, note: true, serialNumberId: true, endDate: true },
+      orderBy: { id: "asc" },
+    });
+  const truocKhoa = await timBaoHanh();
+  if (truocKhoa.length === 0) return [];
+  await khoaChungTu(nc.tx, "warranties", truocKhoa.map((w) => w.id));
+  // Đọc lại SAU khi khóa: một lần hủy bằng tay chạy cùng lúc có thể vừa đổi trạng thái / nhả sê-ri.
+  const ds = await timBaoHanh();
+  const homNay = ngayVeDate(homNayVN());
   const lyDo = `Khách trả máy theo phiếu ${soPhieu} — bảo hành của lần bán này kết thúc.`;
   for (const w of ds) {
-    const conHieuLuc = w.status === "hieu-luc";
+    // Đã hết hạn (theo trạng thái hoặc theo ngày) thì chỉ nhả sê-ri, giữ nguyên trạng thái —
+    // báo cáo vẫn nói "hết bảo hành", không nói sai là "đã hủy" (TV-BH-06).
+    const conHieuLuc = w.status === "hieu-luc" && w.endDate >= homNay;
     await nc.tx.warranty.update({
       where: { id: w.id },
       data: {

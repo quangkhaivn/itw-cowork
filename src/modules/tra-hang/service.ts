@@ -6,7 +6,7 @@ import { SU_KIEN } from "@/lib/su-kien";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { batBuocThayKhach } from "@/modules/khach-hang/service";
-import { batBuocThayKho, ghiSoKho } from "@/modules/kho/service";
+import { batBuocThayKho, ghiSoKho, khoaSoDuKho } from "@/modules/kho/service";
 import { tinhDonMua } from "@/modules/mua-hang/tinh-toan";
 import { congNo, dong } from "@/modules/tai-chinh/tinh-toan";
 import { taoThongBao } from "@/modules/thong-bao/service";
@@ -799,6 +799,8 @@ export async function xacNhanTraHangBan(nc: NguCanh, id: string, d: DuLieuXacNha
   }
 
   // Kiểm xong mới đụng kho.
+  // Khóa số dư theo một thứ tự chung (QA 0.16.1) trước khi ghi sổ từng dòng (cả hàng đổi thay thế).
+  await khoaSoDuKho(nc, keHoach.flatMap((k) => [{ khoId: p.warehouse.id, sanPhamId: k.sanPhamId }, { khoId: p.warehouse.id, sanPhamId: k.thayTheSanPhamId }]));
   for (const k of keHoach) {
     if (k.nhapLai && k.sanPhamId && k.quanLyTon) {
       await ghiSoKho(nc, {
@@ -1088,11 +1090,11 @@ export async function xacNhanTraHangMua(nc: NguCanh, id: string, d: DuLieuXacNha
   if (!xacNhanDuoc(p.status)) throw new LoiNghiepVu("Chỉ xác nhận được phiếu còn nháp.", 409, "sai-trang-thai");
   if (p.warehouse.status !== "hoat-dong") throw new LoiNghiepVu("Kho của phiếu đã ngừng hoạt động.", 409, "kho-ngung");
 
-  const keHoach: { sanPhamId: string | null; soLuong: number; quanLyTon: boolean; serial: { id: string }[] }[] = [];
+  const keHoach: { sanPhamId: string | null; soLuong: number; quanLyTon: boolean; serial: { id: string; serial: string }[] }[] = [];
   for (const dongDb of p.items) {
     const sl = Number(dongDb.quantity);
     const khai = docSerialTuGhiChu(dongDb.note, DAU_SERIAL);
-    const serial: { id: string }[] = [];
+    const serial: { id: string; serial: string }[] = [];
     if (dongDb.product?.requiresSerial) {
       if (khai.length !== sl) {
         throw new LoiNghiepVu(
@@ -1108,12 +1110,13 @@ export async function xacNhanTraHangMua(nc: NguCanh, id: string, d: DuLieuXacNha
         if (!sn) throw new LoiNghiepVu(`Số sê-ri ${s} không có trong hệ thống.`, 409, "serial-khong-co", { serial: s });
         if (sn.status !== "trong-kho") throw new LoiNghiepVu(`Số sê-ri ${s} không còn trong kho.`, 409, "serial-da-dung", { serial: s });
         if (sn.warehouseId !== p.warehouse.id) throw new LoiNghiepVu(`Số sê-ri ${s} đang nằm ở kho khác.`, 409, "serial-khac-kho", { serial: s });
-        serial.push({ id: sn.id });
+        serial.push({ id: sn.id, serial: s });
       }
     }
     keHoach.push({ sanPhamId: dongDb.productId, soLuong: sl, quanLyTon: dongDb.product?.quanLyTon ?? false, serial });
   }
 
+  await khoaSoDuKho(nc, keHoach.map((k) => ({ khoId: p.warehouse.id, sanPhamId: k.sanPhamId })));
   for (const k of keHoach) {
     if (k.sanPhamId && k.quanLyTon) {
       await ghiSoKho(nc, {
@@ -1129,10 +1132,13 @@ export async function xacNhanTraHangMua(nc: NguCanh, id: string, d: DuLieuXacNha
       });
     }
     for (const s of k.serial) {
-      await nc.tx.serialNumber.update({
-        where: { id: s.id },
+      // TV-BH-05 (QA 0.16.1): có điều kiện như mọi chứng từ khác — máy vừa được xuất cho khách
+      // (hoặc chuyển kho) cùng lúc thì dừng, không ghi đè "đã bán" thành "trả NCC".
+      const kq = await nc.tx.serialNumber.updateMany({
+        where: { id: s.id, status: "trong-kho", warehouseId: p.warehouse.id },
         data: { status: "tra-lai", warehouseId: null },
       });
+      if (kq.count !== 1) throw new LoiNghiepVu(`Số sê-ri ${s.serial} vừa được xuất theo chứng từ khác — tải lại phiếu.`, 409, "serial-da-dung", { serial: s.serial });
     }
   }
 
