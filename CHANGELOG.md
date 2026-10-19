@@ -18,10 +18,13 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 26 (TV-TC-01 → TV-TC-10). Ki�
 - **Hủy được đơn mua đang có hóa đơn nhà cung cấp** — nay phải hủy hóa đơn trước.
 - Đề nghị mua và đơn mua khóa dòng ở mọi bước đổi trạng thái (duyệt, lập đơn, gửi, xác nhận, hủy, nhận hàng): hai người cùng lập đơn từ một đề nghị, hay nhận đủ hàng hai lần cùng lúc, không còn sinh chứng từ thừa.
 - Hủy hóa đơn nhà cung cấp và hủy phiếu chi nay ghi sự kiện như bên bán.
+- (QA) Lỗi khóa chéo / xung đột ghi của PostgreSQL (40P01, 40001) nay trả **409** "thử lại" thay vì 500 (giao dịch đã cuộn ngược hết). Dòng phân bổ phiếu thu / phiếu chi dưới 1 ₫ sau làm tròn bị từ chối rõ ràng thay vì lỗi 500 từ CHECK của CSDL. Nút Hủy đơn mua ẩn khi đơn đã nhận hàng hoặc còn hóa đơn nhà cung cấp (TV-TC-10). Bài thử QA độc lập `npm run thu:qa-tv-tai-chinh`.
 
 #### Triển khai
 - Migration chỉ thêm hai chỉ mục; nếu dữ liệu cũ đã có đơn nào mang hơn một hóa đơn còn hiệu lực, migration **dừng** và báo số lượng. Kiểm trước:
   `SELECT sales_order_id, count(*) FROM invoices WHERE sales_order_id IS NOT NULL AND status <> 'CANCELLED' GROUP BY 1 HAVING count(*) > 1;` (và tương tự `supplier_bills.purchase_order_id`). Hủy hóa đơn thừa kèm lý do rồi chạy lại. Chạy lại `rls.sql` như mọi lần.
+- **Nếu migration đã dừng vì dữ liệu trùng**, Prisma ghi nó là "failed" và mọi lần `migrate deploy` sau báo `P3009` dù dữ liệu đã sửa (đã thử trên CSDL bẩn). Migration không tạo gì trước khi dừng, nên sau khi hủy hóa đơn thừa phải đánh dấu cuộn ngược rồi mới chạy lại `trien-khai.sh`:
+  `docker compose run --rm -v "$(pwd)/prisma:/app/prisma" -e DATABASE_URL="$DATABASE_URL_OWNER" app npx prisma migrate resolve --rolled-back 20261014085000_toan_ven_tai_chinh`
 
 ## 0.16.0 — 13/10/2026 — Tích hợp CRM: khách hàng nâng cao, marketing & thu lead, email marketing, xác thực 2 lớp
 
