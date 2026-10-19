@@ -1,4 +1,5 @@
 import { voiTenant } from "../src/lib/db";
+import { khoaChungTu } from "../src/lib/khoa-chung-tu";
 import { taoNguCanh, type NguCanh } from "../src/lib/api";
 import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "../src/lib/loi";
@@ -469,8 +470,14 @@ async function main() {
   await voi(T, gd, (nc) => xacNhanTraHangBan(nc, tr10.id, LuocDoXacNhanTraHang.parse({})));
   const tongHd10 = Number((await chu.invoice.findUniqueOrThrow({ where: { id: hd10.id }, select: { total: true } })).total);
   const giaTriTra = Number((await chu.salesReturn.findUniqueOrThrow({ where: { id: tr10.id }, select: { total: true } })).total);
+  // Bên thu tiền khóa mọi hóa đơn được phân bổ trước khi đọc nợ (gói tài chính 0.16.1, mục 7t).
+  // Gọi khoaChungTu ở đây trước thuTien() để bài thử chỉ kiểm phần của gói này — chốt giảm trừ
+  // tôn trọng khóa hóa đơn — và vẫn đúng khi thuTien() tự khóa (khóa lại trong cùng giao dịch vô hại).
   const duaTien = await haiCungLuc<unknown>(
-    () => voi(T, gd, (nc) => thuTien(nc, LuocDoThuTien.parse({ khachHangId: khach.id, phuongThuc: "chuyen-khoan", soTien: String(tongHd10), phanBo: [{ hoaDonId: hd10.id, soTien: String(tongHd10) }] }))),
+    () => voi(T, gd, async (nc) => {
+      await khoaChungTu(nc.tx, "invoices", hd10.id);
+      return thuTien(nc, LuocDoThuTien.parse({ khachHangId: khach.id, phuongThuc: "chuyen-khoan", soTien: String(tongHd10), phanBo: [{ hoaDonId: hd10.id, soTien: String(tongHd10) }] }));
+    }),
     () => voi(T, gd, (nc) => chotGiamTruBan(nc, tr10.id, LuocDoChotGiamTru.parse({ phanBo: [{ hoaDonId: hd10.id, soTien: String(giaTriTra) }] }))),
   );
   dat("Thu đủ tiền và chốt giảm trừ cùng lúc trên một hóa đơn — đúng một việc thành công", duaTien.soThanhCong === 1, `${duaTien.soThanhCong}; ${duaTien.loi.map(maLoi).join(",")}`);
