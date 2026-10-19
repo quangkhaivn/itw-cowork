@@ -20,7 +20,7 @@
     "thu:su-kien": "tsx --env-file-if-exists=.env thu/thu-su-kien.ts",
     "thu:quan-tri": "tsx --env-file-if-exists=.env thu/thu-quan-tri.ts",
     "thu:http": "tsx --env-file-if-exists=.env thu/thu-http.ts",
-    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm && npm run thu:san-pham && npm run thu:bao-gia && npm run thu:don-hang && npm run thu:dich-vu && npm run thu:tai-chinh && npm run thu:tu-dong-hoa && npm run thu:tro-ly && npm run thu:mua-hang && npm run thu:cong-no-tra && npm run thu:tra-hang && npm run thu:chuyen-kho && npm run thu:dinh-kem && npm run thu:khach-nang-cao && npm run thu:qa-khach && npm run thu:marketing && npm run thu:qa-marketing && npm run thu:gop-k-m && npm run thu:email && npm run thu:xac-thuc-2-lop && npm run thu:qa-email && npm run thu:gop-m-e",
+    "thu:tich-hop": "npm run thu:cach-ly && npm run thu:phan-quyen && npm run thu:su-kien && npm run thu:quan-tri && npm run thu:crm && npm run thu:san-pham && npm run thu:bao-gia && npm run thu:don-hang && npm run thu:dich-vu && npm run thu:tai-chinh && npm run thu:tu-dong-hoa && npm run thu:tro-ly && npm run thu:mua-hang && npm run thu:cong-no-tra && npm run thu:tra-hang && npm run thu:chuyen-kho && npm run thu:dinh-kem && npm run thu:khach-nang-cao && npm run thu:qa-khach && npm run thu:marketing && npm run thu:qa-marketing && npm run thu:gop-k-m && npm run thu:email && npm run thu:xac-thuc-2-lop && npm run thu:qa-email && npm run thu:gop-m-e && npm run thu:toan-ven-tai-chinh",
     "thu:tat-ca": "npm run thu:don-vi && npm run thu:tich-hop",
     "kiem-tra": "npm run typecheck && npm run lint && npm run thu:don-vi && npm run build",
     "thu:crm": "tsx --env-file-if-exists=.env thu/thu-crm.ts",
@@ -46,7 +46,8 @@
     "thu:xac-thuc-2-lop": "tsx --env-file-if-exists=.env thu/thu-xac-thuc-2-lop.ts",
     "thu:qa-email": "tsx --env-file-if-exists=.env thu/thu-qa-email.ts",
     "thu:gop-m-e": "tsx --env-file-if-exists=.env thu/thu-gop-m-e.ts",
-    "thu:qa-email-http": "tsx --env-file-if-exists=.env thu/thu-qa-email-http.ts"
+    "thu:qa-email-http": "tsx --env-file-if-exists=.env thu/thu-qa-email-http.ts",
+    "thu:toan-ven-tai-chinh": "tsx --env-file-if-exists=.env thu/thu-toan-ven-tai-chinh.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

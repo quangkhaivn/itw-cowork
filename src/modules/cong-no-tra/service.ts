@@ -7,6 +7,7 @@ import { capSoChungTu, type KieuSo } from "@/lib/so-chung-tu";
 import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { congNo, dong, nhomTuoiNo, soNgayQuaHan, tongHopTuoiNo } from "@/modules/tai-chinh/tinh-toan";
 import { tinhDonMua } from "@/modules/mua-hang/tinh-toan";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import type {
   BoLocHoaDonMua,
   BoLocPhieuChi,
@@ -83,6 +84,11 @@ function daTraCua(hd: { allocations: { amount: Prisma.Decimal; payment: { status
 /** Phần nợ phải trả đã bị xóa bằng hàng trả lại nhà cung cấp (TH-07). */
 function daGiamTruCua(hd: { returnAllocations: { amount: Prisma.Decimal; purchaseReturn: { status: string } }[] }): number {
   return hd.returnAllocations.filter((a) => a.purchaseReturn.status === "SETTLED").reduce((s, a) => s + Number(a.amount), 0);
+}
+
+/** Các phiếu trả nhà cung cấp đã chốt tiền vào hóa đơn này (TV-TC-03). */
+function phieuTraDaChotCua(hd: { returnAllocations: { purchaseReturn: { status: string; number: string } }[] }): string[] {
+  return [...new Set(hd.returnAllocations.filter((a) => a.purchaseReturn.status === "SETTLED").map((a) => a.purchaseReturn.number))];
 }
 
 function hoaDonRa(hd: BanGhi, homNay: string) {
@@ -219,7 +225,7 @@ export async function chiTietHoaDonMua(nc: NguCanh, id: string) {
     quyen: {
       sua: duocGhi && ra.trangThai === "DRAFT",
       ghiNhan: coQuyen(nc.hoSo, "finance.approve") && ra.trangThai === "DRAFT" && ra.dong.length > 0,
-      huy: coQuyen(nc.hoSo, "finance.approve") && ra.trangThai !== "CANCELLED" && ra.daTra === 0,
+      huy: coQuyen(nc.hoSo, "finance.approve") && ra.trangThai !== "CANCELLED" && ra.daTra === 0 && ra.daGiamTru === 0,
       chiTien: duocGhi && ra.trangThai === TRANG_THAI_TINH_NO && ra.conNo > 0,
     },
   };
@@ -371,6 +377,9 @@ function tongVeCot(t: ReturnType<typeof tinhDonMua>) {
 /**
  * Lập hóa đơn nhà cung cấp. Hai đường: từ **đơn mua** (chép nguyên dòng, giữ liên kết
  * từng dòng để đối chiếu với số đã nhận), hoặc nhập tay cho khoản lẻ (CT-01).
+ *
+ * Lập từ đơn mua: khóa dòng đơn mua trước khi dò hóa đơn đã có (TV-TC-04); chỉ mục riêng
+ * phần `supplier_bills_mot_hieu_luc_moi_don` là chốt cuối ở CSDL (CT-02).
  */
 export async function taoHoaDonMua(nc: NguCanh, d: DuLieuTaoHoaDonMua) {
   batBuocQuyen(nc.hoSo, "finance.create", { objectType: "supplier_bill" });
@@ -381,6 +390,7 @@ export async function taoHoaDonMua(nc: NguCanh, d: DuLieuTaoHoaDonMua) {
   let tinh: ReturnType<typeof tinhDonMua>;
 
   if (d.donMuaId) {
+    await khoaChungTu(nc.tx, "purchase_orders", d.donMuaId);
     const dm = await nc.tx.purchaseOrder.findFirst({
       where: { id: d.donMuaId },
       select: {
@@ -397,6 +407,9 @@ export async function taoHoaDonMua(nc: NguCanh, d: DuLieuTaoHoaDonMua) {
     if (!dm) throw new LoiDinhDang("donMuaId", "Không tìm thấy đơn mua.");
     if (dm.status === "DRAFT") throw new LoiNghiepVu("Đơn mua còn nháp — gửi nhà cung cấp trước khi ghi hóa đơn.", 409, "don-con-nhap");
     if (dm.status === "CANCELLED") throw new LoiNghiepVu("Đơn mua đã hủy thì không ghi hóa đơn.", 409, "don-da-huy");
+    if (d.nhaCungCapId && d.nhaCungCapId !== dm.supplierId) {
+      throw new LoiDinhDang("nhaCungCapId", `Đơn mua ${dm.number} là của nhà cung cấp khác — bỏ chọn nhà cung cấp hoặc chọn đúng đơn.`);
+    }
 
     // CT-02: một đơn mua chỉ có một hóa đơn còn hiệu lực.
     const daCo = await nc.tx.supplierBill.findFirst({
@@ -490,6 +503,7 @@ export async function taoHoaDonMua(nc: NguCanh, d: DuLieuTaoHoaDonMua) {
  */
 export async function ghiNhanHoaDonMua(nc: NguCanh, id: string, d: DuLieuGhiNhanHoaDonMua) {
   batBuocQuyen(nc.hoSo, "finance.approve", { objectType: "supplier_bill", objectId: id });
+  await khoaChungTu(nc.tx, "supplier_bills", id);
   const hd = await docHoaDon(nc, id);
   if (hd.status !== "DRAFT") throw new LoiNghiepVu("Chỉ ghi nhận hóa đơn đang ở trạng thái Nháp.", 409, "sai-trang-thai");
   if (hd.items.length === 0) throw new LoiNghiepVu("Hóa đơn chưa có dòng nào.", 409, "hoa-don-rong");
@@ -529,9 +543,14 @@ export async function ghiNhanHoaDonMua(nc: NguCanh, id: string, d: DuLieuGhiNhan
   return { id, trangThai: TRANG_THAI_TINH_NO, ngayHoaDon, hanThanhToan: d.hanThanhToan };
 }
 
-/** CT-08: hủy hóa đơn — chỉ khi chưa chi đồng nào, và luôn phải ghi lý do. */
+/**
+ * CT-08: hủy hóa đơn — chỉ khi chưa chi đồng nào **và** chưa có phiếu trả nhà cung cấp nào
+ * chốt tiền vào nó (TV-TC-03), luôn phải ghi lý do. Khóa dòng hóa đơn trước khi đọc
+ * (TV-TC-02) và ghi sự kiện như bên bán (TV-TC-07).
+ */
 export async function huyHoaDonMua(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "finance.approve", { objectType: "supplier_bill", objectId: id });
+  await khoaChungTu(nc.tx, "supplier_bills", id);
   const hd = await docHoaDon(nc, id);
   if (hd.status === "CANCELLED") throw new LoiNghiepVu("Hóa đơn này đã hủy rồi.", 409, "da-huy");
   const daTra = daTraCua(hd);
@@ -543,12 +562,24 @@ export async function huyHoaDonMua(nc: NguCanh, id: string, lyDo: string) {
       { daTra: dong(daTra) },
     );
   }
+  const daGiamTru = daGiamTruCua(hd);
+  if (daGiamTru > 0) {
+    const phieu = phieuTraDaChotCua(hd);
+    throw new LoiNghiepVu(
+      `Hóa đơn đã được giảm trừ ${dong(daGiamTru).toLocaleString("vi-VN")} ₫ bằng hàng trả nhà cung cấp (${phieu.join(", ")}). ` +
+        "Phiếu trả hàng đã chốt tiền thì không gỡ được, nên hóa đơn phải giữ lại để khoản giảm trừ còn chỗ bám. Nếu số liệu sai, xử lý bằng chứng từ điều chỉnh thay vì hủy hóa đơn.",
+      409,
+      "da-co-giam-tru",
+      { daGiamTru: dong(daGiamTru), phieuTra: phieu },
+    );
+  }
 
   await nc.tx.supplierBill.update({
     where: { id },
     data: { status: "CANCELLED", cancelledAt: new Date(), cancelReason: lyDo, updatedBy: nc.hoSo.userId },
   });
   await nc.kiemToan({ action: "sua", objectType: "supplier_bill", objectId: id, before: { trangThai: hd.status }, after: { trangThai: "CANCELLED", lyDo } });
+  await nc.suKien({ eventType: SU_KIEN.SUPPLIER_BILL_CANCELLED, objectType: "supplier_bill", objectId: id, payload: { so: hd.number, lyDo } });
   return { id, trangThai: "CANCELLED" };
 }
 
@@ -578,7 +609,13 @@ export async function chiTien(nc: NguCanh, d: DuLieuChiTien) {
     );
   }
 
+  // TV-TC-01: khóa mọi hóa đơn được phân bổ TRƯỚC khi đọc phần còn nợ — hai phiếu chi
+  // cùng lúc cho một hóa đơn thì phiếu sau đọc lại số đã chi sau khi phiếu trước commit.
   const ids = d.phanBo.map((p) => p.hoaDonId);
+  if (new Set(ids).size !== ids.length) {
+    throw new LoiDinhDang("phanBo", "Mỗi hóa đơn chỉ được chọn một lần trong một phiếu chi — gộp số tiền vào một dòng.");
+  }
+  await khoaChungTu(nc.tx, "supplier_bills", ids);
   const hoaDon = await nc.tx.supplierBill.findMany({
     where: { AND: [{ id: { in: ids } }, await dieuKienXemHoaDonMua(nc)] },
     select: {
@@ -651,11 +688,16 @@ export async function chiTien(nc: NguCanh, d: DuLieuChiTien) {
   return { id: pc.id, so, soTien: tien };
 }
 
-/** CT-09: hủy phiếu chi. Giữ bản ghi kèm lý do; công nợ quay lại đúng như trước. */
+/**
+ * CT-09: hủy phiếu chi. Giữ bản ghi kèm lý do; công nợ quay lại đúng như trước.
+ * Khóa phiếu chi rồi các hóa đơn nó phân bổ (TV-TC-02), ghi sự kiện như bên thu (TV-TC-07).
+ */
 export async function huyPhieuChi(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "finance.approve", { objectType: "supplier_payment", objectId: id });
-  const pc = await nc.tx.supplierPayment.findFirst({ where: { id }, select: { id: true, number: true, status: true, amount: true } });
+  await khoaChungTu(nc.tx, "supplier_payments", id);
+  const pc = await nc.tx.supplierPayment.findFirst({ where: { id }, select: { id: true, number: true, status: true, amount: true, allocations: { select: { billId: true } } } });
   if (!pc) throw new LoiKhongTimThay("Phiếu chi");
+  await khoaChungTu(nc.tx, "supplier_bills", pc.allocations.map((a) => a.billId));
   if (pc.status === "huy") throw new LoiNghiepVu("Phiếu chi này đã hủy rồi.", 409, "da-huy");
 
   await nc.tx.supplierPayment.update({ where: { id }, data: { status: "huy", cancelledAt: new Date(), cancelReason: lyDo } });
@@ -666,5 +708,6 @@ export async function huyPhieuChi(nc: NguCanh, id: string, lyDo: string) {
     before: { trangThai: "hoat-dong", soTien: pc.amount.toString() },
     after: { trangThai: "huy", lyDo },
   });
+  await nc.suKien({ eventType: SU_KIEN.SUPPLIER_PAYMENT_CANCELLED, objectType: "supplier_payment", objectId: id, payload: { so: pc.number, lyDo } });
   return { id, trangThai: "huy" };
 }
