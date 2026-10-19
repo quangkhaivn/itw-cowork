@@ -23,8 +23,12 @@ Kiến trúc: `ARCHITECTURE.md` mục 7u. Quyết định QĐ-86 → QĐ-90. Mig
 - nginx trong Docker: `limit_req` cho đăng nhập và `/api/cong-khai/`, IP thật qua module realip (chỉ tin dải nội bộ), ghi đè `X-Real-IP`/`X-Forwarded-For`; `proxy_read_timeout 300s` cho `/api/v1/tro-ly/hoi`.
 - Bài thử `npm run thu:van-hanh` (nối vào `thu:tich-hop`) và `thu/don-vi/van-hanh.test.ts`.
 
-#### Còn lại
-- `guiThuThu` (gửi thử một chiến dịch, `src/modules/email/service.ts`) vẫn gửi SMTP trong giao dịch — ngoài phạm vi gói này, sửa cùng mẫu `BuocGiaoDich`.
+#### Sửa sau QA độc lập (`npm run thu:qa-tv-van-hanh`, nối vào `thu:tich-hop`)
+- `guiThuThu` (gửi thử chiến dịch) cũng gửi SMTP ngoài giao dịch, cùng mẫu `BuocGiaoDich`.
+- Giới hạn tốc độ: kho bộ nhớ dự phòng có trần 10.000 khóa (trước đây phình không giới hạn và dọn O(n) mỗi lần đếm — 50.000 khóa lạ mất 46 giây); Redis hỏng thì rơi sang bộ nhớ NGAY (`enableOfflineQueue: false`) thay vì mỗi yêu cầu chờ ~2 giây, không còn "Unhandled error event".
+- `sao-luu.sh` / `thu-phuc-hoi.sh` bị ngắt (TERM/INT/HUP) nay ghi trạng thái hỏng và báo động — trước đây trap EXIT thấy `$? = 0` nên im lặng như thành công. `thu-phuc-hoi.sh` đặt cờ xóa CSDL tạm trước khi tạo.
+- `sao-luu.sh` chỉ xóa tệp `.dang-ghi` của chính nó (lần chạy chờ khóa quá hạn từng xóa tệp đang ghi của lần kia); hạn chờ khóa đổi được bằng `SAO_LUU_CHO_KHOA_GIAY`; cảnh báo khi máy không có `flock`.
+- Trợ lý AI: phiên bị thu hồi / bắt đổi mật khẩu giữa lượt thì dừng ngay (401), không gọi mô hình thêm vòng nào.
 
 ## 0.16.0 — 13/10/2026 — Tích hợp CRM: khách hàng nâng cao, marketing & thu lead, email marketing, xác thực 2 lớp
 
