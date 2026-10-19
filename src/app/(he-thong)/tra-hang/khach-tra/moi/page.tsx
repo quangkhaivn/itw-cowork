@@ -75,6 +75,13 @@ export default async function TrangLapTraHangBan({ searchParams }: { searchParam
             Phiếu trả hàng cần một kho để nhận hàng về. Khai kho ở màn hình Kho → Danh sách kho trước.
           </TrongRong>
         </section>
+      ) : !du.don ? (
+        <section className="the">
+          {/* TV-BH-10: trả hàng luôn theo đơn đã giao (QĐ-81) — không lập phiếu trả lẻ ngoài đơn. */}
+          <TrongRong tieuDe="Trả hàng phải theo một đơn đã giao">
+            Mở đơn hàng của khách rồi bấm &ldquo;Khách trả hàng&rdquo; — phiếu sẽ có sẵn các dòng đã giao và số còn trả được.
+          </TrongRong>
+        </section>
       ) : du.khach.length === 0 && !du.khachTuDon ? (
         <section className="the">
           <TrongRong tieuDe="Chưa chọn được khách hàng">

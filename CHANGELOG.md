@@ -22,6 +22,27 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 26 (TV-TC-01 → TV-TC-10). Ki�
 #### Triển khai
 - Migration chỉ thêm hai chỉ mục; nếu dữ liệu cũ đã có đơn nào mang hơn một hóa đơn còn hiệu lực, migration **dừng** và báo số lượng. Kiểm trước:
   `SELECT sales_order_id, count(*) FROM invoices WHERE sales_order_id IS NOT NULL AND status <> 'CANCELLED' GROUP BY 1 HAVING count(*) > 1;` (và tương tự `supplier_bills.purchase_order_id`). Hủy hóa đơn thừa kèm lý do rồi chạy lại. Chạy lại `rls.sql` như mọi lần.
+### Toàn vẹn dữ liệu — bán hàng và kho
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 25 (TV-BH-01 → TV-BH-12). Kiến trúc: `ARCHITECTURE.md` mục 7s. Quyết định QĐ-77 → QĐ-81. Migration `20261014081000_toan_ven_ban_hang` (chạy lại `prisma/rls.sql` sau khi áp). Bài thử mới `npm run thu:toan-ven-ban-hang` (80 kiểm chứng, nằm trong `thu:tich-hop`).
+
+#### Sửa
+- **Bấm hai lần / hai người làm cùng lúc** không còn ghi hai lần: xác nhận đơn (trước đây giữ chỗ gấp đôi), hai phiếu xuất cho một đơn (giao vượt), tạo đơn từ báo giá, chốt / duyệt / gửi báo giá, nhận hàng chuyển kho (nhập kho đích hai lần), chuyển đổi lead (hai khách), xác nhận / lập phiếu trả hàng, đổi trạng thái phiếu hỗ trợ — khóa dòng chứng từ trước khi đọc trạng thái.
+- **Một sê-ri bán cho hai đơn**: xuất hàng nay chỉ chuyển sê-ri đang `trong-kho` đúng kho; đơn thứ hai nhận lỗi rõ ràng.
+- **Số đã giao bị ghi đè** khi hai phiếu xuất chạy song song: cộng nguyên tử; một dòng đơn chỉ xuất hiện một lần trong phiếu xuất.
+- **Giữ chỗ kẹt mãi**: giao từ kho khác kho đã giữ thì nhả giữ chỗ ở kho đã giữ; đơn giao đủ nhả mọi phần còn sót.
+- **Máy khách trả về không bán lại được** (lỗi trùng khóa sê-ri khi xuất lại) và khách cũ vẫn còn bảo hành: trả hàng thường nay kết thúc bảo hành cũ và nhả sê-ri; hủy bảo hành bằng tay cũng nhả sê-ri. Migration sửa luôn dữ liệu cũ: bảo hành của máy đã quay về kho chuyển "hủy", bảo hành đã hủy nhả sê-ri.
+- **Hủy đơn khi còn hóa đơn**: bị chặn, thông báo liệt kê số hóa đơn; dự án còn mở chỉ được cảnh báo.
+- **Một báo giá sinh nhiều đơn**: chặn ở CSDL (một đơn chưa hủy mỗi báo giá) và chặn ra phiên bản mới khi báo giá đã có đơn.
+- **Báo giá chấp nhận mà cơ hội vẫn mở**: chấp nhận báo giá hoặc tạo đơn từ báo giá chuyển cơ hội sang Thắng (không lật cơ hội đã Thua).
+- **Liên kết chéo khách**: phiếu hỗ trợ không gắn được sê-ri / đơn / dự án / liên hệ của khách khác; phiếu trả hàng không lấy được dòng của đơn khác, sê-ri bán cho khách khác, hay cộng nhiều dòng vượt số đã giao.
+- **Mở lại phiếu hỗ trợ** đã xử lý xong nay xóa mốc xong để nhắc trễ hạn SLA chạy lại; giữ mốc xong lần đầu, diễn biến ghi "Mở lại phiếu".
+
+#### Đổi hành vi
+- **Khách trả hàng bắt buộc theo đơn** (bỏ phiếu "trả lẻ"): mở từ nút "Khách trả hàng" trên trang đơn hàng. Phiếu đổi máy không còn tính vào "đã trả" của dòng đơn.
+
+#### Cơ sở dữ liệu
+- Chỉ mục riêng phần `sales_orders_bao_gia_dang_hoat_dong_key`; CHECK `warranties_huy_nha_serial_check`; cột `support_tickets.first_resolved_at`; loại diễn biến `mo-lai`. Báo giá nào đang có hai đơn chưa hủy thì migration dừng với thông báo rõ ràng — hủy đơn thừa rồi chạy lại.
 
 ## 0.16.0 — 13/10/2026 — Tích hợp CRM: khách hàng nâng cao, marketing & thu lead, email marketing, xác thực 2 lớp
 

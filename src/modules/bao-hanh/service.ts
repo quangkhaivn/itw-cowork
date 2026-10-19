@@ -4,6 +4,7 @@ import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { docCauHinh } from "@/modules/cau-hinh/service";
 import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { mucBaoHanh, ngayHetHan, soNgayConLai } from "./tinh-toan";
@@ -253,15 +254,59 @@ export async function suaBaoHanh(nc: NguCanh, id: string, d: z.infer<typeof Luoc
   return baoHanhRa(sau, homNayVN(), await nguongSapHet(nc));
 }
 
-/** Hủy bảo hành (giao nhầm, khách trả hàng). Không xóa — giữ vết. */
+/**
+ * Hủy bảo hành (giao nhầm, khách trả hàng). Không xóa — giữ vết.
+ *
+ * TV-BH-06: bảo hành đã hủy nhả sê-ri (`serial_number_id` → NULL, số sê-ri dạng chữ vẫn giữ ở
+ * cột `serial`) — nếu không, máy đó giao lại cho khách khác sẽ vấp khóa duy nhất của sê-ri.
+ */
 export async function huyBaoHanh(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "service_desk.update", { objectType: "warranty", objectId: id });
-  const w = await nc.tx.warranty.findFirst({ where: { id }, select: { id: true, status: true } });
+  await khoaChungTu(nc.tx, "warranties", id);
+  const w = await nc.tx.warranty.findFirst({ where: { id }, select: { id: true, status: true, serial: true, serialNumberId: true } });
   if (!w) throw new LoiKhongTimThay("Bảo hành");
   if (w.status === "huy") throw new LoiNghiepVu("Bảo hành này đã hủy rồi.", 409, "da-huy");
 
-  await nc.tx.warranty.update({ where: { id }, data: { status: "huy", cancelledAt: new Date(), note: lyDo } });
-  await nc.kiemToan({ action: "sua", objectType: "warranty", objectId: id, before: { trangThai: w.status }, after: { trangThai: "huy", lyDo } });
-  await nc.suKien({ eventType: SU_KIEN.WARRANTY_CANCELLED, objectType: "warranty", objectId: id, payload: { lyDo } });
+  await nc.tx.warranty.update({ where: { id }, data: { status: "huy", cancelledAt: new Date(), note: lyDo, serialNumberId: null } });
+  await nc.kiemToan({
+    action: "sua", objectType: "warranty", objectId: id,
+    before: { trangThai: w.status, serialId: w.serialNumberId }, after: { trangThai: "huy", lyDo, serialId: null, serial: w.serial },
+  });
+  await nc.suKien({ eventType: SU_KIEN.WARRANTY_CANCELLED, objectType: "warranty", objectId: id, payload: { lyDo, serial: w.serial } });
   return { id, trangThai: "huy" };
+}
+
+/**
+ * Kết thúc bảo hành của những chiếc máy khách đã trả về (TV-BH-06). Gọi từ xác nhận phiếu
+ * trả hàng — người gọi đã kiểm quyền. Bảo hành chuyển `huy`, nhả sê-ri, ghi lý do kèm số phiếu;
+ * bảo hành đã hết hạn thì chỉ nhả sê-ri (trạng thái giữ nguyên để báo cáo không nói sai).
+ */
+export async function ketThucBaoHanhKhiTraHang(nc: NguCanh, serialIds: string[], soPhieu: string): Promise<string[]> {
+  if (serialIds.length === 0) return [];
+  const ds = await nc.tx.warranty.findMany({
+    where: { serialNumberId: { in: serialIds } },
+    select: { id: true, status: true, serial: true, note: true, serialNumberId: true },
+    orderBy: { id: "asc" },
+  });
+  if (ds.length === 0) return [];
+  await khoaChungTu(nc.tx, "warranties", ds.map((w) => w.id));
+  const lyDo = `Khách trả máy theo phiếu ${soPhieu} — bảo hành của lần bán này kết thúc.`;
+  for (const w of ds) {
+    const conHieuLuc = w.status === "hieu-luc";
+    await nc.tx.warranty.update({
+      where: { id: w.id },
+      data: {
+        serialNumberId: null,
+        ...(conHieuLuc ? { status: "huy", cancelledAt: new Date() } : {}),
+        note: [w.note, lyDo].filter(Boolean).join(" · "),
+      },
+    });
+    await nc.kiemToan({
+      action: "sua", objectType: "warranty", objectId: w.id,
+      before: { trangThai: w.status, serialId: w.serialNumberId },
+      after: { trangThai: conHieuLuc ? "huy" : w.status, serialId: null, serial: w.serial, phieuTraHang: soPhieu },
+    });
+    await nc.suKien({ eventType: SU_KIEN.WARRANTY_CANCELLED, objectType: "warranty", objectId: w.id, payload: { lyDo, serial: w.serial, phieuTraHang: soPhieu } });
+  }
+  return ds.map((w) => w.id);
 }

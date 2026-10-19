@@ -61,7 +61,11 @@ export const LuocDoTaoPhieuXuat = z.object({
   khoId: z.uuid("Chọn kho xuất hàng."),
   nguoiNhan: chuoiTuyChon(255),
   ghiChu: chuoiTuyChon(2000),
-  dong: z.array(LuocDoDongXuat).min(1, "Chọn ít nhất một dòng hàng để xuất."),
+  dong: z
+    .array(LuocDoDongXuat)
+    .min(1, "Chọn ít nhất một dòng hàng để xuất.")
+    // TV-BH-03: hai dòng cùng một dòng đơn trong một phiếu = cộng số đã giao hai lần.
+    .refine((ds) => new Set(ds.map((x) => x.dongDonId)).size === ds.length, "Mỗi dòng hàng chỉ xuất hiện một lần trong phiếu xuất."),
 });
 
 export const LuocDoLocDon = z.object({

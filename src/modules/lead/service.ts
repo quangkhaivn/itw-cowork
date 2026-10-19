@@ -3,6 +3,7 @@ import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { chuanHoaDienThoai, chuanHoaEmail, chuanHoaMaSoThue, chuanHoaTen } from "@/modules/crm/chuan-hoa";
 import { khoaDoTrungLead, kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, tienVeChuoi, trongPhamVi } from "@/modules/crm/chung";
@@ -293,6 +294,7 @@ async function docLeadDuocSua(nc: NguCanh, id: string) {
 }
 
 export async function suaLead(nc: NguCanh, id: string, d: DuLieuSuaLead) {
+  await khoaChungTu(nc.tx, "leads", id);
   const truoc = await docLeadDuocSua(nc, id);
   if (truoc.giaiDoan === "CONVERTED") throw new LoiNghiepVu("Lead đã chuyển đổi thành khách hàng, không sửa được (LD-06).", 409, "da-chuyen-doi");
   // Lead đã loại chỉ được "mở lại" bằng cách đặt giai đoạn đang mở.
@@ -352,6 +354,7 @@ export async function suaLead(nc: NguCanh, id: string, d: DuLieuSuaLead) {
 }
 
 export async function loaiLead(nc: NguCanh, id: string, lyDo: string) {
+  await khoaChungTu(nc.tx, "leads", id);
   const truoc = await docLeadDuocSua(nc, id);
   if (!(LEAD_DANG_MO as string[]).includes(truoc.giaiDoan)) {
     throw new LoiNghiepVu("Chỉ loại được lead đang mở.", 409, "khong-dang-mo");
@@ -372,6 +375,9 @@ export async function loaiLead(nc: NguCanh, id: string, lyDo: string) {
  * lỗi ở bước nào (trùng MST, thiếu quyền tạo cơ hội…) thì không bước nào được ghi.
  */
 export async function chuyenDoiLead(nc: NguCanh, id: string, d: DuLieuChuyenDoiLead) {
+  // TV-BH-01: khóa dòng lead rồi mới đọc giai đoạn — bấm "Chuyển đổi" hai lần cùng lúc không
+  // sinh hai khách / hai cơ hội; yêu cầu sau chờ, thấy CONVERTED và bị chặn (LD-06).
+  await khoaChungTu(nc.tx, "leads", id);
   const lead = await docLeadDuocSua(nc, id);
   if (!(LEAD_DANG_MO as string[]).includes(lead.giaiDoan)) {
     throw new LoiNghiepVu(

@@ -78,6 +78,11 @@ export default function TacVuDonHang({
       kq = await goi(`${duong}/phieu-xuat`, "POST", { khoId, nguoiNhan, ghiChu, dong: dsDong });
     }
     if (!kq) return;
+    // TV-BH-07: hủy đơn không tự đóng dự án gắn kèm — nhắc người hủy báo quản lý dự án.
+    const duAn = (kq as { canhBao?: { duAnDangMo?: { ma: string; ten: string }[] } }).canhBao?.duAnDangMo ?? [];
+    if (viec === "huy" && duAn.length > 0) {
+      window.alert(`Đơn đã hủy. Dự án còn mở gắn với đơn: ${duAn.map((d) => `${d.ma} – ${d.ten}`).join("; ")}. Báo quản lý dự án quyết định đóng hay giữ.`);
+    }
     hop.current?.close();
     datViec(null);
     router.refresh();

@@ -237,6 +237,23 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - **Thu hồi phiên**: `layHoSoQuyen().doiMatKhauLuc` = mốc muộn hơn của `password_changed_at` và `security_changed_at` — mọi chỗ đang so phiên với lần đổi mật khẩu tự động tính cả đổi thiết lập 2 lớp, không phải sửa từng chỗ.
 - **Bắt buộc theo vai trò**: danh sách mã vai trò lưu ở `tenant_settings` khóa `bao_mat.vai_tro_bat_buoc_2_lop` (mảng — màn hình Cấu hình chỉ nhận số, QĐ-73). `layHoSoQuyen()` tính `phaiBat2Lop`; `xuLyApi` chặn (trừ route có `choPhepKhiPhaiBat2Lop`), `yeuCauDangNhap()` đưa sang `/bat-xac-thuc-2-lop`.
 
+## 7s. Khóa chứng từ và lan truyền trạng thái (0.16.1)
+
+Luật: `BUSINESS_RULES.md` mục 25 (TV-BH). Quyết định QĐ-77 → QĐ-81. Bài thử `thu/thu-toan-ven-ban-hang.ts` (mỗi lỗi tranh chấp chạy hai giao dịch `voiTenant` song song).
+
+- **Khóa trước, đọc sau.** Mỗi API nghiệp vụ đã là một giao dịch (`xuLyApi` → `voiTenant`, READ COMMITTED). Hàm đổi trạng thái gọi `khoaChungTu(tx, bang, id)` (`src/lib/khoa-chung-tu.ts`, `SELECT … FOR UPDATE` theo danh sách trắng, nhiều dòng thì theo thứ tự id) **trước** khi đọc chứng từ. Yêu cầu thứ hai chờ đến khi yêu cầu thứ nhất COMMIT rồi mới đọc — thấy trạng thái mới và bị chặn bằng chính kiểm tra trạng thái sẵn có. Không dùng SERIALIZABLE (phải bắt lỗi tuần tự hóa và chạy lại cả request) hay cột phiên bản (phải sửa mọi màn hình) — QĐ-78.
+- **Thứ tự khóa** trong một yêu cầu: dòng chứng từ chính → (dòng đơn khi lập phiếu trả; hóa đơn / hóa đơn NCC khi chốt giảm trừ — khớp thứ tự "phiếu → hóa đơn tăng dần" của mục 7t) → dòng số dư kho trong `ghiSoKho()` → bảo hành. Mọi đường đi cùng thứ tự đó nên không khóa chéo.
+- **Thứ không thuộc một chứng từ** (sê-ri dùng chung giữa nhiều đơn) đổi trạng thái bằng `updateMany` có điều kiện trạng thái cũ, kiểm `count === 1`; sai thì ném lỗi nghiệp vụ, cả giao dịch cuộn ngược.
+- **Số cộng dồn** (`sales_order_items.delivered_qty`) cộng bằng `{ increment }` trên CSDL; CHECK `delivered_qty <= quantity` là lớp chặn cuối.
+- **Giữ chỗ suy từ sổ cái** (QĐ-79): không lưu "kho giữ chỗ" trên đơn. `taoPhieuXuat()` đọc phần còn giữ theo (sản phẩm → kho) từ `inventory_transactions` (`ref_type = 'don-hang'`, `ref_id` = đơn); xuất ở kho giao thì nhả tại kho giao trước (`nhaGiuCho` của dòng `xuat`), phần còn lại nhả bằng dòng `nha-giu-cho` ở các kho đã giữ (theo thứ tự id kho). Đơn giao đủ / hủy gọi `nhaHetGiuCho()` — nhả mọi phần còn dương ở mọi kho. Mọi thay đổi vẫn qua `ghiSoKho()`, nên đối soát sổ cái ↔ số dư vẫn khớp.
+- **Lan truyền trạng thái trong cùng giao dịch**:
+  - báo giá chấp nhận / đơn từ báo giá → `thangCoHoiTheoBaoGia()` (bao-gia/service.ts): cập nhật có điều kiện `stage NOT IN (WON, LOST)`, kiểm toán + sự kiện + mốc hành trình `co-hoi-thang` như `doiGiaiDoan()`, không đòi quyền sửa cơ hội;
+  - xác nhận phiếu trả hàng thường → `ketThucBaoHanhKhiTraHang()` (bao-hanh/service.ts): bảo hành `huy` + nhả sê-ri;
+  - hủy đơn → đọc `invoices` trong cùng giao dịch, chặn nếu còn hóa đơn chưa hủy; trả về danh sách dự án còn mở để giao diện cảnh báo.
+- **Một đơn mỗi báo giá**: service khóa dòng `quotations` rồi kiểm; chỉ mục riêng phần `sales_orders_bao_gia_dang_hoat_dong_key (quotation_id) WHERE status <> 'CANCELLED'` là lớp chặn cuối (lỗi P2002 → câu tiếng Việt).
+- **Phiếu hỗ trợ mở lại**: `resolved_at` = mốc xong hiện hành (bộ quét SLA dựa vào nó), `first_resolved_at` = mốc xong lần đầu. Loại diễn biến `mo-lai` thêm vào CHECK `support_ticket_events_loai_check`.
+- Bảng cần khóa mà chưa có trong danh sách trắng của `khoaChungTu` thì thêm vào `BANG_KHOA` (một chỗ), không viết `FOR UPDATE` rời rạc trong service.
+
 ## 7t. Khóa chứng từ tiền (0.16.1)
 
 - Nền: `src/lib/khoa-chung-tu.ts` — `khoaChungTu(tx, bang, ids)` chạy `SELECT … FOR UPDATE` trên danh sách trắng bảng, khóa nhiều dòng theo id tăng dần (QĐ-77). Không có tầng khóa nào khác (không advisory lock, không SERIALIZABLE).
@@ -254,7 +271,6 @@ Chi phí: mỗi bảng thêm cột `tenant_id` và một chỉ mục. Không có
 - **Chốt cuối ở CSDL** cho luật "một đơn — một hóa đơn còn hiệu lực": hai chỉ mục duy nhất riêng phần (migration `20261014085000_toan_ven_tai_chinh`). Prisma không khai được chỉ mục riêng phần nên chỉ ghi chú ở `schema.prisma` (cùng cách `job_runs_lich_moi_ngay`).
 - Bài thử `thu:toan-ven-tai-chinh` chạy **hai giao dịch `voiTenant` thật** (hai kết nối) bằng `Promise.allSettled`; gỡ khóa ra thì các bài đồng thời hỏng (đã kiểm khi viết).
 - **Còn ngoài phạm vi gói này**: chốt giảm trừ trả hàng (`tra-hang`) cũng đọc phần còn nợ của hóa đơn — phân hệ đó phải khóa `invoices` / `supplier_bills` bằng đúng hàm này thì mới khép kín với thu / chi.
-
 ## 8. Tác vụ nền
 
 `worker/index.ts` dùng chung ảnh Docker với app. Phase 1 mới đấu dây (nhịp 60 giây kiểm CSDL + Redis). Phase 8 thêm: bộ lập lịch, quy tắc nhắc việc (đọc ngưỡng từ Cấu hình), sinh thông báo.

@@ -3,6 +3,7 @@ import type { NguCanh } from "@/lib/api";
 import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { batBuocThayKho, ghiSoKho } from "@/modules/kho/service";
@@ -266,6 +267,8 @@ export function docSerialTuGhiChu(ghiChu: string | null): string[] {
 /** Xuất: hàng thật sự rời kho nguồn. Từ đây phiếu khóa lại (CK-03). */
 export async function xuatChuyenKho(nc: NguCanh, id: string, d: DuLieuXuatChuyenKho) {
   batBuocQuyen(nc.hoSo, "inventory.update", { objectType: "stock_transfer", objectId: id });
+  // TV-BH-01: khóa phiếu rồi mới đọc trạng thái — bấm hai lần không xuất kho hai lần.
+  await khoaChungTu(nc.tx, "stock_transfers", id);
   const p = await docPhieu(nc, id);
   if (!xuatDuoc(p.status)) throw new LoiNghiepVu("Chỉ xuất được phiếu còn nháp.", 409, "sai-trang-thai");
   if (p.fromWarehouse.status !== "hoat-dong") throw new LoiNghiepVu("Kho xuất đã ngừng hoạt động.", 409, "kho-ngung");
@@ -325,10 +328,11 @@ export async function xuatChuyenKho(nc: NguCanh, id: string, d: DuLieuXuatChuyen
       if (!sn) continue;
       // CK-05: đang trên đường thì không thuộc kho nào. Nói nó còn ở kho nguồn hay
       // đã ở kho đích đều là nói sai.
-      await nc.tx.serialNumber.update({
-        where: { id: sn.id },
+      const kq = await nc.tx.serialNumber.updateMany({
+        where: { id: sn.id, status: "trong-kho", warehouseId: p.fromWarehouse.id },
         data: { status: "dang-chuyen", warehouseId: null, stockTransferItemId: k.dongId },
       });
+      if (kq.count !== 1) throw new LoiNghiepVu(`Số sê-ri ${s} vừa được xuất theo chứng từ khác.`, 409, "serial-da-dung", { serial: s });
     }
   }
 
@@ -359,6 +363,9 @@ export async function xuatChuyenKho(nc: NguCanh, id: string, d: DuLieuXuatChuyen
  */
 export async function nhanChuyenKho(nc: NguCanh, id: string, d: DuLieuNhanChuyenKho) {
   batBuocQuyen(nc.hoSo, "inventory.update", { objectType: "stock_transfer", objectId: id });
+  // TV-BH-01: hai người cùng bấm "Nhận hàng" — người sau thấy phiếu đã RECEIVED và bị chặn,
+  // không nhập kho đích hai lần.
+  await khoaChungTu(nc.tx, "stock_transfers", id);
   const p = await docPhieu(nc, id);
   if (!nhanDuoc(p.status)) throw new LoiNghiepVu("Chỉ nhận được hàng đang trên đường.", 409, "sai-trang-thai");
   if (p.toWarehouse.status !== "hoat-dong") throw new LoiNghiepVu("Kho nhận đã ngừng hoạt động.", 409, "kho-ngung");
@@ -459,6 +466,7 @@ export async function nhanChuyenKho(nc: NguCanh, id: string, d: DuLieuNhanChuyen
 /** CK-06: chỉ hủy được phiếu còn nháp. Hàng đã rời kho thì phải chuyển ngược lại. */
 export async function huyChuyenKho(nc: NguCanh, id: string, lyDo: string) {
   batBuocQuyen(nc.hoSo, "inventory.create", { objectType: "stock_transfer", objectId: id });
+  await khoaChungTu(nc.tx, "stock_transfers", id);
   const p = await docPhieu(nc, id);
   if (!huyDuoc(p.status)) {
     throw new LoiNghiepVu(
