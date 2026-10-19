@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { NguCanh } from "@/lib/api";
-import { thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
+import { laLoiPhien, thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
 import { batBuocQuyen, coQuyen, LoiThieuQuyen } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
@@ -265,6 +265,9 @@ export async function hoiDap(x: NguCanh | BuocGiaoDich, d: { hoiThoaiId?: string
               return ketQuaSangVanBan(await cc.chay(nc, thamSo));
             });
           } catch (e) {
+            // Phiên bị thu hồi / bắt đổi mật khẩu giữa lượt: dừng hẳn, không gọi mô hình thêm vòng nào
+            // (tốn tiền, và kết quả không ghi được cho một phiên đã hết hiệu lực) — QA 0.16.1.
+            if (laLoiPhien(e)) throw e;
             if (e instanceof LoiThieuQuyen) {
               ketCuc = "thieu-quyen";
               loi = `Thiếu quyền ${cc.quyen}.`;
@@ -294,6 +297,7 @@ export async function hoiDap(x: NguCanh | BuocGiaoDich, d: { hoiThoaiId?: string
       traLoi = CAU_VUOT_TRAN;
     }
   } catch (e) {
+    if (laLoiPhien(e)) throw e;
     loiLuot = e instanceof Error ? e.message : String(e);
     traLoi =
       "Tôi chưa gọi được mô hình nên không trả lời câu này. Số liệu thì tôi không đoán — bạn thử lại sau ít phút giúp tôi.";

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { voiTenant, type ClientTenant, type TuyChonGiaoDich } from "./db";
-import { kiemHoSoTrongGiaoDich, taoNguCanh, traLoiChuaDangNhap, xuLyLoiApi, type NguCanh, type TuyChonApi } from "./api";
+import { kiemHoSoTrongGiaoDich, LoiChuaDangNhap, taoNguCanh, traLoiChuaDangNhap, xuLyLoiApi, type NguCanh, type TuyChonApi } from "./api";
 import { layPhienHienTai } from "./xac-thuc";
 import { layIpKhach } from "./yeu-cau";
-import { LoiKhongTimThay } from "./loi";
+import { LoiKhongTimThay, LoiNghiepVu } from "./loi";
 import type { HoSoQuyen } from "./phan-quyen";
 
 /**
@@ -48,6 +48,43 @@ export function buocChoNguoiDung(
   };
 }
 
+type PhienApi = Parameters<typeof kiemHoSoTrongGiaoDich>[1];
+
+/**
+ * `BuocGiaoDich` của một phiên đăng nhập — đúng thứ `xuLyApiNhieuBuoc` đưa cho route. MỖI bước: giao
+ * dịch riêng đặt `app.tenant_id` của phiên, đọc lại hồ sơ quyền, kiểm phiên còn hiệu lực (đổi mật khẩu /
+ * thu hồi giữa chừng → `LoiChuaDangNhap`) và quyền của route. Xuất ra để bài thử gọi thẳng (QA 0.16.1).
+ */
+export function buocTuPhien(
+  phien: PhienApi,
+  tuyChon: TuyChonNhieuBuoc,
+  ip: string | null,
+  userAgent: string | null,
+  khiDocHoSo?: (h: HoSoQuyen) => void,
+): BuocGiaoDich {
+  return {
+    giaoDich: (khoi, tc) =>
+      voiTenant(
+        phien.tenantId,
+        async (tx) => {
+          const hoSo = await kiemHoSoTrongGiaoDich(tx, phien, tuyChon, khiDocHoSo);
+          return khoi(taoNguCanh(tx, phien.tenantId, hoSo, ip, userAgent));
+        },
+        tc,
+      ),
+  };
+}
+
+/**
+ * Lỗi của bước KIỂM PHIÊN (không phải lỗi nghiệp vụ của bước): phiên hết hiệu lực, bị bắt đổi mật khẩu /
+ * bật 2 lớp giữa chừng. Service nhiều bước gặp lỗi này thì phải DỪNG cả luồng, không nuốt như lỗi thường.
+ */
+export function laLoiPhien(loi: unknown): boolean {
+  if (loi instanceof LoiChuaDangNhap) return true;
+  const ma = (loi as { ma?: string } | null)?.ma;
+  return loi instanceof LoiNghiepVu && (ma === "phai-doi-mat-khau" || ma === "phai-bat-2-lop");
+}
+
 const LA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type TuyChonNhieuBuoc = Pick<TuyChonApi, "quyen" | "choPhepKhiPhaiDoiMatKhau" | "choPhepKhiPhaiBat2Lop">;
@@ -63,18 +100,7 @@ export function xuLyApiNhieuBuoc<P extends Record<string, string> = Record<strin
     const ip = layIpKhach(req.headers);
     const userAgent = req.headers.get("user-agent");
     let hoSoDaDoc: HoSoQuyen | null = null;
-
-    const nb: BuocGiaoDich = {
-      giaoDich: (khoi, tc) =>
-        voiTenant(
-          phien.tenantId,
-          async (tx) => {
-            const hoSo = await kiemHoSoTrongGiaoDich(tx, phien, tuyChon, (h) => (hoSoDaDoc = h));
-            return khoi(taoNguCanh(tx, phien.tenantId, hoSo, ip, userAgent));
-          },
-          tc,
-        ),
-    };
+    const nb = buocTuPhien(phien, tuyChon, ip, userAgent, (h) => (hoSoDaDoc = h));
 
     try {
       const thamSo = ((await ctx?.params) ?? {}) as P;
