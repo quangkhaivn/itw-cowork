@@ -270,6 +270,7 @@ Luật: `BUSINESS_RULES.md` mục 25 (TV-BH). Quyết định QĐ-77 → QĐ-81.
   | `huyDonMua` | `purchase_requests` (nếu có) rồi `purchase_orders` |
 - **Chốt cuối ở CSDL** cho luật "một đơn — một hóa đơn còn hiệu lực": hai chỉ mục duy nhất riêng phần (migration `20261014085000_toan_ven_tai_chinh`). Prisma không khai được chỉ mục riêng phần nên chỉ ghi chú ở `schema.prisma` (cùng cách `job_runs_lich_moi_ngay`).
 - Bài thử `thu:toan-ven-tai-chinh` chạy **hai giao dịch `voiTenant` thật** (hai kết nối) bằng `Promise.allSettled`; gỡ khóa ra thì các bài đồng thời hỏng (đã kiểm khi viết).
+- **Khóa chéo vẫn có thể xảy ra với phân hệ khác** khóa theo thứ tự ngược — ví dụ gộp khách khóa dòng `customers` rồi sửa `invoices`, còn phiếu thu khóa `invoices` rồi chèn phiếu (khóa khóa-ngoại lên `customers`). PostgreSQL phát hiện sau ~1 giây và hủy một bên; `anhXaLoi` nhận ra 40P01 / 40001 (`laLoiTranhChapGiaoDich`, P2034 hoặc P2010 kèm mã gốc) và trả **409 `tranh-chap-ghi`** "thử lại" thay vì 500. Bài thử `thu:qa-tv-tai-chinh` dựng đúng tình huống này.
 - **Còn ngoài phạm vi gói này**: chốt giảm trừ trả hàng (`tra-hang`) cũng đọc phần còn nợ của hóa đơn — phân hệ đó phải khóa `invoices` / `supplier_bills` bằng đúng hàm này thì mới khép kín với thu / chi.
 
 ## 7u. Vận hành bền vững (0.16.1)

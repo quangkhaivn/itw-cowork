@@ -442,6 +442,10 @@ export async function chiTietDonMua(nc: NguCanh, id: string) {
     },
   });
   const duocSua = coQuyen(nc.hoSo, "purchasing.update") && donMuaSuaDuoc(o.status);
+  // Nút Hủy chỉ hiện khi `huyDonMua` thật sự cho hủy: chưa nhận hàng và không còn hóa đơn nhà
+  // cung cấp hiệu lực (TV-TC-10) — không để người dùng bấm rồi mới nhận lỗi.
+  const daNhanHang = o.items.some((x) => Number(x.receivedQty) > 0);
+  const conHoaDonNcc = (await nc.tx.supplierBill.count({ where: { purchaseOrderId: id, status: { not: "CANCELLED" } } })) > 0;
   return {
     donMua: donMuaRa(o),
     phieuNhan: phieuNhan.map((p) => ({
@@ -457,7 +461,7 @@ export async function chiTietDonMua(nc: NguCanh, id: string) {
       gui: duocSua && o.items.length > 0,
       xacNhan: coQuyen(nc.hoSo, "purchasing.update") && o.status === "SENT",
       nhanHang: coQuyen(nc.hoSo, "inventory.update") && nhanDuocHang(o.status),
-      huy: coQuyen(nc.hoSo, "purchasing.update") && !donMuaDaDong(o.status),
+      huy: coQuyen(nc.hoSo, "purchasing.update") && !donMuaDaDong(o.status) && !daNhanHang && !conHoaDonNcc,
     },
   };
 }

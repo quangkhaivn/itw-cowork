@@ -43,3 +43,18 @@ export function laViPhamRangBuoc(loi: unknown, tenRangBuoc?: string): boolean {
   const s = loi instanceof Error ? loi.message : String(loi);
   return (s.includes("23514") || s.includes("check constraint")) && (!tenRangBuoc || s.includes(tenRangBuoc));
 }
+
+/**
+ * Giao dịch bị PostgreSQL hủy vì tranh chấp khóa — khóa chéo (40P01) hoặc xung đột tuần tự
+ * (40001). Prisma bọc thành P2034 (truy vấn thường) hoặc P2010 kèm mã gốc (truy vấn thô, ví
+ * dụ `khoaChungTu`). Không phải lỗi của máy chủ: cả giao dịch đã cuộn ngược, người dùng chỉ
+ * cần thử lại — nên trả 409 chứ không phải 500 (QA 0.16.1).
+ */
+export function laLoiTranhChapGiaoDich(loi: unknown): boolean {
+  if (typeof loi !== "object" || loi === null) return false;
+  const l = loi as { code?: unknown; meta?: { driverAdapterError?: { cause?: { originalCode?: unknown } }; code?: unknown }; message?: unknown };
+  if (l.code === "P2034") return true;
+  const maGoc = l.meta?.driverAdapterError?.cause?.originalCode ?? l.meta?.code;
+  if (maGoc === "40P01" || maGoc === "40001") return true;
+  return typeof l.message === "string" && /deadlock detected|could not serialize access/.test(l.message);
+}

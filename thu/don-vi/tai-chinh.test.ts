@@ -106,3 +106,23 @@ describe("Hạn thanh toán và biên lợi nhuận kỳ", () => {
     assert.equal(bienLoiNhuanKy(100, 130), -30);
   });
 });
+
+describe("Lỗi tranh chấp khóa → 409 thử lại (QA 0.16.1)", async () => {
+  const { laLoiTranhChapGiaoDich } = await import("../../src/lib/loi");
+  it("nhận ra khóa chéo / xung đột tuần tự ở mọi dạng Prisma bọc", () => {
+    assert.equal(laLoiTranhChapGiaoDich({ code: "P2034", message: "Transaction failed due to a write conflict or a deadlock" }), true);
+    assert.equal(
+      laLoiTranhChapGiaoDich({ code: "P2010", meta: { driverAdapterError: { cause: { originalCode: "40P01", kind: "TransactionWriteConflict" } } } }),
+      true,
+    );
+    assert.equal(laLoiTranhChapGiaoDich({ code: "P2010", meta: { driverAdapterError: { cause: { originalCode: "40001" } } } }), true);
+    assert.equal(laLoiTranhChapGiaoDich(new Error("Raw query failed. Code: `40P01`. Message: `deadlock detected`")), true);
+  });
+  it("không nhận nhầm lỗi khác", () => {
+    assert.equal(laLoiTranhChapGiaoDich({ code: "P2002" }), false);
+    assert.equal(laLoiTranhChapGiaoDich({ code: "P2010", meta: { driverAdapterError: { cause: { originalCode: "23514" } } } }), false);
+    assert.equal(laLoiTranhChapGiaoDich(new Error("Số tiền 40001 không hợp lệ")), false);
+    assert.equal(laLoiTranhChapGiaoDich(null), false);
+    assert.equal(laLoiTranhChapGiaoDich("deadlock"), false);
+  });
+});

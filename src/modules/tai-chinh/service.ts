@@ -534,6 +534,11 @@ export async function thuTien(nc: NguCanh, d: DuLieuThuTien) {
   const tien = dong(d.soTien);
   if (tien <= 0) throw new LoiDinhDang("soTien", "Số tiền thu phải lớn hơn 0.");
 
+  // Mỗi dòng phân bổ phải còn ít nhất 1 ₫ sau khi làm tròn về đồng — dòng 0 ₫ (hay 0,4 ₫)
+  // trước đây lọt qua kiểm tổng rồi vấp CHECK amount > 0 của CSDL thành lỗi 500 (QA 0.16.1).
+  for (const [i, p] of d.phanBo.entries()) {
+    if (dong(p.soTien) <= 0) throw new LoiDinhDang("phanBo", `Dòng phân bổ ${i + 1}: số tiền phải từ 1 ₫ trở lên — bỏ dòng không thu tiền.`);
+  }
   const tongPhanBo = d.phanBo.reduce((s, p) => s + dong(p.soTien), 0);
   if (tongPhanBo !== tien) {
     throw new LoiNghiepVu(
