@@ -20,6 +20,8 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 25 (TV-BH-01 → TV-BH-12). Ki�
 - **Liên kết chéo khách**: phiếu hỗ trợ không gắn được sê-ri / đơn / dự án / liên hệ của khách khác; phiếu trả hàng không lấy được dòng của đơn khác, sê-ri bán cho khách khác, hay cộng nhiều dòng vượt số đã giao.
 - **Mở lại phiếu hỗ trợ** đã xử lý xong nay xóa mốc xong để nhắc trễ hạn SLA chạy lại; giữ mốc xong lần đầu, diễn biến ghi "Mở lại phiếu".
 
+- **QA độc lập** (`npm run thu:qa-tv-ban-hang`, trong `thu:tich-hop`; `thu:qa-tv-ban-hang-http` chạy riêng vào máy chủ đang chạy): hai đơn có dòng hàng ngược thứ tự xác nhận / xuất cùng lúc từng khóa chéo nhau và trả lỗi 500 — nay khóa số dư theo một thứ tự chung, lỗi tranh chấp còn lại trả 409 "thử lại"; xác nhận trả hàng nhà cung cấp chạy cùng lúc với xuất đơn từng ghi đè máy đã bán cho khách thành "trả NCC" — nay cập nhật sê-ri có điều kiện; sửa bảo hành chạy cùng lúc với hủy từng gia hạn bảo hành đã hủy — nay khóa; khách trả máy mà bảo hành đã quá hạn theo ngày thì giữ trạng thái hết hạn (trước đây ghi "hủy").
+
 #### Đổi hành vi
 - **Khách trả hàng bắt buộc theo đơn** (bỏ phiếu "trả lẻ"): mở từ nút "Khách trả hàng" trên trang đơn hàng. Phiếu đổi máy không còn tính vào "đã trả" của dòng đơn.
 
