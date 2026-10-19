@@ -48,7 +48,8 @@
     "thu:gop-m-e": "tsx --env-file-if-exists=.env thu/thu-gop-m-e.ts",
     "thu:qa-email-http": "tsx --env-file-if-exists=.env thu/thu-qa-email-http.ts",
     "thu:toan-ven-ban-hang": "tsx --env-file-if-exists=.env thu/thu-toan-ven-ban-hang.ts",
-    "thu:qa-tv-ban-hang": "tsx --env-file-if-exists=.env thu/thu-qa-tv-ban-hang.ts"
+    "thu:qa-tv-ban-hang": "tsx --env-file-if-exists=.env thu/thu-qa-tv-ban-hang.ts",
+    "thu:qa-tv-ban-hang-http": "tsx --env-file-if-exists=.env thu/thu-qa-tv-ban-hang-http.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
