@@ -6,7 +6,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 **Chưa triển khai lên máy thật.** Một migration mới (`20261014150000_cong_viec_thong_suot`), không có biến môi trường mới, không thêm mã quyền.
 
-Luật nghiệp vụ: `BUSINESS_RULES.md` mục 25 (CV-04 → CV-11) và mục 26 (HS-01 → HS-04). Quyết định QĐ-78 → QĐ-80.
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 27 (CV-04 → CV-11) và mục 28 (HS-01 → HS-04). Quyết định QĐ-91 → QĐ-93.
 
 ### Thêm
 - **Kết quả công việc**: mỗi việc có ô kết quả (đã làm gì, khách nói gì, bước tiếp theo) và đánh giá *Đạt / Đạt một phần / Không đạt / Cần làm tiếp*, ghi người ghi và lúc ghi. Đánh dấu xong **bắt buộc** có kết quả (≥ 10 ký tự) và đánh giá. Kết quả hiện trên dòng thời gian và thẻ Công việc của Customer 360.
@@ -20,7 +20,7 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 25 (CV-04 → CV-11) và mục 2
 - API mới: `GET /api/v1/cong-viec/:id`, `GET /api/v1/cong-viec/:id/kiem-tra`, `POST /api/v1/cong-viec/:id/muc-kiem-tra`, `PATCH|DELETE /api/v1/cong-viec/muc-kiem-tra/:mucId`. `PATCH /api/v1/cong-viec/:id` nhận thêm `ketQua`, `danhGia`, `viecTiepTheo`.
 
 ### Thay đổi đáng lưu ý
-- Việc đã xong **trước 0.17** không có kết quả: vẫn mở lại được, nhưng muốn sửa thứ khác thì phải ghi kết quả trước. Trang chi tiết hiện nhắc "Ghi kết quả". Luật này kiểm ở service chứ không đặt CHECK, để chuyển đổi lead và gộp khách vẫn chạy trên dữ liệu cũ (QĐ-78).
+- Việc đã xong **trước 0.17** không có kết quả: vẫn mở lại được, nhưng muốn sửa thứ khác thì phải ghi kết quả trước. Trang chi tiết hiện nhắc "Ghi kết quả". Luật này kiểm ở service chứ không đặt CHECK, để chuyển đổi lead và gộp khách vẫn chạy trên dữ liệu cũ (QĐ-91).
 - Việc cũ được điền người giao = người tạo, lúc giao = lúc tạo.
 
 ### Sửa

@@ -29,7 +29,7 @@ import { clientChuSoHuu, dat, ketLuan } from "./thu-lib";
 
 /**
  * Kiểm chứng 0.17.0 — Công việc thông suốt — trên CSDL THẬT, qua đúng service mà API gọi.
- * Luật: BUSINESS_RULES.md mục 25 (CV-04 → CV-11) và mục 26 (HS-01 → HS-04).
+ * Luật: BUSINESS_RULES.md mục 27 (CV-04 → CV-11) và mục 28 (HS-01 → HS-04).
  * Chạy: npm run thu:cong-viec (CSDL phát triển).
  */
 
@@ -270,7 +270,7 @@ async function main() {
   await chu.task.update({ where: { id: cu2.id }, data: { status: "xong", completedAt: new Date() } });
   await voi(T, nvA, (nc) => suaViec(nc, cu2.id, { trangThai: "mo" }));
   dat("Mở lại việc cũ chưa có kết quả được", (await chu.task.findUniqueOrThrow({ where: { id: cu2.id } })).status === "mo");
-  // Đổi khách hàng loạt (như chuyển đổi lead / gộp khách) trên việc cũ không bị CSDL chặn (QĐ-78).
+  // Đổi khách hàng loạt (như chuyển đổi lead / gộp khách) trên việc cũ không bị CSDL chặn (QĐ-91).
   const capNhat = await chu.task.updateMany({ where: { id: { in: [cu.id] } }, data: { updatedAt: new Date() } });
   dat("Cập nhật hàng loạt việc đã xong vẫn chạy ở tầng CSDL", capNhat.count === 1);
 

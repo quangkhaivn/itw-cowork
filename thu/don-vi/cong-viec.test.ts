@@ -1,6 +1,6 @@
 /**
  * Kiểm thử đơn vị phần thuần của 0.17.0 — Công việc thông suốt.
- * Luật: BUSINESS_RULES.md mục 25 (CV-04 → CV-11) và mục 26 (HS-01 → HS-04).
+ * Luật: BUSINESS_RULES.md mục 27 (CV-04 → CV-11) và mục 28 (HS-01 → HS-04).
  * Chạy: npm run thu:don-vi
  */
 import { describe, it } from "node:test";

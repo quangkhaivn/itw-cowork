@@ -40,7 +40,7 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `leads` | Lead | Phase 2. CHECK giai đoạn; phải có điện thoại hoặc email; loại phải có lý do; đã chuyển đổi phải trỏ sang khách. `marketing_opt_out_at` (0.16.0): lúc từ chối nhận thư marketing, null = chưa |
 | `interactions` | Tương tác đã xảy ra | Phase 2. CHECK loại; phải gắn khách hoặc lead. QĐ-12 |
 | `opportunities` | Cơ hội | Phase 2. **CHECK: đang mở ⇒ có next_action + next_action_date**; thua ⇒ có lost_reason; đóng ⇒ có closed_at; xác suất 0–100 |
-| `tasks` | Công việc có hạn | Phase 2. CHECK trạng thái, ưu tiên; xong ⇒ có completed_at. QĐ-17. 0.17.0: thêm `result`, `outcome`, `result_at`, `result_by` (kết quả — CHECK đánh giá hợp lệ và chữ/đánh giá đi cùng nhau; "xong phải có kết quả" kiểm ở service, QĐ-78), `assigned_by`, `assigned_at` (người giao, lúc giao) |
+| `tasks` | Công việc có hạn | Phase 2. CHECK trạng thái, ưu tiên; xong ⇒ có completed_at. QĐ-17. 0.17.0: thêm `result`, `outcome`, `result_at`, `result_by` (kết quả — CHECK đánh giá hợp lệ và chữ/đánh giá đi cùng nhau; "xong phải có kết quả" kiểm ở service, QĐ-91), `assigned_by`, `assigned_at` (người giao, lúc giao) |
 | `task_checklist_items` | Danh sách kiểm tra trước khi xong của một công việc | 0.17.0 (CV-07). Mục bắt buộc / không; tích ghi `done_at` + `done_by` (CHECK đi cùng nhau); gỡ là xóa mềm `removed_at` + `removed_by`; CHECK nhãn ≥ 2 ký tự. RLS theo tenant như mọi bảng có `tenant_id` |
 | `product_categories` | Nhóm sản phẩm, cây qua parent_id | Phase 3. `requires_serial`, `default_warranty_months`, `default_vat_rate` — mặc định cho sản phẩm mới |
 | `brands` | Thương hiệu | Phase 3 |

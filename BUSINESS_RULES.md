@@ -548,14 +548,14 @@ Mã 6 số đổi mỗi 30 giây (TOTP, RFC 6238) từ ứng dụng xác thực 
 | XT-07 | Bật, tắt, đặt lại đều **thu hồi mọi phiên khác** (như đổi mật khẩu). Tắt cần cả mật khẩu và một mã. Vai trò bắt buộc thì không tự tắt được | [SV] · [TH] |
 | XT-08 | Quản trị (`user.update`) đặt lại 2 lớp cho người khác, bắt buộc ghi lý do, ghi kiểm toán; không tự đặt lại cho chính mình | [SV] · [TH] |
 
-## 25. Công việc thông suốt (0.17.0)
+## 27. Công việc thông suốt (0.17.0)
 
 Mục tiêu: giao việc có người nhận biết ngay, làm xong có **kết quả** lưu lại, và máy **kiểm tra trước khi cho xong**. Nối tiếp CV-01 → CV-03 ở mục 3.
 
 | # | Luật | Chặn ở |
 |---|---|---|
 | CV-04 | Kết quả nằm ngay trên công việc: `result` (chữ) + `outcome` (đánh giá: `dat` Đạt · `mot-phan` Đạt một phần · `khong-dat` Không đạt · `can-theo-doi` Cần làm tiếp). Hai cột **đi cùng nhau** — có chữ thì phải có đánh giá và ngược lại; ghi kèm người ghi, lúc ghi. Sửa kết quả có nhật ký kiểm toán trước/sau | [CSDL] CHECK `tasks_outcome_check`, `tasks_ket_qua_di_cung_check` · [SV] · [TH] |
-| CV-05 | Đánh dấu **xong phải có kết quả** (tối thiểu 10 ký tự) và đánh giá. Việc đã xong không được xoá kết quả (muốn bỏ thì mở lại việc). Việc xong **trước 0.17** chưa có kết quả: chỉ được mở lại hoặc ghi kết quả, không lặng lẽ sửa thứ khác | [SV] (không đặt CHECK — QĐ-78) · [ĐV] · [TH] |
+| CV-05 | Đánh dấu **xong phải có kết quả** (tối thiểu 10 ký tự) và đánh giá. Việc đã xong không được xoá kết quả (muốn bỏ thì mở lại việc). Việc xong **trước 0.17** chưa có kết quả: chỉ được mở lại hoặc ghi kết quả, không lặng lẽ sửa thứ khác | [SV] (không đặt CHECK — QĐ-91) · [ĐV] · [TH] |
 | CV-06 | **Kiểm tra trước khi xong** dùng một hàm thuần `kiemTraTruocKhiXong` cho cả hai chỗ: màn hình hỏi trước (`GET /api/v1/cong-viec/:id/kiem-tra`, không ghi gì) và service chạy lại **trong cùng giao dịch** lúc ghi. Hai mức: *lỗi* (chặn — thiếu kết quả, thiếu đánh giá, còn mục bắt buộc, việc đã hủy, "Cần làm tiếp" chưa hẹn việc) và *nhắc* (không chặn — mục không bắt buộc chưa tích, hồ sơ khách thiếu). Bị chặn thì API trả 422 `chua-du-dieu-kien-xong` kèm danh sách vấn đề | [SV] · [ĐV] · [TH] |
 | CV-07 | **Danh sách kiểm tra** của công việc: tối đa 30 mục, nhãn ≥ 2 ký tự, mỗi mục bắt buộc hoặc không. Mục bắt buộc chưa tích thì không xong được. Tích ghi người tích + lúc tích. Danh sách **khóa** khi việc đã xong hoặc đã hủy. Gỡ mục là xóa mềm (`removed_at`). Thêm / tích / bỏ tích / gỡ đều ghi kiểm toán | [CSDL] CHECK nhãn, tích, gỡ · [SV] · [TH] |
 | CV-08 | **Thông báo khi giao việc**: giao cho người khác (lúc tạo hoặc đổi người) → người nhận được báo ngay (khẩn/cao thì mức cảnh báo tương ứng); đổi người → người cũ được báo "không cần làm tiếp". Việc **xong** → báo người giao (không có thì người tạo) kèm đánh giá + kết quả; "Không đạt" là mức cảnh báo. Không ai tự nhận thông báo về thao tác của chính mình; người nhận đã ngừng hoạt động thì không báo. Chống trùng theo đúng **lần** giao / lần xong. Ghi người giao + lúc giao (`assigned_by`, `assigned_at`); thẻ **"Tôi giao"** liệt kê việc mình giao cho người khác | [SV] · [TH] |
@@ -563,7 +563,7 @@ Mục tiêu: giao việc có người nhận biết ngay, làm xong có **kết 
 | CV-10 | **Đính kèm vào công việc** (biên bản nghiệm thu, ảnh hiện trường, tệp khách gửi) theo luật mục 20; xem theo phạm vi `task.view`, đính / gỡ cần `task.update` | [CSDL] CHECK `attachments_loai_doi_tuong_check` · [SV] DK-01 · [TH] |
 | CV-11 | Kết quả hiện **trên hồ sơ khách**: dòng thời gian Customer 360 ghi "Hoàn thành (đánh giá): …" kèm nội dung kết quả, thẻ Công việc hiện kết quả từng việc. Ô "xong" trên danh sách không ghi tắt mà mở trang chi tiết với hộp hoàn thành bật sẵn | [SV] `khach360` · giao diện · [TH] |
 
-## 26. Hồ sơ khách đầy đủ (0.17.0)
+## 28. Hồ sơ khách đầy đủ (0.17.0)
 
 | # | Luật | Chặn ở |
 |---|---|---|
