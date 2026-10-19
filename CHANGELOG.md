@@ -43,6 +43,27 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 25 (TV-BH-01 → TV-BH-12). Ki�
 
 #### Cơ sở dữ liệu
 - Chỉ mục riêng phần `sales_orders_bao_gia_dang_hoat_dong_key`; CHECK `warranties_huy_nha_serial_check`; cột `support_tickets.first_resolved_at`; loại diễn biến `mo-lai`. Báo giá nào đang có hai đơn chưa hủy thì migration dừng với thông báo rõ ràng — hủy đơn thừa rồi chạy lại.
+### Vận hành bền vững
+
+Kiến trúc: `ARCHITECTURE.md` mục 7u. Quyết định QĐ-86 → QĐ-90. Migration `20261014090001_van_hanh_ben_vung`. Hướng dẫn máy chủ: `DEPLOYMENT.md` mục "Nâng cấp lên 0.16.1" và "Sao lưu và phục hồi".
+
+#### Sửa
+- **Bản quét nhắc việc hỏng biến mất và thử lại mỗi phút mãi mãi**: dòng "hỏng" được ghi trong chính giao dịch đã cuộn ngược; bản quét lớn còn hỏng chắc vì hạn 5 giây. Nay quét trong giao dịch hạn theo lô, ghi việc theo lô (`createMany … skipDuplicates`), lần hỏng ghi bằng giao dịch riêng, thử lại sau 15 → 30 → 60 → 120 phút (tối đa 5 lần/ngày), hỏng 2 lần liên tiếp thì chuông báo quản trị. Nút *Chạy quét ngay* cũng ghi lần hỏng và báo lỗi rõ.
+- **Redis hỏng làm worker bỏ cả nhịp** (kể cả bản quét): mỗi kho một `try`; nhịp sống chính chuyển sang PostgreSQL.
+- **Trợ lý AI gọi mô hình bên trong giao dịch CSDL**, fetch không có hạn: nay ghi câu hỏi → gọi mô hình ngoài giao dịch (hạn `AI_HAN_GOI_GIAY`, mặc định 60 giây) → mỗi công cụ một giao dịch ngắn → ghi câu trả lời. Mô hình treo thì báo "Mô hình không trả lời trong … giây", không lỗi 500.
+- **Gửi thư thử SMTP bên trong giao dịch**: tách ba bước, gửi ngoài giao dịch.
+- **Giới hạn tốc độ cho qua hết khi Redis hỏng**: nay đếm tạm trong bộ nhớ tiến trình.
+- `docker-compose.yml` không chuyển `AI_PROVIDER` / `AI_MODEL` / `ANTHROPIC_API_KEY` vào `app` nên trợ lý trên máy thật luôn "chưa cấu hình"; biến rỗng nay được coi như chưa đặt.
+
+#### Thêm
+- Bảng `system_heartbeats`; healthcheck container `worker` (`worker/kiem-tra-song.ts`); `/api/khoe` thêm `worker: ok|tre`; `GET /api/v1/tu-dong-hoa/van-hanh`; thẻ Worker / Sao lưu và **băng đỏ** trên *Quản trị → Tự động hóa* (worker trễ > 5 phút, quét hỏng, sao lưu > 26 giờ / hỏng / chưa chép ra ngoài / chưa sao lưu `.env`, thử phục hồi hỏng).
+- **Sao lưu**: dùng `THU_MUC_DINH_KEM`; dump + gói đính kèm (luôn có) + `.env` mã hóa gpg cùng mốc; chép ra ngoài bằng rclone (`RCLONE_REMOTE`, kiểm kích thước, `GIU_NGAY_NGOAI`); ghi trạng thái; hỏng thì thoát mã ≠ 0 và báo động (`ALERT_WEBHOOK_URL`, `ALERT_EMAIL`); khóa chạy một mình. `trien-khai.sh` cài `/etc/cron.d/cowork-sao-luu` (02:15) + logrotate khi chạy bằng root.
+- `scripts/thu-phuc-hoi.sh`: phục hồi bộ mới nhất (trên máy hoặc từ ngoài máy) vào CSDL tạm, kiểm số liệu, gói đính kèm, giải mã `.env`, xóa CSDL tạm; cron hằng tuần tùy chọn (`THU_PHUC_HOI_HANG_TUAN=1`).
+- nginx trong Docker: `limit_req` cho đăng nhập và `/api/cong-khai/`, IP thật qua module realip (chỉ tin dải nội bộ), ghi đè `X-Real-IP`/`X-Forwarded-For`; `proxy_read_timeout 300s` cho `/api/v1/tro-ly/hoi`.
+- Bài thử `npm run thu:van-hanh` (nối vào `thu:tich-hop`) và `thu/don-vi/van-hanh.test.ts`.
+
+#### Còn lại
+- `guiThuThu` (gửi thử một chiến dịch, `src/modules/email/service.ts`) vẫn gửi SMTP trong giao dịch — ngoài phạm vi gói này, sửa cùng mẫu `BuocGiaoDich`.
 
 ## 0.16.0 — 13/10/2026 — Tích hợp CRM: khách hàng nâng cao, marketing & thu lead, email marketing, xác thực 2 lớp
 

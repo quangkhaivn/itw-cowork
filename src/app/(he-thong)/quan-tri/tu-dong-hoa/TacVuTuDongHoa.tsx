@@ -45,7 +45,11 @@ export function NutChayQuet() {
       "POST",
       {},
     );
-    if (!kq) return;
+    if (!kq) {
+      // Bản quét hỏng vẫn được ghi vào Lịch sử chạy nền (0.16.1) — tải lại để thấy dòng "Hỏng".
+      router.refresh();
+      return;
+    }
     datKetQua(
       `Đã quét: ${kq.soQuyTacChay} quy tắc chạy, ${kq.soQuyTacBoQua} bỏ qua, sinh ${kq.soViec} việc và ${kq.soThongBao} thông báo.`,
     );

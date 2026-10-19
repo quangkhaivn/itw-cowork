@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { NguCanh } from "@/lib/api";
+import { thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
 import { batBuocQuyen, coQuyen, LoiThieuQuyen } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
@@ -38,6 +39,8 @@ export interface KetQuaHoiDap {
   soVong: number;
   congCuDaGoi: { ten: string; ketCuc: string }[];
   vuotTran: boolean;
+  /** Lỗi gọi mô hình của lượt này (hết thời gian, nhà cung cấp trả lỗi…) — null khi trả lời được. */
+  loi: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,62 +146,81 @@ async function lichSuChoMoHinh(nc: NguCanh, hoiThoaiId: string): Promise<TinNhan
     .map((t) => ({ vaiTro: t.role === "tro-ly" ? ("tro-ly" as const) : ("nguoi-dung" as const), noiDung: t.content }));
 }
 
-export async function hoiDap(nc: NguCanh, d: { hoiThoaiId?: string; cauHoi: string }): Promise<KetQuaHoiDap> {
-  batBuocQuyen(nc.hoSo, "ai.view", { objectType: "ai_conversation" });
+/**
+ * Một lượt hỏi đáp — 0.16.1 (QĐ-89): **không gọi mô hình bên trong giao dịch CSDL**.
+ *
+ *  - Bước 1 (giao dịch ngắn): kiểm quyền, mở / kiểm hội thoại, đọc lịch sử, GHI câu hỏi.
+ *  - Gọi mô hình NGOÀI mọi giao dịch, có hạn (`AI_HAN_GOI_GIAY`, mặc định 60 giây).
+ *  - Mỗi lần mô hình gọi công cụ: một giao dịch ngắn riêng, với quyền của người hỏi đọc lại mới.
+ *  - Bước cuối (giao dịch ngắn): ghi câu trả lời (hoặc lỗi), các lần gọi công cụ, sự kiện.
+ *
+ * Mô hình chậm / treo / hỏng thì câu hỏi vẫn còn, lượt trả lời ghi lỗi rõ ràng — không còn cảnh
+ * giữ một kết nối CSDL trong lúc chờ mạng rồi hỏng vì quá hạn 5 giây của Prisma.
+ *
+ * Nhận `NguCanh` (bài thử cũ: mọi bước chạy trong giao dịch đang có) hoặc `BuocGiaoDich` (route
+ * `/api/v1/tro-ly/hoi` qua `xuLyApiNhieuBuoc`).
+ */
+export async function hoiDap(x: NguCanh | BuocGiaoDich, d: { hoiThoaiId?: string; cauHoi: string }): Promise<KetQuaHoiDap> {
+  const nb = thanhBuoc(x);
   const cauHoi = d.cauHoi.trim();
-  if (cauHoi.length < 2) throw new LoiDinhDang("cauHoi", "Nhập câu hỏi.");
 
-  // Chưa cấu hình thì dừng NGAY, trước khi ghi gì — không tạo hội thoại rỗng (AI-06).
-  const tt = tinhTrangAI();
-  const ncc = (() => {
-    try {
-      return nhaCungCapDangDung();
-    } catch (loi) {
-      if (loi instanceof LoiNhaCungCapAI) {
-        throw new LoiNghiepVu(
-          `Trợ lý chưa dùng được: ${loi.message} Hệ thống không trả lời khi chưa gọi được mô hình.`,
-          503,
-          "ai-chua-cau-hinh",
-        );
+  // Bước 1 — kiểm quyền, ghi câu hỏi. Chưa cấu hình thì dừng NGAY, trước khi ghi gì (AI-06).
+  const buoc1 = await nb.giaoDich(async (nc) => {
+    batBuocQuyen(nc.hoSo, "ai.view", { objectType: "ai_conversation" });
+    if (cauHoi.length < 2) throw new LoiDinhDang("cauHoi", "Nhập câu hỏi.");
+    const ncc = (() => {
+      try {
+        return nhaCungCapDangDung();
+      } catch (loi) {
+        if (loi instanceof LoiNhaCungCapAI) {
+          throw new LoiNghiepVu(
+            `Trợ lý chưa dùng được: ${loi.message} Hệ thống không trả lời khi chưa gọi được mô hình.`,
+            503,
+            "ai-chua-cau-hinh",
+          );
+        }
+        throw loi;
       }
-      throw loi;
+    })();
+
+    let hoiThoaiId = d.hoiThoaiId ?? "";
+    if (hoiThoaiId) {
+      const h = await docHoiThoai(nc, hoiThoaiId);
+      if (h.status !== "dang-mo") throw new LoiNghiepVu("Hội thoại đã đóng.", 409, "hoi-thoai-da-dong");
+    } else {
+      const moi = await nc.tx.aiConversation.create({
+        data: {
+          tenantId: nc.tenantId,
+          userId: nc.hoSo.userId,
+          title: datTenHoiThoai(cauHoi),
+          provider: ncc.ten,
+          model: ncc.model,
+        },
+        select: { id: true },
+      });
+      hoiThoaiId = moi.id;
     }
-  })();
 
-  // 1. Hội thoại
-  let hoiThoaiId = d.hoiThoaiId ?? "";
-  if (hoiThoaiId) {
-    const h = await docHoiThoai(nc, hoiThoaiId);
-    if (h.status !== "dang-mo") throw new LoiNghiepVu("Hội thoại đã đóng.", 409, "hoi-thoai-da-dong");
-  } else {
-    const moi = await nc.tx.aiConversation.create({
-      data: {
-        tenantId: nc.tenantId,
-        userId: nc.hoSo.userId,
-        title: datTenHoiThoai(cauHoi),
-        provider: ncc.ten,
-        model: ncc.model,
-      },
-      select: { id: true },
+    const lichSu = await lichSuChoMoHinh(nc, hoiThoaiId);
+    await nc.tx.aiMessage.create({
+      data: { tenantId: nc.tenantId, conversationId: hoiThoaiId, role: "nguoi-dung", content: cauHoi },
     });
-    hoiThoaiId = moi.id;
-  }
 
-  const lichSu = await lichSuChoMoHinh(nc, hoiThoaiId);
-
-  await nc.tx.aiMessage.create({
-    data: { tenantId: nc.tenantId, conversationId: hoiThoaiId, role: "nguoi-dung", content: cauHoi },
+    // Công cụ đọc + đúng MỘT công cụ ghi: đặt đề xuất chờ người bấm (AI-03).
+    const congCu = [...congCuChoNguoi(nc.hoSo), ...congCuDeXuat(hoiThoaiId, nc.hoSo)];
+    const heThong = loiNhacHeThong(
+      { hoTen: nc.hoSo.hoTen, vaiTro: nc.hoSo.vaiTro.map((v) => v.name) },
+      homNayVN(),
+    );
+    return { ncc, hoiThoaiId, lichSu, congCu, heThong };
   });
 
-  // 2. Vòng lặp mô hình ↔ công cụ
-  // Công cụ đọc + đúng MỘT công cụ ghi: đặt đề xuất chờ người bấm (AI-03).
-  const congCu = [...congCuChoNguoi(nc.hoSo), ...congCuDeXuat(hoiThoaiId, nc.hoSo)];
+  const { ncc, hoiThoaiId, congCu, heThong } = buoc1;
+  const tt = tinhTrangAI();
+
+  // 2. Vòng lặp mô hình ↔ công cụ — NGOÀI giao dịch.
   const moTaCongCu = congCu.map((c) => ({ ten: c.ten, moTa: c.moTa, thamSo: c.luocDoJson }));
-  const tinNhan: TinNhanAI[] = [...lichSu, { vaiTro: "nguoi-dung", noiDung: cauHoi }];
-  const heThong = loiNhacHeThong(
-    { hoTen: nc.hoSo.hoTen, vaiTro: nc.hoSo.vaiTro.map((v) => v.name) },
-    homNayVN(),
-  );
+  const tinNhan: TinNhanAI[] = [...buoc1.lichSu, { vaiTro: "nguoi-dung", noiDung: cauHoi }];
 
   const daGoi: { ten: string; thamSo: Record<string, unknown>; ketCuc: KetCucGoi; ketQua: string | null; loi: string | null; mili: number }[] = [];
   let soVong = 0;
@@ -235,10 +257,13 @@ export async function hoiDap(nc: NguCanh, d: { hoiThoaiId?: string; cauHoi: stri
           loi = `Không có công cụ tên "${g.ten}".`;
         } else {
           try {
-            // Lớp chặn thứ hai: kiểm quyền ngay trước khi chạy, không tin danh sách đã lọc.
-            batBuocQuyenCongCu(nc, cc);
-            const thamSo = cc.thamSo.parse(g.thamSo) as Record<string, unknown>;
-            ketQua = ketQuaSangVanBan(await cc.chay(nc, thamSo));
+            // Mỗi công cụ một giao dịch ngắn: công cụ hỏng ở tầng CSDL không làm hỏng các công cụ sau.
+            ketQua = await nb.giaoDich(async (nc) => {
+              // Lớp chặn thứ hai: kiểm quyền ngay trước khi chạy, không tin danh sách đã lọc.
+              batBuocQuyenCongCu(nc, cc);
+              const thamSo = cc.thamSo.parse(g.thamSo) as Record<string, unknown>;
+              return ketQuaSangVanBan(await cc.chay(nc, thamSo));
+            });
           } catch (e) {
             if (e instanceof LoiThieuQuyen) {
               ketCuc = "thieu-quyen";
@@ -274,51 +299,54 @@ export async function hoiDap(nc: NguCanh, d: { hoiThoaiId?: string; cauHoi: stri
       "Tôi chưa gọi được mô hình nên không trả lời câu này. Số liệu thì tôi không đoán — bạn thử lại sau ít phút giúp tôi.";
   }
 
-  // 3. Ghi lượt trả lời và từng lần gọi công cụ
-  const tin = await nc.tx.aiMessage.create({
-    data: {
-      tenantId: nc.tenantId,
-      conversationId: hoiThoaiId,
-      role: "tro-ly",
-      content: traLoi,
-      turns: soVong,
-      tokensIn,
-      tokensOut,
-      error: loiLuot,
-    },
-    select: { id: true },
-  });
-
-  for (const g of daGoi) {
-    await nc.tx.aiToolCall.create({
+  // 3. Ghi lượt trả lời và từng lần gọi công cụ — giao dịch ngắn riêng.
+  const tinId = await nb.giaoDich(async (nc) => {
+    const tin = await nc.tx.aiMessage.create({
       data: {
         tenantId: nc.tenantId,
-        messageId: tin.id,
-        toolName: g.ten,
-        args: g.thamSo as Prisma.InputJsonValue,
-        result: g.ketQua,
-        outcome: g.ketCuc,
-        error: g.loi,
-        durationMs: g.mili,
+        conversationId: hoiThoaiId,
+        role: "tro-ly",
+        content: traLoi,
+        turns: soVong,
+        tokensIn,
+        tokensOut,
+        error: loiLuot,
       },
+      select: { id: true },
     });
-  }
-
-  await nc.tx.aiConversation.update({ where: { id: hoiThoaiId }, data: { lastMessageAt: new Date() } });
-  await nc.suKien({
-    eventType: SU_KIEN.AI_SUGGESTION_CREATED,
-    objectType: "ai_conversation",
-    objectId: hoiThoaiId,
-    payload: { soVong, soCongCu: daGoi.length, nhaCungCap: tt.nhaCungCap, model: ncc.model, loi: loiLuot },
+    // Từng dòng một (không createMany) để thứ tự created_at giữ đúng thứ tự gọi.
+    for (const g of daGoi) {
+      await nc.tx.aiToolCall.create({
+        data: {
+          tenantId: nc.tenantId,
+          messageId: tin.id,
+          toolName: g.ten,
+          args: g.thamSo as Prisma.InputJsonValue,
+          result: g.ketQua,
+          outcome: g.ketCuc,
+          error: g.loi,
+          durationMs: g.mili,
+        },
+      });
+    }
+    await nc.tx.aiConversation.update({ where: { id: hoiThoaiId }, data: { lastMessageAt: new Date() } });
+    await nc.suKien({
+      eventType: SU_KIEN.AI_SUGGESTION_CREATED,
+      objectType: "ai_conversation",
+      objectId: hoiThoaiId,
+      payload: { soVong, soCongCu: daGoi.length, nhaCungCap: tt.nhaCungCap, model: ncc.model, loi: loiLuot },
+    });
+    return tin.id;
   });
 
   return {
     hoiThoaiId,
-    tinNhanId: tin.id,
+    tinNhanId: tinId,
     traLoi,
     soVong,
     congCuDaGoi: daGoi.map((g) => ({ ten: g.ten, ketCuc: g.ketCuc })),
     vuotTran,
+    loi: loiLuot,
   };
 }
 

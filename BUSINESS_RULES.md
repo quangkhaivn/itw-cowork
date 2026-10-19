@@ -568,6 +568,7 @@ Báo giá → đơn → xuất kho → bảo hành → trả hàng → hỗ tr�
 | TV-BH-12 | **Mở lại phiếu đã xử lý xong** (Đã xử lý xong → Đang xử lý) xóa `resolved_at` để nhắc trễ hạn SLA chạy lại; mốc xử lý xong **lần đầu** giữ ở `first_resolved_at`; diễn biến ghi loại `mo-lai`, sự kiện `SERVICE_TICKET_REOPENED` | [CSDL] CHECK loại diễn biến · [SV] · [TH] |
 
 **Việc người dùng cần biết**: khách trả hàng nay phải mở phiếu từ nút "Khách trả hàng" trên trang đơn hàng. Hàng bán trước khi dùng Cowork (không có đơn trong hệ thống) chưa lập được phiếu trả — tạm ghi bằng điều chỉnh tồn có lý do; Giám đốc quyết định có mở lại đường "trả lẻ" có kiểm soát hay không (QĐ-81).
+
 ## 26. Toàn vẹn tài chính và mua hàng (0.16.1)
 
 Các luật ở mục 11, 16, 17 đã đúng khi **một người bấm một lần**. Mục này bịt các lỗ khi **hai yêu cầu chạy cùng lúc** (hai kế toán, hoặc một cú bấm đúp) và vài chỗ dữ liệu lệch nhau giữa chứng từ. Cách khóa: `khoaChungTu()` (QĐ-77) — `SELECT … FOR UPDATE` dòng chứng từ **trước** khi đọc trạng thái, nhiều dòng thì theo thứ tự id tăng dần.

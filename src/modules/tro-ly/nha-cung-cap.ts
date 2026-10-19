@@ -113,34 +113,53 @@ function tinNhanSangAnthropic(t: TinNhanAI): Record<string, unknown> {
   };
 }
 
+/** Hạn MỘT lần gọi mô hình — `AI_HAN_GOI_GIAY` (mặc định 60 giây, trần 300). QĐ-89. */
+export function hanGoiAiMs(): number {
+  const giay = Number(process.env.AI_HAN_GOI_GIAY);
+  return Number.isFinite(giay) && giay > 0 ? Math.min(giay, 300) * 1000 : 60_000;
+}
+
 export function taoNhaCungCapAnthropic(khoa: string, model: string): NhaCungCapAI {
   return {
     ten: "anthropic",
     model,
     async goi(dauVao) {
-      const r = await fetch(URL_ANTHROPIC, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": khoa,
-          "anthropic-version": PHIEN_BAN_API,
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: dauVao.toiDaToken,
-          system: dauVao.heThong,
-          messages: dauVao.tinNhan.map(tinNhanSangAnthropic),
-          ...(dauVao.congCu.length
-            ? {
-                tools: dauVao.congCu.map((c) => ({
-                  name: c.ten,
-                  description: c.moTa,
-                  input_schema: c.thamSo,
-                })),
-              }
-            : {}),
-        }),
-      });
+      const han = hanGoiAiMs();
+      let r: Response;
+      try {
+        r = await fetch(URL_ANTHROPIC, {
+          // Không có hạn thì một kết nối treo giữ yêu cầu (và trước 0.16.1: cả giao dịch CSDL) mãi mãi.
+          signal: AbortSignal.timeout(han),
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": khoa,
+            "anthropic-version": PHIEN_BAN_API,
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: dauVao.toiDaToken,
+            system: dauVao.heThong,
+            messages: dauVao.tinNhan.map(tinNhanSangAnthropic),
+            ...(dauVao.congCu.length
+              ? {
+                  tools: dauVao.congCu.map((c) => ({
+                    name: c.ten,
+                    description: c.moTa,
+                    input_schema: c.thamSo,
+                  })),
+                }
+              : {}),
+          }),
+        });
+      } catch (loi) {
+        const ten = (loi as { name?: string })?.name;
+        if (ten === "TimeoutError" || ten === "AbortError") {
+          throw new LoiNhaCungCapAI(`Mô hình không trả lời trong ${Math.round(han / 1000)} giây.`, "het-thoi-gian");
+        }
+        // Lỗi mạng (DNS, kết nối bị từ chối…): không kèm chi tiết có thể chứa địa chỉ nội bộ.
+        throw new LoiNhaCungCapAI("Không kết nối được tới nhà cung cấp AI.", "loi-mang");
+      }
 
       if (!r.ok) {
         // Cố ý KHÔNG đưa thân lỗi của nhà cung cấp vào thông báo cho người dùng:
@@ -148,12 +167,22 @@ export function taoNhaCungCapAnthropic(khoa: string, model: string): NhaCungCapA
         throw new LoiNhaCungCapAI(`Nhà cung cấp AI trả lỗi ${r.status}.`, `nha-cung-cap-${r.status}`);
       }
 
-      const d = (await r.json()) as {
+      let d: {
         content: KhoiAnthropic[];
         stop_reason: string;
         model: string;
         usage?: { input_tokens?: number; output_tokens?: number };
       };
+      try {
+        d = await r.json();
+      } catch (loi) {
+        // Hạn ở `signal` phủ cả lúc đọc thân phản hồi.
+        const ten = (loi as { name?: string })?.name;
+        if (ten === "TimeoutError" || ten === "AbortError") {
+          throw new LoiNhaCungCapAI(`Mô hình không trả lời trong ${Math.round(han / 1000)} giây.`, "het-thoi-gian");
+        }
+        throw new LoiNhaCungCapAI("Nhà cung cấp AI trả phản hồi không đọc được.", "phan-hoi-hong");
+      }
 
       const khoi: KhoiPhanHoi[] = [];
       for (const k of d.content ?? []) {
@@ -189,8 +218,8 @@ const MODEL_MAC_DINH = "claude-sonnet-5";
 
 /** Trợ lý đã dùng được chưa — để giao diện nói thật thay vì hiện ô chat chết. */
 export function tinhTrangAI(): TinhTrangAI {
-  const ncc = (process.env.AI_PROVIDER ?? "anthropic").trim().toLowerCase();
-  const model = (process.env.AI_MODEL ?? MODEL_MAC_DINH).trim();
+  const ncc = (process.env.AI_PROVIDER?.trim() || "anthropic").toLowerCase();
+  const model = (process.env.AI_MODEL?.trim() || MODEL_MAC_DINH).trim();
   if (ncc !== "anthropic") {
     return { daCauHinh: false, nhaCungCap: ncc, model, lyDo: `Chưa hỗ trợ nhà cung cấp "${ncc}".` };
   }

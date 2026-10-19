@@ -1,4 +1,5 @@
 import type { NguCanh } from "@/lib/api";
+import { thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
 import type { ClientTenant } from "@/lib/db";
 import { batBuocQuyen } from "@/lib/phan-quyen";
 import { LoiNghiepVu } from "@/lib/loi";
@@ -151,19 +152,31 @@ export async function docKetNoiDeGui(tx: ClientTenant, tenantId: string): Promis
   };
 }
 
-/** "Gửi thư thử" tới email của người đang đăng nhập — kiểm kết nối thật. Ghi kết quả lần thử. */
-export async function guiThuKiemTraKetNoi(nc: NguCanh) {
-  batBuocQuyen(nc.hoSo, "integration.update", { objectType: "email_setting" });
-  const kn = await docKetNoiDeGui(nc.tx, nc.tenantId);
-  if (!kn) throw new LoiNghiepVu("Chưa cấu hình kết nối email.", 409, "chua-cau-hinh-email");
-  const hs = await docHoSoCongTy(nc.tx, nc.tenantId);
+/**
+ * "Gửi thư thử" tới email của người đang đăng nhập — kiểm kết nối thật. Ghi kết quả lần thử.
+ *
+ * 0.16.1 (QĐ-89): ba bước — đọc cấu hình trong giao dịch ngắn, **gửi SMTP ngoài giao dịch** (máy chủ
+ * thư chậm tới 30 giây không còn giữ kết nối CSDL và quá hạn 5 giây của Prisma), ghi kết quả trong
+ * giao dịch ngắn thứ hai. Nhận `NguCanh` (bài thử cũ, mọi bước trong giao dịch đang có) hoặc
+ * `BuocGiaoDich` (route qua `xuLyApiNhieuBuoc`).
+ */
+export async function guiThuKiemTraKetNoi(x: NguCanh | BuocGiaoDich) {
+  const nb = thanhBuoc(x);
+  const { kn, hs, den } = await nb.giaoDich(async (nc) => {
+    batBuocQuyen(nc.hoSo, "integration.update", { objectType: "email_setting" });
+    const kn = await docKetNoiDeGui(nc.tx, nc.tenantId);
+    if (!kn) throw new LoiNghiepVu("Chưa cấu hình kết nối email.", 409, "chua-cau-hinh-email");
+    const hs = await docHoSoCongTy(nc.tx, nc.tenantId);
+    return { kn, hs, den: { ten: nc.hoSo.hoTen, email: nc.hoSo.email } };
+  });
+
   const vc = taoVanChuyen(kn.smtp);
   let loi: string | null = null;
   const noiDung = `Kết nối email của ${hs.tenHienThi || "doanh nghiệp"} hoạt động. Thư này gửi qua ${kn.smtp.host}:${kn.smtp.port}.`;
   try {
     await vc.gui({
       tu: kn.tu,
-      den: { ten: nc.hoSo.hoTen, email: nc.hoSo.email },
+      den,
       traLoi: kn.traLoi,
       tieuDe: "Thư thử từ TGTH Business Cowork",
       text: noiDung,
@@ -174,8 +187,11 @@ export async function guiThuKiemTraKetNoi(nc: NguCanh) {
   } finally {
     vc.dong();
   }
-  await nc.tx.emailSetting.updateMany({ data: { lastTestAt: new Date(), lastTestOk: loi === null, lastTestError: loi } });
-  await nc.kiemToan({ action: "gui-thu", objectType: "email_setting", after: { den: nc.hoSo.email, ok: loi === null } });
-  await nc.suKien({ eventType: SU_KIEN.EMAIL_TEST_SENT, objectType: "email_setting", payload: { ok: loi === null } });
-  return { ok: loi === null, loi, den: nc.hoSo.email };
+
+  await nb.giaoDich(async (nc) => {
+    await nc.tx.emailSetting.updateMany({ data: { lastTestAt: new Date(), lastTestOk: loi === null, lastTestError: loi } });
+    await nc.kiemToan({ action: "gui-thu", objectType: "email_setting", after: { den: den.email, ok: loi === null } });
+    await nc.suKien({ eventType: SU_KIEN.EMAIL_TEST_SENT, objectType: "email_setting", payload: { ok: loi === null } });
+  });
+  return { ok: loi === null, loi, den: den.email };
 }

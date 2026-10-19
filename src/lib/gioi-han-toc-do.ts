@@ -9,8 +9,10 @@ import Redis from "ioredis";
  * Kho đếm:
  *   - Có REDIS_URL (máy chủ thật) → Redis, dùng chung giữa mọi tiến trình.
  *   - Không có (máy phát triển) → bộ nhớ tiến trình.
- * Redis lỗi thì cho qua và ghi log: lớp khóa tài khoản trong cơ sở dữ liệu
- * (users.locked_until) vẫn chặn, nên một sự cố Redis không khóa cả công ty ra ngoài.
+ * Redis lỗi (0.16.1, QĐ-90): đếm tạm bằng bộ nhớ của CHÍNH tiến trình này thay vì cho qua hết —
+ * vẫn chặn được dò mật khẩu / spam form từ một IP, chỉ không dùng chung giữa các tiến trình. Kho dự
+ * phòng cũng hỏng thì mới cho qua (lớp khóa tài khoản `users.locked_until` vẫn chặn), để một sự cố
+ * không khóa cả công ty ra ngoài. Lớp thứ ba nằm trước ứng dụng: `limit_req` của nginx (nginx/cowork.conf).
  */
 
 export interface KetQuaGioiHan {
@@ -78,19 +80,35 @@ function layKho(): KhoDem {
   return bienToanCuc.khoDemGioiHan;
 }
 
+const bienDuPhong = globalThis as unknown as { khoDemDuPhong?: KhoDem };
+function khoDuPhongMacDinh(): KhoDem {
+  return (bienDuPhong.khoDemDuPhong ??= new KhoDemBoNho());
+}
+
+let lanBaoLoi = 0;
+
 /** Đếm thêm một lần và cho biết còn được phép không. */
 export async function demVaKiem(
   khoa: string,
   toiDa: number,
   cuaSoGiay: number,
   kho: KhoDem = layKho(),
+  duPhong: KhoDem = khoDuPhongMacDinh(),
 ): Promise<KetQuaGioiHan> {
   try {
     const { soLan, conLaiGiay } = await kho.tang(khoa, cuaSoGiay);
     return { choPhep: soLan <= toiDa, soLan, conLaiGiay };
   } catch (loi) {
-    console.error("[gioi-han-toc-do] kho đếm lỗi, tạm cho qua:", loi instanceof Error ? loi.message : loi);
-    return { choPhep: true, soLan: 0, conLaiGiay: 0 };
+    if (Date.now() - lanBaoLoi > 60_000) {
+      lanBaoLoi = Date.now();
+      console.error("[gioi-han-toc-do] kho đếm lỗi, tạm đếm trong bộ nhớ tiến trình:", loi instanceof Error ? loi.message : loi);
+    }
+    try {
+      const { soLan, conLaiGiay } = await duPhong.tang(khoa, cuaSoGiay);
+      return { choPhep: soLan <= toiDa, soLan, conLaiGiay };
+    } catch {
+      return { choPhep: true, soLan: 0, conLaiGiay: 0 };
+    }
   }
 }
 
