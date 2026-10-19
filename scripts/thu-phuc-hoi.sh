@@ -44,8 +44,18 @@ umask 077
 ket_thuc() {
   local ma=$?
   if [ "$DA_TAO_CSDL" = "1" ]; then
-    chay_pg psql -X -q -c "DROP DATABASE IF EXISTS \"$CSDL_TAM\" WITH (FORCE)" >/dev/null 2>&1 \
-      || echo "⚠ không xóa được CSDL tạm $CSDL_TAM — xóa tay: DROP DATABASE $CSDL_TAM" >&2
+    # Thử vài lần: máy bận thì DROP … WITH (FORCE) có thể hỏng vì chưa ngắt kịp kết nối còn lại.
+    local lan da_xoa=0
+    for lan in 1 2 3; do
+      if chay_pg psql -X -q -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$CSDL_TAM\" WITH (FORCE)" >/dev/null 2>"$TAM/loi-xoa.txt"; then
+        da_xoa=1; break
+      fi
+      sleep 2
+    done
+    if [ "$da_xoa" != "1" ]; then
+      echo "⚠ không xóa được CSDL tạm $CSDL_TAM — xóa tay: DROP DATABASE \"$CSDL_TAM\" WITH (FORCE); lỗi: $(head -c 300 "$TAM/loi-xoa.txt" 2>/dev/null)" >&2
+      [ "$ma" -ne 0 ] || ma=1
+    fi
   fi
   rm -rf "$TAM"
   if [ "$ma" -ne 0 ]; then

@@ -377,8 +377,14 @@ async function thuScript() {
   // Không để .env của máy phát triển (REDIS, AUTH…) lẫn vào: chỉ truyền PATH/HOME.
   const envChay = (tepEnv: string, them: Record<string, string | undefined> = {}): Record<string, string | undefined> => ({ PATH: process.env.PATH, HOME: process.env.HOME, TEP_ENV: tepEnv, ...them });
   const trangThai = () => JSON.parse(readFileSync(path.join(thuMuc, "trang-thai.json"), "utf8")) as Record<string, unknown>;
-  const dsCsdlTam = async () => (await chu.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM pg_database WHERE datname LIKE 'cowork_thu_phuc_hoi_%'`)[0].n;
-  const truocCsdlTam = await dsCsdlTam();
+  // Chỉ xét CSDL tạm do CHÍNH lần chạy này tạo (tên in ra trong nhật ký script) — máy dùng chung có thể
+  // có CSDL tạm của tiến trình khác.
+  const conCsdlTam = async (ra: string) => {
+    const ten = /CSDL tạm (cowork_thu_phuc_hoi_\d+)/.exec(ra)?.[1];
+    if (!ten) return `không thấy tên CSDL tạm trong nhật ký: ${ra.slice(-300)}`;
+    const n = (await chu.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM pg_database WHERE datname = ${ten}`)[0].n;
+    return n === BigInt(0) ? null : `${ten} còn tồn tại; nhật ký: ${ra.slice(-400)}`;
+  };
 
   // 6a. Đường thành công
   const ok = await chay("./scripts/sao-luu.sh", [], envChay(taoEnv("env-ok")));
@@ -452,7 +458,7 @@ async function thuScript() {
   const hbPh = await chu.systemHeartbeat.findUnique({ where: { name: "thu-phuc-hoi" } });
   dat("thu-phuc-hoi.sh: đạt, mã 0, giải mã được .env", ph.ma === 0 && /giải mã được/.test(ph.ra), ph.ra.slice(-600));
   dat("…nhịp 'thu-phuc-hoi' ok", hbPh?.ok === true, JSON.stringify(hbPh));
-  dat("…CSDL tạm đã xóa", (await dsCsdlTam()) === truocCsdlTam);
+  { const c = await conCsdlTam(ph.ra); dat("…CSDL tạm đã xóa", c === null, c ?? ""); }
 
   // 6h. Bản dump hỏng → mã 1, CSDL tạm vẫn bị xóa, ghi hỏng.
   const hongDir = path.join(tam, "dump-hong");
@@ -463,7 +469,7 @@ async function thuScript() {
   baoDong.length = 0;
   const phHong = await chay("./scripts/thu-phuc-hoi.sh", [], envChay(taoEnv("env-ph-hong"), { TEP_DUMP: path.join(hongDir, `cowork-${L}.dump`) }));
   dat("Dump cắt cụt: thu-phuc-hoi.sh mã ≠ 0 ở bước pg_restore", phHong.ma !== 0 && /pg_restore/.test(phHong.ra), phHong.ra.slice(-400));
-  dat("…CSDL tạm vẫn bị xóa (trap)", (await dsCsdlTam()) === truocCsdlTam);
+  { const c = await conCsdlTam(phHong.ra); dat("…CSDL tạm vẫn bị xóa (trap)", c === null, c ?? ""); }
   dat("…nhịp 'thu-phuc-hoi' ok=false + báo động", (await chu.systemHeartbeat.findUnique({ where: { name: "thu-phuc-hoi" } }))?.ok === false && baoDong.some((b) => /THỬ PHỤC HỒI HỎNG/.test(b)));
 
   // 6i. Bị kill khi đang pg_restore → CSDL tạm bị xóa VÀ ghi hỏng (lỗi cũ: im lặng như thành công).
@@ -471,7 +477,7 @@ async function thuScript() {
   baoDong.length = 0;
   const phKill = await chay("./scripts/thu-phuc-hoi.sh", [], envChay(taoEnv("env-ph-kill"), { PATH: `${binCham}:${process.env.PATH}` }), { ms: 1_200, tinHieu: "SIGTERM" });
   dat("thu-phuc-hoi.sh bị TERM: mã 143", phKill.ma === 143, `${phKill.ma}/${phKill.tinHieu}`);
-  dat("…CSDL tạm đã xóa", (await dsCsdlTam()) === truocCsdlTam);
+  { const c = await conCsdlTam(phKill.ra); dat("…CSDL tạm đã xóa", c === null, c ?? ""); }
   dat("…ghi hỏng + báo động", (await chu.systemHeartbeat.findUnique({ where: { name: "thu-phuc-hoi" } }))?.ok === false && baoDong.some((b) => /THỬ PHỤC HỒI HỎNG/.test(b)));
 
   // Trả nhịp sao lưu về trạng thái "ok" cho các bài khác của chuỗi.
