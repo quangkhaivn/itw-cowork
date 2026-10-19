@@ -10,7 +10,7 @@ import { kiemTraMaDuLieuGoc, kiemTraNguoiPhuTrach, locTheoPhamVi, ngayVeDate, tr
 import { batBuocThayKhach } from "@/modules/khach-hang/service";
 import { dieuKienXemBaoGia, donDangHoatDongCuaBaoGia, thangCoHoiTheoBaoGia } from "@/modules/bao-gia/service";
 import { tinhBaoGia, type DongBaoGia } from "@/modules/bao-gia/tinh-toan";
-import { ghiSoKho, batBuocThayKho } from "@/modules/kho/service";
+import { ghiSoKho, batBuocThayKho, khoaSoDuKho } from "@/modules/kho/service";
 import { sinhBaoHanhKhiGiao } from "@/modules/bao-hanh/service";
 import { conPhaiGiao, duocSuaDong, tienDoGiao } from "./tinh-toan";
 import type { BoLocDon, DuLieuSuaDon, DuLieuTaoDon, DuLieuTaoPhieuXuat } from "./luoc-do";
@@ -473,6 +473,9 @@ export async function xacNhanDon(nc: NguCanh, id: string, d: { khoId: string; gh
   const kho = await batBuocThayKho(nc, d.khoId);
   if (kho.trangThai !== "hoat-dong") throw new LoiNghiepVu("Kho này đã ngừng hoạt động.", 409, "kho-ngung");
 
+  // Khóa mọi dòng số dư sẽ giữ chỗ theo một thứ tự chung — đơn [A, B] và đơn [B, A] xác nhận
+  // cùng lúc không khóa chéo nhau (QA 0.16.1).
+  await khoaSoDuKho(nc, don.items.filter((x) => x.product?.quanLyTon).map((x) => ({ khoId: d.khoId, sanPhamId: x.productId })));
   for (const dong of don.items) {
     if (!dong.productId || !dong.product?.quanLyTon) continue;
     await ghiSoKho(nc, {
@@ -512,6 +515,7 @@ async function nhaHetGiuCho(nc: NguCanh, id: string, soChungTu: string, lyDo: st
     _sum: { reservedDelta: true },
     orderBy: [{ warehouseId: "asc" }, { productId: "asc" }],
   });
+  await khoaSoDuKho(nc, giuCho.map((g) => ({ khoId: g.warehouseId, sanPhamId: g.productId })));
   let daNha = 0;
   for (const g of giuCho) {
     const con = Math.round(Number(g._sum.reservedDelta ?? 0) * 1000) / 1000;
@@ -635,6 +639,12 @@ export async function taoPhieuXuat(nc: NguCanh, id: string, d: DuLieuTaoPhieuXua
     if (!conGiuCho.has(g.productId)) conGiuCho.set(g.productId, new Map());
     conGiuCho.get(g.productId)!.set(g.warehouseId, con);
   }
+  // Khóa trước (một thứ tự chung) mọi dòng số dư phiếu này có thể chạm: kho giao của từng mặt
+  // hàng và mọi kho đang giữ chỗ cho đơn (nhả chéo kho, nhả hết khi giao đủ) — QA 0.16.1.
+  await khoaSoDuKho(nc, [
+    ...d.dong.map((x) => ({ khoId: d.khoId, sanPhamId: theoDong.get(x.dongDonId)?.productId })),
+    ...giuCho.map((g) => ({ khoId: g.warehouseId, sanPhamId: g.productId })),
+  ]);
 
   const so = await capSoChungTu(nc.tx, KIEU_SO.phieuXuat);
   const phieu = await nc.tx.delivery.create({

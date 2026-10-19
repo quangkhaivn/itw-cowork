@@ -45,16 +45,32 @@ export function laViPhamRangBuoc(loi: unknown, tenRangBuoc?: string): boolean {
 }
 
 /**
- * Giao dịch bị PostgreSQL hủy vì tranh chấp khóa — khóa chéo (40P01) hoặc xung đột tuần tự
- * (40001). Prisma bọc thành P2034 (truy vấn thường) hoặc P2010 kèm mã gốc (truy vấn thô, ví
- * dụ `khoaChungTu`). Không phải lỗi của máy chủ: cả giao dịch đã cuộn ngược, người dùng chỉ
- * cần thử lại — nên trả 409 chứ không phải 500 (QA 0.16.1).
+ * Lỗi tranh chấp đồng thời của PostgreSQL: khóa chéo (40P01), tuần tự hóa (40001), không lấy
+ * được khóa (55P03). Prisma bọc nhiều kiểu: P2034, hoặc P2010 / lỗi bộ chuyển (adapter-pg) có
+ * `cause.originalCode` hay `meta.code`, có khi chỉ còn thông điệp gốc. Cả giao dịch đã cuộn
+ * ngược, không phải lỗi lập trình — người dùng chỉ cần thử lại, nên trả 409 (QA 0.16.1).
  */
-export function laLoiTranhChapGiaoDich(loi: unknown): boolean {
-  if (typeof loi !== "object" || loi === null) return false;
-  const l = loi as { code?: unknown; meta?: { driverAdapterError?: { cause?: { originalCode?: unknown } }; code?: unknown }; message?: unknown };
-  if (l.code === "P2034") return true;
-  const maGoc = l.meta?.driverAdapterError?.cause?.originalCode ?? l.meta?.code;
-  if (maGoc === "40P01" || maGoc === "40001") return true;
-  return typeof l.message === "string" && /deadlock detected|could not serialize access/.test(l.message);
+export function laLoiTranhChap(loi: unknown): boolean {
+  const MA_PG = ["40P01", "40001", "55P03"];
+  const duyet = (x: unknown, sau: number): boolean => {
+    if (typeof x !== "object" || x === null || sau > 4) return false;
+    const o = x as { code?: unknown; originalCode?: unknown; kind?: unknown; cause?: unknown; meta?: { driverAdapterError?: unknown; code?: unknown } };
+    if (o.code === "P2034") return true;
+    if (typeof o.code === "string" && MA_PG.includes(o.code)) return true;
+    if (typeof o.originalCode === "string" && MA_PG.includes(o.originalCode)) return true;
+    if (typeof o.meta?.code === "string" && MA_PG.includes(o.meta.code)) return true;
+    if (o.kind === "TransactionWriteConflict") return true;
+    return duyet(o.cause, sau + 1) || duyet(o.meta?.driverAdapterError, sau + 1);
+  };
+  if (duyet(loi, 0)) return true;
+  const thongDiep = typeof loi === "object" && loi !== null ? (loi as { message?: unknown }).message : undefined;
+  return typeof thongDiep === "string" && /deadlock detected|could not serialize access/.test(thongDiep);
+}
+
+/** Tên cũ của gói tài chính — giữ để bài thử và chỗ gọi cũ không gãy. */
+export const laLoiTranhChapGiaoDich = laLoiTranhChap;
+
+/** Giao dịch hết hạn / không mở được giao dịch kịp (Prisma P2028) — máy chủ đang bận. */
+export function laLoiHetHanGiaoDich(loi: unknown): boolean {
+  return typeof loi === "object" && loi !== null && "code" in loi && (loi as { code: unknown }).code === "P2028";
 }

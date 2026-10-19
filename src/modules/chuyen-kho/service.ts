@@ -6,7 +6,7 @@ import { SU_KIEN } from "@/lib/su-kien";
 import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { capSoChungTu, KIEU_SO } from "@/lib/so-chung-tu";
 import { homNayVN, ngayVeDate } from "@/modules/crm/chung";
-import { batBuocThayKho, ghiSoKho } from "@/modules/kho/service";
+import { batBuocThayKho, ghiSoKho, khoaSoDuKho } from "@/modules/kho/service";
 import {
   chuyenKhoSuaDuoc,
   huyDuoc,
@@ -308,6 +308,8 @@ export async function xuatChuyenKho(nc: NguCanh, id: string, d: DuLieuXuatChuyen
     });
   }
 
+  // Khóa số dư theo một thứ tự chung (QA 0.16.1) trước khi ghi sổ từng dòng.
+  await khoaSoDuKho(nc, keHoach.map((k) => ({ khoId: p.fromWarehouse.id, sanPhamId: k.sanPhamId })));
   for (const k of keHoach) {
     if (k.quanLyTon) {
       await ghiSoKho(nc, {
@@ -397,6 +399,7 @@ export async function nhanChuyenKho(nc: NguCanh, id: string, d: DuLieuNhanChuyen
     });
   }
 
+  await khoaSoDuKho(nc, keHoach.map((k) => ({ khoId: p.toWarehouse.id, sanPhamId: k.sanPhamId })));
   for (const k of keHoach) {
     if (k.quanLyTon && k.nhan > 0) {
       await ghiSoKho(nc, {
