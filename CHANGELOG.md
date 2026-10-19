@@ -2,6 +2,37 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.17.0 — 19/10/2026 — Công việc thông suốt: kết quả công việc, hồ sơ khách đầy đủ, thông báo giao việc, kiểm tra trước khi xong
+
+**Chưa triển khai lên máy thật.** Một migration mới (`20261014150000_cong_viec_thong_suot`), không có biến môi trường mới, không thêm mã quyền.
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 27 (CV-04 → CV-11) và mục 28 (HS-01 → HS-04). Quyết định QĐ-91 → QĐ-93.
+
+### Thêm
+- **Kết quả công việc**: mỗi việc có ô kết quả (đã làm gì, khách nói gì, bước tiếp theo) và đánh giá *Đạt / Đạt một phần / Không đạt / Cần làm tiếp*, ghi người ghi và lúc ghi. Đánh dấu xong **bắt buộc** có kết quả (≥ 10 ký tự) và đánh giá. Kết quả hiện trên dòng thời gian và thẻ Công việc của Customer 360.
+- **Kiểm tra trước khi xong**: hộp hoàn thành kiểm tra trực tiếp trong lúc gõ và liệt kê còn thiếu gì; máy chủ kiểm lại đúng bộ kiểm tra đó trong cùng giao dịch lúc ghi (API trả 422 `chua-du-dieu-kien-xong` kèm danh sách vấn đề).
+- **Danh sách kiểm tra** trên từng việc (tối đa 30 mục, bắt buộc / không bắt buộc): lập ngay lúc giao việc (mỗi dòng một mục, `?` đầu dòng = không bắt buộc) hoặc thêm sau; mục bắt buộc chưa tích thì không xong được; khóa khi việc đã xong / đã hủy.
+- **Thông báo khi giao việc**: người được giao nhận thông báo ngay (khẩn/cao hiện mức tương ứng); giao lại thì người mới được báo "Được chuyển việc", người cũ được báo không cần làm tiếp; việc xong thì người giao nhận thông báo kèm đánh giá và kết quả ("Không đạt" là mức cảnh báo). Ghi người giao và lúc giao trên từng việc.
+- **"Cần làm tiếp" phải hẹn việc tiếp theo**: việc mới tạo cùng lúc, cùng người làm, cùng khách / lead / cơ hội, mang theo kết quả lần trước.
+- **Trang chi tiết công việc** `/cong-viec/:id` — đích của mọi thông báo: thông tin giao việc, hạn, kết quả, danh sách kiểm tra, **tệp đính kèm** (biên bản, ảnh hiện trường), nút Bắt đầu làm / Hoàn thành / Giao lại / Hủy / Mở lại / Sửa kết quả.
+- Danh sách công việc: thẻ **"Tôi giao"** (việc mình giao cho người khác), tiến độ danh sách kiểm tra, kết quả + đánh giá ngay dưới tên việc; bấm ô "xong" mở hộp ghi kết quả thay vì ghi tắt.
+- **Hồ sơ khách đầy đủ**: Customer 360 hiện điểm đầy đủ 0–100, trường bắt buộc còn thiếu (theo loại khách: doanh nghiệp / đại lý cần mã số thuế và người liên hệ) và chỗ bổ sung. Tính lúc đọc, không lưu. Hồ sơ thiếu chỉ **nhắc** khi hoàn thành việc, không chặn.
+- API mới: `GET /api/v1/cong-viec/:id`, `GET /api/v1/cong-viec/:id/kiem-tra`, `POST /api/v1/cong-viec/:id/muc-kiem-tra`, `PATCH|DELETE /api/v1/cong-viec/muc-kiem-tra/:mucId`. `PATCH /api/v1/cong-viec/:id` nhận thêm `ketQua`, `danhGia`, `viecTiepTheo`.
+
+### Thay đổi đáng lưu ý
+- Việc đã xong **trước 0.17** không có kết quả: vẫn mở lại được, nhưng muốn sửa thứ khác thì phải ghi kết quả trước. Trang chi tiết hiện nhắc "Ghi kết quả". Luật này kiểm ở service chứ không đặt CHECK, để chuyển đổi lead và gộp khách vẫn chạy trên dữ liệu cũ (QĐ-91).
+- Việc cũ được điền người giao = người tạo, lúc giao = lúc tạo.
+
+### Sửa
+- Lưới hai cột `.luoi-the` (Customer 360, chi tiết công việc) lệch hàng 16px — cùng lỗi đã sửa cho lưới thẻ chỉ số ở 0.16.0.
+- Lint báo lỗi trên `may-ca-nhan/chay-sql.cjs` (script CommonJS của bộ chạy thử Windows) — bỏ thư mục đó khỏi lint ứng dụng.
+- `thu:qa-khach` hỏng giả khi máy không có CSDL mẫu ITW CRM (đường dẫn cũ của phiên trước): nay **bỏ qua có báo rõ** phần script nhập ITW; đặt `QA_ITW_DB` để chạy đủ.
+
+### Kiểm thử
+- **469 bài đơn vị** (thêm 21 cho `kiemTraTruocKhiXong` và `danhGiaHoSoKhach`), `typecheck` + `lint` + `build` sạch.
+- **1.620 kiểm chứng tích hợp** trong 27 bộ của `thu:tich-hop`, gồm bộ mới `thu:cong-viec` 66 (lưu kết quả, báo người giao, việc tiếp theo, chuyển người, việc cũ, đính kèm, hồ sơ khách, ràng buộc CSDL). `thu:qa-khach` 127 (8 kiểm chứng script nhập ITW bỏ qua vì thiếu CSDL mẫu).
+- Trên bản dựng production: **447 bài `thu:http`** (thêm 13 cho công việc: 422 khi thiếu kết quả, xem trước, mục kiểm tra, chi tiết, trang chi tiết, phạm vi), **107 `thu:qa-marketing-http`**, **75 `thu:qa-email-http`** — tất cả đạt. Chạy thử trên trình duyệt: giao việc có danh sách kiểm tra → tích mục → ô "xong" ở danh sách mở hộp → "Cần làm tiếp" bắt hẹn việc → xong → việc tiếp theo được tạo.
+
 ## 0.16.1 — 19/10/2026 — Toàn vẹn dữ liệu: khóa chứng từ, lan truyền trạng thái, vận hành bền vững
 
 ### Toàn vẹn dữ liệu — tài chính và mua hàng

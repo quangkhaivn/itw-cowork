@@ -329,7 +329,8 @@ async function main() {
   dat("Trưởng phòng giao việc cho cấp dưới", viec.nguoiPhuTrach.id === nv1 && viec.quaHan);
   const dsViec = await voi(T, nv1, (nc) => danhSachViec(nc, { cheDo: "qua-han", trangThai: "", nguoiPhuTrach: "", q: "", id: "", trang: 1, coTrang: 30 }));
   dat("CV-02: việc quá hạn hiện trong danh sách quá hạn", dsViec.dong.some((v) => v.id === viec.id) && dsViec.soQuaHanCuaToi >= 1);
-  const xong = await voi(T, nv1, (nc) => suaViec(nc, viec.id, { trangThai: "xong" }));
+  // 0.17.0 (CV-05): xong phải kèm kết quả + đánh giá.
+  const xong = await voi(T, nv1, (nc) => suaViec(nc, viec.id, { trangThai: "xong", ketQua: "Đã gọi lại, khách hẹn tuần sau.", danhGia: "dat" }));
   dat("CV-01: hoàn thành ghi thời điểm xong", xong.trangThai === "xong" && Boolean(xong.xongLuc));
   await nemLoi("CV: NV2 không sửa được việc của NV1", "khong-thay", () => voi(T, nv2, (nc) => suaViec(nc, viec.id, { trangThai: "huy" })));
 

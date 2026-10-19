@@ -16,6 +16,7 @@ export const LOAI_DOI_TUONG = [
   "stock_transfer",
   "sales_order",
   "support_ticket",
+  "task",
 ] as const;
 export type LoaiDoiTuong = (typeof LOAI_DOI_TUONG)[number];
 
@@ -26,6 +27,7 @@ export const NHAN_LOAI_DOI_TUONG: Record<string, string> = {
   stock_transfer: "Phiếu chuyển kho",
   sales_order: "Đơn hàng",
   support_ticket: "Phiếu hỗ trợ",
+  task: "Công việc",
 };
 
 /**

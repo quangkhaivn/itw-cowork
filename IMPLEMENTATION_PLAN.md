@@ -190,6 +190,13 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - [ ] Triển khai máy thật — cần `APP_ENC_KEY` (không đổi sau khi dùng), nginx máy chủ ghi đè `X-Real-IP`, mở cổng SMTP ra ngoài.
 - Ngưỡng mới chờ Giám đốc: ngưỡng điểm Nóng/Ấm, hạn gọi lại lead mới, tốc độ gửi email (đang mặc định chậm).
 
+## 4o. Công việc thông suốt — 0.17.0 (xong trên máy phát triển, 19/10/2026)
+
+- [x] Kết quả công việc + đánh giá, bắt buộc khi xong (CV-04, CV-05) · [x] Kiểm tra trước khi xong, xem trước + kiểm lại ở máy chủ (CV-06) · [x] Danh sách kiểm tra (CV-07) · [x] Thông báo khi giao / chuyển / xong, thẻ "Tôi giao" (CV-08) · [x] "Cần làm tiếp" phải hẹn việc tiếp theo (CV-09) · [x] Đính kèm vào công việc (CV-10) · [x] Kết quả trên hồ sơ khách (CV-11)
+- [x] Độ đầy đủ hồ sơ khách trên Customer 360, chỉ nhắc khi hoàn thành việc (HS-01 → HS-04)
+- [x] Trang chi tiết công việc `/cong-viec/:id` (đích của thông báo) · [x] kiểm thử (đơn vị, `thu:cong-viec`, `thu:http`)
+- [ ] Triển khai máy thật (đi cùng đợt 0.14 → 0.16) — một migration mới, không biến môi trường mới.
+
 ## 5. Sau Phase 9 — việc còn lại
 
 Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc phase nào, xếp theo thứ tự nên làm:

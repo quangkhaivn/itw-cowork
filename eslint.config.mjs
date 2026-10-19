@@ -7,7 +7,9 @@ const cauHinh = [
   ...nextVitals,
   ...nextTs,
   {
-    ignores: ["node_modules/**", ".next/**", "src/generated/**", "data/**", "next-env.d.ts"],
+    ignores: ["node_modules/**", ".next/**", "src/generated/**", "data/**", "next-env.d.ts",
+      // Bộ chạy thử trên máy Windows: script Node thuần CommonJS, không thuộc ứng dụng.
+      "may-ca-nhan/**"],
   },
 ];
 

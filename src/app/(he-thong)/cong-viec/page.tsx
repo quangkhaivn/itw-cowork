@@ -8,13 +8,14 @@ import { dinhDangNgayGio } from "@/lib/dinh-dang";
 import { coQuyen } from "@/lib/phan-quyen";
 import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { danhSachNguoiPhuTrach } from "@/modules/crm/chung";
-import { NHAN_TRANG_THAI_VIEC, NHAN_UU_TIEN, TRANG_THAI_VIEC } from "@/modules/crm/hang-so";
+import { NHAN_DANH_GIA_KET_QUA, NHAN_TRANG_THAI_VIEC, NHAN_UU_TIEN, TRANG_THAI_VIEC } from "@/modules/crm/hang-so";
 import { danhSachViec, LuocDoLocViec } from "@/modules/cong-viec/service";
 import TacVuViec from "./TacVuViec";
 
 export const dynamic = "force-dynamic";
 
 const LOP_UU_TIEN: Record<string, string> = { khan: "loi", cao: "canh-bao", "trung-binh": "", thap: "" };
+const LOP_DANH_GIA: Record<string, string> = { dat: "tot", "mot-phan": "canh-bao", "khong-dat": "loi", "can-theo-doi": "chinh" };
 
 export default async function TrangCongViec({ searchParams }: { searchParams: ThamSoTrang }) {
   const nd = await yeuCauQuyen("task.view");
@@ -23,7 +24,7 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
   const tt = layMot(sp.trangThai);
   const idViec = layMot(sp.id);
   const boLoc = LuocDoLocViec.parse({
-    cheDo: ["cua-toi", "qua-han", "tat-ca"].includes(cheDo) ? cheDo : "cua-toi",
+    cheDo: ["cua-toi", "toi-giao", "qua-han", "tat-ca"].includes(cheDo) ? cheDo : "cua-toi",
     trangThai: tt === "tat-ca" || (TRANG_THAI_VIEC as readonly string[]).includes(tt) ? tt : "",
     nguoiPhuTrach: /^[0-9a-f-]{36}$/i.test(layMot(sp.nguoiPhuTrach)) ? layMot(sp.nguoiPhuTrach) : "",
     q: layMot(sp.q),
@@ -42,6 +43,8 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
 
   const the = [
     { ma: "cua-toi", nhan: "Việc của tôi" },
+    // 0.17.0 (CV-08): việc mình giao cho người khác — theo dõi tới lúc xong và đọc kết quả.
+    ...(nguoiGiao.length > 1 ? [{ ma: "toi-giao", nhan: "Tôi giao" }] : []),
     { ma: "qua-han", nhan: "Quá hạn", so: kq.soQuaHanCuaToi },
     ...(nguoiXem.length > 1 ? [{ ma: "tat-ca", nhan: "Cả nhóm" }] : []),
   ];
@@ -111,6 +114,7 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
         {kq.dong.length === 0 ? (
           <TrongRong tieuDe={boLoc.cheDo === "qua-han" ? "Không có việc quá hạn" : "Không có công việc nào"}>
             {boLoc.cheDo === "cua-toi" && !boLoc.q ? "Việc được giao cho bạn hoặc bạn tự tạo sẽ hiện ở đây." : null}
+            {boLoc.cheDo === "toi-giao" && !boLoc.q ? "Việc bạn giao cho người khác hiện ở đây; khi họ xong, bạn nhận thông báo kèm kết quả." : null}
           </TrongRong>
         ) : (
           <div className="cuon-ngang">
@@ -129,9 +133,23 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
                   <tr key={v.id} className={v.trangThai === "xong" || v.trangThai === "huy" ? "mo" : undefined}>
                     <td>{v.duocSua ? <TacVuViec id={v.id} trangThai={v.trangThai} /> : <span className="huy-hieu">{NHAN_TRANG_THAI_VIEC[v.trangThai]}</span>}</td>
                     <td>
-                      <strong style={{ fontWeight: 600 }}>{v.tieuDe}</strong>{" "}
+                      <Link href={`/cong-viec/${v.id}`} style={{ fontWeight: 600 }}>
+                        {v.tieuDe}
+                      </Link>{" "}
                       {v.uuTien !== "trung-binh" && <span className={`huy-hieu ${LOP_UU_TIEN[v.uuTien]}`}>{NHAN_UU_TIEN[v.uuTien]}</span>}
-                      {v.moTa && <div className="dong-phu">{v.moTa}</div>}
+                      {v.kiemTra.tong > 0 && (
+                        <span className={`huy-hieu ${v.kiemTra.batBuocConThieu ? "canh-bao" : ""}`} title="Danh sách kiểm tra">
+                          ☑ {v.kiemTra.daTich}/{v.kiemTra.tong}
+                        </span>
+                      )}
+                      {v.ketQua ? (
+                        <div className="dong-phu">
+                          {v.danhGia && <span className={`huy-hieu ${LOP_DANH_GIA[v.danhGia] ?? ""}`}>{NHAN_DANH_GIA_KET_QUA[v.danhGia]}</span>} {v.ketQua}
+                        </div>
+                      ) : (
+                        v.moTa && <div className="dong-phu">{v.moTa}</div>
+                      )}
+                      {v.nguoiGiao && v.nguoiGiao.id !== v.nguoiPhuTrach.id && <div className="dong-phu phu">Giao bởi {v.nguoiGiao.hoTen}</div>}
                     </td>
                     <td className="so nho">
                       {v.han ? dinhDangNgayGio(v.han) : <span className="mo">Không hạn</span>}

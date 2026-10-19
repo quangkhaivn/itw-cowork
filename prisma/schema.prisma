@@ -46,6 +46,7 @@ model Tenant {
   interactions         Interaction[]
   opportunities        Opportunity[]
   tasks                Task[]
+  taskChecklistItems   TaskChecklistItem[]
   // Phase 3 — Sản phẩm và bảng giá
   productCategories    ProductCategory[]
   brands               Brand[]
@@ -228,6 +229,9 @@ model User {
   ownedInteractions    Interaction[]            @relation("TuongTacCua")
   ownedOpportunities   Opportunity[]            @relation("CoHoiPhuTrach")
   ownedTasks           Task[]                   @relation("ViecPhuTrach")
+  taskResults          Task[]                   @relation("ViecGhiKetQua")
+  assignedTasks        Task[]                   @relation("ViecNguoiGiao")
+  checklistTicks       TaskChecklistItem[]      @relation("MucKiemTraNguoiTich")
   ownedQuotations      Quotation[]              @relation("BaoGiaPhuTrach")
   ownedSalesOrders     SalesOrder[]             @relation("DonHangPhuTrach")
   managedProjects      Project[]                @relation("DuAnPhuTrach")
@@ -775,13 +779,25 @@ model Task {
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy     String?   @map("created_by") @db.Uuid
   updatedBy     String?   @map("updated_by") @db.Uuid
+  /// 0.17.0 — kết quả công việc (CV-04). Bắt buộc khi đánh dấu xong (CV-05, kiểm ở service).
+  result        String?   @db.Text
+  /// dat | mot-phan | khong-dat | can-theo-doi (CHECK ở migration)
+  outcome       String?   @db.VarChar(20)
+  resultAt      DateTime? @map("result_at") @db.Timestamptz(6)
+  resultBy      String?   @map("result_by") @db.Uuid
+  /// 0.17.0 — ai giao, lúc nào giao cho người đang phụ trách (CV-08).
+  assignedBy    String?   @map("assigned_by") @db.Uuid
+  assignedAt    DateTime? @map("assigned_at") @db.Timestamptz(6)
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner       User         @relation("ViecPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
-  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner       User                @relation("ViecPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  resultUser  User?               @relation("ViecGhiKetQua", fields: [resultBy], references: [id], onDelete: SetNull)
+  assigner    User?               @relation("ViecNguoiGiao", fields: [assignedBy], references: [id], onDelete: SetNull)
+  checklist   TaskChecklistItem[]
+  customer    Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead        Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity Opportunity?        @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  project     Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, ownerId, status, dueAt])
   @@index([tenantId, customerId])
@@ -789,6 +805,30 @@ model Task {
   @@index([tenantId, projectId])
   @@index([tenantId, leadId])
   @@map("tasks")
+}
+
+/// 0.17.0 — danh sách kiểm tra của công việc (CV-07). Mục bắt buộc chưa tích thì không xong được.
+/// Gỡ mục là xóa mềm (`removed_at`), không xóa cứng.
+model TaskChecklistItem {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  taskId    String    @map("task_id") @db.Uuid
+  label     String    @db.VarChar(300)
+  required  Boolean   @default(true)
+  position  Int       @default(0)
+  doneAt    DateTime? @map("done_at") @db.Timestamptz(6)
+  doneBy    String?   @map("done_by") @db.Uuid
+  removedAt DateTime? @map("removed_at") @db.Timestamptz(6)
+  removedBy String?   @map("removed_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  task     Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  doneUser User?  @relation("MucKiemTraNguoiTich", fields: [doneBy], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, taskId])
+  @@map("task_checklist_items")
 }
 
 // ===========================================================================
@@ -2708,7 +2748,7 @@ model StockTransferItem {
 model Attachment {
   id           String    @id @default(uuid()) @db.Uuid
   tenantId     String    @map("tenant_id") @db.Uuid
-  /// supplier_bill | sales_return | purchase_return | stock_transfer | sales_order | support_ticket
+  /// supplier_bill | sales_return | purchase_return | stock_transfer | sales_order | support_ticket | task
   objectType   String    @map("object_type") @db.VarChar(40)
   objectId     String    @map("object_id") @db.Uuid
   /// Tên tệp người dùng thấy. **Không** dùng để đặt tên tệp trên đĩa.

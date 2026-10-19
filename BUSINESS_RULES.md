@@ -585,3 +585,26 @@ Các luật ở mục 11, 16, 17 đã đúng khi **một người bấm một l�
 | TV-TC-08 | **Hủy đơn mua trả đề nghị gốc về "Đã duyệt"** để đặt lại được (nhu cầu mua vẫn còn), có nhật ký kiểm toán trên đề nghị. Mọi bước đổi trạng thái đề nghị (xin duyệt, duyệt / từ chối, sửa, hủy, lập đơn mua) và đơn mua (sửa, gửi, xác nhận, hủy, nhận hàng) khóa dòng trước khi đọc: hai người cùng lập đơn từ một đề nghị thì chỉ một đơn; nhận đủ hàng hai lần cùng lúc thì một phiếu nhận, lần kia báo lỗi nghiệp vụ | [SV] · [TH] đồng thời |
 | TV-TC-09 | Dòng đơn mua chỉ được trỏ về **dòng của chính đề nghị** mà đơn lập từ đó; đơn không lập từ đề nghị thì không trỏ dòng đề nghị nào | [SV] · [TH] |
 | TV-TC-10 | **Không hủy đơn mua còn hóa đơn nhà cung cấp còn hiệu lực** — hủy hóa đơn ở Công nợ phải trả trước, để không có khoản phải trả treo trên đơn đã hủy | [SV] · [TH] |
+## 27. Công việc thông suốt (0.17.0)
+
+Mục tiêu: giao việc có người nhận biết ngay, làm xong có **kết quả** lưu lại, và máy **kiểm tra trước khi cho xong**. Nối tiếp CV-01 → CV-03 ở mục 3.
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| CV-04 | Kết quả nằm ngay trên công việc: `result` (chữ) + `outcome` (đánh giá: `dat` Đạt · `mot-phan` Đạt một phần · `khong-dat` Không đạt · `can-theo-doi` Cần làm tiếp). Hai cột **đi cùng nhau** — có chữ thì phải có đánh giá và ngược lại; ghi kèm người ghi, lúc ghi. Sửa kết quả có nhật ký kiểm toán trước/sau | [CSDL] CHECK `tasks_outcome_check`, `tasks_ket_qua_di_cung_check` · [SV] · [TH] |
+| CV-05 | Đánh dấu **xong phải có kết quả** (tối thiểu 10 ký tự) và đánh giá. Việc đã xong không được xoá kết quả (muốn bỏ thì mở lại việc). Việc xong **trước 0.17** chưa có kết quả: chỉ được mở lại hoặc ghi kết quả, không lặng lẽ sửa thứ khác | [SV] (không đặt CHECK — QĐ-91) · [ĐV] · [TH] |
+| CV-06 | **Kiểm tra trước khi xong** dùng một hàm thuần `kiemTraTruocKhiXong` cho cả hai chỗ: màn hình hỏi trước (`GET /api/v1/cong-viec/:id/kiem-tra`, không ghi gì) và service chạy lại **trong cùng giao dịch** lúc ghi. Hai mức: *lỗi* (chặn — thiếu kết quả, thiếu đánh giá, còn mục bắt buộc, việc đã hủy, "Cần làm tiếp" chưa hẹn việc) và *nhắc* (không chặn — mục không bắt buộc chưa tích, hồ sơ khách thiếu). Bị chặn thì API trả 422 `chua-du-dieu-kien-xong` kèm danh sách vấn đề | [SV] · [ĐV] · [TH] |
+| CV-07 | **Danh sách kiểm tra** của công việc: tối đa 30 mục, nhãn ≥ 2 ký tự, mỗi mục bắt buộc hoặc không. Mục bắt buộc chưa tích thì không xong được. Tích ghi người tích + lúc tích. Danh sách **khóa** khi việc đã xong hoặc đã hủy. Gỡ mục là xóa mềm (`removed_at`). Thêm / tích / bỏ tích / gỡ đều ghi kiểm toán | [CSDL] CHECK nhãn, tích, gỡ · [SV] · [TH] |
+| CV-08 | **Thông báo khi giao việc**: giao cho người khác (lúc tạo hoặc đổi người) → người nhận được báo ngay (khẩn/cao thì mức cảnh báo tương ứng); đổi người → người cũ được báo "không cần làm tiếp". Việc **xong** → báo người giao (không có thì người tạo) kèm đánh giá + kết quả; "Không đạt" là mức cảnh báo. Không ai tự nhận thông báo về thao tác của chính mình; người nhận đã ngừng hoạt động thì không báo. Chống trùng theo đúng **lần** giao / lần xong. Ghi người giao + lúc giao (`assigned_by`, `assigned_at`); thẻ **"Tôi giao"** liệt kê việc mình giao cho người khác | [SV] · [TH] |
+| CV-09 | Đánh giá **"Cần làm tiếp"** thì bắt buộc hẹn việc tiếp theo. Việc tiếp theo tạo **cùng giao dịch** với lần xong, cùng người làm, cùng khách / lead / cơ hội, cùng ưu tiên, mô tả mang theo kết quả lần trước. Chỉ hẹn được lúc đánh dấu xong | [SV] · [TH] |
+| CV-10 | **Đính kèm vào công việc** (biên bản nghiệm thu, ảnh hiện trường, tệp khách gửi) theo luật mục 20; xem theo phạm vi `task.view`, đính / gỡ cần `task.update` | [CSDL] CHECK `attachments_loai_doi_tuong_check` · [SV] DK-01 · [TH] |
+| CV-11 | Kết quả hiện **trên hồ sơ khách**: dòng thời gian Customer 360 ghi "Hoàn thành (đánh giá): …" kèm nội dung kết quả, thẻ Công việc hiện kết quả từng việc. Ô "xong" trên danh sách không ghi tắt mà mở trang chi tiết với hộp hoàn thành bật sẵn | [SV] `khach360` · giao diện · [TH] |
+
+## 28. Hồ sơ khách đầy đủ (0.17.0)
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| HS-01 | Độ đầy đủ hồ sơ (điểm 0–100 + mức) **tính lúc đọc** từ chính các trường của khách bằng hàm thuần `danhGiaHoSoKhach`, **không lưu** vào CSDL — không bao giờ lệch với dữ liệu thật, đổi luật không phải chạy lại | [SV] hàm thuần · [ĐV] · [TH] |
+| HS-02 | Trường **bắt buộc** tùy loại khách. Mọi khách: điện thoại **hoặc** email, loại khách. Doanh nghiệp / đại lý (và khách chưa chọn loại): thêm **mã số thuế** và **≥ 1 người liên hệ đang hoạt động**. Khách cá nhân không bị trừ điểm vì thiếu mã số thuế / người liên hệ | [SV] · [ĐV] |
+| HS-03 | Trường **nên có**: địa chỉ, tỉnh/thành, nguồn khách, ngành nghề (pháp nhân), đủ cả điện thoại lẫn email. Mức: *Đầy đủ* · *Nên bổ sung* (thiếu trường nên có) · *Thiếu thông tin bắt buộc*. Customer 360 hiện điểm, trường thiếu và chỗ bổ sung | [SV] · giao diện · [ĐV] |
+| HS-04 | Hồ sơ khách thiếu **chỉ nhắc**, không chặn việc hoàn thành công việc — chặn việc của nhân viên vì khách chưa có mã số thuế là phạt nhầm người. Nhắc hiện trong hộp hoàn thành và trên trang chi tiết công việc | [SV] `kiemTraTruocKhiXong` · [ĐV] · [TH] |
