@@ -27,6 +27,7 @@
 #   GIU_NGAY_NGOAI           số ngày giữ ở nơi ngoài máy (mặc định 30)
 #   ALERT_WEBHOOK_URL / ALERT_EMAIL   kênh báo động khi hỏng (scripts/van-hanh-chung.sh)
 #   SAO_LUU_KHONG_DOCKER=1   chạy pg_dump trực tiếp bằng DATABASE_URL_OWNER (máy phát triển / bài thử)
+#   SAO_LUU_CHO_KHOA_GIAY    số giây chờ lần sao lưu khác đang chạy trước khi bỏ cuộc (mặc định 1800)
 #   TEP_ENV                  tệp .env để nạp và sao lưu (mặc định .env)
 #
 # Kết quả ghi vào bảng system_heartbeats (dòng 'sao-luu') — màn hình Quản trị → Tự động hóa báo đỏ khi
@@ -68,7 +69,9 @@ TAM="$(mktemp -d)"
 ket_thuc() {
   local ma=$?
   rm -rf "$TAM"
-  rm -f "$THU_MUC"/*.dang-ghi 2>/dev/null || true
+  # Chỉ xóa tệp dở dang CỦA LẦN CHẠY NÀY. Không dùng "$THU_MUC"/*.dang-ghi: một lần chạy chờ khóa
+  # quá hạn (hoặc máy không có flock) sẽ xóa mất tệp đang ghi của lần chạy kia (QA 0.16.1).
+  rm -f "$TEP.dang-ghi" "$TEP_DK.dang-ghi" "$TEP_ENV_MA.dang-ghi" 2>/dev/null || true
   if [ "$ma" -ne 0 ]; then
     local loi="Sao lưu hỏng ở bước: $BUOC (mã $ma)"
     printf '{"luc":"%s","ok":false,"loi":%s}\n' "$LUC" "$(json_chuoi "$loi")" > "$THU_MUC/trang-thai.json" 2>/dev/null || true
@@ -78,12 +81,20 @@ ket_thuc() {
   exit "$ma"
 }
 trap ket_thuc EXIT
+# Bị ngắt (Ctrl-C, kill, mất phiên SSH): bash chạy trap EXIT với $? = 0 nếu không bắt tín hiệu —
+# lần sao lưu dở dang sẽ không bị ghi "hỏng" và không báo động (QA 0.16.1). Đổi tín hiệu thành mã lỗi.
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # Không cho hai lần sao lưu chồng nhau (cron 02:15 trùng lúc trien-khai.sh tự sao lưu).
 BUOC="giữ khóa chạy một mình"
 exec 9>"$THU_MUC/.khoa"
 if command -v flock >/dev/null 2>&1; then
-  flock -w 1800 9 || { echo "❌ Một lần sao lưu khác đang chạy quá 30 phút"; exit 1; }
+  CHO_KHOA="${SAO_LUU_CHO_KHOA_GIAY:-1800}"
+  flock -w "$CHO_KHOA" 9 || { echo "❌ Một lần sao lưu khác đang chạy quá $CHO_KHOA giây"; exit 1; }
+else
+  echo "⚠ máy chủ không có lệnh flock — không chặn được hai lần sao lưu chạy chồng nhau (dnf install util-linux)"
 fi
 
 # ---------------------------------------------------------------------------

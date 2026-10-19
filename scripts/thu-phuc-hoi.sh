@@ -56,6 +56,11 @@ ket_thuc() {
   exit "$ma"
 }
 trap ket_thuc EXIT
+# Bị ngắt thì vẫn phải xóa CSDL tạm VÀ ghi "hỏng" + báo động: không bắt tín hiệu thì trap EXIT
+# chạy với $? = 0 và lần thử dở dang bị coi như không có gì (QA 0.16.1).
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ---------------------------------------------------------------------------
 # 0. Chọn bộ sao lưu: dump + gói đính kèm CÙNG mốc (bỏ qua dump của lần sao lưu hỏng giữa chừng)
@@ -96,8 +101,9 @@ echo "=== Thử phục hồi bộ $LUC ($(du -h "$DUMP" | cut -f1)) vào CSDL t�
 # 1. Phục hồi vào CSDL tạm
 # ---------------------------------------------------------------------------
 BUOC="tạo CSDL tạm"
-chay_pg psql -X -q -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$CSDL_TAM\""
+# Đặt cờ TRƯỚC khi tạo: bị ngắt đúng lúc CREATE DATABASE vừa xong thì trap vẫn xóa (DROP … IF EXISTS).
 DA_TAO_CSDL=1
+chay_pg psql -X -q -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$CSDL_TAM\""
 
 BUOC="pg_restore"
 if ! chay_pg_csdl "$CSDL_TAM" pg_restore --no-owner --no-privileges < "$DUMP" 2> "$TAM/loi-phuc-hoi.txt"; then
