@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { NguCanh } from "@/lib/api";
+import { thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
 import type { ClientTenant } from "@/lib/db";
 import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
@@ -77,22 +78,32 @@ export async function xemTruocThu(nc: NguCanh, d: { tieuDe: string; khoi: Khoi[]
   return { tieuDe: thu.tieuDe, html: thu.html, thieuChanThu: thieu };
 }
 
-/** Gửi thư thử tới chính người đang soạn (EM-15). Không ghi người nhận, không ghi tương tác. */
-export async function guiThuThu(nc: NguCanh, d: { tieuDe: string; khoi: Khoi[] }) {
-  batBuocQuyen(nc.hoSo, "marketing.create", { objectType: "email_template" });
-  const kn = await docKetNoiDeGui(nc.tx, nc.tenantId);
-  if (!kn) throw new LoiNghiepVu("Chưa cấu hình kết nối email (Quản trị → Kết nối email).", 409, "chua-cau-hinh-email");
-  const { thu } = await dungThuMau(nc, d.tieuDe, d.khoi);
+/**
+ * Gửi thư thử tới chính người đang soạn (EM-15). Không ghi người nhận, không ghi tương tác.
+ *
+ * 0.16.1 (QĐ-89, QA): cùng mẫu với `guiThuKiemTraKetNoi` — dựng thư trong giao dịch ngắn, **gửi SMTP
+ * ngoài giao dịch** (máy chủ thư chậm không giữ kết nối CSDL và không vượt hạn 5 giây của Prisma), ghi
+ * nhật ký ở giao dịch ngắn thứ hai. Nhận `NguCanh` (bài thử cũ) hoặc `BuocGiaoDich` (route nhiều bước).
+ */
+export async function guiThuThu(x: NguCanh | BuocGiaoDich, d: { tieuDe: string; khoi: Khoi[] }) {
+  const nb = thanhBuoc(x);
+  const { kn, thu, den } = await nb.giaoDich(async (nc) => {
+    batBuocQuyen(nc.hoSo, "marketing.create", { objectType: "email_template" });
+    const kn = await docKetNoiDeGui(nc.tx, nc.tenantId);
+    if (!kn) throw new LoiNghiepVu("Chưa cấu hình kết nối email (Quản trị → Kết nối email).", 409, "chua-cau-hinh-email");
+    const { thu } = await dungThuMau(nc, d.tieuDe, d.khoi);
+    return { kn, thu, den: { ten: nc.hoSo.hoTen, email: nc.hoSo.email } };
+  });
   const vc = taoVanChuyen(kn.smtp);
   try {
-    await vc.gui({ tu: kn.tu, den: { ten: nc.hoSo.hoTen, email: nc.hoSo.email }, traLoi: kn.traLoi, tieuDe: `[THỬ] ${thu.tieuDe}`, html: thu.html, text: thu.text });
+    await vc.gui({ tu: kn.tu, den, traLoi: kn.traLoi, tieuDe: `[THỬ] ${thu.tieuDe}`, html: thu.html, text: thu.text });
   } catch (e) {
     throw new LoiNghiepVu(`Không gửi được thư thử: ${cauLoiGui(e as Record<string, never>)}`, 502, "gui-thu-loi");
   } finally {
     vc.dong();
   }
-  await nc.kiemToan({ action: "gui-thu", objectType: "email_template", after: { den: nc.hoSo.email, tieuDe: thu.tieuDe } });
-  return { ok: true, den: nc.hoSo.email };
+  await nb.giaoDich((nc) => nc.kiemToan({ action: "gui-thu", objectType: "email_template", after: { den: den.email, tieuDe: thu.tieuDe } }));
+  return { ok: true, den: den.email };
 }
 
 // ---------------------------------------------------------------------------

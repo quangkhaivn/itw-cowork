@@ -44,8 +44,18 @@ umask 077
 ket_thuc() {
   local ma=$?
   if [ "$DA_TAO_CSDL" = "1" ]; then
-    chay_pg psql -X -q -c "DROP DATABASE IF EXISTS \"$CSDL_TAM\" WITH (FORCE)" >/dev/null 2>&1 \
-      || echo "⚠ không xóa được CSDL tạm $CSDL_TAM — xóa tay: DROP DATABASE $CSDL_TAM" >&2
+    # Thử vài lần: máy bận thì DROP … WITH (FORCE) có thể hỏng vì chưa ngắt kịp kết nối còn lại.
+    local lan da_xoa=0
+    for lan in 1 2 3; do
+      if chay_pg psql -X -q -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$CSDL_TAM\" WITH (FORCE)" >/dev/null 2>"$TAM/loi-xoa.txt"; then
+        da_xoa=1; break
+      fi
+      sleep 2
+    done
+    if [ "$da_xoa" != "1" ]; then
+      echo "⚠ không xóa được CSDL tạm $CSDL_TAM — xóa tay: DROP DATABASE \"$CSDL_TAM\" WITH (FORCE); lỗi: $(head -c 300 "$TAM/loi-xoa.txt" 2>/dev/null)" >&2
+      [ "$ma" -ne 0 ] || ma=1
+    fi
   fi
   rm -rf "$TAM"
   if [ "$ma" -ne 0 ]; then
@@ -56,6 +66,11 @@ ket_thuc() {
   exit "$ma"
 }
 trap ket_thuc EXIT
+# Bị ngắt thì vẫn phải xóa CSDL tạm VÀ ghi "hỏng" + báo động: không bắt tín hiệu thì trap EXIT
+# chạy với $? = 0 và lần thử dở dang bị coi như không có gì (QA 0.16.1).
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ---------------------------------------------------------------------------
 # 0. Chọn bộ sao lưu: dump + gói đính kèm CÙNG mốc (bỏ qua dump của lần sao lưu hỏng giữa chừng)
@@ -96,8 +111,9 @@ echo "=== Thử phục hồi bộ $LUC ($(du -h "$DUMP" | cut -f1)) vào CSDL t�
 # 1. Phục hồi vào CSDL tạm
 # ---------------------------------------------------------------------------
 BUOC="tạo CSDL tạm"
-chay_pg psql -X -q -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$CSDL_TAM\""
+# Đặt cờ TRƯỚC khi tạo: bị ngắt đúng lúc CREATE DATABASE vừa xong thì trap vẫn xóa (DROP … IF EXISTS).
 DA_TAO_CSDL=1
+chay_pg psql -X -q -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$CSDL_TAM\""
 
 BUOC="pg_restore"
 if ! chay_pg_csdl "$CSDL_TAM" pg_restore --no-owner --no-privileges < "$DUMP" 2> "$TAM/loi-phuc-hoi.txt"; then

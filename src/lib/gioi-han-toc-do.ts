@@ -26,24 +26,47 @@ export interface KhoDem {
   xoa(khoa: string): Promise<void>;
 }
 
-/** Kho trong bộ nhớ. Xuất ra để kiểm thử đơn vị. */
+/**
+ * Kho trong bộ nhớ. Xuất ra để kiểm thử đơn vị.
+ *
+ * Có TRẦN số khóa (`toiDa`, mặc định 10.000): khi Redis hỏng, kho này là kho dự phòng của mọi yêu cầu
+ * đăng nhập / form công khai, và khóa chứa email người gửi — kẻ tấn công đổi email liên tục sẽ làm bảng
+ * phình không giới hạn trong suốt cửa sổ đếm (QA 0.16.1). Vượt trần: dọn khóa hết hạn, rồi bỏ khóa CŨ
+ * NHẤT cho tới còn 90% trần — dọn theo lô nên chi phí trung bình mỗi lần đếm vẫn là O(1).
+ */
 export class KhoDemBoNho implements KhoDem {
   private readonly bang = new Map<string, { soLan: number; hetHan: number }>();
-  constructor(private readonly bayGio: () => number = Date.now) {}
+  constructor(
+    private readonly bayGio: () => number = Date.now,
+    private readonly toiDa = 10_000,
+  ) {}
+
+  /** Số khóa đang giữ (bài thử). */
+  get kichThuoc(): number {
+    return this.bang.size;
+  }
 
   async tang(khoa: string, cuaSoGiay: number) {
     const t = this.bayGio();
     const cu = this.bang.get(khoa);
     if (!cu || cu.hetHan <= t) {
+      // Xóa rồi thêm lại để khóa mới luôn ở cuối thứ tự chèn (cũ nhất ở đầu Map).
+      this.bang.delete(khoa);
       this.bang.set(khoa, { soLan: 1, hetHan: t + cuaSoGiay * 1000 });
-      // Dọn dần để bảng không phình mãi.
-      if (this.bang.size > 10_000) {
-        for (const [k, v] of this.bang) if (v.hetHan <= t) this.bang.delete(k);
-      }
+      if (this.bang.size > this.toiDa) this.don(t);
       return { soLan: 1, conLaiGiay: cuaSoGiay };
     }
     cu.soLan += 1;
     return { soLan: cu.soLan, conLaiGiay: Math.ceil((cu.hetHan - t) / 1000) };
+  }
+
+  private don(t: number) {
+    for (const [k, v] of this.bang) if (v.hetHan <= t) this.bang.delete(k);
+    const conLai = Math.floor(this.toiDa * 0.9);
+    for (const k of this.bang.keys()) {
+      if (this.bang.size <= conLai) break;
+      this.bang.delete(k);
+    }
   }
 
   async xoa(khoa: string) {
@@ -69,14 +92,28 @@ class KhoDemRedis implements KhoDem {
   }
 }
 
+/**
+ * Redis của bộ đếm. `enableOfflineQueue: false`: Redis đứt thì lệnh hỏng NGAY và rơi sang kho dự phòng,
+ * thay vì xếp hàng chờ kết nối lại — trước đây mỗi yêu cầu đăng nhập chờ thêm tới ~2 giây suốt thời gian
+ * Redis hỏng (QA 0.16.1). Bắt sự kiện "error" để ioredis không in "Unhandled error event" mỗi lần thử lại.
+ */
+function taoRedis(url: string): Redis {
+  const r = new Redis(url, { maxRetriesPerRequest: 1, enableOfflineQueue: false });
+  let lanBao = 0;
+  r.on("error", (loi) => {
+    if (Date.now() - lanBao < 600_000) return;
+    lanBao = Date.now();
+    console.error("[gioi-han-toc-do] Redis lỗi (đếm tạm trong bộ nhớ tiến trình):", loi.message);
+  });
+  return r;
+}
+
 const bienToanCuc = globalThis as unknown as { khoDemGioiHan?: KhoDem };
 
 function layKho(): KhoDem {
   if (bienToanCuc.khoDemGioiHan) return bienToanCuc.khoDemGioiHan;
   const url = process.env.REDIS_URL;
-  bienToanCuc.khoDemGioiHan = url
-    ? new KhoDemRedis(new Redis(url, { maxRetriesPerRequest: 1 }))
-    : new KhoDemBoNho();
+  bienToanCuc.khoDemGioiHan = url ? new KhoDemRedis(taoRedis(url)) : new KhoDemBoNho();
   return bienToanCuc.khoDemGioiHan;
 }
 
