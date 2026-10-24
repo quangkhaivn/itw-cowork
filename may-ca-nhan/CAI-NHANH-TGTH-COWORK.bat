@@ -6,7 +6,7 @@ set "TEP=%~dp0cai-nhanh.ps1"
 if not exist "%TEP%" (
   set "TEP=%TEMP%\cai-nhanh-cowork.ps1"
   echo Tai bo cai tu GitHub...
-  powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/quangkhaivn/itw-cowork/release/0.16/may-ca-nhan/cai-nhanh.ps1 -OutFile $env:TEMP\cai-nhanh-cowork.ps1"
+  powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/quangkhaivn/itw-cowork/release/0.17/may-ca-nhan/cai-nhanh.ps1 -OutFile $env:TEMP\cai-nhanh-cowork.ps1"
 )
 powershell -NoProfile -ExecutionPolicy Bypass -File "%TEP%" %*
 if errorlevel 1 (echo. & echo Cai dat chua xong - chup man hinh cua so nay gui nguoi ho tro. & pause & exit /b 1)

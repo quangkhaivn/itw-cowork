@@ -1,9 +1,9 @@
 @echo off
-rem TAI VE VA CAI TGTH COWORK 0.16.0 LEN MAY NAY (du lieu thu DEMO).
+rem TAI VE VA CAI TGTH COWORK 0.17.0 LEN MAY NAY (du lieu thu DEMO).
 rem Can: Git for Windows, Node.js 22 LTS, Docker Desktop (dang chay).
 setlocal
 set "THU_MUC=%USERPROFILE%\TGTH-Cowork"
-set "NHANH=release/0.16"
+set "NHANH=release/0.17"
 where git >nul 2>nul || (echo Chua cai Git. Tai tai https://git-scm.com/download/win roi chay lai. & pause & exit /b 1)
 where node >nul 2>nul || (echo Chua cai Node.js. Tai ban 22 LTS tai https://nodejs.org roi chay lai. & pause & exit /b 1)
 where docker >nul 2>nul || (echo Chua cai Docker Desktop. Tai tai https://www.docker.com/products/docker-desktop roi chay lai. & pause & exit /b 1)

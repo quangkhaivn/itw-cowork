@@ -1,6 +1,8 @@
 # Chạy thử TGTH Cowork trên máy Windows
 
-Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.16`) chạy riêng trên **một máy Windows**, với **dữ liệu thử DEMO**. Nó không kết nối và không đụng gì tới bản đang chạy thật ở thegioitinhoc.io.vn.
+> **Cách nhanh nhất, không cần cài Git, Node.js hay Docker:** bấm đúp **`CAI-NHANH-TGTH-COWORK.bat`**. Bộ cài tự tải mọi thứ vào `L:\TGTH-Cowork` (không có ổ L: thì vào thư mục người dùng), dựng xong thì mở phần mềm. Đã cài bản cũ thì bấm lại tệp này để cập nhật: dữ liệu thử và `.env` được giữ. Phần dưới đây là cách cài bằng Docker Desktop.
+
+Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.17`) chạy riêng trên **một máy Windows**, với **dữ liệu thử DEMO**. Nó không kết nối và không đụng gì tới bản đang chạy thật ở thegioitinhoc.io.vn.
 
 - **Cơ sở dữ liệu**: PostgreSQL 16 và Redis 7 chạy trong Docker Desktop. Chỉ máy này truy cập được, qua cổng 55432 và 56379.
 - **Phần mềm**: ứng dụng Next.js và worker chạy bằng Node.js. Mở trong trình duyệt tại **http://127.0.0.1:3000**.
@@ -52,7 +54,18 @@ Mở thư mục `TGTH-Cowork\may-ca-nhan`:
 | **`CAI-DAT.bat`** | Chạy lại sau mỗi lần cập nhật mã. Dữ liệu và `.env` được giữ nguyên. |
 | **`XOA-DU-LIEU-THU.bat`** | Xoá sạch dữ liệu thử để cài lại từ đầu. Phải gõ `XOA` để xác nhận. |
 
-**Cập nhật bản mới:** bấm đúp lại `TAI-VE-VA-CAI-DAT.bat`. Tệp này lấy mã mới nhất của nhánh `release/0.16` rồi cài lại.
+**Cập nhật bản mới:** bấm đúp lại `TAI-VE-VA-CAI-DAT.bat`. Tệp này lấy mã mới nhất của nhánh `release/0.17` rồi cài lại.
+
+## 4a. Thử các tính năng mới của 0.17.0 và 0.16.1
+
+- **Công việc → mở một việc**: trang chi tiết có danh sách kiểm tra, tệp đính kèm, nút Bắt đầu làm / Hoàn thành / Giao lại / Mở lại.
+  - Bấm **Hoàn thành**: phải ghi kết quả (ít nhất 10 ký tự) và chọn đánh giá *Đạt / Đạt một phần / Không đạt / Cần làm tiếp*. Chọn "Cần làm tiếp" thì phải hẹn việc tiếp theo.
+  - Thẻ **Tôi giao** liệt kê việc mình giao cho người khác. Giao việc cho tài khoản khác rồi đăng nhập tài khoản đó để xem thông báo.
+- **CRM → Khách hàng → một khách**: điểm đầy đủ hồ sơ (0–100) và các trường còn thiếu; kết quả công việc hiện trên dòng thời gian.
+- **Bán hàng**: chấp nhận báo giá thì cơ hội tự chuyển sang Thắng; một báo giá chỉ ra được một đơn; hủy đơn còn hóa đơn sẽ bị chặn kèm số hóa đơn.
+- **Kho**: xác nhận đơn ở kho A rồi xuất từ kho B, phần giữ chỗ ở kho A được nhả; khách trả máy có sê-ri thì máy bán lại được cho khách khác.
+- **Tài chính**: hai người cùng thu một hóa đơn không thể thu vượt số nợ; hủy hóa đơn đã có giảm trừ trả hàng bị chặn.
+- **Quản trị → Tự động hóa**: thẻ Worker và Sao lưu. Trên máy chạy thử không có sao lưu nên băng đỏ "chưa sao lưu" là bình thường.
 
 ## 4. Thử các tính năng mới của 0.16.0
 

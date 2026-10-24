@@ -5,7 +5,7 @@
 #   node\     Node.js 22 bản chạy ngay (không cài vào Windows)
 #   pgsql\    PostgreSQL 16 bản gọn (gói @embedded-postgres trên npm)
 #   pgdata\   dữ liệu thử (DEMO) — giữ nguyên qua các lần cập nhật
-#   app\      mã nguồn TGTH Cowork nhánh release/0.16 + .env
+#   app\      mã nguồn TGTH Cowork nhánh release/0.17 + .env
 # rồi tạo CHAY.bat / DUNG.bat / CAP-NHAT.bat ngay trong thư mục đó.
 #
 # Chạy lại tệp này bất cứ lúc nào để cập nhật mã mới nhất: dữ liệu và .env được giữ.
@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'   # thanh tiến trình của Invoke-WebRequest làm tải chậm gấp nhiều lần trên PowerShell 5.1
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-$NHANH = 'release/0.16'
+$NHANH = 'release/0.17'
 $NODE_PHIEN_BAN = '22.22.0'
 $PG_GOI = '16.14.0-beta.17'
 $CONG_PG = 55432
