@@ -4,6 +4,7 @@ import { ghiKiemToan } from "@/lib/kiem-toan";
 import { docMaLienKet } from "./ma-lien-ket";
 import { cheEmail, danhSachLienKet, LuocDoDanhSachKhoi } from "./tinh-toan";
 import { docChanThu } from "./service";
+import { ghiSoDongY } from "./so-dong-y";
 
 /**
  * Đường công khai của email: huỷ nhận tin, điểm ảnh mở, chuyển hướng bấm (EM-10, EM-11).
@@ -49,16 +50,33 @@ export async function huyNhanTin(ma: string, bc: BoiCanhYeuCau): Promise<boolean
     if (r.unsubscribedAt) return true;
     const luc = new Date();
     await tx.emailRecipient.update({ where: { id: r.id }, data: { unsubscribedAt: luc } });
-    // Gói Marketing (MK-13): từ chối luôn thắng đồng ý, CHECK `*_dong_y_nhan_tin_check` cấm hai cờ cùng
-    // bật → tắt `marketing_opt_in` cùng lúc và ghi nguồn, y như ghi nhận từ chối ở màn hình lead.
-    const tuChoi = { marketingOptOutAt: luc, marketingOptIn: false, marketingConsentSource: "huy-nhan-tin-email" };
-    const lead = await tx.lead.updateMany({ where: { emailNormalized: r.email, marketingOptOutAt: null }, data: tuChoi });
-    const lh = await tx.contact.updateMany({ where: { emailNormalized: r.email, marketingOptOutAt: null }, data: tuChoi });
-    await tx.emailSuppression.upsert({
-      where: { tenantId_email: { tenantId: m.tenantId, email: r.email } },
-      update: { reason: "huy-nhan-tin", status: "hoat-dong", recipientId: r.id },
-      create: { tenantId: m.tenantId, email: r.email, reason: "huy-nhan-tin", recipientId: r.id },
+    const truocLead = await tx.lead.count({ where: { emailNormalized: r.email, marketingOptOutAt: null } });
+    const truocLh = await tx.contact.count({ where: { emailNormalized: r.email, marketingOptOutAt: null } });
+    // 0.18.0 — EG-08: ghi "rút đồng ý" vào sổ; sổ tự đồng bộ cờ cũ (MK-13: tắt `marketing_opt_in`, ghi
+    // `marketing_opt_out_at` + nguồn `huy-nhan-tin-email` trên MỌI lead / liên hệ cùng email) và danh sách chặn.
+    const c = await tx.emailCampaign.findFirst({ where: { id: r.campaignId }, select: { code: true } });
+    const so = await ghiSoDongY(tx, m.tenantId, {
+      email: r.email,
+      hanhDong: "rut",
+      nguon: "huy-nhan-tin",
+      canCu: `Bấm "Huỷ nhận tin" trong thư chiến dịch ${c?.code ?? ""}`.trim(),
+      thamChieu: `email_recipient:${r.id}`,
+      luc,
+      ip: bc.ip,
+      leadId: r.leadId,
+      contactId: r.contactId,
     });
+    await tx.emailSuppression.updateMany({ where: { email: r.email, recipientId: null }, data: { recipientId: r.id } });
+    const lead = { count: truocLead - (await tx.lead.count({ where: { emailNormalized: r.email, marketingOptOutAt: null } })) };
+    const lh = { count: truocLh - (await tx.contact.count({ where: { emailNormalized: r.email, marketingOptOutAt: null } })) };
+    // EG-13 (NĐ 91/2020 Điều 20): một thư xác nhận cho MỖI lần trạng thái đổi sang từ chối — bấm lại,
+    // hay bấm ở thư của chiến dịch khác khi đã từ chối rồi, không sinh thêm thư.
+    if (so.truoc !== "rut" && so.truoc !== "phan-doi") {
+      await tx.emailTransactional.createMany({
+        data: [{ tenantId: m.tenantId, kind: "xac-nhan-tu-choi", email: r.email, recipientId: r.id, dedupeKey: `xac-nhan-tu-choi:${so.id}`, payload: { nhanLuc: luc.toISOString(), dungTu: luc.toISOString() } }],
+        skipDuplicates: true,
+      });
+    }
     await tx.emailEvent.create({
       data: { tenantId: m.tenantId, campaignId: r.campaignId, recipientId: r.id, eventType: "unsubscribe", ipAddress: bc.ip, userAgent: bc.userAgent?.slice(0, 500) ?? null },
     });

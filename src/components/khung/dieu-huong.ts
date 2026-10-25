@@ -64,7 +64,9 @@ export type BieuTuong =
   | "email"
   | "mau-email"
   | "ket-noi-email"
-  | "bao-mat";
+  | "bao-mat"
+  // 0.18.0
+  | "so-dong-y";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -127,6 +129,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Landing page", href: "/marketing/landing", quyen: "marketing.view", bieuTuong: "landing", tuKhoa: "landing page trang dich ab test" },
       { nhan: "Đợt gửi email", href: "/marketing/email/chien-dich", quyen: "marketing.view", bieuTuong: "email", tuKhoa: "email marketing chien dich email dot gui thu newsletter" },
       { nhan: "Mẫu email", href: "/marketing/email/mau", quyen: "marketing.view", bieuTuong: "mau-email", tuKhoa: "mau thu email template noi dung" },
+      { nhan: "Sổ đồng ý email", href: "/marketing/email/dong-y", quyen: "marketing.view", bieuTuong: "so-dong-y", tuKhoa: "dong y nhan thu quang cao consent rut tu choi nd 91 nhap csv" },
     ],
   },
   {

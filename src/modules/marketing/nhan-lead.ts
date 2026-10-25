@@ -16,6 +16,7 @@ import { NHAN_KENH_NHAN, type KenhNhan } from "./hang-so";
 import { chonTheoVongTron, chuanHoaUtmCampaign, hanGoiLai, KY_TU_DIEU_KHIEN, type BoUtm } from "./tinh-toan";
 import { cheLienLac, kiemTraChienDichGanDuoc, kiemTraNguonLead, locMarketing } from "./chung";
 import type { DuLieuNhapTayLead } from "./luoc-do";
+import { ghiSoDongY, trangThaiDongYCuaNhieu } from "@/modules/email/so-dong-y";
 
 /**
  * MỘT CỬA NHẬN LEAD — `nhanLead()`. Luật MK-06 → MK-10 (BUSINESS_RULES.md mục 22).
@@ -57,6 +58,8 @@ export interface DuLieuNhanLead {
   dongYNhanTin: boolean;
   /** Ghi nhận đồng ý ở đâu, ví dụ "form:camera-tet". */
   nguonDongY: string;
+  /** 0.18.0 — câu chữ của ô đồng ý người đó đã tích (form / landing) — căn cứ ghi vào sổ đồng ý email. */
+  cauDongY?: string | null;
   formId?: string | null;
   webhookSourceId?: string | null;
   landingPageId?: string | null;
@@ -234,15 +237,31 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
     tx.contact.findFirst({ where: { OR: hoacNguoi("contact"), marketingOptOutAt: { not: null } }, select: { marketingOptOutAt: true }, orderBy: { marketingOptOutAt: "desc" } }),
     // Gói Email (EM): người đã bấm "hủy nhận tin" trong thư nằm trong danh sách chặn theo email —
     // kể cả khi lead / liên hệ mang email đó đã đổi email hay chưa từng có trong CRM.
-    email ? tx.emailSuppression.findFirst({ where: { email, reason: "huy-nhan-tin", status: "hoat-dong" }, select: { createdAt: true } }) : null,
+    email ? tx.emailSuppression.findFirst({ where: { email, reason: { in: ["huy-nhan-tin", "bao-rac"] }, status: "hoat-dong" }, select: { createdAt: true } }) : null,
   ]);
-  const tuChoiLuc = leadTuChoi?.marketingOptOutAt ?? lienHeTuChoi?.marketingOptOutAt ?? huyQuaEmail?.createdAt ?? null;
+  // 0.18.0: sổ đồng ý email (EG-08) — dòng mới nhất là rút / phản đối cũng là đã từ chối.
+  const soDongY = email ? (await trangThaiDongYCuaNhieu(tx, [email])).get(email) : undefined;
+  const tuChoiSo = soDongY && soDongY.hanhDong !== "dong-y" ? soDongY.luc : null;
+  const tuChoiLuc = leadTuChoi?.marketingOptOutAt ?? lienHeTuChoi?.marketingOptOutAt ?? huyQuaEmail?.createdAt ?? tuChoiSo ?? null;
   const tichDongYNhungDaTuChoi = d.dongYNhanTin && tuChoiLuc !== null;
   const GHI_CHU_TU_CHOI = "Khách gửi form tích đồng ý nhận tin nhưng đã từng từ chối nhận tin – cần xác nhận lại với khách trước khi gửi tin marketing.";
   const ghiChuTuChoi = (leadId: string, ownerId: string) =>
     tx.interaction.create({
       data: { tenantId, type: "note", leadId, subject: "Cần xác nhận lại đồng ý nhận tin", content: `${GHI_CHU_TU_CHOI}\nKênh: ${kenhMoTa}.`, ownerId, createdBy: tacNhan.nguoiId, updatedBy: tacNhan.nguoiId },
     });
+  /**
+   * EG-08: người đăng ký TỰ tích ô đồng ý trên form / landing (hoặc hệ thống ngoài báo qua webhook) →
+   * một dòng "dong-y" trong sổ đồng ý email, căn cứ = câu chữ ô đồng ý + kênh. Đã từ chối → không ghi
+   * (từ chối luôn thắng; đồng ý lại chỉ qua ghi tay có căn cứ).
+   */
+  const ghiSoDongYNeuCo = async (leadId: string, captureId: string) => {
+    if (!d.dongYNhanTin || !email || tuChoiLuc || !["form", "landing", "webhook"].includes(d.kenh)) return;
+    const canCu =
+      d.kenh === "webhook"
+        ? `Hệ thống ngoài (${d.nguonDongY}) báo người đăng ký đã tích đồng ý nhận tin`
+        : `Tự tích ô đồng ý trên ${d.kenh === "landing" ? "landing page" : "form"} (${d.nguonDongY}): "${(d.cauDongY ?? "").slice(0, 500)}"`;
+    await ghiSoDongY(tx, tenantId, { email, hanhDong: "dong-y", nguon: d.kenh as "form" | "landing" | "webhook", canCu, thamChieu: `lead_capture:${captureId}`, luc: bayGio, ip: tacNhan.ip, leadId });
+  };
   const hoac: Prisma.LeadWhereInput[] = [];
   if (dienThoai) hoac.push({ phoneNormalized: dienThoai });
   if (email) hoac.push({ emailNormalized: email });
@@ -293,6 +312,7 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
       doiTuongId: cu.id,
     });
     const nk = await nhatKy("ghi-them", cu.id, cu.ownerId);
+    await ghiSoDongYNeuCo(cu.id, nk.id);
     await kiemToan("sua", cu.id, { ghiThemTu: d.kenh, chienDichId: chienDich?.id ?? null, dongYNhanTin: d.dongYNhanTin });
     await suKien(SU_KIEN.LEAD_RECAPTURED, "lead", cu.id, { kenh: d.kenh, chienDichId: chienDich?.id ?? null, captureId: nk.id });
     return {
@@ -411,6 +431,7 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
     doiTuongId: l.id,
   });
   const nk = await nhatKy("tao-moi", l.id, nguoiNhan);
+  await ghiSoDongYNeuCo(l.id, nk.id);
   await kiemToan("tao", l.id, {
     ma,
     hoTen,
@@ -621,20 +642,39 @@ export async function doiDongYNhanTin(nc: NguCanh, doiTuong: "lead" | "lien-he",
   const quyen = doiTuong === "lead" ? "crm.update" : "customer.update";
   if (!coQuyen(nc.hoSo, quyen) && !coQuyen(nc.hoSo, "marketing.update")) batBuocQuyen(nc.hoSo, quyen, { objectType: doiTuong, objectId: id });
   const bayGio = new Date();
+  let emailSo: string | null = null;
   const data = d.dongY
     ? { marketingOptIn: true, marketingOptInAt: bayGio, marketingOptOutAt: null, marketingConsentSource: d.nguon }
     : { marketingOptIn: false, marketingOptOutAt: bayGio, marketingConsentSource: d.nguon };
   if (doiTuong === "lead") {
-    const l = await nc.tx.lead.findFirst({ where: { id, ...(coQuyen(nc.hoSo, "marketing.update") ? {} : await locMarketing(nc, "crm.update")) }, select: { id: true, marketingOptIn: true, marketingOptOutAt: true } });
+    const l = await nc.tx.lead.findFirst({ where: { id, ...(coQuyen(nc.hoSo, "marketing.update") ? {} : await locMarketing(nc, "crm.update")) }, select: { id: true, marketingOptIn: true, marketingOptOutAt: true, emailNormalized: true } });
     if (!l) throw new LoiKhongTimThay("Lead");
     await nc.tx.lead.update({ where: { id }, data: { ...data, updatedBy: nc.hoSo.userId } });
     await nc.kiemToan({ action: "sua", objectType: "lead", objectId: id, before: { dongYNhanTin: l.marketingOptIn, tuChoiLuc: l.marketingOptOutAt }, after: { dongYNhanTin: d.dongY, nguon: d.nguon } });
+    emailSo = l.emailNormalized;
   } else {
-    const c = await nc.tx.contact.findFirst({ where: { id }, select: { id: true, marketingOptIn: true, marketingOptOutAt: true, customer: { select: { ownerId: true } } } });
+    const c = await nc.tx.contact.findFirst({ where: { id }, select: { id: true, marketingOptIn: true, marketingOptOutAt: true, emailNormalized: true, customer: { select: { ownerId: true } } } });
     if (!c) throw new LoiKhongTimThay("Liên hệ");
     if (!coQuyen(nc.hoSo, "marketing.update") && !(await trongPhamVi(nc, "customer.update", c.customer.ownerId))) throw new LoiKhongTimThay("Liên hệ");
     await nc.tx.contact.update({ where: { id }, data: { ...data, updatedBy: nc.hoSo.userId } });
     await nc.kiemToan({ action: "sua", objectType: "contact", objectId: id, before: { dongYNhanTin: c.marketingOptIn, tuChoiLuc: c.marketingOptOutAt }, after: { dongYNhanTin: d.dongY, nguon: d.nguon } });
+    emailSo = c.emailNormalized;
+  }
+  // 0.18.0 — EG-08: lời từ chối ghi tay cũng vào sổ đồng ý email (rút). Đồng ý ghi ở đây KHÔNG vào sổ:
+  // đồng ý dùng để gửi thư quảng cáo phải ghi ở Sổ đồng ý kèm căn cứ.
+  if (!d.dongY && emailSo) {
+    await ghiSoDongY(nc.tx, nc.tenantId, {
+      email: emailSo,
+      hanhDong: "rut",
+      nguon: "nhap-tay",
+      canCu: `Ghi nhận từ chối trên ${doiTuong === "lead" ? "lead" : "liên hệ"} bởi ${nc.hoSo.email} (nguồn: ${d.nguon})`.slice(0, 1000),
+      luc: bayGio,
+      nguoiId: nc.hoSo.userId,
+      nguoiEmail: nc.hoSo.email,
+      ip: nc.ip,
+      leadId: doiTuong === "lead" ? id : null,
+      contactId: doiTuong === "lead" ? null : id,
+    });
   }
   await nc.suKien({ eventType: SU_KIEN.MARKETING_CONSENT_CHANGED, objectType: doiTuong === "lead" ? "lead" : "contact", objectId: id, payload: { dongY: d.dongY } });
   return { id, dongY: d.dongY };

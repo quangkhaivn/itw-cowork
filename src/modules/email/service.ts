@@ -26,6 +26,10 @@ import {
   type TrangThaiChienDich,
 } from "./tinh-toan";
 import { taoVanChuyen } from "./van-chuyen";
+import { docHanMucHomNay, docNhanQuangCao } from "./han-muc";
+import { locTheoSoDongY } from "./so-dong-y";
+import { soLieuTyLe } from "./suc-khoe";
+import { gopTheoTenMien } from "./tinh-toan";
 
 /**
  * Mẫu email và chiến dịch email — BUSINESS_RULES.md mục 23 (EM).
@@ -68,7 +72,8 @@ export async function danhSachChan(tx: ClientTenant, emails: string[]): Promise<
 /** Thư xem trước / thư thử với biến mẫu và liên kết huỷ giả. */
 async function dungThuMau(nc: NguCanh, tieuDe: string, khoi: Khoi[]) {
   const chan = await docChanThu(nc.tx, nc.tenantId);
-  const thu = dungThu(tieuDe, khoi, bienMau(chan.tenCongTy, { ten: nc.hoSo.hoTen, email: nc.hoSo.email }), { ...chan, lienKetHuy: "#" });
+  // EG-06: xem trước / thư thử mang đúng nhãn quảng cáo như thư thật — cái người soạn thấy là cái khách nhận.
+  const thu = dungThu(tieuDe, khoi, bienMau(chan.tenCongTy, { ten: nc.hoSo.hoTen, email: nc.hoSo.email }), { ...chan, lienKetHuy: "#" }, undefined, await docNhanQuangCao(nc.tx));
   return { thu, thieuChanThu: thieuChanThu(chan) };
 }
 
@@ -178,7 +183,7 @@ export async function xemTruocNguoiNhan(nc: NguCanh, nguon: string, thamSo: unkn
   batBuocQuyen(nc.hoSo, "marketing.view");
   const { ds, moTa } = await layUngVien(nc, nguon, thamSo);
   const chan = await danhSachChan(nc.tx, ds.map((u) => u.email ?? ""));
-  const { hopLe, biLoai } = locNguoiNhan(ds, chan);
+  const { hopLe, biLoai } = await locTheoSoDongY(nc.tx, locNguoiNhan(ds, chan));
   const theoLyDo: Partial<Record<LyDoLoai, number>> = {};
   for (const b of biLoai) theoLyDo[b.lyDo] = (theoLyDo[b.lyDo] ?? 0) + 1;
   return {
@@ -315,7 +320,8 @@ export async function duyetChienDich(nc: NguCanh, id: string) {
   if (!ketNoi) throw new LoiNghiepVu("Chưa cấu hình kết nối email (Quản trị → Kết nối email) nên chưa gửi được.", 409, "chua-cau-hinh-email");
 
   const { ds } = await layUngVien(nc, c.sourceCode, c.sourceParams);
-  const { hopLe, biLoai } = locNguoiNhan(ds, await danhSachChan(nc.tx, ds.map((u) => u.email ?? "")));
+  // EG-09: sổ đồng ý chốt cùng lúc với danh sách (bật `email.bat_buoc_dong_y` — mặc định).
+  const { hopLe, biLoai } = await locTheoSoDongY(nc.tx, locNguoiNhan(ds, await danhSachChan(nc.tx, ds.map((u) => u.email ?? ""))));
   if (hopLe.length === 0) throw new LoiNghiepVu("Không còn người nhận hợp lệ nào — không có gì để gửi.", 422, "khong-co-nguoi-nhan");
 
   const tomTat: Record<string, number> = { hopLe: hopLe.length };
@@ -338,7 +344,7 @@ export async function duyetChienDich(nc: NguCanh, id: string) {
     ...hopLe.map((u) => dong(u, "QUEUED", null)),
     // Người bị loại mà vẫn có email hợp lệ (đã từ chối, email hỏng) được ghi thành dòng SKIPPED để
     // tra được "vì sao không gửi cho người này". Không email / sai dạng / trùng chỉ đếm trong tóm tắt.
-    ...biLoai.filter((b) => b.lyDo === "da-tu-choi" || b.lyDo === "email-hong").map((b) => dong(b, "SKIPPED", NHAN_LY_DO_LOAI[b.lyDo])),
+    ...biLoai.filter((b) => b.lyDo === "da-tu-choi" || b.lyDo === "email-hong" || b.lyDo === "chua-dong-y").map((b) => dong(b, "SKIPPED", NHAN_LY_DO_LOAI[b.lyDo])),
   ];
   // Khóa duy nhất (chiến dịch, email) là chốt cuối chống trùng; skipDuplicates để người bị loại
   // trùng email với người hợp lệ không làm hỏng cả lần duyệt.
@@ -359,7 +365,7 @@ export async function tamDungChienDich(nc: NguCanh, id: string, lyDo: string) {
   const c = await layChienDich(nc, id);
   batBuocChuyen(c.status, "PAUSED", "tạm dừng");
   const ly = `Tạm dừng bởi ${nc.hoSo.hoTen}${lyDo ? `: ${lyDo}` : ""}`;
-  await nc.tx.emailCampaign.update({ where: { id }, data: { status: "PAUSED", pausedAt: new Date(), pauseReason: ly, updatedBy: nc.hoSo.userId } });
+  await nc.tx.emailCampaign.update({ where: { id }, data: { status: "PAUSED", pausedAt: new Date(), pauseCode: "tay", pauseReason: ly, updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "sua", objectType: "email_campaign", objectId: id, before: { trangThai: c.status }, after: { trangThai: "PAUSED", lyDo } });
   await nc.suKien({ eventType: SU_KIEN.EMAIL_CAMPAIGN_PAUSED, objectType: "email_campaign", objectId: id, payload: { lyDo } });
   return { id };
@@ -372,8 +378,20 @@ export async function tiepTucChienDich(nc: NguCanh, id: string) {
   if (!(await nc.tx.emailSetting.findFirst({ where: { status: "hoat-dong" }, select: { id: true } }))) {
     throw new LoiNghiepVu("Chưa cấu hình kết nối email.", 409, "chua-cau-hinh-email");
   }
-  await nc.tx.emailCampaign.update({ where: { id }, data: { status: "SENDING", pausedAt: null, pauseReason: null, updatedBy: nc.hoSo.userId } });
-  await nc.kiemToan({ action: "sua", objectType: "email_campaign", objectId: id, before: { trangThai: c.status, lyDoDung: c.pauseReason }, after: { trangThai: "SENDING" } });
+  // EG-05: tiếp tục sau lần máy tự dừng vì tỷ lệ → chụp mốc, chỉ xét phần thư gửi SAU lúc này.
+  const moc = c.pauseCode === "ty-le-hong" || c.pauseCode === "ty-le-bao-rac" ? await soLieuTyLe(nc.tx, id) : null;
+  await nc.tx.emailCampaign.update({
+    where: { id },
+    data: {
+      status: "SENDING",
+      pausedAt: null,
+      pauseReason: null,
+      pauseCode: null,
+      ...(moc && { rateBaseSample: moc.mau, rateBaseBounced: moc.hong, rateBaseComplained: moc.baoRac }),
+      updatedBy: nc.hoSo.userId,
+    },
+  });
+  await nc.kiemToan({ action: "sua", objectType: "email_campaign", objectId: id, before: { trangThai: c.status, lyDoDung: c.pauseReason }, after: { trangThai: "SENDING", ...(moc && { mocTyLe: moc }) } });
   await nc.suKien({ eventType: SU_KIEN.EMAIL_CAMPAIGN_RESUMED, objectType: "email_campaign", objectId: id });
   return { id };
 }
@@ -404,12 +422,16 @@ export interface ThongKeChienDich {
   mo: number;
   bam: number;
   huyNhanTin: number;
+  /** 0.18.0 — sự kiện SES: đã tới hộp thư / trả lại vĩnh viễn / báo rác. */
+  denHop: number;
+  hong: number;
+  baoRac: number;
 }
 
 export async function thongKeChienDich(tx: ClientTenant, ids: string[]): Promise<Map<string, ThongKeChienDich>> {
   const ban = new Map<string, ThongKeChienDich>();
   if (!ids.length) return ban;
-  const rong = (): ThongKeChienDich => ({ tong: 0, choGui: 0, dangGui: 0, daGui: 0, loi: 0, biLoai: 0, mo: 0, bam: 0, huyNhanTin: 0 });
+  const rong = (): ThongKeChienDich => ({ tong: 0, choGui: 0, dangGui: 0, daGui: 0, loi: 0, biLoai: 0, mo: 0, bam: 0, huyNhanTin: 0, denHop: 0, hong: 0, baoRac: 0 });
   const nhom = await tx.emailRecipient.groupBy({ by: ["campaignId", "status"], where: { campaignId: { in: ids } }, _count: { _all: true } });
   for (const n of nhom) {
     const t = ban.get(n.campaignId) ?? rong();
@@ -422,14 +444,19 @@ export async function thongKeChienDich(tx: ClientTenant, ids: string[]): Promise
     if (n.status === "SKIPPED") t.biLoai += so;
     ban.set(n.campaignId, t);
   }
-  const tuongTac = await tx.$queryRaw<{ campaign_id: string; mo: bigint; bam: bigint; huy: bigint }[]>`
-    SELECT campaign_id::text, count(opened_at) AS mo, count(clicked_at) AS bam, count(unsubscribed_at) AS huy
+  const tuongTac = await tx.$queryRaw<{ campaign_id: string; mo: bigint; bam: bigint; huy: bigint; den: bigint; hong: bigint; bao_rac: bigint }[]>`
+    SELECT campaign_id::text, count(opened_at) AS mo, count(clicked_at) AS bam, count(unsubscribed_at) AS huy,
+           count(delivered_at) AS den, count(*) FILTER (WHERE bounced_at IS NOT NULL AND bounce_type = 'Permanent') AS hong,
+           count(complained_at) AS bao_rac
     FROM email_recipients WHERE campaign_id = ANY(${ids}::uuid[]) GROUP BY campaign_id`;
   for (const r of tuongTac) {
     const t = ban.get(r.campaign_id) ?? rong();
     t.mo = Number(r.mo);
     t.bam = Number(r.bam);
     t.huyNhanTin = Number(r.huy);
+    t.denHop = Number(r.den);
+    t.hong = Number(r.hong);
+    t.baoRac = Number(r.bao_rac);
     ban.set(r.campaign_id, t);
   }
   return ban;
@@ -522,7 +549,10 @@ export async function chiTietChienDich(nc: NguCanh, id: string, loc: { trangThai
     nguoiDuyet: c.approvedBy ? ten.get(c.approvedBy) ?? null : null,
     huyLuc: c.cancelledAt,
     xongLuc: c.completedAt,
-    thongKe: tk.get(id) ?? { tong: 0, choGui: 0, dangGui: 0, daGui: 0, loi: 0, biLoai: 0, mo: 0, bam: 0, huyNhanTin: 0 },
+    thongKe: tk.get(id) ?? { tong: 0, choGui: 0, dangGui: 0, daGui: 0, loi: 0, biLoai: 0, mo: 0, bam: 0, huyNhanTin: 0, denHop: 0, hong: 0, baoRac: 0 },
+    maDung: c.pauseCode,
+    theoTenMien: c.approvedAt ? await baoCaoTheoTenMien(nc.tx, id) : null,
+    hanMuc: ["SENDING", "PAUSED", "PENDING_APPROVAL"].includes(c.status) ? await hanMucCuaKetNoi(nc.tx) : null,
     xemTruoc: { tieuDe: thu.tieuDe, html: thu.html, thieuChanThu: thieu },
     nguoiNhan: {
       tong: tongNN,
@@ -545,6 +575,25 @@ export async function chiTietChienDich(nc: NguCanh, id: string, loc: { trangThai
       })),
     },
   };
+}
+
+/** EG-11: số theo nhóm tên miền nhận (gmail.com, outlook.com, yahoo.com, khác) của một chiến dịch. */
+export async function baoCaoTheoTenMien(tx: ClientTenant, campaignId: string) {
+  const dong = await tx.$queryRaw<{ mien: string; da_gui: bigint; den: bigint; hong: bigint; bao_rac: bigint; mo: bigint }[]>`
+    SELECT split_part(email, '@', 2) AS mien,
+           count(*) FILTER (WHERE sent_at IS NOT NULL) AS da_gui,
+           count(delivered_at) AS den,
+           count(*) FILTER (WHERE bounced_at IS NOT NULL AND bounce_type = 'Permanent') AS hong,
+           count(complained_at) AS bao_rac,
+           count(opened_at) AS mo
+    FROM email_recipients WHERE campaign_id = ${campaignId}::uuid AND status <> 'SKIPPED'
+    GROUP BY 1`;
+  return gopTheoTenMien(dong.map((d) => ({ tenMien: d.mien, daGui: Number(d.da_gui), denHop: Number(d.den), hong: Number(d.hong), baoRac: Number(d.bao_rac), mo: Number(d.mo) })));
+}
+
+async function hanMucCuaKetNoi(tx: ClientTenant) {
+  const kn = await tx.emailSetting.findFirst({ where: { status: "hoat-dong" }, select: { provider: true } });
+  return docHanMucHomNay(tx, kn?.provider ?? "smtp");
 }
 
 /** Quyền thao tác trên màn hình chiến dịch — chỉ để ẩn/hiện nút; service tự kiểm lại. */

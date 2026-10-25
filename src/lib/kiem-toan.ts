@@ -53,7 +53,12 @@ export type HanhDong =
   | "them-muc-kiem-tra"
   | "tich-muc-kiem-tra"
   | "bo-tich-muc-kiem-tra"
-  | "go-muc-kiem-tra";
+  | "go-muc-kiem-tra"
+  // 0.18.0 — email gửi số lượng lớn
+  | "ghi-dong-y"
+  | "nhap-dong-y"
+  | "kiem-tra-dns"
+  | "tu-tam-dung";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

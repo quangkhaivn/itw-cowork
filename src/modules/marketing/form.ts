@@ -238,6 +238,7 @@ export async function guiFormCongKhai(tx: ClientTenant, tenantId: string, slug: 
       // MK-13: chỉ khi form có hỏi VÀ người gửi tự tích.
       dongYNhanTin: Boolean(f.consentText) && than.dongYNhanTin === true,
       nguonDongY: `${kenh}:${f.slug}`,
+      cauDongY: f.consentText,
       formId: f.id,
       landingPageId: meta.landingPageId ?? null,
       landingVariant: meta.landingVariant ?? null,

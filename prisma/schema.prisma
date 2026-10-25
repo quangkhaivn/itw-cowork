@@ -139,6 +139,9 @@ model Tenant {
   emailRecipients      EmailRecipient[]
   emailEvents          EmailEvent[]
   emailSuppressions    EmailSuppression[]
+  emailConsents        EmailConsent[]
+  emailSnsMessages     EmailSnsMessage[]
+  emailTransactionals  EmailTransactional[]
   recoveryCodes        UserRecoveryCode[]
 
   @@map("tenants")
@@ -3201,28 +3204,54 @@ model LandingPage {
 
 /// Kết nối hộp thư gửi (SMTP) — một dòng mỗi doanh nghiệp. Mật khẩu **mã hóa**, không bao giờ trả ra API.
 model EmailSetting {
-  id              String    @id @default(uuid()) @db.Uuid
-  tenantId        String    @map("tenant_id") @db.Uuid
-  host            String    @db.VarChar(255)
-  port            Int
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  host                String    @db.VarChar(255)
+  port                Int
   /// tls (cổng 465) | starttls (cổng 587) | none (chỉ cho máy chủ nội bộ)
-  security        String    @db.VarChar(10)
-  username        String?   @db.VarChar(255)
+  security            String    @db.VarChar(10)
+  username            String?   @db.VarChar(255)
   /// AES-256-GCM bằng APP_ENC_KEY, gắn ngữ cảnh doanh nghiệp. null = máy chủ không đòi đăng nhập.
-  passwordEnc     String?   @map("password_enc") @db.Text
-  fromName        String    @map("from_name") @db.VarChar(255)
-  fromEmail       String    @map("from_email") @db.VarChar(255)
-  replyTo         String?   @map("reply_to") @db.VarChar(255)
+  passwordEnc         String?   @map("password_enc") @db.Text
+  fromName            String    @map("from_name") @db.VarChar(255)
+  fromEmail           String    @map("from_email") @db.VarChar(255)
+  replyTo             String?   @map("reply_to") @db.VarChar(255)
   /// Bật điểm ảnh đếm lượt mở và chuyển hướng đếm lượt bấm.
-  trackingEnabled Boolean   @default(false) @map("tracking_enabled")
-  lastTestAt      DateTime? @map("last_test_at") @db.Timestamptz(6)
-  lastTestOk      Boolean?  @map("last_test_ok")
-  lastTestError   String?   @map("last_test_error") @db.Text
-  status          String    @default("hoat-dong") @db.VarChar(30)
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy       String?   @map("created_by") @db.Uuid
-  updatedBy       String?   @map("updated_by") @db.Uuid
+  trackingEnabled     Boolean   @default(false) @map("tracking_enabled")
+  lastTestAt          DateTime? @map("last_test_at") @db.Timestamptz(6)
+  lastTestOk          Boolean?  @map("last_test_ok")
+  lastTestError       String?   @map("last_test_error") @db.Text
+  /// 0.18.0 — kênh gửi: smtp (hộp thư SMTP bất kỳ) | ses (Amazon SES qua cổng SMTP của vùng).
+  provider            String    @default("smtp") @db.VarChar(10)
+  /// Vùng SES, ví dụ ap-southeast-1. Bắt buộc khi provider = ses.
+  sesRegion           String?   @map("ses_region") @db.VarChar(30)
+  /// Configuration set của SES — đi vào tiêu đề X-SES-CONFIGURATION-SET để SES đẩy sự kiện qua SNS.
+  sesConfigurationSet String?   @map("ses_configuration_set") @db.VarChar(64)
+  /// Tên miền gửi thư marketing (vd tin.itwonline.com). provider = ses thì địa chỉ gửi phải thuộc tên miền này.
+  sendingDomain       String?   @map("sending_domain") @db.VarChar(255)
+  /// Tên miền MAIL FROM riêng (vd bounce.tin.itwonline.com). Trống = bounce.<tên miền gửi>.
+  mailFromDomain      String?   @map("mail_from_domain") @db.VarChar(255)
+  /// 3 mã DKIM (Easy DKIM) quản trị dán từ bảng điều khiển SES.
+  dkimTokens          Json      @default("[]") @map("dkim_tokens")
+  /// Hộp thư nhận báo cáo DMARC (rua=mailto:…).
+  dmarcRua            String?   @map("dmarc_rua") @db.VarChar(255)
+  /// ARN của chủ đề SNS nhận sự kiện SES — chỉ nhận thông điệp đúng chủ đề này.
+  sesTopicArn         String?   @map("ses_topic_arn") @db.VarChar(300)
+  /// SHA-256 của mã webhook SES (mã hiện một lần, máy chủ chỉ giữ băm).
+  sesWebhookHash      String?   @map("ses_webhook_hash") @db.VarChar(64)
+  sesWebhookHint      String?   @map("ses_webhook_hint") @db.VarChar(8)
+  sesWebhookRotatedAt DateTime? @map("ses_webhook_rotated_at") @db.Timestamptz(6)
+  /// Lúc xác nhận đăng ký SNS (SubscriptionConfirmation) thành công.
+  sesSubscribedAt     DateTime? @map("ses_subscribed_at") @db.Timestamptz(6)
+  sesLastEventAt      DateTime? @map("ses_last_event_at") @db.Timestamptz(6)
+  /// Kết quả lần kiểm tra DNS gần nhất (danh sách bản ghi + trạng thái).
+  dnsCheck            Json?     @map("dns_check")
+  dnsCheckedAt        DateTime? @map("dns_checked_at") @db.Timestamptz(6)
+  status              String    @default("hoat-dong") @db.VarChar(30)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?   @map("created_by") @db.Uuid
+  updatedBy           String?   @map("updated_by") @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -3253,37 +3282,43 @@ model EmailTemplate {
 
 /// Chiến dịch email. Số EM-2026-0001. Nội dung chép từ mẫu lúc lập, **đóng băng** lúc duyệt.
 model EmailCampaign {
-  id               String    @id @default(uuid()) @db.Uuid
-  tenantId         String    @map("tenant_id") @db.Uuid
-  code             String    @db.VarChar(30)
-  name             String    @db.VarChar(255)
-  templateId       String?   @map("template_id") @db.Uuid
-  subject          String    @db.VarChar(255)
-  blocks           Json      @default("[]")
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  code               String    @db.VarChar(30)
+  name               String    @db.VarChar(255)
+  templateId         String?   @map("template_id") @db.Uuid
+  subject            String    @db.VarChar(255)
+  blocks             Json      @default("[]")
   /// Mã nguồn người nhận (src/modules/email/nguon-nguoi-nhan.ts) + tham số lọc.
-  sourceCode       String    @map("source_code") @db.VarChar(50)
-  sourceParams     Json      @default("{}") @map("source_params")
+  sourceCode         String    @map("source_code") @db.VarChar(50)
+  sourceParams       Json      @default("{}") @map("source_params")
   /// DRAFT | PENDING_APPROVAL | SENDING | PAUSED | COMPLETED | CANCELLED
-  status           String    @default("DRAFT") @db.VarChar(20)
-  submittedAt      DateTime? @map("submitted_at") @db.Timestamptz(6)
-  submittedBy      String?   @map("submitted_by") @db.Uuid
-  approvedAt       DateTime? @map("approved_at") @db.Timestamptz(6)
-  approvedBy       String?   @map("approved_by") @db.Uuid
-  pausedAt         DateTime? @map("paused_at") @db.Timestamptz(6)
+  status             String    @default("DRAFT") @db.VarChar(20)
+  submittedAt        DateTime? @map("submitted_at") @db.Timestamptz(6)
+  submittedBy        String?   @map("submitted_by") @db.Uuid
+  approvedAt         DateTime? @map("approved_at") @db.Timestamptz(6)
+  approvedBy         String?   @map("approved_by") @db.Uuid
+  pausedAt           DateTime? @map("paused_at") @db.Timestamptz(6)
   /// Vì sao đang tạm dừng: người bấm, hoặc máy tự dừng khi hộp thư gửi báo lỗi kết nối / đăng nhập.
-  pauseReason      String?   @map("pause_reason") @db.Text
-  completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
-  cancelledAt      DateTime? @map("cancelled_at") @db.Timestamptz(6)
-  cancelledBy      String?   @map("cancelled_by") @db.Uuid
-  cancelReason     String?   @map("cancel_reason") @db.Text
+  pauseReason        String?   @map("pause_reason") @db.Text
+  completedAt        DateTime? @map("completed_at") @db.Timestamptz(6)
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledBy        String?   @map("cancelled_by") @db.Uuid
+  cancelReason       String?   @map("cancel_reason") @db.Text
   /// Chụp lại lúc duyệt: có theo dõi mở/bấm hay không (đổi Cấu hình sau không đổi thư đã gửi).
-  trackingEnabled  Boolean   @default(false) @map("tracking_enabled")
+  trackingEnabled    Boolean   @default(false) @map("tracking_enabled")
   /// Chụp lại lúc duyệt: bao nhiêu người bị loại vì lý do gì (cả những người không có email, không thành dòng người nhận).
-  recipientSummary Json      @default("{}") @map("recipient_summary")
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy        String?   @map("created_by") @db.Uuid
-  updatedBy        String?   @map("updated_by") @db.Uuid
+  recipientSummary   Json      @default("{}") @map("recipient_summary")
+  /// 0.18.0 — vì sao tạm dừng: tay | ket-noi | ty-le-hong | ty-le-bao-rac | khac.
+  pauseCode          String?   @map("pause_code") @db.VarChar(30)
+  /// Mốc tính tỷ lệ hỏng / báo rác (chụp lúc tiếp tục sau khi máy tự dừng vì tỷ lệ): chỉ xét thư gửi sau mốc.
+  rateBaseSample     Int       @default(0) @map("rate_base_sample")
+  rateBaseBounced    Int       @default(0) @map("rate_base_bounced")
+  rateBaseComplained Int       @default(0) @map("rate_base_complained")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy          String?   @map("created_by") @db.Uuid
+  updatedBy          String?   @map("updated_by") @db.Uuid
 
   tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   template   EmailTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
@@ -3321,6 +3356,15 @@ model EmailRecipient {
   clickedAt      DateTime? @map("clicked_at") @db.Timestamptz(6)
   clickCount     Int       @default(0) @map("click_count")
   unsubscribedAt DateTime? @map("unsubscribed_at") @db.Timestamptz(6)
+  /// 0.18.0 — sự kiện từ SES (qua SNS): đã tới hộp thư, bị trả lại vĩnh viễn, bị báo rác.
+  deliveredAt    DateTime? @map("delivered_at") @db.Timestamptz(6)
+  bouncedAt      DateTime? @map("bounced_at") @db.Timestamptz(6)
+  /// Permanent | Transient | Undetermined (lần trả lại gần nhất)
+  bounceType     String?   @map("bounce_type") @db.VarChar(20)
+  complainedAt   DateTime? @map("complained_at") @db.Timestamptz(6)
+  /// Hoãn gửi tới lúc này (đủ N thư quảng cáo / địa chỉ / 24 giờ — NĐ 91/2020 Điều 13). Vẫn QUEUED.
+  deferredUntil  DateTime? @map("deferred_until") @db.Timestamptz(6)
+  deferCount     Int       @default(0) @map("defer_count")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -3333,6 +3377,8 @@ model EmailRecipient {
   @@unique([campaignId, email])
   @@index([tenantId, campaignId, status])
   @@index([tenantId, status, attemptAt])
+  @@index([tenantId, email, attemptAt])
+  @@index([tenantId, messageId])
   @@map("email_recipients")
 }
 
@@ -3342,8 +3388,10 @@ model EmailEvent {
   tenantId    String   @map("tenant_id") @db.Uuid
   campaignId  String   @map("campaign_id") @db.Uuid
   recipientId String   @map("recipient_id") @db.Uuid
-  /// open | click | unsubscribe
+  /// open | click | unsubscribe | send | delivery | bounce | complaint | reject | delivery-delay | rendering-failure
   eventType   String   @map("event_type") @db.VarChar(20)
+  /// 0.18.0 — chi tiết sự kiện SES đã lọc (loại trả lại, mã chẩn đoán…). Không chứa nội dung thư.
+  detail      Json?
   linkIndex   Int?     @map("link_index")
   url         String?  @db.Text
   ipAddress   String?  @map("ip_address") @db.VarChar(45)
@@ -3363,7 +3411,7 @@ model EmailSuppression {
   id          String   @id @default(uuid()) @db.Uuid
   tenantId    String   @map("tenant_id") @db.Uuid
   email       String   @db.VarChar(255)
-  /// huy-nhan-tin | email-hong
+  /// huy-nhan-tin | email-hong | bao-rac (0.18.0 — người nhận bấm "Báo thư rác")
   reason      String   @db.VarChar(30)
   recipientId String?  @map("recipient_id") @db.Uuid
   note        String?  @db.Text
@@ -3377,6 +3425,88 @@ model EmailSuppression {
 
   @@unique([tenantId, email])
   @@map("email_suppressions")
+}
+
+/// 0.18.0 — Sổ đồng ý nhận thư quảng cáo. **Chỉ ghi thêm** (trigger chặn sửa / xóa, ứng dụng không có
+/// quyền UPDATE/DELETE). Trạng thái hiện hành = dòng mới nhất theo (email, mục đích).
+model EmailConsent {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  /// Email chuẩn hóa chữ thường.
+  email       String   @db.VarChar(255)
+  /// quang-cao-email
+  purpose     String   @default("quang-cao-email") @db.VarChar(30)
+  /// dong-y | rut | phan-doi
+  action      String   @db.VarChar(20)
+  /// form | landing | webhook | nhap-csv | nhap-tay | huy-nhan-tin | bao-rac | chuyen-doi
+  source      String   @db.VarChar(30)
+  /// Căn cứ: câu chữ người đó đã tích, biên bản, thư trả lời… Đồng ý bắt buộc có căn cứ.
+  evidence    String   @db.Text
+  /// Tham chiếu căn cứ: lead_capture:<id>, email_recipient:<id>, csv:<băm tệp>…
+  evidenceRef String?  @map("evidence_ref") @db.VarChar(255)
+  occurredAt  DateTime @map("occurred_at") @db.Timestamptz(6)
+  recordedAt  DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  actorId     String?  @map("actor_id") @db.Uuid
+  actorEmail  String?  @map("actor_email") @db.VarChar(255)
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  leadId      String?  @map("lead_id") @db.Uuid
+  contactId   String?  @map("contact_id") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, email, purpose, occurredAt])
+  @@index([tenantId, recordedAt])
+  @@map("email_consents")
+}
+
+/// 0.18.0 — Thông điệp SNS đã nhận (sự kiện SES). Khóa duy nhất theo MessageId của SNS: gửi lại không xử lý hai lần.
+model EmailSnsMessage {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  snsMessageId String   @map("sns_message_id") @db.VarChar(100)
+  /// Notification | SubscriptionConfirmation | UnsubscribeConfirmation
+  messageType  String   @map("message_type") @db.VarChar(40)
+  /// Send | Delivery | Bounce | Complaint | Reject | Rendering Failure | DeliveryDelay | …
+  eventType    String?  @map("event_type") @db.VarChar(40)
+  sesMessageId String?  @map("ses_message_id") @db.VarChar(255)
+  recipientId  String?  @map("recipient_id") @db.Uuid
+  /// da-xu-ly | bo-qua | da-xac-nhan
+  result       String   @db.VarChar(30)
+  note         String?  @db.Text
+  receivedAt   DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, snsMessageId])
+  @@index([tenantId, receivedAt])
+  @@map("email_sns_messages")
+}
+
+/// 0.18.0 — Hàng chờ thư giao dịch (không phải quảng cáo): thư xác nhận từ chối (NĐ 91/2020 Điều 20).
+/// Khóa chống trùng theo (doanh nghiệp, dedupe_key) — một yêu cầu từ chối chỉ một thư xác nhận.
+model EmailTransactional {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  /// xac-nhan-tu-choi
+  kind        String    @db.VarChar(30)
+  email       String    @db.VarChar(255)
+  recipientId String?   @map("recipient_id") @db.Uuid
+  dedupeKey   String    @map("dedupe_key") @db.VarChar(150)
+  payload     Json      @default("{}")
+  /// QUEUED | SENDING | SENT | FAILED
+  status      String    @default("QUEUED") @db.VarChar(20)
+  attemptAt   DateTime? @map("attempt_at") @db.Timestamptz(6)
+  sentAt      DateTime? @map("sent_at") @db.Timestamptz(6)
+  messageId   String?   @map("message_id") @db.VarChar(255)
+  reason      String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId, status, createdAt])
+  @@map("email_transactionals")
 }
 
 /// Mã khôi phục 2 lớp: dùng một lần, chỉ lưu **băm** (HMAC-SHA256 có khóa riêng).

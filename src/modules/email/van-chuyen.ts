@@ -31,7 +31,8 @@ export interface ThuGui {
 }
 
 export interface VanChuyenThu {
-  gui(thu: ThuGui): Promise<{ messageId: string | null }>;
+  /** `phanHoi`: câu trả lời SMTP sau DATA (SES: "250 Ok <mã thư SES>") — 0.18.0 đọc mã thư SES từ đây. */
+  gui(thu: ThuGui): Promise<{ messageId: string | null; phanHoi?: string | null }>;
   dong(): void;
 }
 
@@ -45,6 +46,11 @@ export function datVanChuyenThu(ham: HamTao | null): void {
 
 export function taoVanChuyen(c: CauHinhSmtp): VanChuyenThu {
   if (bienToanCuc.taoVanChuyenThu) return bienToanCuc.taoVanChuyenThu(c);
+  return taoVanChuyenNodemailer(c);
+}
+
+/** nodemailer thật. Xuất ra để bài thử bọc lại (ghi cấu hình rồi trỏ sang máy chủ SMTP giả). */
+export function taoVanChuyenNodemailer(c: CauHinhSmtp): VanChuyenThu {
   const t = nodemailer.createTransport({
     host: c.host,
     port: c.port,
@@ -70,7 +76,7 @@ export function taoVanChuyen(c: CauHinhSmtp): VanChuyenThu {
         text: thu.text,
         headers: thu.tieuDePhu,
       });
-      return { messageId: typeof kq.messageId === "string" ? kq.messageId.slice(0, 255) : null };
+      return { messageId: typeof kq.messageId === "string" ? kq.messageId.slice(0, 255) : null, phanHoi: typeof kq.response === "string" ? kq.response.slice(0, 500) : null };
     },
     dong() {
       t.close();
