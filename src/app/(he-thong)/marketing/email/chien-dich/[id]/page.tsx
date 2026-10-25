@@ -16,6 +16,7 @@ import {
   LOP_TRANG_THAI_CHIEN_DICH,
   LOP_TRANG_THAI_NGUOI_NHAN,
   NHAN_LY_DO_LOAI,
+  NHAN_NHOM_TEN_MIEN,
   NHAN_TRANG_THAI_CHIEN_DICH,
   NHAN_TRANG_THAI_NGUOI_NHAN,
   type LyDoLoai,
@@ -124,7 +125,58 @@ export default async function TrangChiTietChienDich({ params, searchParams }: { 
             <div className="nhan">Huỷ nhận tin</div>
             <div className="gia-tri">{dinhDangSo(tk.huyNhanTin)}</div>
           </div>
+          <div className={`the chi-so ${tk.hong || tk.baoRac ? "canh-bao" : ""}`}>
+            <div className="nhan">Trả lại / báo rác</div>
+            <div className="gia-tri">
+              {dinhDangSo(tk.hong)} / {dinhDangSo(tk.baoRac)}
+            </div>
+            <div className="ghi-chu">tới hộp thư {dinhDangSo(tk.denHop)} (chỉ có khi gửi qua Amazon SES)</div>
+          </div>
         </div>
+      )}
+
+      {c.hanMuc && (
+        <p className="nho phu" style={{ margin: "0 0 12px" }}>
+          Hạn mức hôm nay: {dinhDangSo(c.hanMuc.moiPhut)} thư/phút
+          {c.hanMuc.tranHomNay !== null
+            ? ` · trần ${dinhDangSo(c.hanMuc.tranHomNay)} thư/ngày (đã gửi ${dinhDangSo(c.hanMuc.daGuiHomNay)})${c.hanMuc.khoiDong ? ` · đang khởi động, ngày thứ ${c.hanMuc.khoiDong.ngayThu}` : ""}${c.hanMuc.tranNgayMacDinhSes ? " · trần mặc định khi dùng SES" : ""}`
+            : " · không chặn theo ngày"}
+          {` · mỗi địa chỉ tối đa ${c.hanMuc.toiDaMoiDiaChi24h} thư quảng cáo/24 giờ (quá thì hoãn, không lỗi).`}
+        </p>
+      )}
+
+      {c.theoTenMien && (
+        <section className="the">
+          <div className="dau">
+            <h2>Theo tên miền nhận</h2>
+          </div>
+          <div className="cuon-ngang">
+            <table className="bang">
+              <thead>
+                <tr>
+                  <th>Tên miền</th>
+                  <th className="so">Đã gửi</th>
+                  <th className="so">Tới hộp thư</th>
+                  <th className="so">Trả lại</th>
+                  <th className="so">Báo rác</th>
+                  <th className="so">Đã mở</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.theoTenMien.map((t) => (
+                  <tr key={t.nhom}>
+                    <td>{NHAN_NHOM_TEN_MIEN[t.nhom]}</td>
+                    <td className="so">{dinhDangSo(t.daGui)}</td>
+                    <td className="so">{dinhDangSo(t.denHop)}</td>
+                    <td className="so">{dinhDangSo(t.hong)}</td>
+                    <td className="so">{dinhDangSo(t.baoRac)}</td>
+                    <td className="so">{c.theoDoi ? dinhDangSo(t.mo) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {c.trangThai === "DRAFT" && q.sua ? (

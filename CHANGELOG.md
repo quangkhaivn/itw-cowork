@@ -2,6 +2,30 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.18.0 (chưa phát hành) — Email marketing, giai đoạn 1: gửi số lượng lớn
+
+**Chưa triển khai lên máy thật.** Một migration mới (`20261025090001_email_gui_lon`, có chuyển dữ liệu cũ vào sổ đồng ý), chạy lại `prisma/rls.sql` như mọi lần (sổ đồng ý + nhật ký SNS vào nhóm bảng chỉ-ghi-thêm). Không có biến môi trường mới, không thêm mã quyền, không thêm thư viện.
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 29 (EG-01 → EG-14). Quyết định QĐ-94 → QĐ-99. Hướng dẫn: `docs/HUONG-DAN-SES.md`.
+
+### Thêm
+- **Kênh gửi Amazon SES** (Quản trị → Kết nối email): chọn "Amazon SES", vùng (mặc định ap-southeast-1), configuration set, tên miền gửi (vd `tin.itwonline.com`), SMTP credentials. Máy tự dùng `email-smtp.<vùng>.amazonaws.com:587` STARTTLS, gắn configuration set + thẻ người nhận vào thư và lưu mã thư SES.
+- **Webhook sự kiện SES qua SNS** `/api/cong-khai/email/ses/<mã>`: kiểm chữ ký SNS (phiên bản 1 và 2), chủ đề, host chứng chỉ; tự xác nhận đăng ký; không xử lý trùng. Thư tới hộp thư, bị trả lại vĩnh viễn (chặn email hỏng), bị báo rác (chặn + ghi phản đối + từ chối trên lead / liên hệ).
+- **Tự tạm dừng chiến dịch** khi tỷ lệ trả lại > 5% hoặc báo rác > 1‰ (sau 200 thư), báo người duyệt.
+- **Sổ đồng ý email** (Marketing → Sổ đồng ý email): chỉ ghi thêm; ghi tự động từ form có ô đồng ý (khách tự tích), huỷ nhận tin, báo rác; ghi tay có căn cứ; nhập CSV (Email, Nguồn, Căn cứ, Thời điểm). Duyệt chiến dịch loại người chưa có đồng ý ("Chưa có đồng ý nhận thư quảng cáo").
+- **Nhãn [QC]** tự động đầu tiêu đề thư quảng cáo (đổi được, không bỏ được).
+- **Tối đa 3 thư quảng cáo / địa chỉ / 24 giờ** trên mọi chiến dịch — vượt thì hoãn, không lỗi.
+- **Thư xác nhận từ chối**: sau khi huỷ nhận tin, gửi một thư xác nhận lúc nhận yêu cầu và lúc ngừng gửi.
+- **Khởi động tên miền (warm-up)**: trần ngày tăng dần từ 200 thư, hệ số 1,3/ngày; hạn mức hôm nay hiện ở Kết nối email và chiến dịch.
+- **Báo cáo theo tên miền nhận** (Gmail, Outlook, Yahoo, khác) trên chi tiết chiến dịch; thẻ "Trả lại / báo rác".
+- **Tên miền gửi**: bảng bản ghi DNS cần thêm, chia "Làm ngay" (DMARC) và "Sau khi có AWS" (DKIM, MAIL FROM), nút **Kiểm tra** báo từng bản ghi.
+- Cấu hình mới (nhóm Email marketing): `email.nguong_hong_phan_tram`, `email.nguong_bao_rac_phan_nghin`, `email.mau_toi_thieu_danh_gia`, `email.bat_buoc_dong_y`, `email.toi_da_thu_moi_dia_chi_24h`, `email.khoi_dong_ngay_bat_dau`, `email.khoi_dong_muc_dau`, `email.khoi_dong_he_so`.
+
+### Thay đổi đáng lưu ý
+- **Duyệt chiến dịch giờ cần sổ đồng ý** (mặc định bật). Migration chuyển cờ đồng ý cũ vào sổ (nguồn "Chuyển từ dữ liệu trước 0.18"); người chỉ được tích "đồng ý" bằng nút trên lead mà không có căn cứ sẽ bị loại — ghi lại ở Sổ đồng ý kèm căn cứ. Tắt bằng `email.bat_buoc_dong_y = 0` (chỉ khi gửi thư không phải quảng cáo).
+- Tiêu đề thư chiến dịch, xem trước và thư thử luôn mở đầu bằng `[QC]`.
+- Chưa có tài khoản AWS: mọi tính năng trên (trừ webhook SES) chạy với hộp thư SMTP hiện tại.
+
 ## 0.17.0 — 19/10/2026 — Công việc thông suốt: kết quả công việc, hồ sơ khách đầy đủ, thông báo giao việc, kiểm tra trước khi xong
 
 **Chưa triển khai lên máy thật.** Một migration mới (`20261014150000_cong_viec_thong_suot`), không có biến môi trường mới, không thêm mã quyền.
