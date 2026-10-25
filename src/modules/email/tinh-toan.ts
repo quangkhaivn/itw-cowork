@@ -502,7 +502,7 @@ export const GOI_Y_KET_NOI: GoiYKetNoi[] = [
     host: "email-smtp.ap-southeast-1.amazonaws.com",
     port: 587,
     baoMat: "starttls",
-    huongDan: "Tạo SMTP credentials trong SES (khác với khóa IAM thường), đổi vùng trong tên máy chủ cho đúng vùng đã dùng, và ra khỏi chế độ sandbox trước khi gửi cho khách.",
+    huongDan: "Từ 0.18.0 nên chọn Kênh gửi = Amazon SES ở trên: máy tự đặt máy chủ theo vùng, gắn configuration set và nhận sự kiện trả lại / báo rác qua webhook. Tạo SMTP credentials trong SES (khác với khóa IAM thường) và ra khỏi chế độ sandbox trước khi gửi cho khách — xem docs/HUONG-DAN-SES.md.",
   },
 ];
 
