@@ -26,6 +26,14 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 29 (EG-01 → EG-14). Quyết đ
 - Tiêu đề thư chiến dịch, xem trước và thư thử luôn mở đầu bằng `[QC]`.
 - Chưa có tài khoản AWS: mọi tính năng trên (trừ webhook SES) chạy với hộp thư SMTP hiện tại.
 
+#### Sửa sau QA độc lập (`npm run thu:qa-email-gui-lon`, nối vào `thu:tich-hop`)
+- **Trần ngày / khởi động bị vượt khi hai worker chồng nhau**: số "đã gửi hôm nay" chỉ đếm thư đã gửi xong, nên worker thứ hai nhận việc lúc worker đầu còn đang gửi thấy cả trần còn nguyên (đo được 20 thư với trần 10). Nay đếm cả thư đang gửi (SENDING) nhận trong ngày.
+- **Nhập CSV sổ đồng ý hỏng từ vài trăm dòng** (hết hạn giao dịch 5 giây; 5.000 dòng mất ~15–20 giây): route dùng hạn giao dịch theo lô như các route nhập CSV khác (QĐ-56).
+- **Webhook SES đọc trọn thân yêu cầu trước khi kiểm trần**: thân gửi kiểu chunked (không Content-Length) 50 MB được nạp hết vào bộ nhớ rồi mới trả 413. Nay đọc từng phần, dừng ngay khi vượt 300 KB.
+- **Trả lại vĩnh viễn (SES) khi địa chỉ đang bị chặn vì huỷ nhận tin / báo rác** không nâng lý do chặn thành "email hỏng" → đồng ý lại sau đó gỡ chặn một địa chỉ đã chết. Nay luôn nâng (như đường SMTP 5.1.x); hai lần trả lại cùng lúc không còn 503 vì trùng khóa chặn.
+- **Từ chối mang thời điểm cũ hơn lần đồng ý đang hiệu lực** (báo rác SES tới trễ, ghi tay lùi ngày) không thành trạng thái hiện hành — sổ hiện "Đồng ý" trong khi lead / danh sách chặn đã từ chối. Nay: sự kiện tự động ghi theo lúc nhận (thời điểm gốc giữ trong căn cứ); ghi tay lùi về trước lần đồng ý bị từ chối kèm hướng dẫn.
+- Nhãn quảng cáo dạng chữ (vd `QC`) không còn bị coi là "đã có" khi tiêu đề chỉ bắt đầu bằng cùng chữ (`QCVN 01` → `QC QCVN 01`, trước đây ra `QC VN 01`).
+
 ## 0.17.0 — 19/10/2026 — Công việc thông suốt: kết quả công việc, hồ sơ khách đầy đủ, thông báo giao việc, kiểm tra trước khi xong
 
 **Chưa triển khai lên máy thật.** Một migration mới (`20261014150000_cong_viec_thong_suot`), không có biến môi trường mới, không thêm mã quyền.
