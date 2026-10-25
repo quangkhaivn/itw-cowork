@@ -25,6 +25,8 @@ export interface MucCauHinh {
   macDinh: number | null;
   /** Phase bắt đầu đọc giá trị này — để giao diện nói thật là đang dùng hay chưa. */
   dungTuPhase: number;
+  /** 0.18.0: giá trị là một NGÀY viết dạng số YYYYMMDD (ô Cấu hình chỉ nhận số — QĐ-73). */
+  laNgay?: boolean;
 }
 
 export const PHASE_HIEN_TAI = 8;
@@ -426,12 +428,111 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     nhom: "Email marketing",
     nhan: "Số thư chiến dịch tối đa mỗi ngày",
     moTa:
-      "Đủ số này trong ngày (giờ Việt Nam) thì máy ngừng gửi, hôm sau gửi tiếp. Để trống = không chặn theo ngày. Gmail thường giới hạn khoảng 500 thư/ngày, Google Workspace khoảng 2.000 — kiểm hạn mức thật của tài khoản trước khi đặt.",
+      "Đủ số này trong ngày (giờ Việt Nam) thì máy ngừng gửi, hôm sau gửi tiếp. Để trống = không chặn theo ngày với kênh SMTP; với kênh Amazon SES để trống thì dùng MẶC ĐỊNH 5.000 thư/ngày (đủ cho dưới 100.000 thư/tháng). Gmail thường giới hạn khoảng 500 thư/ngày, Google Workspace khoảng 2.000 — kiểm hạn mức thật của tài khoản trước khi đặt. Khi đang khởi động tên miền (warm-up), trần thật trong ngày là số nhỏ hơn giữa giá trị này và đường khởi động.",
     donVi: "thư/ngày",
     toiThieu: 1,
     toiDa: 1_000_000,
     soNguyen: true,
     macDinh: null,
+    dungTuPhase: 8,
+  },
+  // 0.18.0 — Email marketing gửi số lượng lớn (BUSINESS_RULES.md mục 29, EG). Mọi ngưỡng có mặc định
+  // ghi rõ: hộp thư gửi bị nhà cung cấp khóa vì tỷ lệ hỏng / báo rác cao là rủi ro thật, không để "chưa đặt = không chặn".
+  {
+    khoa: "email.nguong_hong_phan_tram",
+    nhom: "Email marketing",
+    nhan: "Ngưỡng tỷ lệ thư bị trả lại để tự tạm dừng",
+    moTa: "Tỷ lệ thư bị trả lại VĨNH VIỄN (địa chỉ không tồn tại) của một chiến dịch vượt ngưỡng này thì máy tự tạm dừng chiến dịch và báo người duyệt. Mặc định 5% — Amazon SES xem xét tài khoản khi tỷ lệ vượt khoảng 5% và có thể dừng gửi khi vượt khoảng 10%.",
+    donVi: "%",
+    toiThieu: 0.1,
+    toiDa: 50,
+    soNguyen: false,
+    macDinh: 5,
+    dungTuPhase: 8,
+  },
+  {
+    khoa: "email.nguong_bao_rac_phan_nghin",
+    nhom: "Email marketing",
+    nhan: "Ngưỡng tỷ lệ báo thư rác để tự tạm dừng",
+    moTa: "Tỷ lệ người nhận bấm \"Báo thư rác\" vượt ngưỡng này (tính theo phần nghìn) thì máy tự tạm dừng chiến dịch. Mặc định 1‰ (0,1%) — Gmail / Yahoo yêu cầu người gửi số lượng lớn giữ dưới 0,3% và khuyên dưới 0,1%.",
+    donVi: "‰",
+    toiThieu: 0.1,
+    toiDa: 100,
+    soNguyen: false,
+    macDinh: 1,
+    dungTuPhase: 8,
+  },
+  {
+    khoa: "email.mau_toi_thieu_danh_gia",
+    nhom: "Email marketing",
+    nhan: "Số thư tối thiểu trước khi xét tỷ lệ",
+    moTa: "Chỉ xét hai ngưỡng trên khi chiến dịch đã gửi đi (có kết quả) ít nhất chừng này thư — tránh dừng oan vì 1 thư hỏng trong 10 thư đầu. Mặc định 200.",
+    donVi: "thư",
+    toiThieu: 20,
+    toiDa: 100_000,
+    soNguyen: true,
+    macDinh: 200,
+    dungTuPhase: 8,
+  },
+  {
+    khoa: "email.bat_buoc_dong_y",
+    nhom: "Email marketing",
+    nhan: "Bắt buộc có đồng ý trong sổ đồng ý",
+    moTa: "1 = khi duyệt chiến dịch, loại mọi người nhận chưa có dòng \"Đồng ý\" còn hiệu lực trong Sổ đồng ý email (lý do: Chưa có đồng ý nhận thư quảng cáo). 0 = tắt (chỉ dùng khi gửi thư không phải quảng cáo). Mặc định 1 — NĐ 91/2020 chỉ cho gửi thư quảng cáo khi người nhận đã đồng ý trước.",
+    donVi: "0 hoặc 1",
+    toiThieu: 0,
+    toiDa: 1,
+    soNguyen: true,
+    macDinh: 1,
+    dungTuPhase: 8,
+  },
+  {
+    khoa: "email.toi_da_thu_moi_dia_chi_24h",
+    nhom: "Email marketing",
+    nhan: "Số thư quảng cáo tối đa mỗi địa chỉ trong 24 giờ",
+    moTa: "Tính chung MỌI chiến dịch của doanh nghiệp, cửa sổ trượt 24 giờ. Đủ số này thì thư tiếp theo tới địa chỉ đó được HOÃN (không lỗi) tới khi ra khỏi cửa sổ. Mặc định 3 — trần của NĐ 91/2020 Điều 13, không đặt cao hơn được.",
+    donVi: "thư / 24 giờ",
+    toiThieu: 1,
+    toiDa: 3,
+    soNguyen: true,
+    macDinh: 3,
+    dungTuPhase: 8,
+  },
+  {
+    khoa: "email.khoi_dong_ngay_bat_dau",
+    nhom: "Email marketing",
+    nhan: "Ngày bắt đầu khởi động tên miền gửi",
+    moTa: "Viết dạng số NĂMTHÁNGNGÀY, ví dụ 20261101. Đặt vào ngày bắt đầu gửi chiến dịch qua tên miền / tài khoản gửi MỚI (ví dụ Amazon SES). Từ ngày đó trần mỗi ngày tăng dần theo hai mục dưới. Để trống = không áp đường khởi động.",
+    donVi: "YYYYMMDD",
+    toiThieu: 20200101,
+    toiDa: 21001231,
+    soNguyen: true,
+    macDinh: null,
+    dungTuPhase: 8,
+    laNgay: true,
+  },
+  {
+    khoa: "email.khoi_dong_muc_dau",
+    nhom: "Email marketing",
+    nhan: "Số thư ngày đầu khởi động",
+    moTa: "Trần ngày thứ nhất của đường khởi động. Mặc định 200 thư.",
+    donVi: "thư/ngày",
+    toiThieu: 10,
+    toiDa: 100_000,
+    soNguyen: true,
+    macDinh: 200,
+    dungTuPhase: 8,
+  },
+  {
+    khoa: "email.khoi_dong_he_so",
+    nhom: "Email marketing",
+    nhan: "Hệ số tăng mỗi ngày khi khởi động",
+    moTa: "Trần ngày d = mức ngày đầu × hệ số^d. Mặc định 1,3: từ 200 thư lên khoảng 5.000 thư sau khoảng 2 tuần (ngày 13 ≈ 6.000).",
+    donVi: "lần",
+    toiThieu: 1,
+    toiDa: 3,
+    soNguyen: false,
+    macDinh: 1.3,
     dungTuPhase: 8,
   },
 ];
@@ -444,5 +545,16 @@ export function timMuc(khoa: string): MucCauHinh | undefined {
 export function luocDoGiaTri(muc: MucCauHinh) {
   let so = z.number().min(muc.toiThieu, `Tối thiểu ${muc.toiThieu}`).max(muc.toiDa, `Tối đa ${muc.toiDa}`);
   if (muc.soNguyen) so = so.int("Phải là số nguyên");
+  if (muc.laNgay) return so.refine((n) => laNgayYmd(n), "Phải là ngày có thật, dạng NĂMTHÁNGNGÀY (vd 20261101)").nullable();
   return so.nullable();
+}
+
+/** Số YYYYMMDD có phải ngày thật không (kiểm cả 30/02). */
+export function laNgayYmd(n: number): boolean {
+  if (!Number.isInteger(n)) return false;
+  const nam = Math.floor(n / 10000);
+  const thang = Math.floor((n % 10000) / 100);
+  const ngay = n % 100;
+  const d = new Date(Date.UTC(nam, thang - 1, ngay));
+  return thang >= 1 && thang <= 12 && ngay >= 1 && d.getUTCFullYear() === nam && d.getUTCMonth() === thang - 1 && d.getUTCDate() === ngay;
 }

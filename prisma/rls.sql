@@ -46,7 +46,7 @@ BEGIN
         WHERE c.table_schema = 'public'
           AND c.column_name = 'tenant_id'
           AND t.table_type = 'BASE TABLE'
-          AND c.table_name NOT IN ('business_events', 'audit_logs')
+          AND c.table_name NOT IN ('business_events', 'audit_logs', 'email_consents', 'email_sns_messages')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -61,7 +61,8 @@ BEGIN
 END $$;
 
 -- --------------------------------------------------------------------------
--- 3. Bảng chỉ ghi thêm: business_events và audit_logs
+-- 3. Bảng chỉ ghi thêm: business_events, audit_logs, và (0.18.0) sổ đồng ý
+--    email_consents + nhật ký thông điệp SNS email_sns_messages
 --    Không cấp UPDATE/DELETE cho ứng dụng, và chặn thêm bằng trigger để kể cả
 --    chủ sở hữu cũng không lỡ tay sửa lịch sử.
 -- --------------------------------------------------------------------------
@@ -75,7 +76,7 @@ $$ LANGUAGE plpgsql;
 DO $$
 DECLARE
     ten_bang text;
-    ds_bang text[] := ARRAY['business_events', 'audit_logs'];
+    ds_bang text[] := ARRAY['business_events', 'audit_logs', 'email_consents', 'email_sns_messages'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
