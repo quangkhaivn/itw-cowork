@@ -146,7 +146,7 @@ ALTER TABLE "email_settings" ADD CONSTRAINT "email_settings_ten_mien_check"
 ALTER TABLE "email_settings" ADD CONSTRAINT "email_settings_dkim_check"
     CHECK (jsonb_typeof("dkim_tokens") = 'array' AND jsonb_array_length("dkim_tokens") <= 3);
 ALTER TABLE "email_settings" ADD CONSTRAINT "email_settings_topic_check"
-    CHECK ("ses_topic_arn" IS NULL OR "ses_topic_arn" ~ '^arn:aws(-[a-z]+)?:sns:[a-z]{2}(-[a-z]+)+-[0-9]:[0-9]{12}:[A-Za-z0-9_-]{1,256}$');
+    CHECK ("ses_topic_arn" IS NULL OR "ses_topic_arn" ~ '^arn:aws(-[a-z]+)?:sns:[a-z]{2}(-[a-z]+)+-[0-9]:[0-9]{12}:[A-Za-z0-9_-]+$');
 -- EG-02: mã webhook chỉ giữ băm SHA-256.
 ALTER TABLE "email_settings" ADD CONSTRAINT "email_settings_webhook_bam_check"
     CHECK ("ses_webhook_hash" IS NULL OR "ses_webhook_hash" ~ '^[0-9a-f]{64}$');

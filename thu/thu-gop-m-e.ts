@@ -108,6 +108,9 @@ async function main() {
   const smtp = await dungSmtpGia();
   const tenant = await seedNenMong(chu, `thu-me-${DAU}`, "Doanh nghiệp thử M×E");
   const T = tenant.id;
+  // 0.18.0: bài này kiểm luật EM / MK trước 0.18 — tắt "bắt buộc sổ đồng ý" (EG-09, mặc định bật).
+  // Sổ đồng ý được kiểm riêng ở thu/thu-email-gui-lon.ts.
+  for (const t of [T]) await chu.tenantSetting.create({ data: { tenantId: t, key: "email.bat_buoc_dong_y", value: 0 } });
   const vaiTro = async (code: string) => (await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: T, code } } })).id;
   async function nguoi(ten: string, vai: string) {
     const u = await chu.user.create({

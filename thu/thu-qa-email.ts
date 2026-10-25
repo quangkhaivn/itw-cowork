@@ -269,6 +269,9 @@ async function main() {
   const T = tenant.id;
   const tenantB = await seedNenMong(chu, `qa-email-b-${DAU}`, "Doanh nghiệp QA email B");
   const TB = tenantB.id;
+  // 0.18.0: bài này kiểm luật EM / MK trước 0.18 — tắt "bắt buộc sổ đồng ý" (EG-09, mặc định bật).
+  // Sổ đồng ý được kiểm riêng ở thu/thu-email-gui-lon.ts.
+  for (const t of [T, TB]) await chu.tenantSetting.create({ data: { tenantId: t, key: "email.bat_buoc_dong_y", value: 0 } });
 
   const gd = await nguoi(T, "giam-doc", "ceo");
   const qt = await nguoi(T, "quan-tri", "admin");
