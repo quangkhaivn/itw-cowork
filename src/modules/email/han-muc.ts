@@ -44,7 +44,11 @@ export async function docHanMucHomNay(tx: ClientTenant, kenh: string, bayGio: Da
   const tranNgayDat = tranDat ?? (kenh === "ses" ? TRAN_NGAY_MAC_DINH_SES : null);
   const kd = tranKhoiDong(ngayBatDau, mucDau, heSo, bayGio);
   const tranHomNay = tranNgayHieuLuc(tranNgayDat, kd);
-  const daGuiHomNay = await tx.emailRecipient.count({ where: { sentAt: { gte: dauHomNayVN(bayGio) } } });
+  // Tính cả thư worker khác đã NHẬN (SENDING) mà chưa gửi xong: chỉ đếm sent_at thì worker thứ hai vào
+  // nhận việc lúc worker đầu đang gửi sẽ thấy cả trần còn nguyên và gửi vượt trần ngày / khởi động
+  // (QA 0.18.0 đo được 20 thư với trần 10). Cùng cách "thư/phút" đã tính SENDING theo attempt_at.
+  const dauNgay = dauHomNayVN(bayGio);
+  const daGuiHomNay = await tx.emailRecipient.count({ where: { OR: [{ sentAt: { gte: dauNgay } }, { status: "SENDING", attemptAt: { gte: dauNgay } }] } });
   return {
     moiPhut: moiPhutDat ?? 10,
     moiPhutMacDinh: daDatMoiPhut === 0,

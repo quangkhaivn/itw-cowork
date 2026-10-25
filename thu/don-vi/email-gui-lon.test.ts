@@ -82,6 +82,11 @@ describe("EG-06 — nhãn quảng cáo đầu tiêu đề", () => {
     assert.equal(ganNhanQuangCao("[qc]   Ưu đãi", "[QC]"), "[QC] Ưu đãi");
   });
   it("nhãn nằm giữa tiêu đề không tính — vẫn gắn lên đầu", () => assert.equal(ganNhanQuangCao("Ưu đãi [QC]", "[QC]"), "[QC] Ưu đãi [QC]"));
+  it("nhãn chữ (QC) không bị coi là đã có khi tiêu đề chỉ bắt đầu bằng cùng chữ (QA 0.18.0)", () => {
+    assert.equal(ganNhanQuangCao("QCVN 01 mới", "QC"), "QC QCVN 01 mới");
+    assert.equal(ganNhanQuangCao("qc giảm giá", "QC"), "QC giảm giá");
+    assert.equal(ganNhanQuangCao("[QC]Ưu đãi", "[QC]"), "[QC] Ưu đãi");
+  });
   it("nhãn trống / sai → dùng mặc định, người soạn không bỏ được nhãn", () => {
     assert.equal(chuanHoaNhanQuangCao(""), NHAN_QUANG_CAO_MAC_DINH);
     assert.equal(chuanHoaNhanQuangCao("x\ny"), NHAN_QUANG_CAO_MAC_DINH);

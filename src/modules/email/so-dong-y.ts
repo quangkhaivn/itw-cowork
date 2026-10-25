@@ -6,6 +6,7 @@ import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { docBangCsv } from "@/lib/csv";
+import { dinhDangNgayGio } from "@/lib/dinh-dang";
 import { docCauHinh } from "@/modules/cau-hinh/service";
 import {
   cheEmail,
@@ -80,6 +81,14 @@ export async function ghiSoDongY(tx: ClientTenant, tenantId: string, d: DuLieuGh
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`cowork:dong-y:${tenantId}:${email}`}))`;
   const truoc = (await trangThaiDongYCuaNhieu(tx, [email])).get(email) ?? null;
   const luc = d.luc ?? new Date();
+  // Từ chối luôn thắng (MK-13): rút / phản đối mang thời điểm KHÔNG sau lần đồng ý đang hiệu lực (vd sự
+  // kiện báo rác của SES tới trễ, thời điểm SES cũ hơn một lần đồng ý vừa ghi) vẫn phải là trạng thái hiện
+  // hành của sổ — nếu không, sổ hiện "Đồng ý" trong khi cờ cũ / danh sách chặn đã từ chối. Khi đó dòng
+  // sổ ghi theo lúc nhận, thời điểm gốc giữ trong căn cứ. Bằng thời điểm thì dòng ghi sau đã thắng nhờ
+  // recorded_at. QA 0.18.0.
+  const tuChoi = d.hanhDong === "rut" || d.hanhDong === "phan-doi";
+  const lucSo = tuChoi && truoc?.hanhDong === "dong-y" && luc.getTime() < truoc.luc.getTime() ? new Date(Math.max(Date.now(), truoc.luc.getTime() + 1)) : luc;
+  const canCuSo = lucSo === luc ? canCu : `${canCu} (thời điểm gốc ${luc.toISOString()}, sớm hơn lần đồng ý đang hiệu lực — ghi theo lúc nhận)`.slice(0, 4000);
   const dong = await tx.emailConsent.create({
     data: {
       tenantId,
@@ -87,9 +96,9 @@ export async function ghiSoDongY(tx: ClientTenant, tenantId: string, d: DuLieuGh
       purpose: MUC_DICH_QUANG_CAO,
       action: d.hanhDong,
       source: d.nguon,
-      evidence: canCu,
+      evidence: canCuSo,
       evidenceRef: d.thamChieu?.slice(0, 255) ?? null,
-      occurredAt: luc,
+      occurredAt: lucSo,
       actorId: d.nguoiId ?? null,
       actorEmail: d.nguoiEmail?.slice(0, 255) ?? null,
       ipAddress: d.ip?.slice(0, 45) ?? null,
@@ -195,6 +204,14 @@ export async function ghiTayDongY(nc: NguCanh, d: DuLieuGhiTayDongY) {
         );
       }
       if (luc.getTime() <= hien.luc.getTime()) throw new LoiDinhDang("thoiDiem", "Thời điểm đồng ý lại phải sau lần từ chối gần nhất.");
+    }
+  } else if (d.thoiDiem) {
+    // Rút / phản đối ghi lùi về TRƯỚC lần đồng ý đang hiệu lực thì không còn là trạng thái hiện hành — sổ
+    // sẽ vẫn hiện "Đồng ý" trong khi lead / danh sách chặn đã từ chối. Người ghi phải chọn thời điểm sau
+    // lần đồng ý đó (hoặc để trống = bây giờ). QA 0.18.0.
+    const hien = (await trangThaiDongYCuaNhieu(nc.tx, [d.email])).get(d.email);
+    if (hien?.hanhDong === "dong-y" && luc.getTime() < hien.luc.getTime()) {
+      throw new LoiDinhDang("thoiDiem", `Thời điểm từ chối không được trước lần đồng ý gần nhất (${dinhDangNgayGio(hien.luc)}). Để trống nếu khách vừa từ chối.`);
     }
   }
   const kq = await ghiSoDongY(nc.tx, nc.tenantId, {

@@ -531,7 +531,10 @@ export function chuanHoaNhanQuangCao(s: unknown): string {
 export function ganNhanQuangCao(tieuDe: string, nhan: string): string {
   const n = chuanHoaNhanQuangCao(nhan);
   const t = tieuDe.replace(/[\r\n]+/g, " ").trim();
-  if (t.toLocaleLowerCase("vi").startsWith(n.toLocaleLowerCase("vi"))) {
+  // Nhãn kết thúc bằng chữ / số (vd "QC") chỉ tính là "đã có" khi ngay sau nó không còn chữ / số —
+  // "QCVN 01" không phải "QC VN 01" (QA 0.18.0).
+  const dinhChu = /[\p{L}\p{N}]$/u.test(n) && /^[\p{L}\p{N}]/u.test(t.slice(n.length));
+  if (!dinhChu && t.toLocaleLowerCase("vi").startsWith(n.toLocaleLowerCase("vi"))) {
     const conLai = t.slice(n.length).trim();
     return conLai ? `${n} ${conLai}` : n;
   }

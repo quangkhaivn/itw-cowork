@@ -169,9 +169,15 @@ async function xuLyThongBao(tenantId: string, settingId: string, m: ThongDiepSns
               ...(r.status === "SENT" && { status: "FAILED", reason: `Thư bị trả lại vĩnh viễn (SES)${chanDoan ? `: ${chanDoan}` : ""}` }),
             },
           });
-          const cu = await tx.emailSuppression.findFirst({ where: { email: r.email }, select: { id: true, status: true } });
-          if (!cu) await tx.emailSuppression.create({ data: { tenantId, email: r.email, reason: "email-hong", recipientId: r.id, note: `SES Bounce Permanent ${chanDoan}`.slice(0, 500) } });
-          else if (cu.status !== "hoat-dong") await tx.emailSuppression.update({ where: { id: cu.id }, data: { reason: "email-hong", status: "hoat-dong", recipientId: r.id } });
+          // Email hỏng thắng mọi lý do chặn khác (như đường gửi SMTP 5.1.x trong gui.ts): đang chặn vì "huỷ
+          // nhận tin" / "báo rác" mà không nâng lên thì lần đồng ý lại sau đó gỡ chặn một địa chỉ đã chết
+          // (EG-08 "không bao giờ gỡ email hỏng"). upsert để hai lần trả lại cùng lúc (hai chiến dịch)
+          // không đụng khóa duy nhất (tenant, email) → 503. QA 0.18.0.
+          await tx.emailSuppression.upsert({
+            where: { tenantId_email: { tenantId, email: r.email } },
+            update: { reason: "email-hong", status: "hoat-dong", recipientId: r.id },
+            create: { tenantId, email: r.email, reason: "email-hong", recipientId: r.id, note: `SES Bounce Permanent ${chanDoan}`.slice(0, 500) },
+          });
           await ghiSuKien(tx, { eventType: SU_KIEN.EMAIL_BOUNCED, actorType: "system", objectType: "email_recipient", objectId: r.id, payload: { chienDichId: r.campaignId, loai: "Permanent" } });
         } else {
           // Trả lại tạm thời (hộp thư đầy, máy chủ bận…): chỉ ghi nhật ký, không chặn, không tính tỷ lệ hỏng.
