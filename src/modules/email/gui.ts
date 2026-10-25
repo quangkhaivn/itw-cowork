@@ -1,6 +1,5 @@
 import { voiTenant, type ClientTenant } from "@/lib/db";
 import { ghiSuKien, SU_KIEN } from "@/lib/su-kien";
-import { dinhDangNgayGio } from "@/lib/dinh-dang";
 import { taoThongBao } from "@/modules/thong-bao/service";
 import { docHanMucHomNay, docNhanQuangCao } from "./han-muc";
 import { kiemTyLeChienDich } from "./suc-khoe";
@@ -9,7 +8,7 @@ import { docKetNoiDeGui, type KetNoiDeGui } from "./ket-noi";
 import { urlAnhMo, urlBam, urlHuyMotCham, urlHuyNhanTin } from "./ma-lien-ket";
 import { docChanThu } from "./service";
 import { LoiNghiepVu } from "@/lib/loi";
-import { cauLoiGui, CUA_SO_DIA_CHI_MS, docMaThuSes, dungThu, lyDoTamDung, LuocDoDanhSachKhoi, phanLoaiLoiGui, THE_SES, thieuChanThu, thoatHtml, tieuDeSes, xetGioiHanDiaChi } from "./tinh-toan";
+import { cauLoiGui, CUA_SO_DIA_CHI_MS, docMaThuSes, dungThu, dungThuXacNhanTuChoi, lyDoTamDung, LuocDoDanhSachKhoi, phanLoaiLoiGui, THE_SES, thieuChanThu, tieuDeSes, xetGioiHanDiaChi } from "./tinh-toan";
 import { taoVanChuyen, type VanChuyenThu } from "./van-chuyen";
 
 /**
@@ -386,20 +385,6 @@ export async function guiLoThu(tenantId: string, bayGio: Date = new Date()): Pro
 // ---------------------------------------------------------------------------
 // Thư giao dịch: xác nhận từ chối (EG-13, NĐ 91/2020 Điều 20)
 // ---------------------------------------------------------------------------
-
-/** Nội dung thư xác nhận từ chối — không nhãn [QC], không theo dõi, không liên kết huỷ (không phải quảng cáo). */
-export function dungThuXacNhanTuChoi(tenCongTy: string, nhanLuc: Date, dungTu: Date) {
-  const cty = tenCongTy.trim() || "chúng tôi";
-  const tieuDe = `Xác nhận từ chối nhận thư quảng cáo từ ${cty}`.replace(/[\r\n]+/g, " ").slice(0, 200);
-  const dong = [
-    "Xin chào,",
-    `${cty} đã nhận được yêu cầu từ chối nhận thư quảng cáo của bạn lúc ${dinhDangNgayGio(nhanLuc)} (giờ Việt Nam).`,
-    `Kể từ ${dinhDangNgayGio(dungTu)}, chúng tôi đã ngừng gửi thư quảng cáo tới địa chỉ email này.`,
-    "Đây là thư xác nhận tự động, gửi một lần duy nhất. Bạn không cần làm gì thêm.",
-  ];
-  const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${thoatHtml(tieuDe)}</title></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937">${dong.map((d) => `<p>${thoatHtml(d)}</p>`).join("")}</body></html>`;
-  return { tieuDe, html, text: dong.join("\n\n") };
-}
 
 const TOI_DA_GIAO_DICH_MOI_NHIP = 20;
 

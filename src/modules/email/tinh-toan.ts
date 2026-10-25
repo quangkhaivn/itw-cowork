@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dinhDangNgayGio } from "@/lib/dinh-dang";
 
 /**
  * Phần thuần của email marketing — không đụng CSDL, không đụng mạng; dùng được cả ở máy chủ
@@ -823,3 +824,18 @@ export function vungCuaTopic(arn: string): string | null {
   const m = /^arn:aws(?:-[a-z]+)?:sns:([a-z]{2}(?:-[a-z]+)+-\d):\d{12}:[A-Za-z0-9_-]{1,256}$/.exec(arn);
   return m ? m[1] : null;
 }
+
+/** Nội dung thư xác nhận từ chối — không nhãn [QC], không theo dõi, không liên kết huỷ (không phải quảng cáo). */
+export function dungThuXacNhanTuChoi(tenCongTy: string, nhanLuc: Date, dungTu: Date) {
+  const cty = tenCongTy.trim() || "chúng tôi";
+  const tieuDe = `Xác nhận từ chối nhận thư quảng cáo từ ${cty}`.replace(/[\r\n]+/g, " ").slice(0, 200);
+  const dong = [
+    "Xin chào,",
+    `${cty} đã nhận được yêu cầu từ chối nhận thư quảng cáo của bạn lúc ${dinhDangNgayGio(nhanLuc)} (giờ Việt Nam).`,
+    `Kể từ ${dinhDangNgayGio(dungTu)}, chúng tôi đã ngừng gửi thư quảng cáo tới địa chỉ email này.`,
+    "Đây là thư xác nhận tự động, gửi một lần duy nhất. Bạn không cần làm gì thêm.",
+  ];
+  const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${thoatHtml(tieuDe)}</title></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937">${dong.map((d) => `<p>${thoatHtml(d)}</p>`).join("")}</body></html>`;
+  return { tieuDe, html, text: dong.join("\n\n") };
+}
+
