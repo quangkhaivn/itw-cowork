@@ -73,14 +73,14 @@ async function main() {
     });
     return u.id;
   }
-  const hr = await nguoi(T, "nhan-su", "nhan-su");
+  const hr = await nguoi(T, "nhan-su", "nhan-su-hr");
   const tp = await nguoi(T, "truong-phong", "sales-manager");
   const nvA = await nguoi(T, "nhan-vien-a", "sales", tp);
   const nvB = await nguoi(T, "nhan-vien-b", "sales", tp);
   const nvC = await nguoi(T, "nhan-vien-c", "sales");
   const ktv = await nguoi(T, "ky-thuat-vien", "technical");
-  const tts = await nguoi(T, "thuc-tap-sinh", "thuc-tap-sinh", tp);
-  const ngoai = await nguoi(T2, "nguoi-ngoai", "nhan-su");
+  const tts = await nguoi(T, "thuc-tap-sinh", "sinh-vien-thuc-tap", tp);
+  const ngoai = await nguoi(T2, "nguoi-ngoai", "nhan-su-hr");
   const caiDat = (t: string, key: string, value: number) => chu.tenantSetting.create({ data: { tenantId: t, key, value } });
   await caiDat(T, "nghi_phep.cong_don_theo_thang", 0);
   await caiDat(T, "nghi_phep.so_ngay_nam", 5);

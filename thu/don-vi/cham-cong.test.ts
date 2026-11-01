@@ -468,7 +468,7 @@ describe("NS-70: quyền và vai trò chấm công", () => {
       if (v.quyen === "*" || v.code === "ai-assistant") continue;
       assert.ok(v.quyen.includes("cham_cong.view") && v.quyen.includes("cham_cong.create"), `${v.code} thiếu quyền chấm công`);
     }
-    for (const ma of ["marketing", "purchasing", "warehouse", "finance", "customer-service", "sales", "technical", "thuc-tap-sinh"]) {
+    for (const ma of ["marketing", "purchasing", "warehouse", "finance", "customer-service", "sales", "technical", "sinh-vien-thuc-tap"]) {
       const v = VAI_TRO.find((x) => x.code === ma)!;
       assert.equal(phamViCuaQuyen(v, "cham_cong.view"), "own", ma);
     }
@@ -478,13 +478,13 @@ describe("NS-70: quyền và vai trò chấm công", () => {
     assert.equal(pv("sales-manager", "cham_cong.approve"), "team");
     assert.equal(pv("marketing-manager", "cham_cong.approve"), "team");
     assert.equal(pv("technical-manager", "cham_cong.approve"), "department");
-    assert.equal(pv("nhan-su", "cham_cong.approve"), "all");
-    assert.equal(pv("nhan-su", "task.view"), "own");
+    assert.equal(pv("nhan-su-hr", "cham_cong.approve"), "all");
+    assert.equal(pv("nhan-su-hr", "task.view"), "own");
     const ai = VAI_TRO.find((x) => x.code === "ai-assistant")!;
     assert.ok(ai.quyen !== "*" && !ai.quyen.some((q) => q.startsWith("cham_cong.") || q.startsWith("nhan_su.")));
   });
   it("Thực tập sinh không thấy khách hàng, giá, đơn hàng", () => {
-    const tts = VAI_TRO.find((x) => x.code === "thuc-tap-sinh")!;
+    const tts = VAI_TRO.find((x) => x.code === "sinh-vien-thuc-tap")!;
     assert.ok(tts.quyen !== "*");
     assert.ok(!tts.quyen.some((q) => /^(customer|crm|sales|quotation|order|product|finance|supplier)\./.test(q)));
   });

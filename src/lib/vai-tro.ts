@@ -373,8 +373,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   },
   {
     // 0.19.0 — Nhân sự giai đoạn 1 (BUSINESS_RULES mục 30). Toàn công ty với chấm công / nhân sự;
+    // mã "nhan-su-hr" (không phải "nhan-su") để không chiếm vai trò tùy biến doanh nghiệp đã tự đặt tên đó.
     // công việc chỉ của mình. Không có quyền khách hàng, giá, tài chính.
-    code: "nhan-su",
+    code: "nhan-su-hr",
     name: "Nhân sự (HR)",
     phamVi: "all",
     description: "Hồ sơ nhân sự, ca làm, máy chấm công, duyệt nghỉ phép / tăng ca, bảng công tháng.",
@@ -391,7 +392,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
   {
     // 0.19.0 — sinh viên thực tập (owner 01/11/2026). Chỉ công việc của mình + chấm công của mình;
     // KHÔNG thấy khách hàng, giá, đơn hàng. Phiếu đánh giá thực tập là giai đoạn 2.
-    code: "thuc-tap-sinh",
+    code: "sinh-vien-thuc-tap",
     name: "Thực tập sinh",
     phamVi: "own",
     description: "Sinh viên thực tập: chỉ xem / cập nhật công việc được giao và chấm công của chính mình.",

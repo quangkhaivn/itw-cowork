@@ -655,7 +655,7 @@ Giai đoạn 1 của phân hệ Nhân sự (Giám đốc duyệt 01/11/2026). Ch
 | Hồ sơ nhân sự, địa điểm, ca, lịch, ngày lễ, loại nghỉ, máy chấm công, PIN chưa khớp, điều chỉnh quỹ phép | `nhan_su.view` / `create` / `update` |
 | Máy chấm công gọi `/iclock/*` | Không đăng nhập — số sê-ri (SN) đã đăng ký + danh sách IP (tùy chọn) |
 
-Vai trò mới: **Nhân sự (HR)** (`nhan-su`: chấm công + nhân sự toàn công ty, công việc của mình, không có khách hàng / giá / tài chính) và **Thực tập sinh** (`thuc-tap-sinh`: công việc của mình + chấm công của mình). Mọi vai trò dựng sẵn (trừ Trợ lý AI) được `cham_cong.view` + `cham_cong.create` phạm vi `own`; trưởng phòng thêm `cham_cong.approve` theo phạm vi vai trò (Trưởng phòng Marketing: `team`). Trợ lý AI **không** có quyền chấm công (dữ liệu vị trí). Seed cấp mã quyền mới cho vai trò đã có trên máy thật (QĐ-10), không đè chỉnh sửa trên màn hình Vai trò.
+Vai trò mới: **Nhân sự (HR)** (`nhan-su-hr`: chấm công + nhân sự toàn công ty, công việc của mình, không có khách hàng / giá / tài chính) và **Thực tập sinh** (`sinh-vien-thuc-tap`: công việc của mình + chấm công của mình). Mọi vai trò dựng sẵn (trừ Trợ lý AI) được `cham_cong.view` + `cham_cong.create` phạm vi `own`; trưởng phòng thêm `cham_cong.approve` theo phạm vi vai trò (Trưởng phòng Marketing: `team`). Trợ lý AI **không** có quyền chấm công (dữ liệu vị trí). Seed cấp mã quyền mới cho vai trò đã có trên máy thật (QĐ-10), không đè chỉnh sửa trên màn hình Vai trò.
 
 ### Hồ sơ và thiết lập
 
