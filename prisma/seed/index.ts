@@ -1,7 +1,7 @@
 import { PrismaClient } from "../../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
-import { VAI_TRO, toanBoQuyen, kiemTraGioiHanAI } from "../../src/lib/vai-tro";
+import { VAI_TRO, toanBoQuyen, kiemTraGioiHanAI, phamViCuaQuyen } from "../../src/lib/vai-tro";
 import { LOAI_DU_LIEU_GOC } from "../../src/modules/du-lieu-goc/loai";
 import { kiemTraMatKhauManh } from "../../src/lib/mat-khau";
 import { TRANG_THAI_KHOI_TAO } from "../../src/modules/hanh-trinh/moc";
@@ -68,6 +68,17 @@ const NHOM_SAN_PHAM = [
 ];
 
 const TOAN_QUYEN = new Set(["ceo", "admin"]);
+
+/**
+ * 0.19.0 — loại nghỉ khởi tạo (sửa / thêm ở Nhân sự → Loại nghỉ). "Ốm đau" để KHÔNG lương công ty
+ * vì thường do bảo hiểm xã hội chi trả — Giám đốc đổi được.
+ */
+const LOAI_NGHI_KHOI_TAO = [
+  { ma: "phep-nam", ten: "Phép năm", coLuong: true, truPhep: true },
+  { ma: "viec-rieng-co-luong", ten: "Việc riêng có lương (cưới, tang…)", coLuong: true, truPhep: false },
+  { ma: "om-dau", ten: "Ốm đau (BHXH chi trả)", coLuong: false, truPhep: false },
+  { ma: "khong-luong", ten: "Nghỉ không lương", coLuong: false, truPhep: false },
+];
 
 export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant: string) {
   // Chốt chặn: không cho phép vai trò AI cầm quyền duyệt hoặc xóa.
@@ -161,7 +172,7 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
       await db.rolePermission.upsert({
         where: { roleId_permissionId: { roleId: vaiTro.id, permissionId } },
         update: {},
-        create: { tenantId: tenant.id, roleId: vaiTro.id, permissionId, dataScope: dn.phamVi },
+        create: { tenantId: tenant.id, roleId: vaiTro.id, permissionId, dataScope: phamViCuaQuyen(dn, ma) },
       });
     }
 
@@ -208,6 +219,18 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
     }
     console.log(`✓ Trạng thái hành trình khách hàng: ${TRANG_THAI_KHOI_TAO.length}`);
   }
+
+  // ---- 5c. Loại nghỉ (0.19.0) — chỉ tạo loại còn thiếu, không đổi tên / không bật lại loại đã tắt ----
+  let loaiNghiMoi = 0;
+  for (const [i, l] of LOAI_NGHI_KHOI_TAO.entries()) {
+    const daCo = await db.leaveType.findUnique({ where: { tenantId_code: { tenantId: tenant.id, code: l.ma } }, select: { id: true } });
+    if (daCo) continue;
+    await db.leaveType.create({
+      data: { tenantId: tenant.id, code: l.ma, name: l.ten, paid: l.coLuong, usesBalance: l.truPhep, sortOrder: (i + 1) * 10 },
+    });
+    loaiNghiMoi++;
+  }
+  console.log(`✓ Loại nghỉ: ${LOAI_NGHI_KHOI_TAO.length} (${loaiNghiMoi} loại mới)`);
 
   // ---- 6. Tài khoản máy cho trợ lý ITA ----
   const ita = await db.user.upsert({

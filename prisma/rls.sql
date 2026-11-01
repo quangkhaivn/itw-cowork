@@ -46,7 +46,8 @@ BEGIN
         WHERE c.table_schema = 'public'
           AND c.column_name = 'tenant_id'
           AND t.table_type = 'BASE TABLE'
-          AND c.table_name NOT IN ('business_events', 'audit_logs', 'email_consents', 'email_sns_messages')
+          AND c.table_name NOT IN ('business_events', 'audit_logs', 'email_consents', 'email_sns_messages',
+                                   'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -62,7 +63,9 @@ END $$;
 
 -- --------------------------------------------------------------------------
 -- 3. Bảng chỉ ghi thêm: business_events, audit_logs, và (0.18.0) sổ đồng ý
---    email_consents + nhật ký thông điệp SNS email_sns_messages
+--    email_consents + nhật ký thông điệp SNS email_sns_messages, (0.19.0) xác nhận
+--    thông báo vị trí attendance_consents, quyết định xem xét lần chấm
+--    attendance_punch_reviews, điều chỉnh quỹ phép leave_adjustments
 --    Không cấp UPDATE/DELETE cho ứng dụng, và chặn thêm bằng trigger để kể cả
 --    chủ sở hữu cũng không lỡ tay sửa lịch sử.
 -- --------------------------------------------------------------------------
@@ -76,7 +79,8 @@ $$ LANGUAGE plpgsql;
 DO $$
 DECLARE
     ten_bang text;
-    ds_bang text[] := ARRAY['business_events', 'audit_logs', 'email_consents', 'email_sns_messages'];
+    ds_bang text[] := ARRAY['business_events', 'audit_logs', 'email_consents', 'email_sns_messages',
+                            'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -97,6 +101,17 @@ BEGIN
         $f$, ten_bang, ten_bang);
     END LOOP;
 END $$;
+
+-- --------------------------------------------------------------------------
+-- 3b. (0.19.0) Lần chấm công `attendance_punches`: chỉ ghi thêm (NS-10). Ứng dụng cần
+--     UPDATE cho đúng một việc — gán người cho dòng PIN chưa khớp, trigger
+--     chan_sua_lan_cham kiểm — nhưng KHÔNG bao giờ được xóa.
+--     Hàm tra_may_cham_cong (SECURITY DEFINER, QĐ-101): máy chấm công gọi vào không
+--     kèm doanh nghiệp; hàm trả doanh nghiệp của đúng một số sê-ri đang hoạt động.
+-- --------------------------------------------------------------------------
+REVOKE DELETE ON public.attendance_punches FROM cowork_app;
+REVOKE ALL ON FUNCTION public.tra_may_cham_cong(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.tra_may_cham_cong(text) TO cowork_app;
 
 -- --------------------------------------------------------------------------
 -- 4. Bảng `tenants`: sổ đăng ký doanh nghiệp.

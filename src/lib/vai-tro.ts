@@ -39,6 +39,9 @@ export const PHAN_HE = [
   "ai",
   // Phase 3 (20/09/2026): sản phẩm, nhóm sản phẩm, thương hiệu, bảng giá nhà cung cấp.
   "product",
+  // 0.19.0 — Nhân sự giai đoạn 1: chấm công (lần chấm, đơn từ, bảng công) và hồ sơ / thiết lập nhân sự.
+  "cham_cong",
+  "nhan_su",
 ] as const;
 
 // Thêm phân hệ mới: thêm vào CUỐI mảng trên + MO_TA_PHAN_HE, rồi khai quyền cho
@@ -99,6 +102,8 @@ export const MO_TA_PHAN_HE: Record<PhanHe, string> = {
   audit_log: "Nhật ký kiểm toán",
   ai: "Trợ lý AI",
   product: "Sản phẩm",
+  cham_cong: "Chấm công",
+  nhan_su: "Nhân sự",
 };
 
 export const MO_TA_HANH_DONG: Record<HanhDongQuyen, string> = {
@@ -130,10 +135,30 @@ export interface DinhNghiaVaiTro {
    * Giả định ban đầu, chờ Giám đốc xác nhận; sửa được trên màn hình Vai trò.
    */
   phamVi: PhamVi;
+  /**
+   * 0.19.0: phạm vi RIÊNG cho vài mã quyền, đè `phamVi` của vai trò. Ví dụ nhân viên mua hàng có phạm
+   * vi "all" trên phân hệ của mình nhưng chỉ được xem chấm công CỦA MÌNH (`cham_cong.view` = own).
+   */
+  phamViRieng?: Record<string, PhamVi>;
+}
+
+/** Phạm vi seed cấp cho một mã quyền của vai trò dựng sẵn. */
+export function phamViCuaQuyen(dn: DinhNghiaVaiTro, ma: string): PhamVi {
+  return dn.phamViRieng?.[ma] ?? dn.phamVi;
 }
 
 /**
- * 15 vai trò: 14 của mục 19 đặc tả 12/09 + Thực tập sinh Marketing.
+ * 0.19.0 — chấm công. Mọi nhân viên tự chấm công và xem / gửi đơn của CHÍNH MÌNH (`own`). Trưởng
+ * phòng duyệt đơn của nhóm mình (`approve` theo phạm vi vai trò). Nhân sự và Giám đốc: toàn công ty.
+ */
+const CHAM_CONG_CA_NHAN = [maQuyen("cham_cong", "view"), maQuyen("cham_cong", "create")];
+const CHAM_CONG_QUAN_LY = [...CHAM_CONG_CA_NHAN, maQuyen("cham_cong", "approve")];
+function rieng(ds: string[], pv: PhamVi): Record<string, PhamVi> {
+  return Object.fromEntries(ds.map((m) => [m, pv]));
+}
+
+/**
+ * 17 vai trò: 14 của mục 19 đặc tả 12/09 + Thực tập sinh Marketing + (0.19.0) Nhân sự (HR), Thực tập sinh.
  * Bao trùm đủ 10 vai trò ban đầu của master prompt TGTH Business Cowork (19/09):
  * Super Admin → admin, CEO → ceo, Accountant → finance, Technician → technical.
  */
@@ -175,6 +200,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("customer", "approve"),
       ...tron(["dashboard", "kpi", "report", "alert", "project"], XEM_XUAT),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_QUAN_LY,
     ],
   },
   {
@@ -187,6 +214,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["product"], XEM_XUAT),
       ...tron(["order", "project", "inventory", "dashboard", "alert", "supplier"], CHI_XEM),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_CA_NHAN,
     ],
   },
   {
@@ -200,7 +229,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("marketing", "approve"),
       ...tron(["crm", "customer", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_QUAN_LY,
     ],
+    phamViRieng: rieng(CHAM_CONG_QUAN_LY, "team"),
   },
   {
     code: "marketing",
@@ -211,7 +243,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["marketing", "task"], LAM_VIEC),
       ...tron(["crm", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_CA_NHAN,
     ],
+    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
   },
   {
     code: "technical-manager",
@@ -225,6 +260,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("project", "approve"),
       ...tron(["customer", "inventory", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_QUAN_LY,
     ],
   },
   {
@@ -236,6 +273,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["technical", "service_desk", "task"], LAM_VIEC),
       ...tron(["customer", "project", "inventory", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_CA_NHAN,
     ],
   },
   {
@@ -249,6 +288,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("project", "approve"),
       ...tron(["customer", "order", "inventory", "purchasing", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_QUAN_LY,
     ],
   },
   {
@@ -260,7 +301,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["purchasing", "supplier", "product", "task"], LAM_VIEC),
       ...tron(["inventory", "order", "project", "dashboard", "alert"], CHI_XEM),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_CA_NHAN,
     ],
+    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
   },
   {
     code: "warehouse",
@@ -272,7 +316,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["product"], XEM_XUAT),
       ...tron(["order", "purchasing", "project", "dashboard", "alert", "supplier"], CHI_XEM),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_CA_NHAN,
     ],
+    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
   },
   {
     code: "finance",
@@ -289,7 +336,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("purchasing", "approve"),
       ...tron(["order", "project", "customer", "purchasing", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_CA_NHAN,
     ],
+    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
   },
   {
     code: "customer-service",
@@ -300,7 +350,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["service_desk", "customer", "crm", "task"], LAM_VIEC),
       ...tron(["order", "project", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_CA_NHAN,
     ],
+    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
   },
   {
     code: "marketing-intern",
@@ -314,7 +367,35 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("task", "view"),
       maQuyen("task", "update"),
       maQuyen("dashboard", "view"),
+      // 0.19.0: chấm công — QĐ-104.
+      ...CHAM_CONG_CA_NHAN,
     ],
+  },
+  {
+    // 0.19.0 — Nhân sự giai đoạn 1 (BUSINESS_RULES mục 30). Toàn công ty với chấm công / nhân sự;
+    // công việc chỉ của mình. Không có quyền khách hàng, giá, tài chính.
+    code: "nhan-su",
+    name: "Nhân sự (HR)",
+    phamVi: "all",
+    description: "Hồ sơ nhân sự, ca làm, máy chấm công, duyệt nghỉ phép / tăng ca, bảng công tháng.",
+    quyen: [
+      ...tron(["cham_cong"], ["view", "create", "update", "approve", "export"]),
+      ...tron(["nhan_su"], ["view", "create", "update", "export"]),
+      maQuyen("user", "view"),
+      maQuyen("department", "view"),
+      ...tron(["task"], LAM_VIEC),
+      ...tron(["dashboard", "alert"], CHI_XEM),
+    ],
+    phamViRieng: rieng(tron(["task"], LAM_VIEC), "own"),
+  },
+  {
+    // 0.19.0 — sinh viên thực tập (owner 01/11/2026). Chỉ công việc của mình + chấm công của mình;
+    // KHÔNG thấy khách hàng, giá, đơn hàng. Phiếu đánh giá thực tập là giai đoạn 2.
+    code: "thuc-tap-sinh",
+    name: "Thực tập sinh",
+    phamVi: "own",
+    description: "Sinh viên thực tập: chỉ xem / cập nhật công việc được giao và chấm công của chính mình.",
+    quyen: [maQuyen("task", "view"), maQuyen("task", "update"), ...CHAM_CONG_CA_NHAN],
   },
   {
     code: "ai-assistant",

@@ -5,6 +5,7 @@ import { quetTheoLich } from "../src/modules/nhac-viec/service";
 import { homNayVN } from "../src/modules/crm/chung";
 import { guiLoThu } from "../src/modules/email/gui";
 import { ghiNhipSong } from "./nhip";
+import { quetChamCong } from "../src/modules/cham-cong/nhac-viec";
 
 /**
  * Tiến trình nền — Phase 8.
@@ -118,6 +119,15 @@ async function motNhip() {
       }
     } catch (loi) {
       console.error(`[worker] ${luc} — gửi email doanh nghiệp ${t.code} hỏng:`, loi);
+    }
+    // 0.19.0 — chấm công: nhắc chưa chấm vào ca, máy chấm công mất kết nối (mỗi phút, NS-61/62).
+    try {
+      const kq = await quetChamCong(t.id);
+      if (kq.soNhacNhanVien || kq.soNhacQuanLy || kq.soMayMatKetNoi) {
+        console.log(`[worker] ${t.code}: chấm công — nhắc ${kq.soNhacNhanVien} nhân viên, ${kq.soNhacQuanLy} quản lý, ${kq.soMayMatKetNoi} máy mất kết nối.`);
+      }
+    } catch (loi) {
+      console.error(`[worker] ${luc} — quét chấm công doanh nghiệp ${t.code} hỏng:`, loi);
     }
   }
 }

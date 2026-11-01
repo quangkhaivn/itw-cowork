@@ -38,6 +38,13 @@ const BANG_KHOA = [
   "maintenance_contracts",
   "projects",
   "tasks",
+  // 0.19.0 — nhân sự: đơn từ, quỹ phép (dòng khóa), bảng công, máy chấm công.
+  "attendance_corrections",
+  "leave_requests",
+  "leave_balances",
+  "overtime_requests",
+  "timesheets",
+  "attendance_devices",
 ] as const;
 
 export type BangKhoa = (typeof BANG_KHOA)[number];

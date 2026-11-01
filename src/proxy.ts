@@ -24,6 +24,9 @@ const DUONG_MO = [
   "/api/cong-khai",
   // 0.16.0 — Email marketing (QĐ-76): trang hủy nhận tin một chạm từ liên kết trong thư.
   "/huy-nhan-tin",
+  // 0.19.0 — máy chấm công vân tay (ZKTeco ADMS/PUSH, NS-14): máy không có phiên; route tự nhận máy
+  // bằng số sê-ri đã đăng ký. Không phải tiền tố /api nên không qua kiểm Origin.
+  "/iclock",
 ];
 
 /**

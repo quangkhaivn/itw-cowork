@@ -58,7 +58,16 @@ export type HanhDong =
   | "ghi-dong-y"
   | "nhap-dong-y"
   | "kiem-tra-dns"
-  | "tu-tam-dung";
+  | "tu-tam-dung"
+  // 0.19.0 — nhân sự, chấm công
+  | "cham-cong"
+  | "gan-ma-cham-cong"
+  | "nhap-cham-cong"
+  | "xac-nhan-vi-tri"
+  | "xem-xet-lan-cham"
+  | "sinh-bang-cong"
+  | "khoa-bang-cong"
+  | "phan-hoi-bang-cong";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

@@ -143,6 +143,27 @@ model Tenant {
   emailSnsMessages     EmailSnsMessage[]
   emailTransactionals  EmailTransactional[]
   recoveryCodes        UserRecoveryCode[]
+  // 0.19.0 — Nhân sự – chấm công
+  workLocations        WorkLocation[]
+  workShifts           WorkShift[]
+  workSchedules        WorkSchedule[]
+  scheduleAssignments  ScheduleAssignment[]
+  holidays             Holiday[]
+  internProfiles       InternProfile[]
+  employmentContracts  EmploymentContract[]
+  attendanceDevices    AttendanceDevice[]
+  attendancePunches    AttendancePunch[]
+  punchReviews         AttendancePunchReview[]
+  attendanceConsents   AttendanceConsent[]
+  attendanceCorrections AttendanceCorrection[]
+  leaveTypes           LeaveType[]
+  leaveBalances        LeaveBalance[]
+  leaveAdjustments     LeaveAdjustment[]
+  leaveRequests        LeaveRequest[]
+  overtimeRequests     OvertimeRequest[]
+  timesheets           Timesheet[]
+  timesheetRows        TimesheetRow[]
+  timesheetFeedback    TimesheetFeedback[]
 
   @@map("tenants")
 }
@@ -267,6 +288,17 @@ model User {
   ownedLandingPages    LandingPage[]            @relation("LandingPhuTrach")
   // Xác thực 2 lớp
   recoveryCodes        UserRecoveryCode[]
+  // 0.19.0 — Nhân sự – chấm công
+  internProfile        InternProfile?           @relation("HoSoThucTap")
+  menteeProfiles       InternProfile[]          @relation("NguoiHuongDanThucTap")
+  employmentContracts  EmploymentContract[]     @relation("HopDongLaoDong")
+  scheduleAssignments  ScheduleAssignment[]     @relation("LichLamCuaNguoi")
+  attendancePunches    AttendancePunch[]        @relation("LanChamCuaNguoi")
+  attendanceCorrections AttendanceCorrection[]  @relation("GiaiTrinhCuaNguoi")
+  leaveRequests        LeaveRequest[]           @relation("DonNghiCuaNguoi")
+  overtimeRequests     OvertimeRequest[]        @relation("DonTangCaCuaNguoi")
+  timesheetRows        TimesheetRow[]           @relation("DongCongCuaNguoi")
+  timesheetFeedback    TimesheetFeedback[]      @relation("PhanHoiCongCuaNguoi")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -284,6 +316,12 @@ model StaffProfile {
   employeeCode String?   @map("employee_code") @db.VarChar(50)
   jobTitle     String?   @map("job_title") @db.VarChar(255)
   hiredAt      DateTime? @map("hired_at") @db.Date
+  /// 0.19.0 — loại nhân sự: chinh-thuc | thu-viec | thuc-tap | cong-tac-vien (NS-01).
+  staffType    String    @default("chinh-thuc") @map("staff_type") @db.VarChar(20)
+  /// 0.19.0 — mã chấm công (PIN khai trên máy vân tay), duy nhất trong doanh nghiệp (NS-02).
+  attendancePin String?  @map("attendance_pin") @db.VarChar(20)
+  /// 0.19.0 — địa điểm làm việc mặc định (máy chấm công / bán kính GPS).
+  defaultLocationId String? @map("default_location_id") @db.Uuid
   status       String    @default("hoat-dong") @db.VarChar(30)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -294,8 +332,10 @@ model StaffProfile {
   user       User        @relation("HoSoCuaNguoiDung", fields: [userId], references: [id], onDelete: Cascade)
   department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   manager    User?       @relation("QuanLyTrucTiep", fields: [managerId], references: [id], onDelete: SetNull)
+  defaultLocation WorkLocation? @relation("DiaDiemMacDinh", fields: [defaultLocationId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, employeeCode])
+  @@unique([tenantId, attendancePin])
   @@index([tenantId])
   @@index([tenantId, departmentId])
   @@index([tenantId, managerId])
@@ -3524,4 +3564,514 @@ model UserRecoveryCode {
   @@unique([userId, codeHash])
   @@index([tenantId, userId])
   @@map("user_recovery_codes")
+}
+
+// ---------------------------------------------------------------------------
+// 0.19.0 — Nhân sự, giai đoạn 1: chấm công, nghỉ phép, tăng ca, bảng công tháng.
+// Luật: BUSINESS_RULES.md mục 30 (NS). Kiến trúc: ARCHITECTURE.md mục 7w. QĐ-100 → QĐ-109.
+// Mọi giờ lưu UTC (timestamptz); ngày công tính theo lịch giờ Việt Nam (+07:00 cố định).
+// ---------------------------------------------------------------------------
+
+/// Địa điểm làm việc: văn phòng, chi nhánh, kho. Bán kính GPS trống = dùng `cham_cong.ban_kinh_mac_dinh_m`.
+model WorkLocation {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String   @db.VarChar(255)
+  address   String?  @db.Text
+  latitude  Float
+  longitude Float
+  radiusM   Int?     @map("radius_m")
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  devices       AttendanceDevice[]
+  staffDefaults StaffProfile[]     @relation("DiaDiemMacDinh")
+  punches       AttendancePunch[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("work_locations")
+}
+
+/// Ca làm việc. Giờ lưu bằng PHÚT trong ngày (0–1439) theo giờ Việt Nam. `overnight` = ca qua nửa đêm.
+model WorkShift {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  code              String   @db.VarChar(30)
+  name              String   @db.VarChar(255)
+  startMinute       Int      @map("start_minute")
+  endMinute         Int      @map("end_minute")
+  /// Giờ bắt đầu nghỉ giữa ca (phút trong ngày); dùng để chia nửa ca sáng / chiều.
+  breakStartMinute  Int?     @map("break_start_minute")
+  breakMinutes      Int      @default(0) @map("break_minutes")
+  overnight         Boolean  @default(false)
+  /// Trống = dùng `cham_cong.di_muon_cho_phep_phut` / `cham_cong.ve_som_cho_phep_phut`.
+  lateGraceMinutes  Int?     @map("late_grace_minutes")
+  earlyGraceMinutes Int?     @map("early_grace_minutes")
+  status            String   @default("hoat-dong") @db.VarChar(30)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?  @map("created_by") @db.Uuid
+  updatedBy         String?  @map("updated_by") @db.Uuid
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedules WorkSchedule[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("work_shifts")
+}
+
+/// Lịch tuần: một ca + 7 ô (thứ Hai → Chủ nhật), mỗi ô `ca` | `sang` | `chieu` | `nghi`.
+model WorkSchedule {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String   @db.VarChar(30)
+  name      String   @db.VarChar(255)
+  shiftId   String   @map("shift_id") @db.Uuid
+  days      Json
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shift       WorkShift            @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  assignments ScheduleAssignment[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("work_schedules")
+}
+
+/// Gán lịch cho nhân viên từ một ngày. Lịch áp cho ngày D = dòng có `effective_from` lớn nhất ≤ D.
+model ScheduleAssignment {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  scheduleId    String   @map("schedule_id") @db.Uuid
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  note          String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String?  @map("created_by") @db.Uuid
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User         @relation("LichLamCuaNguoi", fields: [userId], references: [id], onDelete: Cascade)
+  schedule WorkSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, userId, effectiveFrom])
+  @@index([tenantId, userId])
+  @@map("schedule_assignments")
+}
+
+/// Ngày lễ / ngày nghỉ chung của doanh nghiệp (có hưởng lương). Ngừng = `status` khác hoạt động.
+model Holiday {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  date      DateTime @db.Date
+  name      String   @db.VarChar(255)
+  status    String   @default("hoat-dong") @db.VarChar(30)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@map("holidays")
+}
+
+/// Thông tin riêng của sinh viên thực tập (phiếu đánh giá thực tập là giai đoạn 2).
+model InternProfile {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  userId             String    @unique @map("user_id") @db.Uuid
+  school             String?   @db.VarChar(255)
+  faculty            String?   @db.VarChar(255)
+  studentCode        String?   @map("student_code") @db.VarChar(50)
+  academicSupervisor String?   @map("academic_supervisor") @db.VarChar(255)
+  mentorId           String?   @map("mentor_id") @db.Uuid
+  startDate          DateTime? @map("start_date") @db.Date
+  endDate            DateTime? @map("end_date") @db.Date
+  note               String?   @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy          String?   @map("created_by") @db.Uuid
+  updatedBy          String?   @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("HoSoThucTap", fields: [userId], references: [id], onDelete: Cascade)
+  mentor User?  @relation("NguoiHuongDanThucTap", fields: [mentorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@map("intern_profiles")
+}
+
+/// Hợp đồng lao động (mức cơ bản). Tệp hợp đồng đính kèm qua `attachments` loại `employment_contract`.
+model EmploymentContract {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  /// thu-viec | xac-dinh-thoi-han | khong-xac-dinh-thoi-han | thuc-tap | cong-tac-vien | khac
+  contractType String    @map("contract_type") @db.VarChar(30)
+  startDate    DateTime  @map("start_date") @db.Date
+  endDate      DateTime? @map("end_date") @db.Date
+  note         String?   @db.Text
+  /// hieu-luc | het-hieu-luc | huy
+  status       String    @default("hieu-luc") @db.VarChar(30)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+  updatedBy    String?   @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("HopDongLaoDong", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@map("employment_contracts")
+}
+
+/// Máy chấm công vân tay (ZKTeco ADMS/PUSH). Số sê-ri (SN) duy nhất TOÀN HỆ THỐNG — máy gọi vào
+/// không kèm doanh nghiệp, hệ thống tra doanh nghiệp từ SN (hàm `tra_may_cham_cong`, QĐ-101).
+model AttendanceDevice {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  serialNumber     String    @unique @map("serial_number") @db.VarChar(64)
+  name             String    @db.VarChar(255)
+  locationId       String    @map("location_id") @db.Uuid
+  /// Danh sách IP được gọi vào (trống = mọi IP).
+  ipAllowlist      String[]  @default([]) @map("ip_allowlist")
+  status           String    @default("hoat-dong") @db.VarChar(30)
+  lastSeenAt       DateTime? @map("last_seen_at") @db.Timestamptz(6)
+  lastIp           String?   @map("last_ip") @db.VarChar(45)
+  /// Thông tin máy tự báo (phiên bản, số người, số bản ghi…) — chỉ để hiển thị.
+  info             Json?
+  attlogStamp      String?   @map("attlog_stamp") @db.VarChar(30)
+  operlogStamp     String?   @map("operlog_stamp") @db.VarChar(30)
+  /// Mốc đã báo "mất kết nối" cho lần im lặng hiện tại (chống báo lặp).
+  offlineAlertedAt DateTime? @map("offline_alerted_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?   @map("created_by") @db.Uuid
+  updatedBy        String?   @map("updated_by") @db.Uuid
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location WorkLocation      @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  punches  AttendancePunch[]
+
+  @@index([tenantId])
+  @@map("attendance_devices")
+}
+
+/// Lần chấm công — CHỈ GHI THÊM (NS-10). Ngoại lệ duy nhất: gán người cho dòng PIN chưa khớp
+/// (`user_id` NULL → có giá trị, kèm `matched_at`), do trigger `chan_sua_lan_cham` kiểm.
+model AttendancePunch {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  pin          String?   @db.VarChar(20)
+  /// Giờ máy chủ (GPS, bổ sung) hoặc giờ máy chấm công đổi sang UTC (vân tay, nhập CSV).
+  punchedAt    DateTime  @map("punched_at") @db.Timestamptz(6)
+  /// van-tay | gps | bo-sung | nhap-csv
+  source       String    @db.VarChar(20)
+  /// vao | ra — nút người dùng bấm (GPS) hoặc giải trình; máy vân tay để trống.
+  direction    String?   @db.VarChar(5)
+  deviceId     String?   @map("device_id") @db.Uuid
+  locationId   String?   @map("location_id") @db.Uuid
+  latitude     Float?
+  longitude    Float?
+  accuracyM    Float?    @map("accuracy_m")
+  distanceM    Float?    @map("distance_m")
+  /// hop-le | hien-truong | ngoai-vung (chỉ GPS)
+  gpsResult    String?   @map("gps_result") @db.VarChar(20)
+  ticketId     String?   @map("ticket_id") @db.Uuid
+  /// Cờ: do-chinh-xac-thap | toc-do-bat-thuong | thieu-quyen-vi-tri …
+  flags        Json      @default("[]")
+  needsReview  Boolean   @default(false) @map("needs_review")
+  clientTime   DateTime? @map("client_time") @db.Timestamptz(6)
+  deviceStatus Int?      @map("device_status")
+  verifyCode   Int?      @map("verify_code")
+  workCode     String?   @map("work_code") @db.VarChar(20)
+  rawLine      String?   @map("raw_line") @db.VarChar(500)
+  correctionId String?   @map("correction_id") @db.Uuid
+  ipAddress    String?   @map("ip_address") @db.VarChar(45)
+  userAgent    String?   @map("user_agent") @db.VarChar(500)
+  matchedAt    DateTime? @map("matched_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+
+  tenant   Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User?                   @relation("LanChamCuaNguoi", fields: [userId], references: [id], onDelete: Restrict)
+  device   AttendanceDevice?       @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  location WorkLocation?           @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  reviews  AttendancePunchReview[]
+
+  // Chống nạp trùng từ máy: (máy, PIN, giờ). Nhập CSV có chỉ mục riêng phần trong migration.
+  @@unique([tenantId, deviceId, pin, punchedAt])
+  @@index([tenantId, userId, punchedAt])
+  @@index([tenantId, punchedAt])
+  @@index([tenantId, pin])
+  @@map("attendance_punches")
+}
+
+/// Quản lý xem xét một lần chấm GPS bị gắn cờ — chỉ ghi thêm, quyết định mới nhất có hiệu lực.
+model AttendancePunchReview {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  punchId    String   @map("punch_id") @db.Uuid
+  /// chap-nhan | tu-choi
+  decision   String   @db.VarChar(20)
+  note       String?  @db.Text
+  reviewedBy String   @map("reviewed_by") @db.Uuid
+  reviewedAt DateTime @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+
+  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  punch  AttendancePunch @relation(fields: [punchId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, punchId, reviewedAt])
+  @@map("attendance_punch_reviews")
+}
+
+/// Nhân viên xác nhận đã đọc thông báo xử lý dữ liệu vị trí (Luật BVDLCN 91/2025) — chỉ ghi thêm.
+model AttendanceConsent {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  noticeVersion  String   @map("notice_version") @db.VarChar(20)
+  acknowledgedAt DateTime @default(now()) @map("acknowledged_at") @db.Timestamptz(6)
+  ipAddress      String?  @map("ip_address") @db.VarChar(45)
+  userAgent      String?  @map("user_agent") @db.VarChar(500)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, noticeVersion])
+  @@map("attendance_consents")
+}
+
+/// Giải trình / xin chấm bù. Duyệt thì sinh một lần chấm nguồn `bo-sung` (không sửa lần chấm cũ).
+model AttendanceCorrection {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  workDate     DateTime  @map("work_date") @db.Date
+  punchAt      DateTime  @map("punch_at") @db.Timestamptz(6)
+  direction    String    @db.VarChar(5)
+  reason       String    @db.Text
+  /// cho-duyet | da-duyet | tu-choi | da-huy
+  status       String    @default("cho-duyet") @db.VarChar(20)
+  decidedBy    String?   @map("decided_by") @db.Uuid
+  decidedAt    DateTime? @map("decided_at") @db.Timestamptz(6)
+  decisionNote String?   @map("decision_note") @db.Text
+  punchId      String?   @map("punch_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("GiaiTrinhCuaNguoi", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, userId, workDate])
+  @@index([tenantId, status])
+  @@map("attendance_corrections")
+}
+
+/// Loại nghỉ: phép năm, việc riêng có lương, ốm đau, không lương… `uses_balance` = trừ quỹ phép năm.
+model LeaveType {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  code        String   @db.VarChar(30)
+  name        String   @db.VarChar(255)
+  paid        Boolean  @default(true)
+  usesBalance Boolean  @default(false) @map("uses_balance")
+  sortOrder   Int      @default(0) @map("sort_order")
+  status      String   @default("hoat-dong") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requests LeaveRequest[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("leave_types")
+}
+
+/// Dòng KHÓA quỹ phép của (người, năm) — không chứa số dư (số dư tính lúc đọc, NS-31). Duyệt / hủy
+/// đơn trừ quỹ khóa dòng này bằng `khoaChungTu` để hai lần duyệt cùng lúc không tiêu trùng quỹ.
+model LeaveBalance {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  year      Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, year])
+  @@map("leave_balances")
+}
+
+/// Điều chỉnh tay quỹ phép (số dư đầu kỳ khi bắt đầu dùng hệ thống, thưởng, trừ…) — chỉ ghi thêm.
+model LeaveAdjustment {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  year      Int
+  days      Decimal  @db.Decimal(5, 1)
+  reason    String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, year])
+  @@map("leave_adjustments")
+}
+
+/// Đơn nghỉ. `days` = số ngày công bị nghỉ (bỏ ngày nghỉ tuần, ngày lễ), tính lại lúc duyệt.
+model LeaveRequest {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  leaveTypeId  String    @map("leave_type_id") @db.Uuid
+  startDate    DateTime  @map("start_date") @db.Date
+  endDate      DateTime  @map("end_date") @db.Date
+  /// ca-ngay | sang | chieu (nửa ngày chỉ khi một ngày)
+  portion      String    @default("ca-ngay") @db.VarChar(10)
+  days         Decimal   @db.Decimal(5, 1)
+  reason       String    @db.Text
+  /// cho-duyet | da-duyet | tu-choi | da-huy
+  status       String    @default("cho-duyet") @db.VarChar(20)
+  decidedBy    String?   @map("decided_by") @db.Uuid
+  decidedAt    DateTime? @map("decided_at") @db.Timestamptz(6)
+  decisionNote String?   @map("decision_note") @db.Text
+  cancelledBy  String?   @map("cancelled_by") @db.Uuid
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?   @map("cancel_reason") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User      @relation("DonNghiCuaNguoi", fields: [userId], references: [id], onDelete: Restrict)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, userId, startDate])
+  @@index([tenantId, status])
+  @@map("leave_requests")
+}
+
+/// Đơn tăng ca. Giờ tăng ca thật tính từ lần chấm, không vượt `approved_hours` (NS-40).
+model OvertimeRequest {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  workDate      DateTime  @map("work_date") @db.Date
+  expectedHours Decimal   @map("expected_hours") @db.Decimal(4, 2)
+  approvedHours Decimal?  @map("approved_hours") @db.Decimal(4, 2)
+  reason        String    @db.Text
+  /// cho-duyet | da-duyet | tu-choi | da-huy
+  status        String    @default("cho-duyet") @db.VarChar(20)
+  decidedBy     String?   @map("decided_by") @db.Uuid
+  decidedAt     DateTime? @map("decided_at") @db.Timestamptz(6)
+  decisionNote  String?   @map("decision_note") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("DonTangCaCuaNguoi", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, userId, workDate])
+  @@index([tenantId, status])
+  @@map("overtime_requests")
+}
+
+/// Bảng công tháng: `nhap` (HR sinh, nhân viên phản hồi) → `da-khoa` (bất biến, trigger chặn).
+model Timesheet {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  year             Int
+  month            Int
+  status           String    @default("nhap") @db.VarChar(20)
+  generatedAt      DateTime  @map("generated_at") @db.Timestamptz(6)
+  generatedBy      String?   @map("generated_by") @db.Uuid
+  feedbackDeadline DateTime  @map("feedback_deadline") @db.Timestamptz(6)
+  lockedAt         DateTime? @map("locked_at") @db.Timestamptz(6)
+  lockedBy         String?   @map("locked_by") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rows     TimesheetRow[]
+  feedback TimesheetFeedback[]
+
+  @@unique([tenantId, year, month])
+  @@map("timesheets")
+}
+
+/// Một ngày công của một người trong bảng công. `is_adjustment` = dòng điều chỉnh cho ngày thuộc
+/// kỳ đã khóa (giá trị là CHÊNH LỆCH so với số đã khóa), NS-53.
+model TimesheetRow {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  timesheetId    String    @map("timesheet_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  workDate       DateTime  @map("work_date") @db.Date
+  isAdjustment   Boolean   @default(false) @map("is_adjustment")
+  /// thuong | nghi-tuan | le
+  dayType        String    @map("day_type") @db.VarChar(20)
+  expectedValue  Decimal   @default(0) @map("expected_value") @db.Decimal(3, 1)
+  firstIn        DateTime? @map("first_in") @db.Timestamptz(6)
+  lastOut        DateTime? @map("last_out") @db.Timestamptz(6)
+  sources        Json      @default("[]")
+  workValue      Decimal   @default(0) @map("work_value") @db.Decimal(3, 1)
+  lateMinutes    Int       @default(0) @map("late_minutes")
+  earlyMinutes   Int       @default(0) @map("early_minutes")
+  leaveTypeCode  String?   @map("leave_type_code") @db.VarChar(30)
+  leaveDays      Decimal   @default(0) @map("leave_days") @db.Decimal(3, 1)
+  leavePaid      Boolean   @default(false) @map("leave_paid")
+  otMinutes      Int       @default(0) @map("ot_minutes")
+  otNightMinutes Int       @default(0) @map("ot_night_minutes")
+  flags          Json      @default("[]")
+  note           String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  timesheet Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Restrict)
+  user      User      @relation("DongCongCuaNguoi", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([timesheetId, userId, workDate, isAdjustment])
+  @@index([tenantId, userId, workDate])
+  @@map("timesheet_rows")
+}
+
+/// Phản hồi của nhân viên về bảng công nháp, trong hạn `cham_cong.han_phan_hoi_ngay`.
+model TimesheetFeedback {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  timesheetId String    @map("timesheet_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  workDate    DateTime? @map("work_date") @db.Date
+  content     String    @db.Text
+  /// mo | da-giai-quyet
+  status      String    @default("mo") @db.VarChar(20)
+  resolution  String?   @db.Text
+  resolvedBy  String?   @map("resolved_by") @db.Uuid
+  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  timesheet Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Restrict)
+  user      User      @relation("PhanHoiCongCuaNguoi", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, timesheetId, status])
+  @@map("timesheet_feedback")
 }

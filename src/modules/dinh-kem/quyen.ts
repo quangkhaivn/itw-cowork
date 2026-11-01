@@ -4,6 +4,7 @@ import { dieuKienXemHoaDonMua } from "@/modules/cong-no-tra/service";
 import { dieuKienXemDon } from "@/modules/don-hang/service";
 import { dieuKienXemPhieu } from "@/modules/ho-tro/service";
 import { dieuKienXemViec } from "@/modules/cong-viec/service";
+import { dieuKienXemHopDong } from "@/modules/nhan-su/service";
 import { dieuKienXemTraHangBan, dieuKienXemTraHangMua } from "@/modules/tra-hang/service";
 import type { LoaiDoiTuong } from "./tinh-toan";
 
@@ -49,6 +50,11 @@ async function coTrongPhamVi(nc: NguCanh, loai: LoaiDoiTuong, id: string): Promi
       const n = await nc.tx.task.count({ where: { AND: [{ id }, await dieuKienXemViec(nc)] } });
       return n > 0;
     }
+    case "employment_contract": {
+      // 0.19.0 (NS-03): hợp đồng lao động — theo phạm vi nhan_su.view của người có hợp đồng.
+      const n = await nc.tx.employmentContract.count({ where: { AND: [{ id }, await dieuKienXemHopDong(nc)] } });
+      return n > 0;
+    }
     case "stock_transfer": {
       // Kho là tài sản dùng chung, không chia phạm vi theo người (QĐ-18).
       const n = await nc.tx.stockTransfer.count({ where: { id } });
@@ -66,6 +72,7 @@ const QUYEN_XEM: Record<LoaiDoiTuong, string[]> = {
   sales_order: ["order.view"],
   support_ticket: ["service_desk.view"],
   task: ["task.view"],
+  employment_contract: ["nhan_su.view"],
 };
 
 /** Mã quyền cần có để **đính kèm hoặc gỡ** tệp của từng loại. */
@@ -77,6 +84,7 @@ const QUYEN_SUA: Record<LoaiDoiTuong, string[]> = {
   sales_order: ["order.update"],
   support_ticket: ["service_desk.update"],
   task: ["task.update"],
+  employment_contract: ["nhan_su.update"],
 };
 
 export async function duocXemChungTu(nc: NguCanh, loai: LoaiDoiTuong, id: string): Promise<boolean> {
