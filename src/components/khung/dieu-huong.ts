@@ -66,7 +66,15 @@ export type BieuTuong =
   | "ket-noi-email"
   | "bao-mat"
   // 0.18.0
-  | "so-dong-y";
+  | "so-dong-y"
+  // 0.19.0 — Nhân sự, chấm công
+  | "cham-cong"
+  | "truc-tiep"
+  | "don-tu"
+  | "bang-cong"
+  | "nhan-su"
+  | "may-cham-cong"
+  | "thiet-lap";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -203,6 +211,19 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
   {
     nhan: "Công việc",
     muc: [{ nhan: "Công việc", href: "/cong-viec", quyen: "task.view", bieuTuong: "cong-viec", tuKhoa: "task viec can lam qua han activity" }],
+  },
+  {
+    // 0.19.0 — Nhân sự giai đoạn 1 (BUSINESS_RULES mục 30).
+    nhan: "Nhân sự",
+    muc: [
+      { nhan: "Chấm công", href: "/cham-cong", quyen: "cham_cong.create", bieuTuong: "cham-cong", tuKhoa: "cham cong vao ca ra ca gps dien thoai" },
+      { nhan: "Bảng chấm công trực tiếp", href: "/cham-cong/truc-tiep", quyen: "cham_cong.view", bieuTuong: "truc-tiep", tuKhoa: "realtime ai da den di muon chua den hien truong may van tay" },
+      { nhan: "Đơn từ (phép, tăng ca, giải trình)", href: "/cham-cong/don-tu", quyen: "cham_cong.view", bieuTuong: "don-tu", tuKhoa: "nghi phep tang ca giai trinh cham bu duyet don lich nghi so du phep" },
+      { nhan: "Bảng công tháng", href: "/cham-cong/bang-cong", quyen: "cham_cong.view", bieuTuong: "bang-cong", tuKhoa: "bang cong thang tinh luong khoa xuat csv phan hoi" },
+      { nhan: "Hồ sơ nhân sự", href: "/nhan-su/ho-so", quyen: "nhan_su.view", bieuTuong: "nhan-su", tuKhoa: "ho so nhan vien thuc tap hop dong lao dong ma cham cong pin" },
+      { nhan: "Máy chấm công", href: "/nhan-su/may-cham-cong", quyen: "nhan_su.view", bieuTuong: "may-cham-cong", tuKhoa: "zkteco van tay adms iclock sn pin chua khop nhap csv" },
+      { nhan: "Thiết lập chấm công", href: "/nhan-su/thiet-lap", quyen: "nhan_su.view", bieuTuong: "thiet-lap", tuKhoa: "dia diem ban kinh ca lam lich tuan ngay le loai nghi" },
+    ],
   },
   {
     nhan: "Trợ lý",

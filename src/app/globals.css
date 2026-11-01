@@ -938,3 +938,25 @@ table.tong-itw .bang-chu td { text-align: left; font-style: italic; font-weight:
   .thong-tin-itw > span:nth-child(n) { text-align: left; }
   table.tong-itw { min-width: 0; width: 100%; }
 }
+
+/* ---------------------------------------------------------------------------
+   0.19.0 — Chấm công (trang điện thoại trước: nút lớn, chữ to)
+   --------------------------------------------------------------------------- */
+.cham-cong-nut { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 4px; }
+.cham-cong-nut .nut { min-height: 88px; font-size: 20px; font-weight: 700; border-radius: 14px; flex-direction: column; gap: 4px; }
+.cham-cong-nut .nut small { font-size: 12px; font-weight: 500; opacity: .85; }
+.cham-cong-nut .nut.ra { background: var(--tot); border-color: var(--tot); color: #fff; }
+.cham-cong-gio { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+.ds-lan-cham { list-style: none; margin: 0; padding: 0; }
+.ds-lan-cham li { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--vien); flex-wrap: wrap; }
+.ds-lan-cham li:last-child { border-bottom: 0; }
+.bang-truc-tiep td, .bang-truc-tiep th { white-space: nowrap; }
+.lich-nghi { border-collapse: collapse; font-size: 12px; }
+.lich-nghi th, .lich-nghi td { border: 1px solid var(--vien); padding: 2px 4px; text-align: center; min-width: 22px; }
+.lich-nghi td.nghi { background: var(--canh-bao-nhat); }
+.lich-nghi td.cho { background: var(--chinh-nhat); }
+.lich-nghi td.ten { text-align: left; white-space: nowrap; }
+@media (max-width: 600px) {
+  .cham-cong-nut .nut { min-height: 104px; font-size: 22px; }
+  .cham-cong-gio { font-size: 48px; }
+}

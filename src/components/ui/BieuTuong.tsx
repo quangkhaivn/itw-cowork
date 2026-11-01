@@ -4,6 +4,14 @@
  */
 
 const DUONG_VE: Record<string, string> = {
+  // 0.19.0 — nhân sự, chấm công
+  "cham-cong": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2",
+  "truc-tiep": "M22 12h-4l-3 9L9 3l-3 9H2M12 2v2",
+  "don-tu": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 15l2 2 4-4",
+  "bang-cong": "M3 4h18v16H3zM3 10h18M9 4v16M15 4v16",
+  "nhan-su": "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1",
+  "may-cham-cong": "M5 3h14v18H5zM9 7h6M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
+  "thiet-lap": "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6",
   // 0.16.0 — email marketing, xác thực 2 lớp
   email: "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6",
   "mau-email": "M4 4h16v16H4zM4 9h16M9 9v11",
