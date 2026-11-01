@@ -2,6 +2,29 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.19.0 (chưa phát hành) — Nhân sự, giai đoạn 1: chấm công
+
+**Chưa triển khai lên máy thật.** Một migration mới (`20261102090001_nhan_su_cham_cong`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm mới + quyền EXECUTE hàm `tra_may_cham_cong`), chạy seed (cấp quyền `cham_cong.*` / `nhan_su.*`, tạo vai trò Nhân sự (HR) và Thực tập sinh, 4 loại nghỉ). **nginx máy chủ phải mở HTTP cho riêng `/iclock/`** nếu máy vân tay không hỗ trợ HTTPS (DEPLOYMENT.md). Chấm GPS cần Cowork chạy HTTPS.
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 30 (NS-01 → NS-62). Quyết định QĐ-100 → QĐ-109. Hướng dẫn cho Nhân sự: `docs/HUONG-DAN-CHAM-CONG.md`.
+
+### Thêm
+- **Chấm công GPS** (Nhân sự → Chấm công): trang cho điện thoại, hai nút lớn Vào ca / Ra ca; trong bán kính địa điểm → hợp lệ, ngoài vùng nhưng đang có phiếu hỗ trợ → hiện trường, còn lại → ngoài vùng chờ quản lý xem xét; cờ độ chính xác thấp / tốc độ bất thường / không lấy được vị trí; chống bấm trùng; giờ chấm là giờ máy chủ; lần đầu phải xác nhận thông báo dữ liệu vị trí (Luật 91/2025).
+- **Máy chấm công vân tay ZKTeco (ADMS / PUSH)**: máy gửi thẳng về `/iclock/*`; đăng ký máy theo số sê-ri + địa điểm, IP cho phép (tùy chọn); nhận dữ liệu tức thì, không nhân đôi khi máy gửi lại; PIN chưa gán vẫn lưu, gán sau thì áp lại; trạng thái trực tuyến / mất kết nối; **nhập CSV** dự phòng.
+- **Bảng chấm công trực tiếp**: đã vào ca, đi muộn, chưa đến, nghỉ phép, hiện trường, đã ra ca — tự làm mới 10 giây, lọc phòng ban / địa điểm, "Xem trên bản đồ", hàng chờ xem xét, trạng thái máy. Nhân viên thấy mình, trưởng phòng thấy nhóm / phòng, Nhân sự thấy cả công ty.
+- **Đơn từ**: giải trình / chấm bù (duyệt → lần chấm bổ sung), nghỉ phép cả ngày / nửa ngày (quỹ phép năm, thâm niên, tích lũy theo tháng, chuyển năm sau, điều chỉnh tay), tăng ca (giờ thực tế từ lần chấm, tối đa giờ duyệt, phân loại ngày thường / nghỉ tuần / lễ, tách giờ đêm, cảnh báo trần tháng / năm); lịch nghỉ của nhóm.
+- **Bảng công tháng**: Nhân sự sinh nháp → nhân viên phản hồi trong hạn → giải quyết → khóa (bất biến); sửa sau khóa thành dòng điều chỉnh ở kỳ sau; xuất CSV tổng hợp / chi tiết.
+- **Nhắc việc** (mỗi phút): chưa chấm vào ca sau 15 phút → báo nhân viên + quản lý trực tiếp (không nhắc ngày lễ, ngày nghỉ, ngày nghỉ phép); máy mất kết nối > 10 phút → báo Nhân sự.
+- **Hồ sơ nhân sự mở rộng**: loại nhân sự (chính thức, thử việc, thực tập, cộng tác viên), mã chấm công, địa điểm mặc định, thông tin sinh viên thực tập, hợp đồng lao động + tệp đính kèm. **Thiết lập**: địa điểm, ca (kể cả ca qua đêm), lịch tuần (vd sáng thứ Bảy), gán lịch từ ngày, ngày lễ theo năm, loại nghỉ.
+- Quyền mới `cham_cong.*`, `nhan_su.*`; vai trò **Nhân sự (HR)**, **Thực tập sinh**; mọi vai trò có quyền tự chấm công + xem của mình; trưởng phòng duyệt theo nhóm. Cấu hình mới nhóm *Chấm công* và *Nghỉ phép* (21 khóa, mặc định ghi rõ).
+
+### Thay đổi đáng lưu ý
+- Seed hỗ trợ phạm vi riêng theo mã quyền cho vai trò dựng sẵn (`phamViRieng`) — nhân viên kho / kế toán / mua hàng (phạm vi "toàn công ty" ở phân hệ của mình) chỉ xem chấm công của chính mình.
+- `proxy.ts` mở tiền tố `/iclock` (không cần phiên); `attachments` nhận loại `employment_contract`.
+
+### Kiểm thử
+- `thu/don-vi/cham-cong.test.ts` (53 bài: haversine, ca qua đêm / nửa ca, đi muộn, tăng ca, quỹ phép, bảng công, ADMS, CSV, quyền); `npm run thu:cham-cong` (110 kiểm tra, nối vào `thu:tich-hop`).
+
 ## 0.18.0 (chưa phát hành) — Email marketing, giai đoạn 1: gửi số lượng lớn
 
 **Chưa triển khai lên máy thật.** Một migration mới (`20261025090001_email_gui_lon`, có chuyển dữ liệu cũ vào sổ đồng ý), chạy lại `prisma/rls.sql` như mọi lần (sổ đồng ý + nhật ký SNS vào nhóm bảng chỉ-ghi-thêm). Không có biến môi trường mới, không thêm mã quyền, không thêm thư viện.

@@ -53,11 +53,14 @@ export default function BangTrucTiep({ phongBan, diaDiem }: { phongBan: { id: st
   }, [loc]);
 
   useEffect(() => {
-    void tai();
+    const dau = setTimeout(() => void tai(), 0);
     const t = setInterval(() => {
       if (document.visibilityState === "visible") void tai();
     }, 10_000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(dau);
+      clearInterval(t);
+    };
   }, [tai]);
 
   async function xemXet(id: string, quyetDinh: "chap-nhan" | "tu-choi") {

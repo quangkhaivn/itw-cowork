@@ -640,3 +640,97 @@ Mục tiêu: gửi được hàng chục nghìn thư quảng cáo mỗi tháng (
 Ngưỡng ở Cấu hình (nhóm *Email marketing*): `email.nguong_hong_phan_tram` (5), `email.nguong_bao_rac_phan_nghin` (1), `email.mau_toi_thieu_danh_gia` (200), `email.bat_buoc_dong_y` (1), `email.toi_da_thu_moi_dia_chi_24h` (3, tối đa 3), `email.khoi_dong_ngay_bat_dau` (chưa đặt), `email.khoi_dong_muc_dau` (200), `email.khoi_dong_he_so` (1,3). Mọi giá trị trong ngoặc là **mặc định** khi chưa đặt, màn hình ghi rõ "mặc định".
 
 **Chưa làm ở phần này (giai đoạn sau)**: thư giao dịch khác (xác nhận đăng ký kép — double opt-in), ngưỡng riêng theo tên miền nhận, tự gỡ chặn email hỏng sau thời gian, nhận sự kiện Open / Click của SES (đang dùng điểm ảnh / chuyển hướng của Cowork — EM-11), gửi theo IP riêng (dedicated IP).
+
+## 30. Nhân sự – chấm công, nghỉ phép, tăng ca (0.19.0)
+
+Giai đoạn 1 của phân hệ Nhân sự (Giám đốc duyệt 01/11/2026). Chấm công bằng **đúng hai cách**: (1) máy chấm công vân tay ZKTeco gửi về qua giao thức ADMS / PUSH, (2) bấm Vào ca / Ra ca bằng GPS ngay trên Cowork. Quản lý xem trạng thái gần thời gian thực. Sinh viên thực tập là một **loại nhân sự** (phiếu đánh giá thực tập là giai đoạn 2). Quyết định QĐ-100 → QĐ-109. Hướng dẫn vận hành cho Nhân sự: `docs/HUONG-DAN-CHAM-CONG.md`.
+
+| Việc | Quyền |
+|---|---|
+| Tự chấm công GPS, xác nhận thông báo vị trí, gửi đơn (nghỉ, tăng ca, giải trình), phản hồi bảng công của mình | `cham_cong.create` |
+| Xem chấm công / đơn / bảng công / bảng trực tiếp | `cham_cong.view` — phạm vi: nhân viên `own`, trưởng phòng `team` / `department`, Nhân sự + Giám đốc `all`; quản lý trực tiếp luôn thấy cấp dưới trực tiếp |
+| Duyệt đơn, xem xét lần chấm bị gắn cờ | quản lý trực tiếp (`staff_profiles.manager_id`) **hoặc** `cham_cong.approve` trong phạm vi |
+| Sinh / sinh lại / khóa bảng công, giải quyết phản hồi, nhập CSV lần chấm | `cham_cong.update` (Nhân sự) |
+| Xuất CSV bảng công | `cham_cong.export` |
+| Hồ sơ nhân sự, địa điểm, ca, lịch, ngày lễ, loại nghỉ, máy chấm công, PIN chưa khớp, điều chỉnh quỹ phép | `nhan_su.view` / `create` / `update` |
+| Máy chấm công gọi `/iclock/*` | Không đăng nhập — số sê-ri (SN) đã đăng ký + danh sách IP (tùy chọn) |
+
+Vai trò mới: **Nhân sự (HR)** (`nhan-su`: chấm công + nhân sự toàn công ty, công việc của mình, không có khách hàng / giá / tài chính) và **Thực tập sinh** (`thuc-tap-sinh`: công việc của mình + chấm công của mình). Mọi vai trò dựng sẵn (trừ Trợ lý AI) được `cham_cong.view` + `cham_cong.create` phạm vi `own`; trưởng phòng thêm `cham_cong.approve` theo phạm vi vai trò (Trưởng phòng Marketing: `team`). Trợ lý AI **không** có quyền chấm công (dữ liệu vị trí). Seed cấp mã quyền mới cho vai trò đã có trên máy thật (QĐ-10), không đè chỉnh sửa trên màn hình Vai trò.
+
+### Hồ sơ và thiết lập
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| NS-01 | Loại nhân sự: `chinh-thuc`, `thu-viec`, `thuc-tap`, `cong-tac-vien`. Thông tin thực tập (trường, khoa, MSSV, giảng viên hướng dẫn, người hướng dẫn tại công ty, thời gian) chỉ nhập cho loại `thuc-tap`; người hướng dẫn phải là người khác đang hoạt động | [CSDL] CHECK · [SV] · [TH] |
+| NS-02 | **Mã chấm công** (PIN khai trên máy vân tay): 1–20 chữ / số, **duy nhất trong doanh nghiệp** | [CSDL] duy nhất `(tenant_id, attendance_pin)` + CHECK · [SV] · [TH] |
+| NS-03 | Hợp đồng lao động: loại, từ ngày, đến ngày (≥ từ ngày, trống = không thời hạn), ghi chú, trạng thái; tệp hợp đồng đính kèm theo mục 20 (loại `employment_contract`, quyền mượn `nhan_su.view` / `nhan_su.update` + phạm vi) | [CSDL] CHECK · [SV] DK-01 |
+| NS-04 | Thực tập sinh không có quyền khách hàng, giá, đơn hàng, tài chính | seed · [ĐV] · [TH] |
+| NS-05 | Địa điểm làm việc: toạ độ hợp lệ, bán kính GPS 10 m – 5 km; trống = `cham_cong.ban_kinh_mac_dinh_m` (mặc định 150 m). Ngừng địa điểm còn máy chấm công hoạt động → chặn | [CSDL] CHECK · [SV] |
+| NS-06 | Ca làm: giờ vào / ra theo phút trong ngày (giờ Việt Nam); **ca qua đêm** khi giờ ra < giờ vào (CHECK giữ cờ `overnight` khớp); nghỉ giữa ca (giờ bắt đầu + số phút, ngắn hơn cả ca); phút cho phép đi muộn / về sớm riêng của ca, trống = mặc định Cấu hình | [CSDL] CHECK · [SV] · [ĐV] |
+| NS-07 | Lịch tuần: một ca + 7 ô (thứ Hai → Chủ nhật), mỗi ô `ca` / `sang` / `chieu` / `nghi` (vd thứ Bảy làm sáng). Gán lịch cho người **từ một ngày**; lịch áp cho ngày D = lần gán có ngày bắt đầu lớn nhất ≤ D | [CSDL] CHECK `days <@ …` · [SV] |
+| NS-08 | **Công dự kiến**: `ca` = 1, `sang` / `chieu` = 0,5 (cắt ở giờ nghỉ giữa ca; không khai giờ nghỉ thì chia đôi phần làm), `nghi` / ngày lễ / chưa gán lịch = 0. **Công thực tế**: có giờ vào và giờ ra (hai lần chấm cách nhau ≥ 1 phút) → đủ phần phải làm (trừ phần nghỉ phép đã duyệt); chỉ một lần chấm → 0 công + cờ thiếu giờ ra / vào (giải trình để chấm bù); không chấm → 0 + cờ vắng mặt. **Đi muộn / về sớm**: trong phút cho phép → 0, vượt → tính **toàn bộ** số phút; **không tự trừ công** (số phút đưa sang tính lương theo quy chế) | [SV] hàm thuần `congDuKien`, `tinhCongNgay` · [ĐV] · [TH] |
+| NS-09 | **Ghép lần chấm vào ngày công**: thuộc ngày có khung ca [vào − `cham_cong.cua_so_truoc_ca_phut`, ra + `cham_cong.cua_so_sau_ca_phut`] chứa nó (nhiều khung → ca gần nhất); không khung nào → ngày lịch của chính nó. Ca 22:00 → 06:00: lần ra 06:05 sáng hôm sau thuộc ngày bắt đầu ca | [SV] hàm thuần `ganNgayCong` · [ĐV] |
+
+### Lần chấm công
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| NS-10 | **Lần chấm chỉ ghi thêm**, mọi nguồn (`van-tay`, `gps`, `bo-sung`, `nhap-csv`): không sửa, không xóa, kể cả vai chủ sở hữu. Ngoại lệ duy nhất: gán người cho dòng PIN chưa khớp (`user_id` NULL → có giá trị + `matched_at`, mọi cột khác giữ nguyên). Ứng dụng không có quyền DELETE | [CSDL] trigger `chan_sua_lan_cham` + REVOKE · [TH] |
+| NS-11 | **Chấm GPS**: trình duyệt gửi vĩ độ, kinh độ, độ chính xác, giờ điện thoại; **giờ chấm = giờ máy chủ** (giờ điện thoại chỉ lưu tham khảo). Trong bán kính một địa điểm đang hoạt động (khoảng cách haversine) → `hop-le`; ngoài vùng nhưng hôm nay đang có **phiếu hỗ trợ giao cho mình** (Mới / Đang xử lý / Chờ khách, hoặc xong hôm nay) → `hien-truong` gắn phiếu (không dịch địa chỉ — quản lý xem lại); còn lại → `ngoai-vung`. Ghi IP + trình duyệt. Mỗi lần chấm có đường "Xem trên bản đồ" (Google Maps theo toạ độ, không nhúng thư viện bản đồ) | [CSDL] CHECK · [SV] hàm thuần `danhGiaViTri` · [ĐV] · [TH] |
+| NS-12 | **Cờ**: độ chính xác kém hơn `cham_cong.do_chinh_xac_toi_da_m` (mặc định 100 m) hoặc không báo; **tốc độ bất thường** — từ lần chấm có toạ độ trước đó (GPS, hoặc địa điểm đặt máy vân tay) phải đi nhanh hơn `cham_cong.toc_do_toi_da_kmh` (mặc định 120 km/h, đã trừ sai số hai điểm); **không lấy được vị trí** (từ chối quyền, máy không hỗ trợ, hết giờ) → vẫn ghi `ngoai-vung`. Có cờ hoặc không `hop-le` → cần xem xét, báo quản lý trực tiếp ngay. Quản lý (quản lý trực tiếp / phạm vi duyệt, không tự xem xét) **chấp nhận** hoặc **không chấp nhận** (bắt buộc lý do) — quyết định chỉ ghi thêm, mới nhất có hiệu lực. **Tính công**: không chấp nhận → không tính; `ngoai-vung` → chỉ tính khi đã chấp nhận; còn lại tính ngay | [SV] `duocTinhCong` · [ĐV] · [TH] |
+| NS-13 | **Bấm trùng** trong `cham_cong.chong_bam_trung_giay` (mặc định 60) giây → không ghi thêm, trả lại lần trước (khóa tư vấn theo người, hai lần bấm cùng lúc xếp hàng). Trần kỹ thuật 10 lần / phút / người → 429 | [SV] · [ĐV] · [TH] |
+| NS-14 | **Máy vân tay (ADMS / PUSH)**: `/iclock/cdata` (GET bắt tay, POST `table=ATTLOG` / OPERLOG / bảng khác), `/iclock/getrequest`, `/iclock/devicecmd` (nhận cả đuôi `.aspx`), trả văn bản thuần. Máy nhận ra bằng **SN đã đăng ký**, SN **duy nhất toàn hệ thống** (doanh nghiệp khác không đăng ký trùng; báo lỗi không lộ doanh nghiệp nào giữ); SN lạ → 401 + nhật ký máy chủ; IP ngoài danh sách cho phép (nếu khai) → 403; trần 120 yêu cầu / phút / SN, 600 / phút / IP; thân ≤ 2 MB. Giờ trên máy là **giờ Việt Nam** → đổi UTC. **Chống trùng** (máy, PIN, giờ): máy gửi lại cả lô không nhân đôi. Dòng hỏng không làm hỏng lô (trả `OK: <số dòng đã xử lý>` để máy không gửi lại mãi); giờ máy đi trước giờ máy chủ > 60 phút → cờ giờ máy lệch | [CSDL] duy nhất + hàm `tra_may_cham_cong` · [SV] · [ĐV] · [TH] |
+| NS-15 | **PIN chưa khớp** người: vẫn ghi lần chấm (`user_id` trống). Nhân sự gán PIN cho người (hoặc đặt mã chấm công ở hồ sơ) → mọi lần chấm cũ mang PIN đó được gán cho người đó | [SV] `apDungPinChuaKhop` · [TH] |
+| NS-16 | **Nhập CSV dự phòng** (`cham_cong.update`): cột Mã chấm công + Thời gian (hoặc Ngày + Giờ), giờ Việt Nam; xem trước rồi ghi; cùng PIN + cùng giờ không nhập hai lần; tối đa 20.000 dòng / tệp | [CSDL] chỉ mục duy nhất riêng phần · [SV] · [ĐV] · [TH] |
+| NS-17 | **Nhịp sống máy**: mọi yêu cầu của máy đã đăng ký cập nhật lần cuối + IP + thông tin máy (`INFO`). Im lặng quá `cham_cong.may_mat_ket_noi_phut` (mặc định 10) phút → báo người có `nhan_su.update`, **một lần mỗi đợt im lặng**; máy gọi lại thì xóa mốc | [SV] worker · [TH] |
+| NS-18 | **Thông báo xử lý dữ liệu vị trí** (Luật BVDLCN 91/2025): lần đầu chấm GPS phải đọc và xác nhận; chỉ lấy vị trí lúc bấm; xác nhận lưu **chỉ ghi thêm** kèm phiên bản thông báo, IP, trình duyệt. Đổi nội dung → tăng phiên bản → xác nhận lại. Chưa xác nhận → chặn chấm GPS (máy vân tay không bị ảnh hưởng) | [CSDL] trigger chỉ ghi thêm · [SV] · [TH] |
+| NS-19 | Geolocation chỉ chạy trên **HTTPS**; trang báo rõ khi mở qua HTTP | giao diện |
+
+### Đơn từ
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| NS-20 | **Giải trình / chấm bù**: ngày công + giờ (ca qua đêm chọn "sáng hôm sau") + vào / ra + lý do ≥ 5 ký tự; không xin cho thời điểm chưa tới; một đơn chờ cho mỗi (ngày, chiều). **Duyệt → sinh một lần chấm nguồn `bo-sung`** gắn đơn (không bao giờ sửa lần chấm máy / GPS) | [CSDL] CHECK + duy nhất `correction_id` · [SV] · [TH] |
+| NS-21 | **Ai duyệt**: quản lý trực tiếp, hoặc người có `cham_cong.approve` mà người xin nằm trong phạm vi. Không tự duyệt (trừ phạm vi duyệt `all`, như BG-05). Từ chối bắt buộc lý do. Khóa dòng đơn trước khi đọc: duyệt lần hai → 409 | [SV] `kiemDuocDuyet` + `khoaChungTu` · [TH] |
+
+### Nghỉ phép
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| NS-30 | Loại nghỉ cấu hình được (phép năm, việc riêng có lương, ốm đau, không lương… — seed 4 loại, chỉ thêm loại còn thiếu): cờ **có lương**, cờ **trừ phép năm**. Không đổi "trừ phép năm" khi loại đã có đơn được duyệt | [SV] · seed |
+| NS-31 | **Quỹ phép năm** = `nghi_phep.so_ngay_nam` (12) + ⌊năm thâm niên tính tới 01/01 ÷ `nghi_phep.tham_nien_so_nam` (5)⌋ × `nghi_phep.tham_nien_cong_ngay` (1); vào làm giữa năm chia theo tháng còn lại. `nghi_phep.cong_don_theo_thang` = 1 → dùng được tới phần tích lũy theo tháng. **Không lưu số dư**: tính lúc đọc từ Cấu hình + ngày vào làm + điều chỉnh + đơn đã duyệt. Làm tròn xuống 0,5 | [SV] hàm thuần · [ĐV] · [TH] |
+| NS-32 | Phép năm trước còn thừa chuyển sang tối đa `nghi_phep.chuyen_nam_sau_toi_da` (0 = không chuyển). **Điều chỉnh tay** (số dư đầu kỳ, thưởng, trừ) chỉ ghi thêm, bắt buộc lý do | [CSDL] trigger chỉ ghi thêm + CHECK · [SV] · [TH] |
+| NS-33 | Đơn nghỉ cả ngày (một / nhiều ngày) hoặc **nửa ngày** sáng / chiều (một ngày). Số ngày = công dự kiến theo lịch của người xin (ngày nghỉ tuần, ngày lễ không tính); 0 ngày → chặn. Không chồng đơn khác đang chờ / đã duyệt (sáng + chiều cùng ngày thì được). Đơn qua năm mới phải tách. Loại trừ phép năm: vượt phần còn được dùng (đã trừ đơn đang chờ) → chặn khi gửi | [CSDL] CHECK · [SV] · [ĐV] · [TH] |
+| NS-34 | **Duyệt**: khóa đơn → tính lại số ngày → (loại trừ phép) **khóa dòng quỹ phép** `leave_balances` (người, năm) → đọc lại số dư → vượt thì chặn. Hai lần duyệt cùng lúc không thể tiêu trùng một ngày phép | [SV] `khoaChungTu` · [TH] (hai giao dịch song song; gỡ khóa thì bài thử hỏng) |
+| NS-35 | **Hủy**: người xin hủy đơn còn chờ; đơn đã duyệt do quản lý trực tiếp / người duyệt được hủy, **bắt buộc lý do**, ngày phép trả về quỹ. Lịch nghỉ tháng của nhóm theo phạm vi xem | [CSDL] CHECK · [SV] · [TH] |
+
+### Tăng ca
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| NS-40 | Đơn tăng ca: ngày, số giờ dự kiến (0 – 24), lý do; một đơn chờ / đã duyệt mỗi ngày. Duyệt được ít hơn số giờ xin, không nhiều hơn | [CSDL] CHECK · [SV] · [TH] |
+| NS-41 | **Giờ tăng ca thực tế** tính từ lần chấm: ngày thường có ca → phần **sau giờ ra ca** (đến sớm không tính); ngày nghỉ tuần / lễ / không có ca → cả khoảng vào → ra (trừ nghỉ giữa ca nếu phủ trọn). Chỉ tính khi có đơn **đã duyệt**, tối đa đúng số giờ duyệt (cắt từ đầu khoảng làm thêm) | [SV] hàm thuần `tinhTangCa` · [ĐV] · [TH] |
+| NS-42 | Phân loại **ngày thường / nghỉ hằng tuần / lễ** theo lịch + ngày lễ; tách **phần giờ đêm** theo `cham_cong.gio_dem_bat_dau` / `gio_dem_ket_thuc` (mặc định 22 → 6) | [SV] · [ĐV] |
+| NS-43 | **Cảnh báo trần**: gửi / duyệt mà tổng giờ duyệt trong tháng / năm vượt `cham_cong.tang_ca_toi_da_thang` / `_nam` → cảnh báo "vượt", đạt `cham_cong.tang_ca_canh_bao_phan_tram` (80%) → "sắp chạm". **Chưa đặt trần thì không cảnh báo** — hệ thống không viết cứng con số của luật; Giám đốc đặt theo quy định hiện hành. Cảnh báo, không chặn | [SV] hàm thuần `canhBaoTangCa` · [ĐV] · [TH] |
+
+### Bảng công tháng
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| NS-50 | Nhân sự **sinh bảng công nháp** cho tháng: mỗi người (có lịch hoặc có lần chấm trong tháng; người đã nghỉ việc chỉ khi còn lần chấm) × mỗi ngày cần ghi (có công dự kiến, có chấm, có nghỉ): vào đầu / ra cuối (gộp mọi nguồn), nguồn, công dự kiến / thực tế, phút muộn / sớm, nghỉ (loại, có lương), tăng ca theo loại ngày + giờ đêm, cờ. **Sinh lại** được khi còn nháp (tính lại từ dữ liệu hiện có, phản hồi giữ nguyên, hạn phản hồi tính từ lần sinh đầu). Mỗi người có dòng được báo một lần | [SV] · [TH] |
+| NS-51 | Nhân viên xem **dòng của chính mình** và phản hồi trong `cham_cong.han_phan_hoi_ngay` (mặc định 3) ngày kể từ lần sinh đầu; người không có dòng không phản hồi được; hết hạn → chặn. Nhân sự được báo, giải quyết (bắt buộc nội dung), nhân viên được báo lại | [CSDL] CHECK · [SV] · [TH] |
+| NS-52 | **Khóa**: chỉ khi hết hạn phản hồi và không còn phản hồi chưa giải quyết; khóa rồi **không mở lại**. Bảng đã khóa **bất biến** — trigger chặn sửa / xóa bảng và mọi thêm / sửa / xóa dòng công, phản hồi, kể cả vai chủ sở hữu | [CSDL] trigger `chan_sua_bang_cong_da_khoa` · [SV] · [TH] |
+| NS-53 | **Sửa sau khóa = dòng điều chỉnh ở kỳ sau**: khi sinh tháng M, tính lại các kỳ đã khóa trong 3 tháng trước; ngày nào khác số đã khóa (cộng các dòng điều chỉnh trước đó) thì thêm một **dòng điều chỉnh** (`is_adjustment`, giá trị = chênh lệch, cờ "Điều chỉnh kỳ đã khóa"). Sinh lại tháng M không nhân đôi | [SV] hàm thuần `chenhLechCong` · [ĐV] · [TH] |
+| NS-54 | **Xuất CSV** (`cham_cong.export`) tổng hợp theo người hoặc chi tiết từng ngày cho tính lương / kế toán (BOM UTF-8, chống chèn công thức CSV-01); bản nháp có chữ "NHAP" trong tên tệp | [SV] · [TH] |
+
+### Bảng trực tiếp và nhắc việc
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| NS-60 | **Bảng chấm công trực tiếp**: trạng thái hôm nay từng người (đã vào ca, đi muộn, chưa đến, chưa tới giờ, nghỉ phép, đang ở hiện trường, đã ra ca, không có ca), giờ chấm cuối + nguồn (vân tay / GPS / chấm bù / nhập tệp), "Xem trên bản đồ" cho lần GPS; lọc phòng ban / địa điểm; tự làm mới **mỗi 10 giây**; theo phạm vi `cham_cong.view` (+ cấp dưới trực tiếp). Kèm hàng chờ xem xét (chỉ những lần người xem được duyệt) và trạng thái máy (trực tuyến / mất kết nối, lần cuối) | [SV] · [TH] (ba phạm vi + RLS) |
+| NS-61 | **Nhắc chưa chấm công** (worker mỗi phút): quá giờ vào ca `cham_cong.nhac_chua_cham_sau_phut` (mặc định 15) phút, còn trong giờ ca, chưa có lần chấm nào → báo nhân viên + quản lý trực tiếp, **mỗi người một lần mỗi ngày**. Không nhắc ngày lễ, ngày không có ca, ngày nghỉ phép đã duyệt (nghỉ sáng → tính từ giờ vào nửa chiều) | [SV] · [TH] |
+| NS-62 | Máy mất kết nối: xem NS-17 | |
+
+Ngưỡng ở Cấu hình (nhóm **Chấm công**): `cham_cong.ban_kinh_mac_dinh_m` (150), `cham_cong.do_chinh_xac_toi_da_m` (100), `cham_cong.toc_do_toi_da_kmh` (120), `cham_cong.chong_bam_trung_giay` (60), `cham_cong.di_muon_cho_phep_phut` (5), `cham_cong.ve_som_cho_phep_phut` (5), `cham_cong.cua_so_truoc_ca_phut` (240), `cham_cong.cua_so_sau_ca_phut` (480), `cham_cong.nhac_chua_cham_sau_phut` (15), `cham_cong.may_mat_ket_noi_phut` (10), `cham_cong.han_phan_hoi_ngay` (3), `cham_cong.gio_dem_bat_dau` (22), `cham_cong.gio_dem_ket_thuc` (6), `cham_cong.tang_ca_toi_da_thang` (chưa đặt), `cham_cong.tang_ca_toi_da_nam` (chưa đặt), `cham_cong.tang_ca_canh_bao_phan_tram` (80); nhóm **Nghỉ phép**: `nghi_phep.so_ngay_nam` (12), `nghi_phep.tham_nien_so_nam` (5), `nghi_phep.tham_nien_cong_ngay` (1), `nghi_phep.cong_don_theo_thang` (1), `nghi_phep.chuyen_nam_sau_toi_da` (0). Giá trị trong ngoặc là **mặc định** khi chưa đặt, màn hình ghi rõ "mặc định".
+
+**Chưa làm ở giai đoạn này**: phiếu đánh giá thực tập (giai đoạn 2), tính lương, gửi lệnh xuống máy (đẩy người dùng / vân tay, đồng bộ giờ), ảnh chấm công / nhận diện khuôn mặt, dịch địa chỉ từ toạ độ, đổi ca / đăng ký ca linh hoạt, nghỉ bù, chế độ thai sản.

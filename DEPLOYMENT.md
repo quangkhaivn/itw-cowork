@@ -1,6 +1,6 @@
 # Triển khai — TGTH Business Cowork
 
-Cập nhật: 14/10/2026 (0.16.1 — vận hành bền vững: sao lưu ra ngoài máy, thử phục hồi, nhịp worker, giới hạn tốc độ ở nginx).
+Cập nhật: 01/11/2026 (0.19.0 — máy chấm công: HTTP cho riêng `/iclock/`). Trước đó 14/10/2026 (0.16.1 — vận hành bền vững: sao lưu ra ngoài máy, thử phục hồi, nhịp worker, giới hạn tốc độ ở nginx).
 
 ## Môi trường
 
@@ -182,6 +182,43 @@ rclone copy --include 'cowork-<LUC>*' --include 'cowork-dinh-kem-<LUC>*' --inclu
 5. Kiểm: đăng nhập, mở một chứng từ có tệp đính kèm, *Quản trị → Kết nối email → Gửi thư thử* (chứng minh `APP_ENC_KEY` đúng), *Quản trị → Tự động hóa* không còn băng đỏ sau 1–2 phút.
 
 Máy phát triển / bài thử: `SAO_LUU_KHONG_DOCKER=1` cho cả hai script chạy `pg_dump`/`psql` trực tiếp bằng `DATABASE_URL_OWNER` thay vì `docker compose exec db`; `THU_MUC_SAO_LUU`, `THU_MUC_DINH_KEM`, `TEP_ENV` đổi được nơi đọc/ghi.
+
+## Máy chấm công vân tay — HTTP cho riêng `/iclock/` (0.19.0)
+
+Máy ZKTeco gửi dữ liệu theo giao thức ADMS / PUSH tới `http(s)://<máy chủ>:<cổng>/iclock/…` (QĐ-101 → QĐ-103). **Nhiều đời máy chỉ nói HTTP** (không TLS). nginx máy chủ hiện chuyển mọi yêu cầu HTTP sang HTTPS — máy sẽ không theo chuyển hướng và không gửi được. Cách làm: mở HTTP **chỉ cho tiền tố `/iclock/`**, mọi đường khác giữ nguyên chuyển hướng HTTPS (cookie phiên không bao giờ đi qua HTTP).
+
+Trong `/etc/nginx/conf.d/cowork.conf` (nginx máy chủ), khối `server` cổng 80 của tên miền Cowork:
+
+```nginx
+server {
+    listen 80;
+    server_name cowork.itwonline.com;   # tên miền thật của Cowork
+
+    # Máy chấm công vân tay (ADMS/PUSH) — chỉ tiền tố này được đi HTTP.
+    location ^~ /iclock/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;          # BẮT BUỘC ghi đè (giới hạn tốc độ, IP cho phép)
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 4m;
+        proxy_read_timeout 60s;
+    }
+
+    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }   # giữ như hiện có (certbot)
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+```
+
+Rồi `nginx -t && systemctl reload nginx`. Kiểm từ ngoài: `curl -i "http://<tên miền>/iclock/cdata?SN=THU1234&options=all"` → `401 ERROR: UNKNOWN DEVICE` (đúng — SN chưa đăng ký), còn `curl -I http://<tên miền>/` vẫn `301` sang https. nginx trong Docker (`nginx/cowork.conf`) đã có `location ^~ /iclock/` với `limit_req` riêng (300 / phút / IP) và trần thân 4 MB; `proxy.ts` mở `/iclock` không cần phiên.
+
+- Mở cổng 80 trên tường lửa nếu chưa mở (certbot thường đã cần). Máy hỗ trợ HTTPS thì khai cổng 443, không cần khối trên.
+- Máy được nhận ra bằng **số sê-ri đã đăng ký** ở *Nhân sự → Máy chấm công*; SN lạ bị từ chối và ghi một dòng `[cham-cong/adms] Máy chưa đăng ký gọi vào` trong nhật ký app (tối đa một dòng / 10 giây). Nên khai **IP công cộng của văn phòng** vào "Chỉ nhận từ IP".
+- **Phải thử với đúng mẫu máy thật** trước khi dùng (Giám đốc gửi mẫu máy): bắt tay → chấm thử một người → thấy trên *Bảng chấm công trực tiếp* trong vài giây. Lệch giao thức thì sửa ở `src/modules/cham-cong/adms.ts`.
+- **Chấm công GPS cần HTTPS** (trình duyệt chặn Geolocation trên HTTP) — Cowork đã chạy HTTPS qua nginx máy chủ, không cần làm thêm.
 
 ## Chiến lược migration
 

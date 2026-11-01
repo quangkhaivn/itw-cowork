@@ -95,7 +95,6 @@ async function main() {
   await voi(T, hr, (nc) => taoNgayLe(nc, { ngay: "2026-10-20", ten: "Ngày lễ thử" }));
   const PIN_A = "1001";
   const PIN_B = "1002";
-  const PIN_C = "1003";
   await voi(T, hr, (nc) => suaHoSoNhanSu(nc, nvA, LuocDoHoSoNhanSu.parse({ maChamCong: PIN_A, diaDiemMacDinhId: vp.id })));
   await voi(T, hr, (nc) => suaHoSoNhanSu(nc, nvB, LuocDoHoSoNhanSu.parse({ maChamCong: PIN_B })));
   await nemLoi("NS-02: mã chấm công trùng trong doanh nghiệp bị chặn", () => voi(T, hr, (nc) => suaHoSoNhanSu(nc, nvC, LuocDoHoSoNhanSu.parse({ maChamCong: PIN_A }))));

@@ -110,6 +110,29 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `email_sns_messages` | Thông điệp SNS đã nhận (sự kiện SES) | 0.18.0. **Chỉ ghi thêm**. Duy nhất `(tenant_id, sns_message_id)` — gửi lại không xử lý hai lần. `message_type`, `event_type`, `ses_message_id`, `recipient_id`, `result` da-xu-ly / bo-qua / da-xac-nhan |
 | `email_transactionals` | Hàng chờ thư giao dịch — thư xác nhận từ chối (EG-13) | 0.18.0. Duy nhất `(tenant_id, dedupe_key)` (`xac-nhan-tu-choi:<id dòng sổ>`); `status` QUEUED / SENDING / SENT / FAILED (CHECK lý do khi FAILED, `sent_at` khi SENT); `payload` (lúc nhận yêu cầu, lúc ngừng gửi) |
 
+| `work_locations` | Địa điểm làm việc (toạ độ + bán kính GPS) | 0.19.0. Duy nhất `(tenant_id, name)`; CHECK toạ độ, bán kính 10–5000 m hoặc NULL (= mặc định Cấu hình) |
+| `work_shifts` | Ca làm (phút trong ngày, giờ VN) | 0.19.0. CHECK `overnight = (end_minute < start_minute)`, nghỉ giữa ca, phút cho phép muộn / sớm riêng |
+| `work_schedules` | Lịch tuần: ca + 7 ô `ca` / `sang` / `chieu` / `nghi` | 0.19.0. CHECK `days` mảng 7 phần tử trong tập giá trị |
+| `schedule_assignments` | Gán lịch cho người từ một ngày | 0.19.0. Duy nhất `(tenant_id, user_id, effective_from)` |
+| `holidays` | Ngày lễ / nghỉ chung | 0.19.0. Duy nhất `(tenant_id, date)`; ngừng = `status` |
+| `intern_profiles` | Thông tin sinh viên thực tập | 0.19.0. Duy nhất `user_id`; `mentor_id` → users |
+| `employment_contracts` | Hợp đồng lao động cơ bản | 0.19.0. CHECK loại, trạng thái, `end_date ≥ start_date`; tệp ở `attachments` loại `employment_contract` |
+| `attendance_devices` | Máy chấm công vân tay | 0.19.0. **`serial_number` duy nhất toàn hệ thống**; `ip_allowlist text[]`, `last_seen_at`, `attlog_stamp`, `offline_alerted_at`. Hàm `tra_may_cham_cong(sn)` SECURITY DEFINER |
+| `attendance_punches` | Lần chấm (vân tay / GPS / bổ sung / CSV) | 0.19.0. **Chỉ ghi thêm** (trigger `chan_sua_lan_cham`: chỉ cho gán `user_id` NULL → người; ứng dụng không có DELETE). Duy nhất `(tenant_id, device_id, pin, punched_at)`; riêng phần: `(tenant_id, pin, punched_at) WHERE source='nhap-csv'`, `(correction_id)`; CHECK nguồn / kết quả GPS / hiện trường cần phiếu |
+| `attendance_punch_reviews` | Quản lý chấp nhận / không chấp nhận lần chấm bị gắn cờ | 0.19.0. **Chỉ ghi thêm**; quyết định mới nhất có hiệu lực |
+| `attendance_consents` | Xác nhận thông báo dữ liệu vị trí (Luật 91/2025) | 0.19.0. **Chỉ ghi thêm**; `notice_version`, IP, trình duyệt |
+| `attendance_corrections` | Giải trình / xin chấm bù | 0.19.0. CHECK trạng thái, lý do ≥ 5, duyệt phải có `punch_id` |
+| `leave_types` | Loại nghỉ (có lương, trừ phép năm) | 0.19.0. Seed 4 loại, duy nhất `(tenant_id, code)` |
+| `leave_balances` | **Dòng khóa** quỹ phép (người, năm) — không chứa số | 0.19.0. Duy nhất `(tenant_id, user_id, year)` |
+| `leave_adjustments` | Điều chỉnh tay quỹ phép | 0.19.0. **Chỉ ghi thêm**; `days numeric(5,1)` ≠ 0, lý do ≥ 5 |
+| `leave_requests` | Đơn nghỉ cả ngày / nửa ngày | 0.19.0. CHECK nửa ngày chỉ một ngày, `days > 0`, hủy phải có lý do |
+| `overtime_requests` | Đơn tăng ca | 0.19.0. CHECK giờ 0–24, duyệt phải có `approved_hours` |
+| `timesheets` | Bảng công tháng (`nhap` / `da-khoa`) | 0.19.0. Duy nhất `(tenant_id, year, month)`; trigger `chan_sua_bang_cong_da_khoa` |
+| `timesheet_rows` | Dòng công (người × ngày), `is_adjustment` = chênh lệch kỳ đã khóa | 0.19.0. Duy nhất `(timesheet_id, user_id, work_date, is_adjustment)`; bất biến khi bảng khóa |
+| `timesheet_feedback` | Phản hồi của nhân viên về bảng nháp | 0.19.0. Bất biến khi bảng khóa |
+
+Cột thêm 0.19.0: `staff_profiles.staff_type` (chinh-thuc / thu-viec / thuc-tap / cong-tac-vien), `attendance_pin` (duy nhất `(tenant_id, attendance_pin)`, CHECK chữ / số 1–20), `default_location_id`. `attachments_loai_doi_tuong_check` thêm `employment_contract`. Migration `20261102090001_nhan_su_cham_cong`.
+
 Cột thêm 0.18.0: `email_settings.provider` (smtp / ses), `ses_region`, `ses_configuration_set`, `sending_domain`, `mail_from_domain`, `dkim_tokens` (JSON ≤ 3), `dmarc_rua`, `ses_topic_arn`, `ses_webhook_hash` / `ses_webhook_hint` / `ses_webhook_rotated_at` (mã webhook chỉ giữ SHA-256), `ses_subscribed_at`, `ses_last_event_at`, `dns_check` / `dns_checked_at` — CHECK kênh, vùng, tên miền, ARN, băm, và **kênh SES thì địa chỉ gửi thuộc `sending_domain`**. `email_recipients.delivered_at`, `bounced_at`, `bounce_type` (Permanent / Transient / Undetermined), `complained_at`, `deferred_until`, `defer_count`; chỉ mục `(tenant_id, email, attempt_at)` (đếm 3 thư / 24 giờ) và `(tenant_id, message_id)`. `email_campaigns.pause_code` (tay / ket-noi / ty-le-hong / ty-le-bao-rac / khac), `rate_base_sample` / `rate_base_bounced` / `rate_base_complained`. `email_events.detail` (JSON) và `event_type` thêm send / delivery / bounce / complaint / reject / delivery-delay / rendering-failure. `email_suppressions.reason` thêm `bao-rac`. Nhãn quảng cáo lưu ở `tenant_settings` khóa `email.nhan_quang_cao` (chuỗi).
 
 Cột thêm 0.16.0: `customers.journey_stage_id`, `journey_stage_changed_at`, `merged_into_id` / `merged_at` / `merged_by` (CHECK `customers_da_gop_check`: `da-gop` ⇔ có `merged_into_id`), `lead_score` (CHECK 0–100) / `lead_score_at`; `customers.status` thêm giá trị `da-gop`; `contacts.birth_date`.

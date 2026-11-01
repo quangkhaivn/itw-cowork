@@ -14,6 +14,25 @@ export const dynamic = "force-dynamic";
  * `proxy.ts` cho `/iclock` đi qua không cần phiên; tiền tố này không phải `/api` nên không kiểm Origin.
  */
 
+/** Thân yêu cầu dạng chuỗi UTF-8, tối đa `toiDa` byte; vượt → null (đã hủy luồng đọc). */
+async function docThanGioiHan(req: NextRequest, toiDa: number): Promise<string | null> {
+  if (!req.body) return "";
+  const doc = req.body.getReader();
+  const phan: Uint8Array[] = [];
+  let tong = 0;
+  for (;;) {
+    const { done, value } = await doc.read();
+    if (done) break;
+    tong += value.byteLength;
+    if (tong > toiDa) {
+      await doc.cancel().catch(() => {});
+      return null;
+    }
+    phan.push(value);
+  }
+  return Buffer.concat(phan).toString("utf8");
+}
+
 function vanBan(status: number, than: string): Response {
   return new Response(than, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
 }
@@ -27,9 +46,9 @@ async function xuLy(req: NextRequest, ctx: { params: Promise<{ duong: string[] }
       // Trần theo BYTE: kiểm Content-Length trước, rồi kiểm lại sau khi đọc (có thể thiếu / khai sai).
       const khai = Number(req.headers.get("content-length") ?? "0");
       if (Number.isFinite(khai) && khai > ADMS_THAN_TOI_DA_BYTE) return vanBan(413, "ERROR: TOO LARGE");
-      const buf = Buffer.from(await req.arrayBuffer());
-      if (buf.byteLength > ADMS_THAN_TOI_DA_BYTE) return vanBan(413, "ERROR: TOO LARGE");
-      than = buf.toString("utf8");
+      // Đọc từng phần, dừng ngay khi vượt trần (thân kiểu chunked không có Content-Length — QA 0.18.0).
+      than = await docThanGioiHan(req, ADMS_THAN_TOI_DA_BYTE);
+      if (than === null) return vanBan(413, "ERROR: TOO LARGE");
     }
     const kq = await xuLyAdms({
       phuongThuc: req.method,

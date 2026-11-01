@@ -22,7 +22,7 @@ export default async function TrangDonTu({ searchParams }: { searchParams: ThamS
   const nd = await yeuCauQuyen("cham_cong.view");
   const sp = await searchParams;
   const homNay = ngayVNCua(new Date());
-  const [namHt, thangHt] = homNay.split("-").map(Number);
+  const namHt = Number(homNay.slice(0, 4));
   const thang = /^\d{4}-\d{2}$/.test(layMot(sp.thang)) ? layMot(sp.thang) : homNay.slice(0, 7);
   const [nam, th] = thang.split("-").map(Number);
   const d = await docDuLieu(nd, async (tx) => {

@@ -44,10 +44,16 @@ export default function ChamCong({ duLieu }: { duLieu: DuLieu }) {
   const [anToan, datAnToan] = useState(true);
 
   useEffect(() => {
-    datBayGio(new Date());
-    datAnToan(window.isSecureContext);
+    // Đồng hồ và kiểm HTTPS chỉ chạy ở trình duyệt (tránh lệch giữa bản dựng máy chủ và máy khách).
+    const dau = setTimeout(() => {
+      datBayGio(new Date());
+      datAnToan(window.isSecureContext);
+    }, 0);
     const t = setInterval(() => datBayGio(new Date()), 1000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(dau);
+      clearInterval(t);
+    };
   }, []);
 
   async function xacNhan() {
