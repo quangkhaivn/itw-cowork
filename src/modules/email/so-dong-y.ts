@@ -112,6 +112,40 @@ export async function ghiSoDongY(tx: ClientTenant, tenantId: string, d: DuLieuGh
   return { id: dong.id, truoc: truoc?.hanhDong ?? null, truocLuc: truoc?.luc ?? null };
 }
 
+export type KetQuaXepXacNhan = "da-xep" | "da-tu-choi-truoc" | "email-hong";
+
+/**
+ * EG-13 — xếp **một** thư xác nhận từ chối (NĐ 91/2020 Điều 20) cho một lần trạng thái sổ đổi sang "rút":
+ * người đó tự huỷ nhận tin, **hoặc** nhân viên ghi tay lời rút đồng ý thay cho người đó (sổ đồng ý,
+ * nút từ chối trên lead / liên hệ). Không xếp khi:
+ *  - trước đó đã là rút / phản đối (bấm lại, huỷ ở thư chiến dịch khác…);
+ *  - địa chỉ đang bị chặn vì **email hỏng** (trả lại vĩnh viễn) — gửi tới địa chỉ chết chỉ làm xấu uy tín.
+ * Khóa `xac-nhan-tu-choi:<dòng sổ>` + duy nhất `(tenant_id, dedupe_key)`: gọi lại vẫn một thư.
+ */
+export async function xepThuXacNhanTuChoi(
+  tx: ClientTenant,
+  tenantId: string,
+  d: { email: string; dongSoId: string; truoc: HanhDongDongY | null; nhanLuc: Date; dungTu: Date; recipientId?: string | null },
+): Promise<KetQuaXepXacNhan> {
+  if (d.truoc === "rut" || d.truoc === "phan-doi") return "da-tu-choi-truoc";
+  const email = d.email.trim().toLowerCase();
+  if (await tx.emailSuppression.findFirst({ where: { email, reason: "email-hong", status: "hoat-dong" }, select: { id: true } })) return "email-hong";
+  await tx.emailTransactional.createMany({
+    data: [
+      {
+        tenantId,
+        kind: "xac-nhan-tu-choi",
+        email,
+        recipientId: d.recipientId ?? null,
+        dedupeKey: `xac-nhan-tu-choi:${d.dongSoId}`,
+        payload: { nhanLuc: d.nhanLuc.toISOString(), dungTu: d.dungTu.toISOString() },
+      },
+    ],
+    skipDuplicates: true,
+  });
+  return "da-xep";
+}
+
 /** Rút / phản đối: từ chối trên mọi lead + liên hệ cùng email (tắt đồng ý — MK-13) và đưa vào danh sách chặn. */
 async function apDungTuChoi(tx: ClientTenant, tenantId: string, email: string, luc: Date, nguon: NguonDongY, hanhDong: "rut" | "phan-doi") {
   const tuChoi = { marketingOptOutAt: luc, marketingOptIn: false, marketingConsentSource: nguonCot(nguon) };
@@ -224,9 +258,18 @@ export async function ghiTayDongY(nc: NguCanh, d: DuLieuGhiTayDongY) {
     nguoiEmail: nc.hoSo.email,
     ip: nc.ip,
   });
-  await nc.kiemToan({ action: "ghi-dong-y", objectType: "email_consent", objectId: kq.id, before: { trangThai: kq.truoc }, after: { email: cheEmail(d.email), hanhDong: d.hanhDong, luc: luc.toISOString() } });
+  // EG-13 (quyết định 0.18.0): nhân viên ghi tay lời rút đồng ý thay cho người đó → cũng gửi thư xác nhận
+  // (lúc nhận yêu cầu = thời điểm ghi, lúc ngừng gửi = lúc ghi sổ). Phản đối (báo rác) thì không.
+  const thuXacNhan = d.hanhDong === "rut" ? await xepThuXacNhanTuChoi(nc.tx, nc.tenantId, { email: d.email, dongSoId: kq.id, truoc: kq.truoc, nhanLuc: luc, dungTu: bayGio }) : null;
+  await nc.kiemToan({
+    action: "ghi-dong-y",
+    objectType: "email_consent",
+    objectId: kq.id,
+    before: { trangThai: kq.truoc },
+    after: { email: cheEmail(d.email), hanhDong: d.hanhDong, luc: luc.toISOString(), ...(thuXacNhan && { thuXacNhan }) },
+  });
   await nc.suKien({ eventType: SU_KIEN.EMAIL_CONSENT_RECORDED, objectType: "email_consent", objectId: kq.id, payload: { hanhDong: d.hanhDong, nguon: "nhap-tay", truoc: kq.truoc } });
-  return { id: kq.id, truoc: kq.truoc, sau: d.hanhDong };
+  return { id: kq.id, truoc: kq.truoc, sau: d.hanhDong, thuXacNhan };
 }
 
 export const LuocDoNhapCsvDongY = z.object({

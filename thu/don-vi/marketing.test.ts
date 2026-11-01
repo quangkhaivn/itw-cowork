@@ -216,7 +216,9 @@ describe("Webhook (MK-12)", () => {
     assert.equal(d.hoTen, "An");
     assert.equal(d.dienThoai, "0909");
     assert.equal(d.congTy, "ITW");
-    assert.equal(d.dongYNhanTin, false);
+    // 0.18.0 — EG-08: thân webhook không tự mang "đồng ý"; đồng ý đọc theo trường khai ở nguồn (docDongYWebhook).
+    assert.equal("dongYNhanTin" in d, false);
+    assert.ok(LuocDoThanWebhook.safeParse({ hoTen: "An", dongYNhanTin: "Có" }).success, "trường đồng ý dạng chữ không làm hỏng thân");
     assert.ok(!LuocDoThanWebhook.safeParse({ hoTen: "x".repeat(300) }).success);
   });
 });

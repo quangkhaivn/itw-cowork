@@ -557,14 +557,26 @@ const MOT_NGAY_MS = 86_400_000;
 /** Lệch giờ Việt Nam cố định (không có giờ mùa hè). */
 const LECH_VN_MS = 7 * 3_600_000;
 
-/** Số ngày lịch (giờ Việt Nam) từ ngày bắt đầu khởi động tới hôm nay; trước ngày bắt đầu → 0. */
-export function soNgayTuNgay(ngayBatDauYmd: number, bayGio: Date): number | null {
+/** Ngày hôm nay theo lịch giờ Việt Nam dạng số YYYYMMDD (như ô Cấu hình `email.khoi_dong_ngay_bat_dau`). */
+export function ymdHomNayVN(bayGio: Date = new Date()): number {
+  const vn = new Date(bayGio.getTime() + LECH_VN_MS);
+  return vn.getUTCFullYear() * 10000 + (vn.getUTCMonth() + 1) * 100 + vn.getUTCDate();
+}
+
+/** Số ngày lịch (giờ Việt Nam) từ ngày bắt đầu tới hôm nay, **có dấu**: ngày bắt đầu ở tương lai → số âm. */
+export function soNgayLechTuNgay(ngayBatDauYmd: number, bayGio: Date): number | null {
   const d = docNgayYmd(ngayBatDauYmd);
   if (!d) return null;
   const vn = new Date(bayGio.getTime() + LECH_VN_MS);
   const homNay = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate());
   const batDau = Date.UTC(d.nam, d.thang - 1, d.ngay);
-  return Math.max(0, Math.round((homNay - batDau) / MOT_NGAY_MS));
+  return Math.round((homNay - batDau) / MOT_NGAY_MS);
+}
+
+/** Số ngày lịch (giờ Việt Nam) từ ngày bắt đầu khởi động tới hôm nay; trước ngày bắt đầu → 0. */
+export function soNgayTuNgay(ngayBatDauYmd: number, bayGio: Date): number | null {
+  const d = soNgayLechTuNgay(ngayBatDauYmd, bayGio);
+  return d === null ? null : Math.max(0, d);
 }
 
 /** Trần kỹ thuật để lũy thừa không ra Infinity — lớn hơn mọi hạn mức thật. */
@@ -573,12 +585,13 @@ export const TRAN_KHOI_DONG_TOI_DA = 10_000_000;
 /**
  * EG-10 — đường khởi động (warm-up): ngày thứ d (0 = ngày bắt đầu) gửi tối đa ⌊mứcĐầu × hệSố^d⌋ thư.
  * Chưa đặt ngày bắt đầu / ngày sai → null (không áp đường khởi động). Mức đầu / hệ số sai → null.
+ * **Chưa tới ngày bắt đầu** (ngày ở tương lai) → null: trước ngày đó chỉ áp trần ngày thường.
  */
 export function tranKhoiDong(ngayBatDauYmd: number | null, mucDau: number | null, heSo: number | null, bayGio: Date): number | null {
   if (ngayBatDauYmd === null || mucDau === null || heSo === null) return null;
   if (!(mucDau >= 1) || !(heSo >= 1)) return null;
-  const d = soNgayTuNgay(ngayBatDauYmd, bayGio);
-  if (d === null) return null;
+  const d = soNgayLechTuNgay(ngayBatDauYmd, bayGio);
+  if (d === null || d < 0) return null;
   const tran = Math.floor(mucDau * Math.pow(heSo, d));
   return Number.isFinite(tran) ? Math.min(tran, TRAN_KHOI_DONG_TOI_DA) : TRAN_KHOI_DONG_TOI_DA;
 }

@@ -340,7 +340,12 @@ async function main() {
   const cu = thongBaoSes(TOPIC_A, { eventType: "Delivery", mail: mailCua(rA0) }, cc.khoaRieng, { Timestamp: "2019-01-01T00:00:00.000Z" });
   const kqCu = await goi(MA_A, cu);
   const kqCu2 = await goi(MA_A, cu);
-  dat("Thông điệp cũ (Timestamp 2019) đã ký đúng: xử lý một lần, phát lại → trùng lặp (chống lặp theo MessageId)", kqCu.status === 200 && kqCu2.json.trungLap === true, JSON.stringify([kqCu, kqCu2]));
+  // Quyết định 5 (0.18.0): Timestamp cũ hơn 1 giờ → 403, không xử lý, không ghi nhật ký SNS.
+  dat("Thông điệp cũ (Timestamp 2019) đã ký đúng → 403 cả hai lần, không ghi gì (chống phát lại theo thời điểm)", kqCu.status === 403 && kqCu2.status === 403 && (await chu.emailSnsMessage.count({ where: { snsMessageId: cu.MessageId } })) === 0, JSON.stringify([kqCu, kqCu2]));
+  const moiDay = thongBaoSes(TOPIC_A, { eventType: "Delivery", mail: mailCua(rA0) }, cc.khoaRieng, { Timestamp: new Date(Date.now() - 30 * 60_000).toISOString() });
+  const kqMoi = await goi(MA_A, moiDay);
+  const kqMoi2 = await goi(MA_A, moiDay);
+  dat("Thông điệp 30 phút trước: xử lý một lần, phát lại trong cửa sổ → trùng lặp (chống lặp theo MessageId)", kqMoi.status === 200 && kqMoi2.json.trungLap === true, JSON.stringify([kqMoi, kqMoi2]));
 
   // ==================================================================
   console.log("\n— 3. Tương quan sự kiện: thẻ giả, mã thư lạ, cùng lúc —");
@@ -520,7 +525,7 @@ async function main() {
   const kd = (iso: string, bd: number, muc = 200, he = 1.3) => tranKhoiDong(bd, muc, he, new Date(iso));
   dat("Khởi động: 23:59:59 giờ VN vẫn là ngày 0, 00:00 giờ VN sang ngày 1", kd("2026-10-24T16:59:59.999Z", 20261024) === 200 && kd("2026-10-24T17:00:00.000Z", 20261024) === 260);
   dat("Khởi động: hệ số 1 → không đổi; hệ số 3 sau 1.000 ngày → chặn ở trần kỹ thuật, không Infinity/NaN", kd("2026-12-01T00:00:00Z", 20261024, 50, 1) === 50 && kd("2029-07-20T00:00:00Z", 20261024, 100_000, 3) === 10_000_000);
-  dat("Khởi động: ngày bắt đầu ở tương lai → dùng mức đầu (thận trọng), ngày không có thật → không áp", kd("2026-10-20T00:00:00Z", 20261101) === 200 && kd("2026-10-20T00:00:00Z", 20260231) === null);
+  dat("Khởi động: ngày bắt đầu ở tương lai → chưa áp (chỉ trần ngày thường — quyết định 0.18.0), ngày không có thật → không áp", kd("2026-10-20T00:00:00Z", 20261101) === null && kd("2026-10-20T00:00:00Z", 20260231) === null);
   const ng = { hongPhanTram: 5, baoRacPhanNghin: 1, mauToiThieu: 200 };
   dat(
     "Ngưỡng: 10/200 = 5% đúng ngưỡng → chưa dừng; 11/200 → dừng; 199 mẫu 100 hỏng → chưa đủ mẫu; mốc trừ đúng",

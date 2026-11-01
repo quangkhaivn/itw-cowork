@@ -6,6 +6,37 @@ import HopThoai from "@/components/ui/HopThoai";
 import { loiCua, useGoiApi } from "@/components/ui/goi-api";
 import MaNhung from "../form/MaNhung";
 
+/** "a, b ,c" → ["a","b","c"] (bỏ ô trống). */
+function tachDs(s: string): string[] {
+  return s
+    .split(/[,\n]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+const GOI_Y_GIA_TRI = "true, 1, yes, có, đồng ý";
+
+/** Hai ô khai trường / giá trị đồng ý nhận email quảng cáo (EG-08). */
+function OTruongDongY({ truong, giaTri, doi }: { truong: string; giaTri: string; doi: (k: "truong" | "giaTri", v: string) => void }) {
+  return (
+    <>
+      <div className="truong">
+        <label htmlFor="wh-dy-truong">Trường đồng ý nhận email quảng cáo</label>
+        <input id="wh-dy-truong" type="text" value={truong} onChange={(e) => doi("truong", e.target.value)} placeholder="vd: dong_y_email (bỏ trống = nguồn này không mang đồng ý)" />
+        <span className="goi-y">
+          Tên trường trong thân JSON (đúng chữ hoa / thường, nhiều trường cách nhau dấu phẩy, tối đa 5). Chỉ khi thân có trường này với giá trị chấp nhận, lead mới được ghi
+          “đồng ý” vào Sổ đồng ý email. Bỏ trống: lead vẫn vào, nhưng không được gửi thư quảng cáo cho tới khi có căn cứ đồng ý.
+        </span>
+      </div>
+      <div className="truong">
+        <label htmlFor="wh-dy-gia-tri">Giá trị được coi là đồng ý</label>
+        <input id="wh-dy-gia-tri" type="text" value={giaTri} onChange={(e) => doi("giaTri", e.target.value)} placeholder={`bỏ trống = ${GOI_Y_GIA_TRI}`} disabled={!truong.trim()} />
+        <span className="goi-y">Không phân biệt hoa / thường; tối đa 10 giá trị. Giá trị khác (vd “không”, false) → không ghi đồng ý.</span>
+      </div>
+    </>
+  );
+}
+
 interface KhoaMoi {
   ma: string;
   khoa: string;
@@ -36,13 +67,14 @@ export function NutTaoWebhook({ duongDan, chienDich, nguon }: { duongDan: string
   const router = useRouter();
   const hop = useRef<HTMLDialogElement>(null);
   const { goi, dangGui, loi } = useGoiApi();
-  const [gt, datGt] = useState({ ten: "", ma: "", chienDichId: "", nguon: "facebook" });
+  const [gt, datGt] = useState({ ten: "", ma: "", chienDichId: "", nguon: "facebook", truong: "", giaTri: "" });
   const [moi, datMoi] = useState<KhoaMoi | null>(null);
 
   async function tao(e: React.FormEvent) {
     e.preventDefault();
     const kq = await goi<{ nguon: { ma: string }; khoa: string }>("/api/v1/marketing/webhook", "POST", {
       ten: gt.ten, ma: gt.ma || null, chienDichId: gt.chienDichId || null, nguon: gt.nguon || null,
+      truongDongY: tachDs(gt.truong), giaTriDongY: tachDs(gt.giaTri),
     });
     if (kq) datMoi({ ma: kq.nguon.ma, khoa: kq.khoa });
   }
@@ -91,6 +123,7 @@ export function NutTaoWebhook({ duongDan, chienDich, nguon }: { duongDan: string
                   ))}
                 </select>
               </div>
+              <OTruongDongY truong={gt.truong} giaTri={gt.giaTri} doi={(k, v) => datGt((c) => ({ ...c, [k]: v }))} />
             </div>
             <div className="chan-form">
               <button type="submit" className="nut chinh" disabled={dangGui || gt.ten.trim().length < 3}>
@@ -104,13 +137,25 @@ export function NutTaoWebhook({ duongDan, chienDich, nguon }: { duongDan: string
   );
 }
 
-export function TacVuWebhook({ id, ma, duongDan }: { id: string; ma: string; duongDan: string }) {
+export function TacVuWebhook({ id, ma, duongDan, truongDongY, giaTriDongY }: { id: string; ma: string; duongDan: string; truongDongY: string[]; giaTriDongY: string[] }) {
   const router = useRouter();
   const hop = useRef<HTMLDialogElement>(null);
+  const hopDongY = useRef<HTMLDialogElement>(null);
   const { goi, dangGui, loi } = useGoiApi();
   const [moi, datMoi] = useState<KhoaMoi | null>(null);
+  const [dy, datDy] = useState({ truong: truongDongY.join(", "), giaTri: giaTriDongY.join(", ") });
   return (
     <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+      <button
+        type="button"
+        className="nut nho"
+        onClick={() => {
+          datDy({ truong: truongDongY.join(", "), giaTri: giaTriDongY.join(", ") });
+          hopDongY.current?.showModal();
+        }}
+      >
+        Đồng ý email
+      </button>
       <button
         type="button"
         className="nut nho"
@@ -138,6 +183,28 @@ export function TacVuWebhook({ id, ma, duongDan }: { id: string; ma: string; duo
         Thu hồi
       </button>
       {loi && <span className="loi-truong">{loi.thongBao}</span>}
+      <HopThoai ref={hopDongY} tieuDe="Đồng ý nhận email quảng cáo" rong={640}>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (await goi(`/api/v1/marketing/webhook/${id}/dong-y`, "POST", { truongDongY: tachDs(dy.truong), giaTriDongY: tachDs(dy.giaTri) })) {
+              hopDongY.current?.close();
+              router.refresh();
+            }
+          }}
+        >
+          <div className="than">
+            {loi && <div className="hop-thong-bao loi" role="alert">{loi.thongBao}</div>}
+            <OTruongDongY truong={dy.truong} giaTri={dy.giaTri} doi={(k, v) => datDy((c) => ({ ...c, [k]: v }))} />
+            <p className="phu">Chỉ áp cho lead nhận sau khi lưu. Đồng ý đã ghi trước đó không đổi.</p>
+          </div>
+          <div className="chan-form">
+            <button type="submit" className="nut chinh" disabled={dangGui}>
+              Lưu
+            </button>
+          </div>
+        </form>
+      </HopThoai>
       <HopThoai ref={hop} tieuDe="Khóa mới" rong={640} khiDong={() => router.refresh()}>
         {moi && <HienKhoa duongDan={duongDan} k={moi} dong={() => hop.current?.close()} />}
       </HopThoai>

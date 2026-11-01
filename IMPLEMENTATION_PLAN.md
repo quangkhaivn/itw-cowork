@@ -197,6 +197,12 @@ Không có blocker cứng cho Phase 2. Các câu chờ Giám đốc đều có m
 - [x] Trang chi tiết công việc `/cong-viec/:id` (đích của thông báo) · [x] kiểm thử (đơn vị, `thu:cong-viec`, `thu:http`)
 - [ ] Triển khai máy thật (đi cùng đợt 0.14 → 0.16) — một migration mới, không biến môi trường mới.
 
+## 4p. Email marketing: gửi số lượng lớn — 0.18.0 (phát hành 01/11/2026 trên máy phát triển)
+
+- [x] Kênh Amazon SES qua SMTP, webhook SNS (chỉ chữ ký v2, Timestamp ≤ 1 giờ), sổ đồng ý, nhãn [QC], 3 thư / địa chỉ / 24 giờ, khởi động, tự tạm dừng theo tỷ lệ, thư xác nhận từ chối, DNS tên miền gửi (EG-01 → EG-14, QĐ-94 → QĐ-99, QĐ-101 → QĐ-103)
+- [x] Sáu quyết định của Giám đốc trước khi phát hành (CHANGELOG 0.18.0) · [x] kiểm thử (đơn vị, `thu:email-gui-lon`, `thu:qa-email-gui-lon`)
+- [ ] Triển khai máy thật — hai migration mới, không biến môi trường mới. Chủ tên miền làm `docs/HUONG-DAN-SES.md` phần A ngay; phần B khi có tài khoản AWS (nhớ đặt phiên bản chữ ký 2 cho chủ đề SNS).
+
 ## 5. Sau Phase 9 — việc còn lại
 
 Lộ trình 0→9 của prompt đã đi hết. Việc còn lại không thuộc phase nào, xếp theo thứ tự nên làm:

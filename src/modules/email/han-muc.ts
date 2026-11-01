@@ -1,7 +1,7 @@
 import type { ClientTenant } from "@/lib/db";
 import { dauHomNayVN } from "@/lib/dinh-dang";
 import { docCauHinh } from "@/modules/cau-hinh/service";
-import { chuanHoaNhanQuangCao, soNgayTuNgay, TRAN_NGAY_MAC_DINH_SES, tranKhoiDong, tranNgayHieuLuc } from "./tinh-toan";
+import { chuanHoaNhanQuangCao, soNgayLechTuNgay, soNgayTuNgay, TRAN_NGAY_MAC_DINH_SES, tranKhoiDong, tranNgayHieuLuc } from "./tinh-toan";
 
 /**
  * Hạn mức gửi hôm nay (EG-07, EG-10) — một chỗ tính cho cả worker (gui.ts) lẫn màn hình (Kết nối
@@ -23,6 +23,8 @@ export interface HanMucHomNay {
   tranNgayDat: number | null;
   tranNgayMacDinhSes: boolean;
   khoiDong: { ngayBatDau: number; ngayThu: number; mucDau: number; heSo: number; tranHomNay: number } | null;
+  /** Đã đặt ngày bắt đầu khởi động nhưng ngày đó chưa tới (YYYYMMDD) — tới lúc đó chỉ áp trần ngày thường. */
+  khoiDongTuNgay: number | null;
   /** Trần thật hôm nay = min(trần đã đặt, đường khởi động). */
   tranHomNay: number | null;
   daGuiHomNay: number;
@@ -58,6 +60,7 @@ export async function docHanMucHomNay(tx: ClientTenant, kenh: string, bayGio: Da
       kd !== null && ngayBatDau !== null
         ? { ngayBatDau, ngayThu: (soNgayTuNgay(ngayBatDau, bayGio) ?? 0) + 1, mucDau: mucDau!, heSo: heSo!, tranHomNay: kd }
         : null,
+    khoiDongTuNgay: ngayBatDau !== null && (soNgayLechTuNgay(ngayBatDau, bayGio) ?? 0) < 0 ? ngayBatDau : null,
     tranHomNay,
     daGuiHomNay,
     conLaiHomNay: tranHomNay === null ? null : Math.max(0, tranHomNay - daGuiHomNay),

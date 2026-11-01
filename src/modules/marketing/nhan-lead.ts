@@ -16,7 +16,7 @@ import { NHAN_KENH_NHAN, type KenhNhan } from "./hang-so";
 import { chonTheoVongTron, chuanHoaUtmCampaign, hanGoiLai, KY_TU_DIEU_KHIEN, type BoUtm } from "./tinh-toan";
 import { cheLienLac, kiemTraChienDichGanDuoc, kiemTraNguonLead, locMarketing } from "./chung";
 import type { DuLieuNhapTayLead } from "./luoc-do";
-import { ghiSoDongY, trangThaiDongYCuaNhieu } from "@/modules/email/so-dong-y";
+import { ghiSoDongY, trangThaiDongYCuaNhieu, xepThuXacNhanTuChoi } from "@/modules/email/so-dong-y";
 
 /**
  * MỘT CỬA NHẬN LEAD — `nhanLead()`. Luật MK-06 → MK-10 (BUSINESS_RULES.md mục 22).
@@ -258,7 +258,7 @@ export async function nhanLead(tx: ClientTenant, tenantId: string, d: DuLieuNhan
     if (!d.dongYNhanTin || !email || tuChoiLuc || !["form", "landing", "webhook"].includes(d.kenh)) return;
     const canCu =
       d.kenh === "webhook"
-        ? `Hệ thống ngoài (${d.nguonDongY}) báo người đăng ký đã tích đồng ý nhận tin`
+        ? `Hệ thống ngoài (${d.nguonDongY}) gửi ${(d.cauDongY ?? "trường đồng ý").slice(0, 300)} — khớp trường / giá trị đồng ý khai ở nguồn webhook`
         : `Tự tích ô đồng ý trên ${d.kenh === "landing" ? "landing page" : "form"} (${d.nguonDongY}): "${(d.cauDongY ?? "").slice(0, 500)}"`;
     await ghiSoDongY(tx, tenantId, { email, hanhDong: "dong-y", nguon: d.kenh as "form" | "landing" | "webhook", canCu, thamChieu: `lead_capture:${captureId}`, luc: bayGio, ip: tacNhan.ip, leadId });
   };
@@ -663,7 +663,7 @@ export async function doiDongYNhanTin(nc: NguCanh, doiTuong: "lead" | "lien-he",
   // 0.18.0 — EG-08: lời từ chối ghi tay cũng vào sổ đồng ý email (rút). Đồng ý ghi ở đây KHÔNG vào sổ:
   // đồng ý dùng để gửi thư quảng cáo phải ghi ở Sổ đồng ý kèm căn cứ.
   if (!d.dongY && emailSo) {
-    await ghiSoDongY(nc.tx, nc.tenantId, {
+    const so = await ghiSoDongY(nc.tx, nc.tenantId, {
       email: emailSo,
       hanhDong: "rut",
       nguon: "nhap-tay",
@@ -675,6 +675,8 @@ export async function doiDongYNhanTin(nc: NguCanh, doiTuong: "lead" | "lien-he",
       leadId: doiTuong === "lead" ? id : null,
       contactId: doiTuong === "lead" ? null : id,
     });
+    // EG-13 (quyết định 0.18.0): nhân viên ghi nhận lời từ chối thay cho người đó → thư xác nhận (một lần).
+    await xepThuXacNhanTuChoi(nc.tx, nc.tenantId, { email: emailSo, dongSoId: so.id, truoc: so.truoc, nhanLuc: bayGio, dungTu: bayGio });
   }
   await nc.suKien({ eventType: SU_KIEN.MARKETING_CONSENT_CHANGED, objectType: doiTuong === "lead" ? "lead" : "contact", objectId: id, payload: { dongY: d.dongY } });
   return { id, dongY: d.dongY };

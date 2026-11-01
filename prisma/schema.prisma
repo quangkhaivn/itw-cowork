@@ -3113,6 +3113,11 @@ model MarketingWebhookSource {
   keyHint        String    @map("key_hint") @db.VarChar(8)
   campaignId     String?   @map("campaign_id") @db.Uuid
   source         String?   @db.VarChar(50)
+  /// 0.18.0 — tên trường trong thân webhook mang đồng ý nhận email quảng cáo (EG-08). Trống = nguồn
+  /// này không bao giờ ghi "đồng ý" vào sổ (lead vẫn được tạo).
+  consentFields  String[]  @default([]) @map("consent_fields") @db.VarChar(60)
+  /// Giá trị (đã chuẩn hóa chữ thường) được coi là đồng ý, vd true / 1 / yes / có / đồng ý.
+  consentValues  String[]  @default([]) @map("consent_values") @db.VarChar(60)
   ownerId        String    @map("owner_id") @db.Uuid
   /// hoat-dong | thu-hoi
   status         String    @default("hoat-dong") @db.VarChar(20)
@@ -3355,6 +3360,9 @@ model EmailCampaign {
   rateBaseSample     Int       @default(0) @map("rate_base_sample")
   rateBaseBounced    Int       @default(0) @map("rate_base_bounced")
   rateBaseComplained Int       @default(0) @map("rate_base_complained")
+  /// 0.18.0 — lúc chụp mốc (bấm Tiếp tục sau lần tự dừng vì tỷ lệ): cửa sổ đánh giá mới chỉ gồm thư
+  /// gửi từ lúc này (so `sent_at`); trả lại / báo rác tới trễ của thư gửi trước mốc không tính.
+  rateBaseAt         DateTime? @map("rate_base_at") @db.Timestamptz(6)
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy          String?   @map("created_by") @db.Uuid

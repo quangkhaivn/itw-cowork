@@ -378,7 +378,10 @@ export async function tiepTucChienDich(nc: NguCanh, id: string) {
   if (!(await nc.tx.emailSetting.findFirst({ where: { status: "hoat-dong" }, select: { id: true } }))) {
     throw new LoiNghiepVu("Chưa cấu hình kết nối email.", 409, "chua-cau-hinh-email");
   }
-  // EG-05: tiếp tục sau lần máy tự dừng vì tỷ lệ → chụp mốc, chỉ xét phần thư gửi SAU lúc này.
+  // EG-05: tiếp tục sau lần máy tự dừng vì tỷ lệ → chụp mốc thời gian, chỉ xét thư GỬI từ lúc này (so
+  // sent_at): trả lại / báo rác tới trễ của thư đã gửi trước mốc không tính vào cửa sổ mới. Số đếm lúc
+  // chụp vẫn lưu để xem / kiểm toán.
+  const lucMoc = new Date();
   const moc = c.pauseCode === "ty-le-hong" || c.pauseCode === "ty-le-bao-rac" ? await soLieuTyLe(nc.tx, id) : null;
   await nc.tx.emailCampaign.update({
     where: { id },
@@ -387,11 +390,11 @@ export async function tiepTucChienDich(nc: NguCanh, id: string) {
       pausedAt: null,
       pauseReason: null,
       pauseCode: null,
-      ...(moc && { rateBaseSample: moc.mau, rateBaseBounced: moc.hong, rateBaseComplained: moc.baoRac }),
+      ...(moc && { rateBaseSample: moc.mau, rateBaseBounced: moc.hong, rateBaseComplained: moc.baoRac, rateBaseAt: lucMoc }),
       updatedBy: nc.hoSo.userId,
     },
   });
-  await nc.kiemToan({ action: "sua", objectType: "email_campaign", objectId: id, before: { trangThai: c.status, lyDoDung: c.pauseReason }, after: { trangThai: "SENDING", ...(moc && { mocTyLe: moc }) } });
+  await nc.kiemToan({ action: "sua", objectType: "email_campaign", objectId: id, before: { trangThai: c.status, lyDoDung: c.pauseReason }, after: { trangThai: "SENDING", ...(moc && { mocTyLe: moc, mocLuc: lucMoc.toISOString() }) } });
   await nc.suKien({ eventType: SU_KIEN.EMAIL_CAMPAIGN_RESUMED, objectType: "email_campaign", objectId: id });
   return { id };
 }

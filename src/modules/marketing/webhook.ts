@@ -6,11 +6,11 @@ import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { trongPhamVi } from "@/modules/crm/chung";
-import { docUtm, kiemTraDuLieuForm, laSlugHopLe, taoSlug } from "./tinh-toan";
+import { docDongYWebhook, docUtm, kiemTraDuLieuForm, laSlugHopLe, taoSlug } from "./tinh-toan";
 import { kiemTraChienDichGanDuoc, kiemTraNguonLead, locMarketing } from "./chung";
 import { nhanLead } from "./nhan-lead";
 import { LoiTuChoiNhan } from "./form";
-import { LuocDoThanWebhook, type DuLieuNguonWebhook } from "./luoc-do";
+import { LuocDoDongYWebhook, LuocDoThanWebhook, type DuLieuDongYWebhook, type DuLieuNguonWebhook } from "./luoc-do";
 
 /**
  * Webhook nhận lead — Facebook Lead Ads (qua Zapier / Make), Zalo, website khác. Luật MK-12.
@@ -36,7 +36,7 @@ export function khopBam(a: string, b: string): boolean {
 
 const CHON = {
   id: true, code: true, name: true, keyHint: true, campaignId: true, source: true, ownerId: true, status: true,
-  revokedAt: true, lastReceivedAt: true, createdAt: true,
+  revokedAt: true, lastReceivedAt: true, createdAt: true, consentFields: true, consentValues: true,
   owner: { select: { id: true, fullName: true } },
   campaign: { select: { id: true, code: true, name: true } },
 } satisfies Prisma.MarketingWebhookSourceSelect;
@@ -53,6 +53,9 @@ function chuyenDoi(w: BanGhi) {
     thuHoiLuc: w.revokedAt,
     nhanCuoiLuc: w.lastReceivedAt,
     taoLuc: w.createdAt,
+    /** EG-08: trường / giá trị đồng ý nhận email quảng cáo. Trống = nguồn không bao giờ ghi đồng ý. */
+    truongDongY: w.consentFields,
+    giaTriDongY: w.consentValues,
     chienDich: w.campaign ? { id: w.campaign.id, ma: w.campaign.code, ten: w.campaign.name } : null,
     nguoiPhuTrach: { id: w.owner.id, hoTen: w.owner.fullName },
   };
@@ -89,14 +92,22 @@ export async function taoNguonWebhook(nc: NguCanh, d: DuLieuNguonWebhook) {
   await kiemTraChienDichGanDuoc(nc.tx, d.chienDichId);
   await kiemTraNguonLead(nc.tx, d.nguon);
   const khoa = sinhKhoa();
+  // EG-08: gọi thẳng service (không qua lược đồ) vẫn ra cấu hình hợp lệ — chuẩn hóa như LuocDoDongYWebhook.
+  const dy = LuocDoDongYWebhook.parse({ truongDongY: d.truongDongY ?? [], giaTriDongY: d.giaTriDongY ?? [] });
   const w = await nc.tx.marketingWebhookSource.create({
     data: {
       tenantId: nc.tenantId, code: ma, name: d.ten, keyHash: bamKhoa(khoa), keyHint: khoa.slice(-4), campaignId: d.chienDichId ?? null,
       source: d.nguon ?? null, ownerId: nc.hoSo.userId, createdBy: nc.hoSo.userId, updatedBy: nc.hoSo.userId,
+      consentFields: dy.truongDongY, consentValues: dy.giaTriDongY,
     },
     select: CHON,
   });
-  await nc.kiemToan({ action: "tao", objectType: "marketing_webhook_source", objectId: w.id, after: { ma, ten: d.ten, chienDichId: d.chienDichId ?? null, goiYKhoa: w.keyHint } });
+  await nc.kiemToan({
+    action: "tao",
+    objectType: "marketing_webhook_source",
+    objectId: w.id,
+    after: { ma, ten: d.ten, chienDichId: d.chienDichId ?? null, goiYKhoa: w.keyHint, truongDongY: dy.truongDongY, giaTriDongY: dy.giaTriDongY },
+  });
   await nc.suKien({ eventType: SU_KIEN.WEBHOOK_SOURCE_CREATED, objectType: "marketing_webhook_source", objectId: w.id, payload: { ma } });
   return { nguon: chuyenDoi(w), khoa };
 }
@@ -109,6 +120,25 @@ export async function doiKhoaWebhook(nc: NguCanh, id: string) {
   await nc.kiemToan({ action: "doi-khoa", objectType: "marketing_webhook_source", objectId: id, before: { goiYKhoa: w.keyHint }, after: { goiYKhoa: khoa.slice(-4) } });
   await nc.suKien({ eventType: SU_KIEN.WEBHOOK_KEY_ROTATED, objectType: "marketing_webhook_source", objectId: id, payload: {} });
   return { id, khoa };
+}
+
+/**
+ * 0.18.0 — EG-08: khai trường / giá trị đồng ý nhận email quảng cáo của nguồn. Chỉ áp cho lead nhận SAU
+ * khi lưu; không sửa sổ đồng ý đã ghi. Bỏ trống trường = nguồn không bao giờ ghi đồng ý.
+ */
+export async function doiDongYWebhook(nc: NguCanh, id: string, d: DuLieuDongYWebhook) {
+  const w = await docDuocSua(nc, id);
+  if (w.status !== "hoat-dong") throw new LoiNghiepVu("Nguồn đã thu hồi.", 409, "da-thu-hoi");
+  await nc.tx.marketingWebhookSource.update({ where: { id }, data: { consentFields: d.truongDongY, consentValues: d.giaTriDongY, updatedBy: nc.hoSo.userId } });
+  await nc.kiemToan({
+    action: "sua",
+    objectType: "marketing_webhook_source",
+    objectId: id,
+    before: { truongDongY: w.consentFields, giaTriDongY: w.consentValues },
+    after: { truongDongY: d.truongDongY, giaTriDongY: d.giaTriDongY },
+  });
+  await nc.suKien({ eventType: SU_KIEN.WEBHOOK_SOURCE_UPDATED, objectType: "marketing_webhook_source", objectId: id, payload: { truongDongY: d.truongDongY, giaTriDongY: d.giaTriDongY } });
+  return { id, truongDongY: d.truongDongY, giaTriDongY: d.giaTriDongY };
 }
 
 export async function thuHoiWebhook(nc: NguCanh, id: string) {
@@ -139,7 +169,7 @@ export async function nhanQuaWebhook(
 ) {
   // Mã nguồn sai khuôn: trả đúng câu "khóa không hợp lệ" như mọi trường hợp sai khác, không truy vấn.
   if (!laSlugHopLe(maNguon)) throw new LoiTuChoiNhan("Khóa không hợp lệ.", 401, "sai-khoa", { kenh: "webhook", lyDo: "Mã nguồn sai khuôn" });
-  const w = await tx.marketingWebhookSource.findFirst({ where: { code: maNguon }, select: { id: true, code: true, keyHash: true, status: true, campaignId: true, source: true, ownerId: true } });
+  const w = await tx.marketingWebhookSource.findFirst({ where: { code: maNguon }, select: { id: true, code: true, keyHash: true, status: true, campaignId: true, source: true, ownerId: true, consentFields: true, consentValues: true } });
   // Không phân biệt "không có nguồn" với "sai khóa" trong câu trả lời — tránh dò mã nguồn.
   if (!w) throw new LoiTuChoiNhan("Khóa không hợp lệ.", 401, "sai-khoa", { kenh: "webhook", lyDo: `Nguồn "${maNguon.slice(0, 60)}" không tồn tại` });
   if (w.status !== "hoat-dong") throw new LoiTuChoiNhan("Khóa không hợp lệ.", 401, "sai-khoa", { kenh: "webhook", lyDo: "Nguồn đã thu hồi", webhookSourceId: w.id });
@@ -167,6 +197,10 @@ export async function nhanQuaWebhook(
   if (Object.keys(loi).length) {
     throw new LoiTuChoiNhan(Object.values(loi)[0], 400, "du-lieu-sai", { kenh: "webhook", lyDo: `Dữ liệu sai: ${Object.keys(loi).join(", ")}`, webhookSourceId: w.id }, { loiTruong: loi });
   }
+  // EG-08 (0.18.0): đồng ý nhận email quảng cáo CHỈ khi thân có trường đồng ý đã khai ở nguồn này, giá
+  // trị nằm trong danh sách chấp nhận. Không khai / không có trường / giá trị khác → lead vẫn được tạo,
+  // không ghi "đồng ý" (cả sổ lẫn cờ MK-13).
+  const dy = docDongYWebhook(than, w.consentFields, w.consentValues);
   const kq = await nhanLead(
     tx,
     tenantId,
@@ -183,11 +217,12 @@ export async function nhanQuaWebhook(
       nguon: w.source,
       chienDichId: w.campaignId,
       utm: docUtm(d.utm),
-      dongYNhanTin: d.dongYNhanTin,
+      dongYNhanTin: dy.dongY,
       nguonDongY: `webhook:${w.code}`,
+      cauDongY: dy.dongY ? `trường "${dy.truong}" = "${dy.giaTri}"` : null,
       webhookSourceId: w.id,
       nguoiDuPhongId: w.ownerId,
-      payload: { hoTen: d.hoTen, dienThoai: d.dienThoai, email: d.email, congTy: d.congTy, nhuCau: d.nhuCau.slice(0, 1000), dongYNhanTin: d.dongYNhanTin },
+      payload: { hoTen: d.hoTen, dienThoai: d.dienThoai, email: d.email, congTy: d.congTy, nhuCau: d.nhuCau.slice(0, 1000), dongYEmail: dy },
     },
     { nguoiId: null, email: null, ip: meta.ip, userAgent: meta.userAgent },
   );

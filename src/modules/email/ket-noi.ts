@@ -8,7 +8,8 @@ import { SU_KIEN } from "@/lib/su-kien";
 import { coKhoaMaHoa, giaiMaNghiepVu, maHoa } from "@/lib/ma-hoa";
 import { docHoSoCongTy } from "@/modules/ho-so-cong-ty/service";
 import type { DuLieuKetNoiEmail } from "./luoc-do";
-import { cauLoiGui, chuanHoaNhanQuangCao, GOI_Y_KET_NOI, mayChuSmtpSes, thoatHtml, VUNG_SES_MAC_DINH, vungCuaTopic } from "./tinh-toan";
+import { cauLoiGui, chuanHoaNhanQuangCao, GOI_Y_KET_NOI, mayChuSmtpSes, thoatHtml, VUNG_SES_MAC_DINH, vungCuaTopic, ymdHomNayVN } from "./tinh-toan";
+import { docCauHinh } from "@/modules/cau-hinh/service";
 import { taoVanChuyen, type CauHinhSmtp } from "./van-chuyen";
 import { banGhiCanCo, kiemTraDns, mailFromMacDinh, type KetQuaBanGhi } from "./dns";
 import { docHanMucHomNay, docNhanQuangCao, KHOA_NHAN_QUANG_CAO, type HanMucHomNay } from "./han-muc";
@@ -22,6 +23,7 @@ import { bamMaWebhookSes, sinhMaWebhookSes, urlWebhookSes } from "./ma-webhook-s
  */
 
 const ngucanh = (tenantId: string) => `smtp:${tenantId}`;
+const KHOA_KHOI_DONG = "email.khoi_dong_ngay_bat_dau";
 
 export interface KetNoiCongKhai {
   daCauHinh: boolean;
@@ -194,6 +196,27 @@ export async function luuKetNoi(nc: NguCanh, d: DuLieuKetNoiEmail) {
     ? await nc.tx.emailSetting.update({ where: { id: cu.id }, data: { ...duLieu, status: "hoat-dong" } })
     : await nc.tx.emailSetting.create({ data: { ...duLieu, tenantId: nc.tenantId, createdBy: nc.hoSo.userId } });
 
+  // EG-10 (quyết định 0.18.0): chuyển kênh sang Amazon SES mà chưa đặt ngày bắt đầu khởi động → tự đặt
+  // hôm nay (lịch giờ VN) để tên miền / tài khoản gửi mới không gửi thẳng 5.000 thư ngày đầu. Đã đặt
+  // (kể cả ngày tương lai) thì giữ nguyên. Ghi kiểm toán + sự kiện như đổi Cấu hình.
+  let khoiDongTuDat: number | null = null;
+  if (laSes && cu?.provider !== "ses" && (await docCauHinh(nc.tx, KHOA_KHOI_DONG)) === null) {
+    khoiDongTuDat = ymdHomNayVN();
+    const dongCu = await nc.tx.tenantSetting.findFirst({ where: { key: KHOA_KHOI_DONG }, select: { value: true } });
+    await nc.tx.tenantSetting.upsert({
+      where: { tenantId_key: { tenantId: nc.tenantId, key: KHOA_KHOI_DONG } },
+      update: { value: khoiDongTuDat, status: "hoat-dong", updatedBy: nc.hoSo.userId },
+      create: { tenantId: nc.tenantId, key: KHOA_KHOI_DONG, value: khoiDongTuDat, createdBy: nc.hoSo.userId, updatedBy: nc.hoSo.userId },
+    });
+    await nc.kiemToan({
+      action: "sua",
+      objectType: "setting",
+      before: { khoa: KHOA_KHOI_DONG, giaTri: (dongCu?.value as number | null | undefined) ?? null },
+      after: { khoa: KHOA_KHOI_DONG, giaTri: khoiDongTuDat, lyDo: "Tự đặt khi chuyển kênh gửi sang Amazon SES" },
+    });
+    await nc.suKien({ eventType: SU_KIEN.SETTING_CHANGED, objectType: "setting", payload: { khoa: KHOA_KHOI_DONG, truoc: null, sau: khoiDongTuDat, tuDong: "chuyen-sang-ses" } });
+  }
+
   // EG-06: nhãn quảng cáo — chuỗi trong tenant_settings (ô Cấu hình chỉ nhận số, QĐ-73). Trống = mặc định.
   const nhanCu = await docNhanQuangCao(nc.tx);
   const nhanMoi = chuanHoaNhanQuangCao(d.nhanQuangCao);
@@ -215,10 +238,15 @@ export async function luuKetNoi(nc: NguCanh, d: DuLieuKetNoiEmail) {
     objectType: "email_setting",
     objectId: sau.id,
     before: anhChup(cu) ?? null,
-    after: { ...anhChup(sau), doiMatKhau: passwordEnc === undefined ? "giu-nguyen" : passwordEnc === null ? "da-xoa" : "da-doi", nhanQuangCao: nhanMoi },
+    after: {
+      ...anhChup(sau),
+      doiMatKhau: passwordEnc === undefined ? "giu-nguyen" : passwordEnc === null ? "da-xoa" : "da-doi",
+      nhanQuangCao: nhanMoi,
+      ...(khoiDongTuDat !== null && { khoiDongTuDat }),
+    },
   });
   await nc.suKien({ eventType: SU_KIEN.EMAIL_CONNECTION_CHANGED, objectType: "email_setting", objectId: sau.id, payload: { host: sau.host } });
-  return { ok: true };
+  return { ok: true, khoiDongTuDat };
 }
 
 export interface KetNoiDeGui {
