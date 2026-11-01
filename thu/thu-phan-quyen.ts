@@ -20,7 +20,8 @@ async function main() {
   // 14 vai trò của mục 19 đặc tả Business OS, cộng "Thực tập sinh Marketing"
   // lấy từ mục 6.1 đặc tả Marketing v1.1 — vai trò này có ràng buộc riêng
   // (che số điện thoại và email của lead), nên tách thành vai trò thứ 15.
-  dat("Đủ 15 vai trò (14 của mục 19 + Thực tập sinh Marketing)", VAI_TRO.length === 15, `đang có ${VAI_TRO.length}`);
+  // 0.19.0 (BUSINESS_RULES mục 30): thêm "Nhân sự (HR)" và "Thực tập sinh" (sinh viên thực tập) = 17.
+  dat("Đủ 17 vai trò (14 của mục 19 + Thực tập sinh Marketing + Nhân sự + Thực tập sinh)", VAI_TRO.length === 17, `đang có ${VAI_TRO.length}`);
   const maVaiTro = VAI_TRO.map((v) => v.code);
   const thieu = [
     "ceo", "admin", "sales-manager", "sales", "marketing-manager", "marketing",
