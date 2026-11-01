@@ -33,7 +33,8 @@ async function docThanGioiHan(req: NextRequest, toiDa: number): Promise<string |
 /**
  * POST /api/cong-khai/email/ses/<mã> — SNS đẩy sự kiện SES (EG-02 → EG-04). Không phiên, không Origin
  * (proxy miễn kiểm cho /api/cong-khai/email/); xác thực = mã trong đường dẫn + chữ ký SNS.
- * Dữ liệu sai → 400; sai mã / chữ ký / chủ đề / host chứng chỉ → 403; quá lớn → 413; dồn dập → 429.
+ * Dữ liệu sai → 400; sai mã / chữ ký / phiên bản chữ ký (chỉ 2) / chủ đề / host chứng chỉ, thông điệp
+ * cũ hơn 1 giờ hoặc ở tương lai quá 5 phút → 403 (có ghi nhật ký); quá lớn → 413; dồn dập → 429.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ ma: string }> }) {
   const ip = layIpKhach(req.headers);
@@ -48,6 +49,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ma: string
     const tho = await docThanGioiHan(req, TOI_DA_BYTE);
     if (tho === null) return NextResponse.json({ thongBao: "Dữ liệu gửi quá lớn." }, { status: 413 });
     const kq = await nhanThongDiepSes(ma.slice(0, 100), tho, { loaiTieuDe: req.headers.get("x-amz-sns-message-type") });
+    // Mọi lần từ chối (sai mã / chữ ký / phiên bản / thông điệp quá cũ…) ghi nhật ký máy chủ — không lộ mã.
+    if (kq.status === 403) console.warn(`[ses-webhook] từ chối 403 (ip ${ip ?? "không rõ"}): ${String(kq.than.thongBao)}`);
     return NextResponse.json(kq.than, { status: kq.status });
   } catch (e) {
     // Lỗi hạ tầng (CSDL…): 503 để SNS gửi lại — không bao giờ 500.

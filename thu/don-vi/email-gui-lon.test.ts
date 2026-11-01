@@ -18,6 +18,7 @@ import {
   mayChuSmtpSes,
   NHAN_QUANG_CAO_MAC_DINH,
   nhomTenMien,
+  soNgayLechTuNgay,
   soNgayTuNgay,
   tieuDeSes,
   trangThaiDongY,
@@ -26,8 +27,11 @@ import {
   vungCuaTopic,
   xetGioiHanDiaChi,
   chuanHoaNhanQuangCao,
+  ymdHomNayVN,
 } from "../../src/modules/email/tinh-toan";
-import { chuoiKySns, docSuKienSes, laUrlChungChiSns, laUrlDangKySns, LuocDoThongDiepSns, xacMinhChuKySns, type ThongDiepSns } from "../../src/modules/email/sns";
+import { chuoiKySns, docSuKienSes, kiemThoiDiemSns, laUrlChungChiSns, laUrlDangKySns, LuocDoThongDiepSns, xacMinhChuKySns, type ThongDiepSns } from "../../src/modules/email/sns";
+import { docDongYWebhook, GIA_TRI_DONG_Y_MAC_DINH } from "../../src/modules/marketing/tinh-toan";
+import { LuocDoDongYWebhook, LuocDoNguonWebhook } from "../../src/modules/marketing/luoc-do";
 import { banGhiCanCo, danhGiaBanGhi } from "../../src/modules/email/dns";
 import { bamMaWebhookSes, khopMaWebhookSes, sinhMaWebhookSes, tenantCuaMaWebhook } from "../../src/modules/email/ma-webhook-ses";
 import { laNgayYmd } from "../../src/modules/cau-hinh/danh-muc";
@@ -50,8 +54,14 @@ describe("EG-10 — đường khởi động (warm-up)", () => {
     assert.equal(soNgayTuNgay(20261109, new Date("2026-11-09T23:30:00Z")), 1);
     assert.equal(soNgayTuNgay(20261109, new Date("2026-11-09T16:59:00Z")), 0);
   });
-  it("chưa tới ngày bắt đầu → mức đầu; chưa đặt / ngày sai → null", () => {
-    assert.equal(tranKhoiDong(20261201, 200, 1.3, TRUA_10_11), 200);
+  it("chưa tới ngày bắt đầu → null (chỉ áp trần ngày thường — quyết định 0.18.0); chưa đặt / ngày sai → null", () => {
+    assert.equal(tranKhoiDong(20261201, 200, 1.3, TRUA_10_11), null);
+    assert.equal(tranKhoiDong(20261111, 200, 1.3, TRUA_10_11), null, "ngày mai theo giờ VN");
+    // 23:59 ngày 10/11 VN (16:59Z) vẫn chưa tới ngày 11/11; 00:00 ngày 11/11 VN (17:00Z) là ngày đầu.
+    assert.equal(tranKhoiDong(20261111, 200, 1.3, new Date("2026-11-10T16:59:59Z")), null);
+    assert.equal(tranKhoiDong(20261111, 200, 1.3, new Date("2026-11-10T17:00:00Z")), 200);
+    assert.equal(soNgayLechTuNgay(20261201, TRUA_10_11), -21);
+    assert.equal(soNgayTuNgay(20261201, TRUA_10_11), 0);
     assert.equal(tranKhoiDong(null, 200, 1.3, TRUA_10_11), null);
     assert.equal(tranKhoiDong(20260231, 200, 1.3, TRUA_10_11), null);
     assert.equal(tranKhoiDong(20261110, 200, 0.5, TRUA_10_11), null);
@@ -258,19 +268,33 @@ describe("EG-03 — SNS: chuỗi ký và URL chứng chỉ", () => {
     assert.equal(laUrlDangKySns("https://169.254.169.254/latest/meta-data", "ap-southeast-1"), false);
     assert.equal(laUrlDangKySns("https://sns.ap-southeast-1.amazonaws.com.evil.com/", "ap-southeast-1"), false);
   });
-  it("chữ ký thật bằng chứng chỉ tự ký: phiên bản 1 và 2 đúng; sửa nội dung / khóa khác → sai", () => {
+  it("chữ ký thật bằng chứng chỉ tự ký: CHỈ phiên bản 2 (SHA256) đúng; v1 (SHA1) luôn sai; sửa nội dung / khóa khác → sai", () => {
     const cc = taoChungChiTuKy();
     const khac = taoChungChiTuKy();
-    for (const v of ["1", "2"] as const) {
-      const m = kyThongDiep({ ...goc, SignatureVersion: v }, cc.khoaRieng);
-      assert.equal(xacMinhChuKySns(m, cc.pem), true, `v${v}`);
-      assert.equal(xacMinhChuKySns({ ...m, Message: '{"a":2}' }, cc.pem), false);
-      assert.equal(xacMinhChuKySns(m, khac.pem), false);
-    }
+    const m = kyThongDiep({ ...goc, SignatureVersion: "2" }, cc.khoaRieng);
+    assert.equal(xacMinhChuKySns(m, cc.pem), true, "v2");
+    assert.equal(xacMinhChuKySns({ ...m, Message: '{"a":2}' }, cc.pem), false);
+    assert.equal(xacMinhChuKySns(m, khac.pem), false);
     const m1 = kyThongDiep({ ...goc, SignatureVersion: "1" }, cc.khoaRieng);
+    assert.equal(xacMinhChuKySns(m1, cc.pem), false, "chữ ký SHA1 đúng nhưng phiên bản 1 không được nhận");
     assert.equal(xacMinhChuKySns({ ...m1, SignatureVersion: "2" } as ThongDiepSns, cc.pem), false, "đổi phiên bản chữ ký");
-    assert.equal(xacMinhChuKySns(m1, "không phải pem"), false);
-    assert.equal(xacMinhChuKySns(m1, cc.pem, new Date("2000-01-01")), false, "chứng chỉ chưa hiệu lực");
+    assert.equal(xacMinhChuKySns({ ...m, SignatureVersion: "1" } as ThongDiepSns, cc.pem), false, "hạ phiên bản trên chữ ký SHA256");
+    assert.equal(xacMinhChuKySns(m, "không phải pem"), false);
+    assert.equal(xacMinhChuKySns(m, cc.pem, new Date("2000-01-01")), false, "chứng chỉ chưa hiệu lực");
+  });
+  it("Timestamp: cửa sổ [−1 giờ, +5 phút]; đúng biên vẫn nhận; sai khuôn → sai-khuon", () => {
+    const bay = new Date("2026-11-10T05:00:00.000Z");
+    assert.equal(kiemThoiDiemSns("2026-11-10T05:00:00.000Z", bay), "hop-le");
+    assert.equal(kiemThoiDiemSns("2026-11-10T04:00:00.000Z", bay), "hop-le", "đúng 1 giờ");
+    assert.equal(kiemThoiDiemSns("2026-11-10T03:59:59.999Z", bay), "qua-cu");
+    assert.equal(kiemThoiDiemSns("2019-01-01T00:00:00.000Z", bay), "qua-cu");
+    assert.equal(kiemThoiDiemSns("2026-11-10T05:05:00.000Z", bay), "hop-le", "đúng 5 phút");
+    assert.equal(kiemThoiDiemSns("2026-11-10T05:05:00.001Z", bay), "tuong-lai");
+    assert.equal(kiemThoiDiemSns("2026-11-10T12:00:00+07:00", bay), "hop-le", "múi giờ +07:00");
+    assert.equal(kiemThoiDiemSns("2026-11-10T12:30:00+07:00", bay), "tuong-lai", "+07:00 đi trước 30 phút");
+    for (const sai of ["", "hôm qua", "2026-11-10 05:00:00", "2026-11-10T05:00:00", "1731214800", "2026-13-40T05:00:00Z"]) {
+      assert.equal(kiemThoiDiemSns(sai, bay), "sai-khuon", sai);
+    }
   });
   it("lược đồ thông điệp: Type lạ / thiếu chữ ký → hỏng", () => {
     assert.equal(LuocDoThongDiepSns.safeParse({ ...goc, Type: "Hack" }).success, false);
@@ -348,5 +372,44 @@ describe("EG-13 — thư xác nhận từ chối", () => {
     assert.ok(t.text.includes("ngừng gửi"));
     assert.ok(t.html.includes("&lt;ITW&gt;") && !t.html.includes("<ITW>"));
     assert.ok(!t.html.includes("huy-nhan-tin") && !t.html.includes("/email/mo/"));
+  });
+});
+
+describe("Quyết định 0.18.0 — đồng ý qua webhook (EG-08), ngày khởi động (EG-10)", () => {
+  it("webhook: chỉ trường đã khai + giá trị chấp nhận mới là đồng ý", () => {
+    const truong = ["dong_y_email"];
+    assert.equal(docDongYWebhook({ dong_y_email: "Có" }, truong, ["có"]).dongY, true);
+    assert.deepEqual(docDongYWebhook({ dong_y_email: " ĐỒNG Ý " }, truong, []), { dongY: true, truong: "dong_y_email", giaTri: " ĐỒNG Ý " }, "giá trị mặc định, không phân biệt hoa thường");
+    assert.equal(docDongYWebhook({ dong_y_email: true }, truong, []).dongY, true, "true (boolean) khớp 'true'");
+    assert.equal(docDongYWebhook({ dong_y_email: 1 }, truong, []).dongY, true);
+    assert.equal(docDongYWebhook({ dong_y_email: "không" }, truong, []).dongY, false);
+    assert.equal(docDongYWebhook({ dong_y_email: false }, truong, []).dongY, false);
+    assert.equal(docDongYWebhook({ dong_y_email: "" }, truong, []).dongY, false);
+    assert.equal(docDongYWebhook({ dong_y_email: ["Có"] }, truong, []).dongY, false, "mảng không bao giờ là đồng ý");
+    assert.equal(docDongYWebhook({ dong_y_email: { v: "Có" } }, truong, []).dongY, false);
+    assert.equal(docDongYWebhook({ Dong_Y_Email: "Có" }, truong, []).dongY, false, "tên trường phân biệt hoa thường");
+    assert.equal(docDongYWebhook({ dongYNhanTin: true }, truong, []).dongY, false, "trường cũ dongYNhanTin không tự là đồng ý");
+    assert.equal(docDongYWebhook({ dongYNhanTin: true }, [], []).dongY, false, "nguồn chưa khai trường → không bao giờ đồng ý");
+    assert.equal(docDongYWebhook({ dong_y_email: "yes" }, truong, ["có"]).dongY, false, "giá trị ngoài danh sách đã khai");
+    assert.equal(docDongYWebhook({ a: "không", b: "Có" }, ["a", "b"], []).dongY, true, "nhiều trường: một trường khớp là đủ");
+    assert.equal(docDongYWebhook(null, truong, []).dongY, false);
+    assert.equal(docDongYWebhook(["x"], truong, []).dongY, false);
+    assert.equal(docDongYWebhook(JSON.parse('{"__proto__": "có"}'), ["__proto__"], []).dongY, true, "khóa lạ chỉ đọc như dữ liệu");
+    assert.equal(docDongYWebhook({}, ["toString"], ["true"]).dongY, false, "không đọc thuộc tính kế thừa");
+  });
+  it("lược đồ cấu hình nguồn: giá trị chuẩn hóa chữ thường; khai trường mà trống giá trị → bộ mặc định; không khai trường → không lưu giá trị", () => {
+    assert.deepEqual(LuocDoDongYWebhook.parse({ truongDongY: ["dong_y_email", "dong_y_email"], giaTriDongY: [" Có ", "có", "YES"] }), { truongDongY: ["dong_y_email"], giaTriDongY: ["có", "yes"] });
+    assert.deepEqual(LuocDoDongYWebhook.parse({ truongDongY: ["x"] }).giaTriDongY, [...GIA_TRI_DONG_Y_MAC_DINH]);
+    assert.deepEqual(LuocDoDongYWebhook.parse({ giaTriDongY: ["có"] }), { truongDongY: [], giaTriDongY: [] });
+    assert.ok(!LuocDoDongYWebhook.safeParse({ truongDongY: ["a", "b", "c", "d", "e", "f"] }).success, "tối đa 5 trường");
+    assert.ok(!LuocDoDongYWebhook.safeParse({ truongDongY: ["a\u0000"] }).success, "ký tự điều khiển");
+    const n = LuocDoNguonWebhook.parse({ ten: "Facebook Lead Ads" });
+    assert.deepEqual([n.truongDongY, n.giaTriDongY], [[], []], "mặc định nguồn mới không mang đồng ý");
+  });
+  it("ngày hôm nay theo giờ VN dạng YYYYMMDD", () => {
+    assert.equal(ymdHomNayVN(TRUA_10_11), 20261110);
+    assert.equal(ymdHomNayVN(new Date("2026-11-10T16:59:59Z")), 20261110);
+    assert.equal(ymdHomNayVN(new Date("2026-11-10T17:00:00Z")), 20261111);
+    assert.equal(ymdHomNayVN(new Date("2026-12-31T17:00:00Z")), 20270101);
   });
 });

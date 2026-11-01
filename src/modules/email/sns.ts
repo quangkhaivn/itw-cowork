@@ -13,7 +13,9 @@ import { vungCuaTopic } from "./tinh-toan";
  *  - Chỉ tải chứng chỉ từ `https://sns.<vùng>.amazonaws.com/…pem` — host so bằng biểu thức chặt,
  *    không cổng, không tên đăng nhập, không chuyển hướng (redirect: "error"), trần kích thước.
  *  - Vùng của host chứng chỉ phải trùng vùng trong TopicArn.
- *  - SignatureVersion 1 = SHA1withRSA, 2 = SHA256withRSA (AWS khuyên dùng 2).
+ *  - **Chỉ** SignatureVersion 2 = SHA256withRSA (quyết định trước khi phát hành 0.18.0 — chủ đề SNS phải
+ *    đặt SignatureVersion = 2). Phiên bản 1 (SHA1) vẫn đọc được lược đồ nhưng luôn bị từ chối (403).
+ *  - Timestamp phải trong cửa sổ [bây giờ − 1 giờ, bây giờ + 5 phút] — chống phát lại thông điệp cũ đã ký.
  *  - SubscribeURL chỉ gọi khi host đúng `sns.<vùng>.amazonaws.com` (https).
  */
 
@@ -89,12 +91,39 @@ export function laUrlDangKySns(s: string, vung?: string | null): boolean {
   return Boolean(m) && (!vung || m![1] === vung);
 }
 
-/** Kiểm chữ ký bằng chứng chỉ PEM. Chứng chỉ hết hạn / chưa hiệu lực / sai → false. Không bao giờ ném lỗi. */
+/** Phiên bản chữ ký duy nhất được nhận (SHA256withRSA). */
+export const PHIEN_BAN_CHU_KY_SNS = "2";
+/** Thông điệp cũ hơn mức này (theo Timestamp) bị từ chối. */
+export const TUOI_TOI_DA_SNS_MS = 3_600_000;
+/** Timestamp đi trước đồng hồ máy chủ quá mức này bị từ chối (lệch giờ cho phép). */
+export const LECH_TUONG_LAI_SNS_MS = 5 * 60_000;
+
+const LA_THOI_DIEM_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Timestamp của thông điệp SNS so với đồng hồ máy chủ. Sai khuôn ISO-8601 → "sai-khuon"; cũ hơn 1 giờ →
+ * "qua-cu"; đi trước quá 5 phút → "tuong-lai". Đúng biên (đúng 1 giờ / đúng 5 phút) vẫn hợp lệ. Hàm thuần.
+ */
+export function kiemThoiDiemSns(timestamp: string, bayGio: Date = new Date()): "hop-le" | "sai-khuon" | "qua-cu" | "tuong-lai" {
+  if (!LA_THOI_DIEM_ISO.test(timestamp)) return "sai-khuon";
+  const t = Date.parse(timestamp);
+  if (Number.isNaN(t)) return "sai-khuon";
+  const lech = bayGio.getTime() - t;
+  if (lech > TUOI_TOI_DA_SNS_MS) return "qua-cu";
+  if (-lech > LECH_TUONG_LAI_SNS_MS) return "tuong-lai";
+  return "hop-le";
+}
+
+/**
+ * Kiểm chữ ký bằng chứng chỉ PEM. Chỉ SignatureVersion 2 (SHA256withRSA); phiên bản 1 → false. Chứng chỉ
+ * hết hạn / chưa hiệu lực / sai → false. Không bao giờ ném lỗi.
+ */
 export function xacMinhChuKySns(m: ThongDiepSns, pem: string, bayGio: Date = new Date()): boolean {
+  if (m.SignatureVersion !== PHIEN_BAN_CHU_KY_SNS) return false;
   try {
     const cc = new X509Certificate(pem);
     if (bayGio < new Date(cc.validFrom) || bayGio > new Date(cc.validTo)) return false;
-    const v = createVerify(m.SignatureVersion === "1" ? "RSA-SHA1" : "RSA-SHA256");
+    const v = createVerify("RSA-SHA256");
     v.update(chuoiKySns(m), "utf8");
     return v.verify(cc.publicKey, m.Signature, "base64");
   } catch {

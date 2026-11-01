@@ -6,6 +6,8 @@ import { khopMaWebhookSes, tenantCuaMaWebhook } from "./ma-webhook-ses";
 import {
   docSuKienSes,
   goiXacNhanDangKySns,
+  kiemThoiDiemSns,
+  PHIEN_BAN_CHU_KY_SNS,
   laUrlChungChiSns,
   laUrlDangKySns,
   layChungChiSns,
@@ -23,9 +25,10 @@ import {
  *   1. Mã sai khuôn → 403, không truy vấn.
  *   2. JSON / lược đồ sai → 400.
  *   3. Giao dịch ngắn: đọc cấu hình — kênh phải là SES, mã khớp băm, TopicArn khớp chủ đề đã khai → 403.
- *   4. Ngoài giao dịch: kiểm URL chứng chỉ (host chặt, đúng vùng của chủ đề), tải chứng chỉ (có đệm),
- *      kiểm chữ ký SignatureVersion 1/2 → 403 nếu sai. SubscriptionConfirmation: gọi SubscribeURL
- *      (host chặt) để xác nhận.
+ *   4. Ngoài giao dịch: chỉ SignatureVersion 2 → 403 nếu khác; Timestamp cũ hơn 1 giờ / đi trước quá
+ *      5 phút → 403 (sai khuôn → 400) — trước khi tải chứng chỉ; kiểm URL chứng chỉ (host chặt, đúng
+ *      vùng của chủ đề), tải chứng chỉ (có đệm), kiểm chữ ký SHA256 → 403 nếu sai.
+ *      SubscriptionConfirmation: gọi SubscribeURL (host chặt) để xác nhận.
  *   5. Giao dịch ngắn: khóa theo MessageId, đã xử lý → trả "trùng lặp", không làm gì thêm; chưa thì áp
  *      tác dụng của sự kiện và ghi `email_sns_messages` (chỉ ghi thêm).
  * Lỗi không lường trước → 503 (SNS sẽ gửi lại), không bao giờ 500 vì dữ liệu vào sai.
@@ -38,7 +41,7 @@ export interface KetQuaWebhook {
 
 const tu = (status: number, thongBao: string, them: Record<string, unknown> = {}): KetQuaWebhook => ({ status, than: { thongBao, ...them } });
 
-export async function nhanThongDiepSes(ma: string, tho: string, meta: { loaiTieuDe: string | null }): Promise<KetQuaWebhook> {
+export async function nhanThongDiepSes(ma: string, tho: string, meta: { loaiTieuDe: string | null; bayGio?: Date }): Promise<KetQuaWebhook> {
   const tenantId = tenantCuaMaWebhook(ma);
   if (!tenantId) return tu(403, "Không có quyền.");
 
@@ -62,7 +65,16 @@ export async function nhanThongDiepSes(ma: string, tho: string, meta: { loaiTieu
   if (!ch.sesTopicArn) return tu(403, "Chưa khai ARN chủ đề SNS ở Kết nối email.");
   if (m.TopicArn !== ch.sesTopicArn) return tu(403, "Chủ đề SNS không khớp.");
 
-  // 4. Chữ ký (ngoài giao dịch).
+  // 4. Phiên bản chữ ký + độ mới của thông điệp (rẻ, không gọi mạng) rồi mới tới chữ ký.
+  if (m.SignatureVersion !== PHIEN_BAN_CHU_KY_SNS) {
+    return tu(403, "Chỉ nhận chữ ký SNS phiên bản 2 (SHA256). Đặt SignatureVersion = 2 cho chủ đề SNS (xem docs/HUONG-DAN-SES.md).");
+  }
+  const tuoi = kiemThoiDiemSns(m.Timestamp, meta.bayGio ?? new Date());
+  if (tuoi === "sai-khuon") return tu(400, "Timestamp của thông điệp SNS sai khuôn.");
+  if (tuoi === "qua-cu") return tu(403, "Thông điệp SNS quá cũ (Timestamp hơn 1 giờ trước) — bỏ qua để chống phát lại.");
+  if (tuoi === "tuong-lai") return tu(403, "Timestamp của thông điệp SNS ở tương lai (lệch hơn 5 phút) — kiểm đồng hồ máy chủ.");
+
+  // Chữ ký (ngoài giao dịch).
   const vung = vungCuaTopic(m.TopicArn);
   if (!laUrlChungChiSns(m.SigningCertURL, vung)) return tu(403, "URL chứng chỉ ký không phải của Amazon SNS.");
   let pem: string;

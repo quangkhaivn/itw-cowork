@@ -392,7 +392,8 @@ const TOI_DA_GIAO_DICH_MOI_NHIP = 20;
  * Gửi các thư giao dịch đang chờ của một doanh nghiệp. Cùng nguyên tắc gửi tối đa một lần (QĐ-70):
  * nhận việc + COMMIT trước, gửi ngoài giao dịch, ghi kết quả bằng giao dịch nhỏ; kẹt quá PHUT_KET phút
  * → FAILED, không gửi lại. Không qua danh sách chặn (người nhận vừa từ chối — đây chính là thư xác nhận
- * cho họ), không tính vào trần N thư quảng cáo / 24 giờ.
+ * cho họ) — **trừ email hỏng**: địa chỉ bị trả lại vĩnh viễn sau lúc xếp thư thì ghi Lỗi, không gửi.
+ * Không tính vào trần N thư quảng cáo / 24 giờ.
  */
 export async function guiThuGiaoDich(tenantId: string, bayGio: Date = new Date()): Promise<number> {
   const nhan = await voiTenant(tenantId, async (tx) => {
@@ -411,8 +412,18 @@ export async function guiThuGiaoDich(tenantId: string, bayGio: Date = new Date()
       return null;
     }
     if (!ketNoi) return null;
-    await tx.emailTransactional.updateMany({ where: { id: { in: ds.map((d) => d.id) } }, data: { status: "SENDING", attemptAt: bayGio } });
-    const viec = await tx.emailTransactional.findMany({ where: { id: { in: ds.map((d) => d.id) } }, select: { id: true, email: true, kind: true, payload: true } });
+    const tatCa = await tx.emailTransactional.findMany({ where: { id: { in: ds.map((d) => d.id) } }, select: { id: true, email: true, kind: true, payload: true } });
+    // EG-13: không bao giờ gửi tới địa chỉ đang bị chặn vì email hỏng (kể cả hỏng sau lúc xếp thư).
+    const hong = new Set(
+      (await tx.emailSuppression.findMany({ where: { email: { in: tatCa.map((v) => v.email) }, reason: "email-hong", status: "hoat-dong" }, select: { email: true } })).map((x) => x.email),
+    );
+    const boQua = tatCa.filter((v) => hong.has(v.email)).map((v) => v.id);
+    if (boQua.length) {
+      await tx.emailTransactional.updateMany({ where: { id: { in: boQua } }, data: { status: "FAILED", attemptAt: bayGio, reason: "Địa chỉ email hỏng (trả lại vĩnh viễn) — không gửi thư xác nhận." } });
+    }
+    const viec = tatCa.filter((v) => !hong.has(v.email));
+    if (!viec.length) return null;
+    await tx.emailTransactional.updateMany({ where: { id: { in: viec.map((v) => v.id) } }, data: { status: "SENDING", attemptAt: bayGio } });
     return { viec, ketNoi, chan: await docChanThu(tx, tenantId) };
   });
   if (!nhan) return 0;

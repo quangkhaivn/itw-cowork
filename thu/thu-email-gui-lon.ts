@@ -16,9 +16,11 @@ import { datMangSns, type ThongDiepSns } from "../src/modules/email/sns";
 import { datBoTraDns } from "../src/modules/email/dns";
 import { docHanMucHomNay } from "../src/modules/email/han-muc";
 import { datVanChuyenThu, taoVanChuyenNodemailer, type CauHinhSmtp } from "../src/modules/email/van-chuyen";
-import { capNhatCauHinh } from "../src/modules/cau-hinh/service";
-import { guiFormCongKhai, taoForm } from "../src/modules/marketing/service";
-import { LuocDoForm } from "../src/modules/marketing/luoc-do";
+import { capNhatCauHinh, docCauHinh } from "../src/modules/cau-hinh/service";
+import { batBuocDongY } from "../src/modules/email/so-dong-y";
+import { doiDongYNhanTin, doiDongYWebhook, guiFormCongKhai, nhanQuaWebhook, taoForm, taoNguonWebhook } from "../src/modules/marketing/service";
+import { LuocDoDongYWebhook, LuocDoForm, LuocDoNguonWebhook } from "../src/modules/marketing/luoc-do";
+import { ymdHomNayVN } from "../src/modules/email/tinh-toan";
 import { POST as postWebhookSes } from "../src/app/api/cong-khai/email/ses/[ma]/route";
 import { seedNenMong } from "../prisma/seed/index";
 import { clientChuSoHuu, dat, ketLuan } from "./thu-lib";
@@ -234,6 +236,12 @@ async function main() {
   dat("[CSDL] CHECK: kênh SES thì địa chỉ gửi phải thuộc tên miền gửi", loCheck);
   const xemA = await voi(A, gdA, (nc) => xemKetNoi(nc));
   dat("Xem kết nối không lộ mật khẩu; có tên miền + hạn mức hôm nay (SES mặc định 5.000/ngày)", !JSON.stringify(xemA).includes(dongA.passwordEnc!) && xemA.tenMien?.mailFrom === "bounce.tin.itwonline.com" && xemA.hanMuc.tranNgayDat === 5000 && xemA.hanMuc.tranNgayMacDinhSes, JSON.stringify(xemA.hanMuc));
+  // Quyết định 3 (0.18.0): bật kênh SES mà chưa đặt ngày khởi động → máy tự đặt hôm nay (giờ VN), có kiểm toán.
+  const homNayA = ymdHomNayVN();
+  dat("QĐ3: lưu kênh SES lần đầu → email.khoi_dong_ngay_bat_dau = hôm nay (giờ VN)", (await voiTenant(A, (tx) => docCauHinh(tx, "email.khoi_dong_ngay_bat_dau"))) === homNayA, String(homNayA));
+  const ktKhoiDongA = await chu.auditLog.findFirst({ where: { tenantId: A, objectType: "setting", actorId: gdA }, orderBy: { createdAt: "desc" } });
+  dat("QĐ3: kiểm toán ghi khóa, giá trị, lý do 'tự đặt khi chuyển sang SES'", (ktKhoiDongA?.after as Record<string, unknown> | null)?.khoa === "email.khoi_dong_ngay_bat_dau" && (ktKhoiDongA?.after as Record<string, unknown>).giaTri === homNayA && String((ktKhoiDongA?.after as Record<string, unknown>).lyDo).includes("Amazon SES"), JSON.stringify(ktKhoiDongA?.after));
+  dat("QĐ3: hạn mức hôm nay = đường khởi động ngày 1 (200) < trần SES 5.000", xemA.hanMuc.khoiDong?.ngayThu === 1 && xemA.hanMuc.tranHomNay === 200 && xemA.hanMuc.khoiDongTuNgay === null, JSON.stringify(xemA.hanMuc));
 
   // ------------------------------------------------------------------
   console.log("\n— EG-08: sổ đồng ý — form, ghi tay, CSV —");
@@ -331,7 +339,8 @@ async function main() {
   const truocA = hopThu.length;
   const loA = await guiLoThu(A);
   const thuA = hopThu.slice(truocA);
-  dat("Gửi 2 thư (người vừa rút đồng ý bị loại lúc gửi)", loA.daGui === 2 && loA.boQua === 1 && thuToi(eCsv).length === 0, JSON.stringify(loA));
+  // Hai lời rút ghi tay ở trên (eRut, eCsv) → hai thư xác nhận giao dịch (quyết định 4) — không phải thư chiến dịch.
+  dat("Gửi 2 thư (người vừa rút đồng ý bị loại lúc gửi — chỉ nhận thư xác nhận, không nhận thư chiến dịch)", loA.daGui === 2 && loA.boQua === 1 && loA.xacNhan === 2 && thuToi(eCsv).length === 1 && thuToi(eCsv).every((h) => !/List-Unsubscribe/i.test(tieuDeThu(h.du))), JSON.stringify(loA));
   dat("Người vừa rút: Bị loại kèm lý do", (await chu.emailRecipient.findFirstOrThrow({ where: { campaignId: cdA.id, email: eCsv } })).status === "SKIPPED");
   dat("Kết nối SES dựng tới email-smtp.ap-southeast-1.amazonaws.com:587 STARTTLS với tên đăng nhập SMTP", cauHinhDaDung.some((c) => c.host === "email-smtp.ap-southeast-1.amazonaws.com" && c.port === 587 && c.baoMat === "starttls" && c.tenDangNhap === "AKIATHUSMTP" && c.matKhau === `MatKhauSes-${DAU}`));
   const thuForm = thuA.find((h) => h.den.includes(eForm))!;
@@ -387,7 +396,10 @@ async function main() {
   const [ss1, ss2] = await Promise.all([goi(MA, moi), goi(MA, moi)]);
   dat("Cùng một thông điệp MỚI tới hai lần cùng lúc → chỉ xử lý một lần", ss1.status === 200 && ss2.status === 200 && (await chu.emailEvent.count({ where: { recipientId: rForm.id, eventType: "send" } })) === 1 && [ss1, ss2].filter((x) => x.json.trungLap === true).length === 1, JSON.stringify([ss1.json, ss2.json]));
   const v1 = thongBaoSes(TOPIC, { eventType: "Send", mail: mail(rForm), send: {} }, cc.khoaRieng, { SignatureVersion: "1", Subject: "Amazon SES Email Event Notification" });
-  dat("Chữ ký phiên bản 1 (SHA1) + có Subject → 200", (await goi(MA, v1)).status === 200 && (await chu.emailEvent.count({ where: { recipientId: rForm.id, eventType: "send" } })) === 2);
+  const kqV1 = await goi(MA, v1);
+  dat("QĐ5: chữ ký phiên bản 1 (SHA1) đúng chữ ký vẫn → 403, không xử lý", kqV1.status === 403 && String(kqV1.json.thongBao).includes("phiên bản 2") && (await chu.emailEvent.count({ where: { recipientId: rForm.id, eventType: "send" } })) === 1 && (await chu.emailSnsMessage.count({ where: { tenantId: A, snsMessageId: v1.MessageId } })) === 0, JSON.stringify(kqV1));
+  const v2Subject = thongBaoSes(TOPIC, { eventType: "Send", mail: mail(rForm), send: {} }, cc.khoaRieng, { Subject: "Amazon SES Email Event Notification" });
+  dat("Chữ ký phiên bản 2 + có Subject → 200", (await goi(MA, v2Subject)).status === 200 && (await chu.emailEvent.count({ where: { recipientId: rForm.id, eventType: "send" } })) === 2);
   dat("Nhật ký SNS chỉ ghi thêm", await (async () => {
     try {
       await chu.emailSnsMessage.updateMany({ where: { tenantId: A }, data: { note: "x" } });
@@ -462,7 +474,7 @@ async function main() {
   dat("Đang tạm dừng thì worker không gửi tiếp", (await guiLoThu(A, new Date(tP + 65_000))).daGui === 0);
   await voi(A, tpA, (nc) => tiepTucChienDich(nc, cdP.id));
   const cP2 = await chu.emailCampaign.findUniqueOrThrow({ where: { id: cdP.id } });
-  dat("Tiếp tục: chụp mốc (mẫu 22, hỏng 3) — chỉ xét thư gửi sau mốc", cP2.status === "SENDING" && cP2.rateBaseSample === 22 && cP2.rateBaseBounced === 3, `${cP2.rateBaseSample}/${cP2.rateBaseBounced}`);
+  dat("Tiếp tục: chụp mốc (mẫu 22, hỏng 3, lúc chụp) — chỉ xét thư gửi sau mốc", cP2.status === "SENDING" && cP2.rateBaseSample === 22 && cP2.rateBaseBounced === 3 && cP2.rateBaseAt !== null, `${cP2.rateBaseSample}/${cP2.rateBaseBounced} ${cP2.rateBaseAt?.toISOString()}`);
   const loP2 = await guiLoThu(A, new Date(tP + 130_000));
   dat("Sau khi tiếp tục không bị dừng lại ngay vì thư cũ; gửi nốt 3 thư", loP2.daGui === 3 && (await chu.emailCampaign.findUniqueOrThrow({ where: { id: cdP.id } })).status === "SENDING", JSON.stringify(loP2));
 
@@ -604,7 +616,8 @@ async function main() {
   console.log("\n— Cách ly doanh nghiệp (RLS) —");
   await voi(B, gdB, (nc) => ghiTayDongY(nc, LuocDoGhiTayDongY.parse({ email: eTay, hanhDong: "rut", canCu: "Doanh nghiệp B ghi từ chối" })));
   const demB = await voiTenant(B, async (tx) => ({ so: await tx.emailConsent.count(), sns: await tx.emailSnsMessage.count(), gd: await tx.emailTransactional.count() }));
-  dat("B chỉ thấy đúng dòng sổ của mình, không thấy nhật ký SNS / thư giao dịch của A, C", demB.so === 1 && demB.sns === 0 && demB.gd === 0, JSON.stringify(demB));
+  // gd = 1: chính thư xác nhận cho lời rút B vừa ghi tay (quyết định 4) — không thấy thư của A, C.
+  dat("B chỉ thấy đúng dòng sổ / thư giao dịch của mình, không thấy nhật ký SNS / thư giao dịch của A, C", demB.so === 1 && demB.sns === 0 && demB.gd === 1 && (await voiTenant(B, (tx) => tx.emailTransactional.count({ where: { email: eTay } }))) === 1, JSON.stringify(demB));
   dat("Lời từ chối ở B không đổi trạng thái đồng ý của cùng email ở A", (await voiTenant(A, (tx) => trangThaiDongYCuaNhieu(tx, [eTay]))).get(eTay)?.hanhDong === "dong-y");
   let ghiCheo = false;
   try {
@@ -615,6 +628,155 @@ async function main() {
   dat("RLS: B không ghi được dòng sổ mang tenant A", ghiCheo);
   const soB = await voi(B, gdB, (nc) => xemSoDongY(nc, { q: "", trang: 1 }));
   dat("Màn hình sổ của B chỉ có dòng của B", soB.tong === 1);
+
+  // ==================================================================
+  // Quyết định của chủ doanh nghiệp trước khi phát hành 0.18.0 (CHANGELOG 0.18.0, mục 29)
+  // ==================================================================
+  console.log("\n— QĐ1: bắt buộc đồng ý mặc định BẬT —");
+  const tD = await seedNenMong(chu, `thu-eg-d-${DAU}`, "Doanh nghiệp thử gửi lớn D");
+  dat("QĐ1: doanh nghiệp mới, chưa đặt gì → email.bat_buoc_dong_y = 1, duyệt chiến dịch đòi sổ đồng ý", await voiTenant(tD.id, async (tx) => (await docCauHinh(tx, "email.bat_buoc_dong_y")) === 1 && (await batBuocDongY(tx))));
+
+  console.log("\n— QĐ2: đồng ý qua webhook chỉ khi có trường đồng ý đã khai —");
+  const goiLead = (maNguon: string, khoa: string, than: unknown) => voiTenant(A, (tx) => nhanQuaWebhook(tx, A, maNguon, khoa, than, meta));
+  const nguonWh = await voi(A, mkA, (nc) => taoNguonWebhook(nc, LuocDoNguonWebhook.parse({ ten: "Facebook Lead Ads", ma: `fb-${DAU}` })));
+  dat("QĐ2: nguồn mới mặc định không khai trường đồng ý", nguonWh.nguon.truongDongY.length === 0 && nguonWh.nguon.giaTriDongY.length === 0);
+  const eWh1 = `wh1.${DAU}@gmail.com`;
+  const kqWh1 = await goiLead(nguonWh.nguon.ma, nguonWh.khoa, { full_name: "Khach Webhook 1", email: eWh1, dongYNhanTin: true, dong_y_email: "Có" });
+  const leadWh1 = await chu.lead.findFirstOrThrow({ where: { tenantId: A, emailNormalized: eWh1 } });
+  dat("QĐ2: nguồn chưa khai trường — lead vẫn tạo, KHÔNG ghi đồng ý (kể cả gửi dongYNhanTin: true)", kqWh1.ketQua === "tao-moi" && (await chu.emailConsent.count({ where: { tenantId: A, email: eWh1 } })) === 0 && !leadWh1.marketingOptIn);
+  await nemLoi("QĐ2: nhân viên kinh doanh không đổi được trường đồng ý của nguồn", "quyen", () => voi(A, saleA, (nc) => doiDongYWebhook(nc, nguonWh.nguon.id, LuocDoDongYWebhook.parse({ truongDongY: ["dong_y_email"] }))));
+  await voi(A, mkA, (nc) => doiDongYWebhook(nc, nguonWh.nguon.id, LuocDoDongYWebhook.parse({ truongDongY: ["dong_y_email"], giaTriDongY: ["Có", "Đồng ý"] })));
+  const nguonSau = await chu.marketingWebhookSource.findUniqueOrThrow({ where: { id: nguonWh.nguon.id } });
+  const ktNguon = await chu.auditLog.findFirst({ where: { tenantId: A, objectType: "marketing_webhook_source", objectId: nguonWh.nguon.id, action: "sua" } });
+  dat("QĐ2: lưu trường + giá trị đã chuẩn hóa, có kiểm toán trước / sau", nguonSau.consentFields.join() === "dong_y_email" && nguonSau.consentValues.join() === "có,đồng ý" && ktNguon !== null, JSON.stringify([nguonSau.consentFields, nguonSau.consentValues]));
+  const eWh2 = `wh2.${DAU}@gmail.com`;
+  const eWh3 = `wh3.${DAU}@gmail.com`;
+  const eWh4 = `wh4.${DAU}@gmail.com`;
+  await goiLead(nguonWh.nguon.ma, nguonWh.khoa, { full_name: "Khach Webhook 2", email: eWh2, dong_y_email: " CÓ " });
+  await goiLead(nguonWh.nguon.ma, nguonWh.khoa, { full_name: "Khach Webhook 3", email: eWh3, dong_y_email: "Không" });
+  await goiLead(nguonWh.nguon.ma, nguonWh.khoa, { full_name: "Khach Webhook 4", email: eWh4, dongYNhanTin: true });
+  const soWh2 = await chu.emailConsent.findMany({ where: { tenantId: A, email: eWh2 } });
+  dat("QĐ2: trường đã khai + giá trị chấp nhận → 'dong-y' nguồn webhook, căn cứ nêu trường / giá trị", soWh2.length === 1 && soWh2[0].action === "dong-y" && soWh2[0].source === "webhook" && soWh2[0].evidence.includes('trường "dong_y_email" = " CÓ "') && (soWh2[0].evidenceRef ?? "").startsWith("lead_capture:"), JSON.stringify(soWh2[0]));
+  dat("QĐ2: lead có đồng ý mang cờ MK-13 khớp sổ", (await chu.lead.findFirstOrThrow({ where: { tenantId: A, emailNormalized: eWh2 } })).marketingOptIn);
+  dat("QĐ2: giá trị ngoài danh sách ('Không') hoặc thiếu trường → lead tạo, không đồng ý", (await chu.lead.count({ where: { tenantId: A, emailNormalized: { in: [eWh3, eWh4] } } })) === 2 && (await chu.emailConsent.count({ where: { tenantId: A, email: { in: [eWh3, eWh4] } } })) === 0 && (await chu.lead.count({ where: { tenantId: A, emailNormalized: { in: [eWh3, eWh4] }, marketingOptIn: true } })) === 0);
+  const nkWh2 = await chu.leadCapture.findFirstOrThrow({ where: { tenantId: A, webhookSourceId: nguonWh.nguon.id, lead: { emailNormalized: eWh3 } } });
+  const dyNk = (nkWh2.payload as { dongYEmail?: { dongY: boolean; truong: string | null; giaTri: string | null } }).dongYEmail;
+  dat("QĐ2: nhật ký nhận lead ghi trường / giá trị đọc được", dyNk?.dongY === false && dyNk.truong === "dong_y_email" && dyNk.giaTri === "Không", JSON.stringify(nkWh2.payload));
+
+  console.log("\n— QĐ3: khởi động khi chuyển sang SES; ngày bắt đầu ở tương lai —");
+  const knC = (kenh: "ses" | "smtp") =>
+    kenh === "ses"
+      ? LuocDoKetNoiEmail.parse({ kenh: "ses", sesVung: VUNG, tenDangNhap: "AKIATHUC", matKhau: `MatKhauC-${DAU}`, tenNguoiGui: "ITW", emailNguoiGui: "tin@tin.itwonline.com", tenMienGui: "tin.itwonline.com" })
+      : LuocDoKetNoiEmail.parse({ host: "127.0.0.1", port: smtp.cong, baoMat: "none", tenNguoiGui: "ITW", emailNguoiGui: "info@itwonline.com", tenMienGui: "tin.itwonline.com" });
+  dat("QĐ3: C đang SMTP, chưa đặt ngày khởi động", (await voiTenant(C, (tx) => docCauHinh(tx, "email.khoi_dong_ngay_bat_dau"))) === null);
+  const luuSesC = await voi(C, gdC, (nc) => luuKetNoi(nc, knC("ses")));
+  dat("QĐ3: chuyển SMTP → SES → tự đặt ngày bắt đầu = hôm nay, trả về cho màn hình", luuSesC.khoiDongTuDat === ymdHomNayVN() && (await voiTenant(C, (tx) => docCauHinh(tx, "email.khoi_dong_ngay_bat_dau"))) === ymdHomNayVN());
+  const ngayTuongLai = 20991231;
+  await voi(C, gdC, (nc) => capNhatCauHinh(nc, { giaTri: { "email.khoi_dong_ngay_bat_dau": ngayTuongLai } }));
+  await voi(C, gdC, (nc) => luuKetNoi(nc, knC("smtp")));
+  const luuSesC2 = await voi(C, gdC, (nc) => luuKetNoi(nc, knC("ses")));
+  dat("QĐ3: chuyển lại sang SES khi đã có ngày (kể cả tương lai) → giữ nguyên, không ghi đè", luuSesC2.khoiDongTuDat === null && (await voiTenant(C, (tx) => docCauHinh(tx, "email.khoi_dong_ngay_bat_dau"))) === ngayTuongLai);
+  const luuSesC3 = await voi(C, gdC, (nc) => luuKetNoi(nc, knC("ses")));
+  dat("QĐ3: lưu lại khi vẫn là SES → không đụng ngày khởi động", luuSesC3.khoiDongTuDat === null);
+  const hmTuongLai = await voiTenant(C, (tx) => docHanMucHomNay(tx, "ses"));
+  dat("QĐ3: ngày bắt đầu ở tương lai → CHƯA áp đường khởi động; trần ngày thường (SES 5.000)", hmTuongLai.khoiDong === null && hmTuongLai.khoiDongTuNgay === ngayTuongLai && hmTuongLai.tranHomNay === 5000, JSON.stringify(hmTuongLai));
+  const knXemC = await voi(C, gdC, (nc) => xemKetNoi(nc));
+  dat("QĐ3: màn hình Kết nối email cùng con số với worker", knXemC.hanMuc.tranHomNay === 5000 && knXemC.hanMuc.khoiDongTuNgay === ngayTuongLai);
+  await voi(C, gdC, (nc) => luuKetNoi(nc, knC("smtp")));
+  await voi(C, gdC, (nc) => capNhatCauHinh(nc, { giaTri: { "email.khoi_dong_ngay_bat_dau": null } }));
+
+  console.log("\n— QĐ4: thư xác nhận khi nhân viên ghi rút thay khách; không gửi tới email hỏng —");
+  const xnRut = await chu.emailTransactional.findMany({ where: { tenantId: A, email: { in: [eRut, eCsv] } } });
+  dat("QĐ4: hai lời rút ghi tay (eRut, eCsv) → mỗi lời một thư xác nhận, đã gửi", xnRut.length === 2 && xnRut.every((x) => x.status === "SENT" && x.dedupeKey.startsWith("xac-nhan-tu-choi:")), JSON.stringify(xnRut.map((x) => [x.email, x.status])));
+  const rutLai = await voi(A, mkA, (nc) => ghiTayDongY(nc, LuocDoGhiTayDongY.parse({ email: eRut, hanhDong: "rut", canCu: "Khách nhắc lại qua điện thoại" })));
+  dat("QĐ4: ghi rút lần nữa khi đã rút → không thêm thư (một thư cho mỗi lần đổi sang từ chối)", rutLai.thuXacNhan === "da-tu-choi-truoc" && (await chu.emailTransactional.count({ where: { tenantId: A, email: eRut } })) === 1);
+  const ePhanDoi = `phandoi.${DAU}@gmail.com`;
+  await voi(A, mkA, (nc) => ghiTayDongY(nc, LuocDoGhiTayDongY.parse({ email: ePhanDoi, hanhDong: "phan-doi", canCu: "Khách gửi thư phàn nàn bị làm phiền" })));
+  dat("QĐ4: ghi tay 'phản đối' → không gửi thư xác nhận", (await chu.emailTransactional.count({ where: { tenantId: A, email: ePhanDoi } })) === 0);
+  const rutHong = await voi(A, mkA, (nc) => ghiTayDongY(nc, LuocDoGhiTayDongY.parse({ email: eTay, hanhDong: "rut", canCu: "Khách gọi điện xin dừng nhận thư" })));
+  dat("QĐ4: ghi rút cho địa chỉ email hỏng (trả lại vĩnh viễn) → sổ ghi rút, KHÔNG xếp thư xác nhận", rutHong.thuXacNhan === "email-hong" && (await chu.emailTransactional.count({ where: { tenantId: A, email: eTay } })) === 0 && (await voiTenant(A, (tx) => trangThaiDongYCuaNhieu(tx, [eTay]))).get(eTay)?.hanhDong === "rut");
+  const rHong = daGuiP[0];
+  dat("QĐ4: tự huỷ nhận tin từ địa chỉ email hỏng → vẫn ghi rút", await huyNhanTin(kyMaLienKet("huy", A, rHong.id), { ip: null, userAgent: null }));
+  dat("QĐ4: ... nhưng không xếp thư xác nhận (đường tự phục vụ cũng bỏ email hỏng)", (await chu.emailTransactional.count({ where: { tenantId: A, email: rHong.email } })) === 0 && (await voiTenant(A, (tx) => trangThaiDongYCuaNhieu(tx, [rHong.email]))).get(rHong.email)?.hanhDong === "rut");
+  const eLeadRut = `leadrut.${DAU}@gmail.com`;
+  const idLeadRut = await lead(A, saleA, eLeadRut, "website");
+  await voi(A, saleA, (nc) => doiDongYNhanTin(nc, "lead", idLeadRut, { dongY: false, nguon: "khach-goi-dien" }));
+  const xnLead = await chu.emailTransactional.findMany({ where: { tenantId: A, email: eLeadRut } });
+  dat("QĐ4: ghi nhận từ chối trên lead (nhân viên) → một thư xác nhận", xnLead.length === 1 && xnLead[0].status === "QUEUED");
+  // Thư đã xếp, rồi địa chỉ hỏng trước lúc gửi → không gửi, ghi Lỗi kèm lý do.
+  await chu.emailSuppression.update({ where: { tenantId_email: { tenantId: A, email: eLeadRut } }, data: { reason: "email-hong", status: "hoat-dong" } });
+  const truocXnHong = thuToi(eLeadRut).length;
+  await guiThuGiaoDich(A);
+  const xnLeadSau = await chu.emailTransactional.findFirstOrThrow({ where: { id: xnLead[0].id } });
+  dat("QĐ4: địa chỉ hỏng sau lúc xếp → lúc gửi bỏ, ghi Lỗi 'email hỏng', không thư nào đi", xnLeadSau.status === "FAILED" && (xnLeadSau.reason ?? "").includes("email hỏng") && thuToi(eLeadRut).length === truocXnHong, `${xnLeadSau.status} ${xnLeadSau.reason}`);
+  const ktRut = await chu.auditLog.findFirst({ where: { tenantId: A, action: "ghi-dong-y", objectId: rutHong.id } });
+  dat("QĐ4: kiểm toán ghi kết quả xếp thư xác nhận", (ktRut?.after as Record<string, unknown> | null)?.thuXacNhan === "email-hong");
+
+  console.log("\n— QĐ5: SNS — chỉ chữ ký v2, Timestamp trong cửa sổ 1 giờ / 5 phút —");
+  const truocTaiQd5 = daTaiChungChi.length;
+  const canhBao: string[] = [];
+  const warnGoc = console.warn;
+  console.warn = (...x: unknown[]) => void canhBao.push(x.map(String).join(" "));
+  const urlCcMoi = `https://sns.${VUNG}.amazonaws.com/SimpleNotificationService-qd5.pem`;
+  const giaoQd5 = (them: Partial<ThongDiepSns>) => thongBaoSes(TOPIC, { eventType: "Delivery", mail: mail(rForm) }, cc.khoaRieng, { SigningCertURL: urlCcMoi, ...them });
+  const cu61 = giaoQd5({ Timestamp: new Date(Date.now() - 61 * 60_000).toISOString() });
+  const kqCu61 = await goi(MA, cu61);
+  const tuongLai = giaoQd5({ Timestamp: new Date(Date.now() + 10 * 60_000).toISOString() });
+  const kqTuongLai = await goi(MA, tuongLai);
+  const saiKhuon = giaoQd5({ Timestamp: "hôm qua" });
+  const kqSaiKhuon = await goi(MA, saiKhuon);
+  console.warn = warnGoc;
+  dat("QĐ5: thông điệp đã ký đúng nhưng Timestamp cũ hơn 1 giờ → 403", kqCu61.status === 403 && String(kqCu61.json.thongBao).includes("quá cũ"), JSON.stringify(kqCu61));
+  dat("QĐ5: Timestamp ở tương lai quá 5 phút → 403", kqTuongLai.status === 403 && String(kqTuongLai.json.thongBao).includes("tương lai"), JSON.stringify(kqTuongLai));
+  dat("QĐ5: Timestamp sai khuôn → 400 (không bao giờ 500)", kqSaiKhuon.status === 400);
+  dat("QĐ5: từ chối trước khi tải chứng chỉ, không ghi nhật ký SNS", daTaiChungChi.length === truocTaiQd5 && (await chu.emailSnsMessage.count({ where: { tenantId: A, snsMessageId: { in: [cu61.MessageId, tuongLai.MessageId, saiKhuon.MessageId] } } })) === 0);
+  dat("QĐ5: mỗi lần 403 ghi nhật ký máy chủ (console.warn [ses-webhook])", canhBao.filter((c) => c.includes("[ses-webhook] từ chối 403")).length === 2, canhBao.join(" | "));
+  const cu59 = giaoQd5({ Timestamp: new Date(Date.now() - 59 * 60_000).toISOString() });
+  dat("QĐ5: Timestamp 59 phút trước (trong cửa sổ) → 200", (await goi(MA, cu59)).status === 200 && daTaiChungChi.length === truocTaiQd5 + 1);
+  const xnCu = kyThongDiep({ Type: "SubscriptionConfirmation", MessageId: randomUUID(), TopicArn: TOPIC, Message: "x", Timestamp: new Date(Date.now() - 2 * 3_600_000).toISOString(), SigningCertURL: URL_CHUNG_CHI, SubscribeURL: urlDung, Token: "tok-cu" }, cc.khoaRieng);
+  const goiXnTruoc = daGoiXacNhan.length;
+  dat("QĐ5: SubscriptionConfirmation cũ hơn 1 giờ → 403, không gọi SubscribeURL", (await goi(MA, xnCu)).status === 403 && daGoiXacNhan.length === goiXnTruoc);
+  const v1Moi = thongBaoSes(TOPIC, { eventType: "Delivery", mail: mail(rForm) }, cc.khoaRieng, { SignatureVersion: "1" });
+  dat("QĐ5: SignatureVersion 1 (Timestamp mới, chữ ký SHA1 đúng) → 403", (await goi(MA, v1Moi)).status === 403);
+
+  console.log("\n— QĐ6: sau 'Tiếp tục', trả lại / báo rác tới trễ của thư gửi trước mốc không tính —");
+  await voi(A, gdA, (nc) => capNhatCauHinh(nc, { giaTri: { "email.mau_toi_thieu_danh_gia": 20, "email.so_thu_moi_phut": 22 } }));
+  const emailsQ = Array.from({ length: 43 }, (_, i) => `q${i}.${DAU}@gmail.com`);
+  for (const e of emailsQ) await lead(A, saleA, e, "nguon-q");
+  await voi(A, mkA, (nc) => nhapCsvDongY(nc, { noiDung: ["Email;Nguồn;Căn cứ;Thời điểm", ...emailsQ.map((e) => `${e};Hội thảo;Phiếu đăng ký;20/10/2026`)].join("\n"), chiKiemTra: false }));
+  const cdQ = await voi(A, mkA, (nc) => taoChienDich(nc, LuocDoTaoChienDich.parse({ ten: "Chien dich Q", mauId: mauA.id, thamSo: { doiTuong: "lead", nguon: ["nguon-q"] } })));
+  await voi(A, mkA, (nc) => guiDuyetChienDich(nc, cdQ.id));
+  await voi(A, tpA, (nc) => duyetChienDich(nc, cdQ.id));
+  const tQ = Date.now() + 3_600_000;
+  const loQ1 = await guiLoThu(A, new Date(tQ));
+  const cuQ = await chu.emailRecipient.findMany({ where: { campaignId: cdQ.id, status: "SENT" }, orderBy: { email: "asc" } });
+  dat("QĐ6: gửi 22/43 thư", loQ1.daGui === 22 && cuQ.length === 22, JSON.stringify(loQ1));
+  const bounceQ = (r: { id: string; messageId: string | null; email: string }) =>
+    goi(MA, thongBaoSes(TOPIC, { eventType: "Bounce", mail: mail(r), bounce: { bounceType: "Permanent", bouncedRecipients: [{ emailAddress: r.email }] } }, cc.khoaRieng));
+  await bounceQ(cuQ[0]);
+  await bounceQ(cuQ[1]);
+  dat("QĐ6: 2/22 trả lại (9,1%) > 5% → tự dừng", (await chu.emailCampaign.findUniqueOrThrow({ where: { id: cdQ.id } })).pauseCode === "ty-le-hong");
+  await voi(A, tpA, (nc) => tiepTucChienDich(nc, cdQ.id));
+  const cQ = await chu.emailCampaign.findUniqueOrThrow({ where: { id: cdQ.id } });
+  dat("QĐ6: tiếp tục → chụp mốc thời gian", cQ.status === "SENDING" && cQ.rateBaseAt !== null && cQ.rateBaseSample === 22);
+  await voi(A, gdA, (nc) => capNhatCauHinh(nc, { giaTri: { "email.so_thu_moi_phut": 20 } }));
+  const loQ2 = await guiLoThu(A, new Date(tQ + 65_000));
+  const moiQ = (await chu.emailRecipient.findMany({ where: { campaignId: cdQ.id, status: "SENT" } })).filter((r) => r.sentAt! >= cQ.rateBaseAt!);
+  dat("QĐ6: gửi tiếp 20 thư sau mốc (còn 1 chờ)", loQ2.daGui === 20 && moiQ.length === 20, JSON.stringify(loQ2));
+  // Cách tính cũ (trừ số đếm) sẽ dừng ở đây: 2 trả lại (10%) + 1 báo rác (50‰) "mới" trên 20 thư sau mốc.
+  await bounceQ(cuQ[2]);
+  await bounceQ(cuQ[3]);
+  await goi(MA, thongBaoSes(TOPIC, { notificationType: "Complaint", mail: mail(cuQ[4]), complaint: { complainedRecipients: [{ emailAddress: cuQ[4].email }] } }, cc.khoaRieng));
+  const cQ2 = await chu.emailCampaign.findUniqueOrThrow({ where: { id: cdQ.id } });
+  dat("QĐ6: trả lại / báo rác TỚI TRỄ của thư gửi trước mốc → không tính, vẫn đang gửi", cQ2.status === "SENDING", `${cQ2.status} ${cQ2.pauseReason}`);
+  dat("QĐ6: ... nhưng vẫn ghi đủ trên người nhận (chặn email hỏng, báo rác)", (await chu.emailRecipient.count({ where: { id: { in: [cuQ[2].id, cuQ[3].id] }, bouncedAt: { not: null } } })) === 2 && (await chu.emailSuppression.count({ where: { tenantId: A, email: cuQ[4].email, reason: "bao-rac" } })) === 1);
+  dat("QĐ6: worker xét lại ở nhịp sau cũng không dừng", !(await voiTenant(A, async (tx) => (await import("../src/modules/email/suc-khoe")).kiemTyLeChienDich(tx, A, cdQ.id))));
+  await bounceQ(moiQ[0]);
+  dat("QĐ6: 1/20 thư sau mốc trả lại (5%) — bằng ngưỡng, chưa dừng", (await chu.emailCampaign.findUniqueOrThrow({ where: { id: cdQ.id } })).status === "SENDING");
+  await bounceQ(moiQ[1]);
+  const cQ3 = await chu.emailCampaign.findUniqueOrThrow({ where: { id: cdQ.id } });
+  dat("QĐ6: trả lại của thư gửi SAU mốc (2/20 = 10%) → tự dừng lại", cQ3.status === "PAUSED" && cQ3.pauseCode === "ty-le-hong" && (cQ3.pauseReason ?? "").includes("(2/20 thư)"), `${cQ3.status} ${cQ3.pauseReason}`);
+  await voi(A, gdA, (nc) => capNhatCauHinh(nc, { giaTri: { "email.mau_toi_thieu_danh_gia": 20, "email.so_thu_moi_phut": 600 } }));
 
   datVanChuyenThu(null);
   datMangSns(null);

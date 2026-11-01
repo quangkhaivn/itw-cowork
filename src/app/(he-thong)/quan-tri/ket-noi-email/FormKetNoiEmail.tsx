@@ -79,6 +79,7 @@ export default function FormKetNoiEmail({
   const [urlWebhook, datUrlWebhook] = useState<string | null>(null);
   const laSes = f.kenh === "ses";
   const [daLuu, datDaLuu] = useState(false);
+  const [khoiDongTuDat, datKhoiDongTuDat] = useState<number | null>(null);
   const [kqThu, datKqThu] = useState<{ ok: boolean; loi: string | null; den: string } | null>(null);
   const [huongDan, datHuongDan] = useState<string | null>(null);
   const doi = (k: keyof typeof f, v: string | boolean) => {
@@ -88,7 +89,7 @@ export default function FormKetNoiEmail({
 
   async function luu(e: React.FormEvent) {
     e.preventDefault();
-    const kq = await goi("/api/v1/email/ket-noi", "PUT", {
+    const kq = await goi<{ ok: boolean; khoiDongTuDat: number | null }>("/api/v1/email/ket-noi", "PUT", {
       ...f,
       port: Number(f.port),
       matKhau: f.matKhau || undefined,
@@ -96,6 +97,7 @@ export default function FormKetNoiEmail({
     });
     if (kq) {
       datDaLuu(true);
+      datKhoiDongTuDat(kq.khoiDongTuDat ?? null);
       datF((c) => ({ ...c, matKhau: "", xoaMatKhau: false }));
       router.refresh();
     }
@@ -140,6 +142,8 @@ export default function FormKetNoiEmail({
         {daLuu && (
           <div className="hop-thong-bao tot" role="status" style={{ margin: 16 }}>
             Đã lưu kết nối.
+            {khoiDongTuDat !== null &&
+              ` Kênh vừa chuyển sang Amazon SES nên máy đặt ngày bắt đầu khởi động là hôm nay (${String(khoiDongTuDat % 100).padStart(2, "0")}/${String(Math.floor(khoiDongTuDat / 100) % 100).padStart(2, "0")}/${Math.floor(khoiDongTuDat / 10000)}) — đổi ở Cấu hình → Email marketing nếu cần.`}
           </div>
         )}
         <div className="phan-form">
@@ -341,7 +345,9 @@ export default function FormKetNoiEmail({
             Khởi động:{" "}
             {hanMuc.khoiDong
               ? `ngày thứ ${hanMuc.khoiDong.ngayThu} — trần ${dinhDangSo(hanMuc.khoiDong.tranHomNay)} thư (từ ${dinhDangSo(hanMuc.khoiDong.mucDau)} × ${dinhDangSo(hanMuc.khoiDong.heSo)}^ngày)`
-              : "chưa đặt ngày bắt đầu — không áp đường khởi động"}
+              : hanMuc.khoiDongTuNgay
+                ? `bắt đầu từ ${String(hanMuc.khoiDongTuNgay % 100).padStart(2, "0")}/${String(Math.floor(hanMuc.khoiDongTuNgay / 100) % 100).padStart(2, "0")}/${Math.floor(hanMuc.khoiDongTuNgay / 10000)} — trước ngày đó chỉ áp trần ngày thường`
+                : "chưa đặt ngày bắt đầu — không áp đường khởi động"}
           </p>
           <p>Mỗi địa chỉ tối đa {hanMuc.toiDaMoiDiaChi24h} thư quảng cáo / 24 giờ (mọi chiến dịch).</p>
           <p className="phu">Đổi ở Quản trị → Cấu hình → Email marketing.</p>

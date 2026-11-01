@@ -2,21 +2,21 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.18.0 (chưa phát hành) — Email marketing, giai đoạn 1: gửi số lượng lớn
+## 0.18.0 — 01/11/2026 — Email marketing: gửi số lượng lớn
 
-**Chưa triển khai lên máy thật.** Một migration mới (`20261025090001_email_gui_lon`, có chuyển dữ liệu cũ vào sổ đồng ý), chạy lại `prisma/rls.sql` như mọi lần (sổ đồng ý + nhật ký SNS vào nhóm bảng chỉ-ghi-thêm). Không có biến môi trường mới, không thêm mã quyền, không thêm thư viện.
+**Chưa triển khai lên máy thật.** Hai migration mới (`20261025090001_email_gui_lon`, có chuyển dữ liệu cũ vào sổ đồng ý; `20261101090000_email_gui_lon_quyet_dinh` — trường đồng ý của nguồn webhook, mốc thời gian tỷ lệ), chạy lại `prisma/rls.sql` như mọi lần (sổ đồng ý + nhật ký SNS vào nhóm bảng chỉ-ghi-thêm). Không có biến môi trường mới, không thêm mã quyền, không thêm thư viện. **Trước khi nối webhook SES: đặt phiên bản chữ ký 2 (SHA256) cho chủ đề SNS** (`docs/HUONG-DAN-SES.md` B6 bước 1b).
 
-Luật nghiệp vụ: `BUSINESS_RULES.md` mục 29 (EG-01 → EG-14). Quyết định QĐ-94 → QĐ-99. Hướng dẫn: `docs/HUONG-DAN-SES.md`.
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 29 (EG-01 → EG-14). Quyết định QĐ-94 → QĐ-99, QĐ-101 → QĐ-103. Hướng dẫn: `docs/HUONG-DAN-SES.md`.
 
 ### Thêm
 - **Kênh gửi Amazon SES** (Quản trị → Kết nối email): chọn "Amazon SES", vùng (mặc định ap-southeast-1), configuration set, tên miền gửi (vd `tin.itwonline.com`), SMTP credentials. Máy tự dùng `email-smtp.<vùng>.amazonaws.com:587` STARTTLS, gắn configuration set + thẻ người nhận vào thư và lưu mã thư SES.
-- **Webhook sự kiện SES qua SNS** `/api/cong-khai/email/ses/<mã>`: kiểm chữ ký SNS (phiên bản 1 và 2), chủ đề, host chứng chỉ; tự xác nhận đăng ký; không xử lý trùng. Thư tới hộp thư, bị trả lại vĩnh viễn (chặn email hỏng), bị báo rác (chặn + ghi phản đối + từ chối trên lead / liên hệ).
+- **Webhook sự kiện SES qua SNS** `/api/cong-khai/email/ses/<mã>`: kiểm chữ ký SNS (chỉ phiên bản 2 — SHA256), thời điểm thông điệp (trong 1 giờ), chủ đề, host chứng chỉ; tự xác nhận đăng ký; không xử lý trùng. Thư tới hộp thư, bị trả lại vĩnh viễn (chặn email hỏng), bị báo rác (chặn + ghi phản đối + từ chối trên lead / liên hệ).
 - **Tự tạm dừng chiến dịch** khi tỷ lệ trả lại > 5% hoặc báo rác > 1‰ (sau 200 thư), báo người duyệt.
 - **Sổ đồng ý email** (Marketing → Sổ đồng ý email): chỉ ghi thêm; ghi tự động từ form có ô đồng ý (khách tự tích), huỷ nhận tin, báo rác; ghi tay có căn cứ; nhập CSV (Email, Nguồn, Căn cứ, Thời điểm). Duyệt chiến dịch loại người chưa có đồng ý ("Chưa có đồng ý nhận thư quảng cáo").
 - **Nhãn [QC]** tự động đầu tiêu đề thư quảng cáo (đổi được, không bỏ được).
 - **Tối đa 3 thư quảng cáo / địa chỉ / 24 giờ** trên mọi chiến dịch — vượt thì hoãn, không lỗi.
-- **Thư xác nhận từ chối**: sau khi huỷ nhận tin, gửi một thư xác nhận lúc nhận yêu cầu và lúc ngừng gửi.
-- **Khởi động tên miền (warm-up)**: trần ngày tăng dần từ 200 thư, hệ số 1,3/ngày; hạn mức hôm nay hiện ở Kết nối email và chiến dịch.
+- **Thư xác nhận từ chối**: sau khi huỷ nhận tin, hoặc khi nhân viên ghi rút đồng ý thay khách, gửi một thư xác nhận lúc nhận yêu cầu và lúc ngừng gửi (không gửi tới email hỏng).
+- **Khởi động tên miền (warm-up)**: trần ngày tăng dần từ 200 thư, hệ số 1,3/ngày; tự bật (ngày bắt đầu = hôm nay) khi chuyển kênh sang SES; hạn mức hôm nay hiện ở Kết nối email và chiến dịch.
 - **Báo cáo theo tên miền nhận** (Gmail, Outlook, Yahoo, khác) trên chi tiết chiến dịch; thẻ "Trả lại / báo rác".
 - **Tên miền gửi**: bảng bản ghi DNS cần thêm, chia "Làm ngay" (DMARC) và "Sau khi có AWS" (DKIM, MAIL FROM), nút **Kiểm tra** báo từng bản ghi.
 - Cấu hình mới (nhóm Email marketing): `email.nguong_hong_phan_tram`, `email.nguong_bao_rac_phan_nghin`, `email.mau_toi_thieu_danh_gia`, `email.bat_buoc_dong_y`, `email.toi_da_thu_moi_dia_chi_24h`, `email.khoi_dong_ngay_bat_dau`, `email.khoi_dong_muc_dau`, `email.khoi_dong_he_so`.
@@ -25,6 +25,16 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 29 (EG-01 → EG-14). Quyết đ
 - **Duyệt chiến dịch giờ cần sổ đồng ý** (mặc định bật). Migration chuyển cờ đồng ý cũ vào sổ (nguồn "Chuyển từ dữ liệu trước 0.18"); người chỉ được tích "đồng ý" bằng nút trên lead mà không có căn cứ sẽ bị loại — ghi lại ở Sổ đồng ý kèm căn cứ. Tắt bằng `email.bat_buoc_dong_y = 0` (chỉ khi gửi thư không phải quảng cáo).
 - Tiêu đề thư chiến dịch, xem trước và thư thử luôn mở đầu bằng `[QC]`.
 - Chưa có tài khoản AWS: mọi tính năng trên (trừ webhook SES) chạy với hộp thư SMTP hiện tại.
+
+### Quyết định của chủ doanh nghiệp trước khi phát hành (01/11/2026)
+1. **Bắt buộc sổ đồng ý giữ bật mặc định** (`email.bat_buoc_dong_y = 1`) — không đổi luật; tài liệu (EG-09, `docs/HUONG-DAN-SES.md` A4) ghi rõ.
+2. **Đồng ý qua webhook phải có trường đồng ý khai ở nguồn** (EG-08, QĐ-102): *Marketing → Webhook nhận lead → Đồng ý email* khai tên trường (≤ 5, vd `dong_y_email`) và giá trị chấp nhận (≤ 10; trống = `true, 1, yes, có, đồng ý`, không phân biệt hoa thường). Chỉ khi thân webhook có trường đó với giá trị chấp nhận, lead mới được ghi "đồng ý" vào sổ (căn cứ ghi tên trường + giá trị) và bật cờ đồng ý; nguồn chưa khai / thiếu trường / giá trị khác → lead vẫn được tạo, không đồng ý. Trường cũ `dongYNhanTin: true` **không** còn tự là đồng ý — nguồn đang dùng nó thì khai trường `dongYNhanTin`. API: `POST /api/v1/marketing/webhook/:id/dong-y`; tạo nguồn nhận thêm `truongDongY`, `giaTriDongY`.
+3. **Khởi động tự bật khi chuyển kênh sang SES** (EG-10): ngày bắt đầu đang trống → đặt hôm nay (giờ VN), ghi kiểm toán + sự kiện, màn hình báo khi lưu. Ngày bắt đầu ở **tương lai** → chưa áp đường khởi động cho tới ngày đó (chỉ trần ngày thường; màn hình ghi "bắt đầu từ …").
+4. **Thư xác nhận từ chối cả khi nhân viên ghi rút** thay khách (Sổ đồng ý ghi tay "Rút đồng ý", ghi nhận từ chối trên lead / liên hệ) — một thư cho mỗi lần đổi sang từ chối (EG-13). **Không bao giờ gửi tới email hỏng** (trả lại vĩnh viễn), cả đường tự huỷ nhận tin: không xếp thư; thư đã xếp mà địa chỉ hỏng trước lúc gửi → Lỗi kèm lý do.
+5. **Webhook SNS chặt hơn** (EG-03, QĐ-101): chỉ nhận **SignatureVersion 2** (SHA256); thông điệp có Timestamp cũ hơn 1 giờ hoặc ở tương lai quá 5 phút → 403 (sai khuôn → 400), kiểm trước khi tải chứng chỉ; mọi 403 ghi nhật ký máy chủ. Hướng dẫn SES thêm bước đặt phiên bản chữ ký 2 cho chủ đề SNS.
+6. **Tự tạm dừng sau "Tiếp tục"** (EG-05, QĐ-103): mốc là thời điểm bấm (`rate_base_at`); cửa sổ mới chỉ gồm thư gửi từ mốc (so `sent_at`), nên trả lại / báo rác tới trễ của thư gửi trước mốc không làm chiến dịch dừng lại lần nữa (vẫn ghi lên người nhận, chặn, sổ đồng ý).
+
+Kiểm thử cho sáu quyết định: thêm 45 kiểm chứng (mục "QĐ1 → QĐ6" và EG-01) vào `thu:email-gui-lon` (nay 155) và sửa các bài dựa trên chữ ký SNS phiên bản 1 / khởi động "mức đầu trước ngày bắt đầu" (`thu:qa-email-gui-lon` 97); 4 nhóm bài đơn vị mới (Timestamp SNS, chỉ v2, `docDongYWebhook`, `ymdHomNayVN`, ngày khởi động ở tương lai) — `thu:don-vi` **530 bài** đạt; `thu:tich-hop` **2.292 kiểm chứng / 35 bộ** đạt; `tsc --noEmit`, `next build --webpack` sạch.
 
 #### Sửa sau QA độc lập (`npm run thu:qa-email-gui-lon`, nối vào `thu:tich-hop`)
 - **Trần ngày / khởi động bị vượt khi hai worker chồng nhau**: số "đã gửi hôm nay" chỉ đếm thư đã gửi xong, nên worker thứ hai nhận việc lúc worker đầu còn đang gửi thấy cả trần còn nguyên (đo được 20 thư với trần 10). Nay đếm cả thư đang gửi (SENDING) nhận trong ngày.

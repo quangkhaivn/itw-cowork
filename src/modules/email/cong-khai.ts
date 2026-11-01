@@ -4,7 +4,7 @@ import { ghiKiemToan } from "@/lib/kiem-toan";
 import { docMaLienKet } from "./ma-lien-ket";
 import { cheEmail, danhSachLienKet, LuocDoDanhSachKhoi } from "./tinh-toan";
 import { docChanThu } from "./service";
-import { ghiSoDongY } from "./so-dong-y";
+import { ghiSoDongY, xepThuXacNhanTuChoi } from "./so-dong-y";
 
 /**
  * Đường công khai của email: huỷ nhận tin, điểm ảnh mở, chuyển hướng bấm (EM-10, EM-11).
@@ -70,13 +70,8 @@ export async function huyNhanTin(ma: string, bc: BoiCanhYeuCau): Promise<boolean
     const lead = { count: truocLead - (await tx.lead.count({ where: { emailNormalized: r.email, marketingOptOutAt: null } })) };
     const lh = { count: truocLh - (await tx.contact.count({ where: { emailNormalized: r.email, marketingOptOutAt: null } })) };
     // EG-13 (NĐ 91/2020 Điều 20): một thư xác nhận cho MỖI lần trạng thái đổi sang từ chối — bấm lại,
-    // hay bấm ở thư của chiến dịch khác khi đã từ chối rồi, không sinh thêm thư.
-    if (so.truoc !== "rut" && so.truoc !== "phan-doi") {
-      await tx.emailTransactional.createMany({
-        data: [{ tenantId: m.tenantId, kind: "xac-nhan-tu-choi", email: r.email, recipientId: r.id, dedupeKey: `xac-nhan-tu-choi:${so.id}`, payload: { nhanLuc: luc.toISOString(), dungTu: luc.toISOString() } }],
-        skipDuplicates: true,
-      });
-    }
+    // hay bấm ở thư của chiến dịch khác khi đã từ chối rồi, không sinh thêm thư; địa chỉ email hỏng thì không gửi.
+    await xepThuXacNhanTuChoi(tx, m.tenantId, { email: r.email, dongSoId: so.id, truoc: so.truoc, nhanLuc: luc, dungTu: luc, recipientId: r.id });
     await tx.emailEvent.create({
       data: { tenantId: m.tenantId, campaignId: r.campaignId, recipientId: r.id, eventType: "unsubscribe", ipAddress: bc.ip, userAgent: bc.userAgent?.slice(0, 500) ?? null },
     });

@@ -55,6 +55,11 @@ export default async function TrangWebhook() {
                         {w.chienDich ? ` · ${w.chienDich.ma}` : ""}
                         {w.trangThai === "thu-hoi" ? ` · đã thu hồi ${dinhDangNgayGio(w.thuHoiLuc)}` : ""}
                       </div>
+                      <div className="dong-phu">
+                        {w.truongDongY.length
+                          ? `Đồng ý email: ${w.truongDongY.join(" / ")} ∈ {${w.giaTriDongY.join(", ")}}`
+                          : "Không mang đồng ý email quảng cáo"}
+                      </div>
                     </td>
                     <td className="nho">{w.goiYKhoa}</td>
                     <td className="so">{dinhDangSo(w.soNhan)}</td>
@@ -62,7 +67,7 @@ export default async function TrangWebhook() {
                       <Link href={`/marketing/nhan-lead?webhookSourceId=${w.id}`}>{dinhDangSo(w.soTuChoi)}</Link>
                     </td>
                     <td className="an-tren-dt nho">{w.nhanCuoiLuc ? dinhDangNgayGio(w.nhanCuoiLuc) : <span className="mo">Chưa nhận</span>}</td>
-                    <td>{sua && w.trangThai === "hoat-dong" && <TacVuWebhook id={w.id} ma={w.ma} duongDan={duongDan} />}</td>
+                    <td>{sua && w.trangThai === "hoat-dong" && <TacVuWebhook id={w.id} ma={w.ma} duongDan={duongDan} truongDongY={w.truongDongY} giaTriDongY={w.giaTriDongY} />}</td>
                   </tr>
                 ))}
               </tbody>
@@ -79,7 +84,13 @@ export default async function TrangWebhook() {
             <code>POST {duongDan}/&lt;mã nguồn&gt;</code>, thân JSON, khóa trong tiêu đề <code>X-Cowork-Key</code> (hoặc <code>Authorization: Bearer …</code>) — không đặt khóa trên đường dẫn.
           </p>
           <p style={{ marginBottom: 0 }}>
-            Trường nhận: <code>hoTen</code>/<code>full_name</code>, <code>dienThoai</code>/<code>phone_number</code>, <code>email</code>, <code>congTy</code>/<code>company_name</code>, <code>chucDanh</code>/<code>job_title</code>, <code>maSoThue</code>, <code>nhuCau</code>/<code>message</code>, <code>ghiChu</code>, <code>dongYNhanTin</code> (true/false — chỉ khi chính khách đã tích), <code>utm_*</code>. Trường lạ bị bỏ qua.
+            Trường nhận: <code>hoTen</code>/<code>full_name</code>, <code>dienThoai</code>/<code>phone_number</code>, <code>email</code>, <code>congTy</code>/<code>company_name</code>, <code>chucDanh</code>/<code>job_title</code>, <code>maSoThue</code>, <code>nhuCau</code>/<code>message</code>, <code>ghiChu</code>, <code>utm_*</code>. Trường lạ bị bỏ qua.
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            <strong>Đồng ý nhận email quảng cáo</strong> (NĐ 91/2020): lead chỉ được ghi “đồng ý” vào Sổ đồng ý email khi thân JSON có <strong>trường đồng ý đã khai cho nguồn</strong> (nút “Đồng ý email”) với một
+            giá trị được chấp nhận — mặc định <code>true</code>, <code>1</code>, <code>yes</code>, <code>có</code>, <code>đồng ý</code> (không phân biệt hoa / thường). Ví dụ khai trường <code>dong_y_email</code>, Zapier
+            gửi <code>{`"dong_y_email": "Có"`}</code>. Chỉ khai khi câu hỏi trên form quảng cáo là ô <em>khách tự tích</em>, không tích sẵn. Nguồn chưa khai trường, hoặc thân không có trường / giá trị khác → lead vẫn vào nhưng
+            không được gửi thư quảng cáo.
           </p>
         </div>
       </section>

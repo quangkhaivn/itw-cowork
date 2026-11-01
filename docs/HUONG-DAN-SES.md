@@ -54,9 +54,10 @@ Quay lại **Kết nối email → Bản ghi DNS của tên miền gửi → Ki�
 
 ### A4. Chuẩn bị danh sách người nhận (sổ đồng ý)
 
-Từ 0.18.0, duyệt chiến dịch chỉ lấy người **có đồng ý** trong **Marketing → Sổ đồng ý email**.
+Từ 0.18.0, duyệt chiến dịch chỉ lấy người **có đồng ý** trong **Marketing → Sổ đồng ý email**. Luật này **bật sẵn** (Cấu hình → Email marketing → `email.bat_buoc_dong_y = 1`) và giữ bật cho mọi thư quảng cáo — chỉ tắt khi gửi thư không phải quảng cáo.
 
 - Khách tự tích ô đồng ý trên form đăng ký của Cowork → tự vào sổ.
+- Lead từ **webhook** (Facebook Lead Ads qua Zapier / Make…) **chỉ** vào sổ khi nguồn webhook đã khai **trường đồng ý**: **Marketing → Webhook nhận lead → Đồng ý email** — nhập tên trường mà Zapier gửi (vd `dong_y_email`) và các giá trị coi là đồng ý (bỏ trống = `true, 1, yes, có, đồng ý`, không phân biệt hoa thường). Chỉ khai khi câu hỏi trên form quảng cáo là ô **khách tự tích, không tích sẵn**. Nguồn chưa khai, hoặc lead gửi giá trị khác (vd "Không") → lead vẫn vào CRM nhưng **không** được gửi thư quảng cáo.
 - Danh sách đồng ý có sẵn (phiếu hội thảo, form giấy…) → **Nhập CSV** với 4 cột `Email; Nguồn; Căn cứ; Thời điểm` (Excel: *Lưu thành → CSV UTF-8*). Bấm **Đọc thử** trước, rồi **Nhập vào sổ**.
 - Không nhập những địa chỉ không có căn cứ đồng ý (mua danh sách, thu thập từ website khác…): vừa trái NĐ 91/2020, vừa làm tỷ lệ báo rác tăng — Amazon SES có thể khóa tài khoản.
 
@@ -107,6 +108,7 @@ Trong bảng điều khiển AWS, chọn vùng **Asia Pacific (Singapore) — `a
 ### B6. Configuration set + chủ đề SNS
 
 1. Mở dịch vụ **Amazon SNS** (cùng vùng) → tạo **topic** loại **Standard**, ví dụ `cowork-ses-su-kien`. Chép **ARN** của topic (dạng `arn:aws:sns:ap-southeast-1:<12 số>:cowork-ses-su-kien`).
+1b. **Bắt buộc — đặt phiên bản chữ ký 2 (SHA256)** cho topic **trước khi** tạo subscription ở B7: mở topic → **Edit** → mục chữ ký thông điệp (*Message signature version* / *Signature version*) chọn **SHA256** (phiên bản **2**) → **Save changes**. Topic mới của AWS mặc định ký **SHA1 (phiên bản 1)** — Cowork **từ chối** mọi thông điệp phiên bản 1 (webhook trả 403, cả thư xác nhận đăng ký), nên bỏ bước này thì subscription không bao giờ "Confirmed". Cách khác (AWS CLI): `aws sns set-topic-attributes --region ap-southeast-1 --topic-arn <ARN> --attribute-name SignatureVersion --attribute-value 2`.
 2. Quay lại SES → **Configuration sets** → tạo `cowork-tin`.
 3. Trong configuration set, thêm **event destination** loại **Amazon SNS**, chọn topic vừa tạo, đánh dấu các loại sự kiện: **Send, Delivery, Bounce, Complaint, Reject, Rendering failure, Delivery delay**. (Open / Click không cần — Cowork tự đếm mở / bấm nếu bật theo dõi.)
 
@@ -116,7 +118,8 @@ Trong bảng điều khiển AWS, chọn vùng **Asia Pacific (Singapore) — `a
 2. Điền: Vùng `ap-southeast-1`; Configuration set `cowork-tin`; ARN chủ đề SNS (bước B6); tên đăng nhập + mật khẩu SMTP (bước B5); **Địa chỉ gửi** thuộc tên miền gửi, ví dụ `tin@tin.itwonline.com`; tên người gửi. Bấm **Lưu kết nối**.
 3. Khung **Webhook sự kiện SES** → **Tạo URL webhook**. URL chỉ hiện **một lần** — chép ngay.
 4. Trong SNS, mở topic → tạo **subscription**: Protocol **HTTPS**, Endpoint = URL vừa chép. **Không** bật "raw message delivery".
-5. Cowork tự xác nhận đăng ký; vài giây sau tải lại trang Kết nối email phải thấy **"SNS đã xác nhận"**. Trong SNS, subscription chuyển sang "Confirmed".
+5. Cowork tự xác nhận đăng ký; vài giây sau tải lại trang Kết nối email phải thấy **"SNS đã xác nhận"**. Trong SNS, subscription chuyển sang "Confirmed". Nếu vẫn "Pending confirmation": kiểm lại B6 bước 1b (phiên bản chữ ký 2) rồi bấm **Request confirmation** trên subscription.
+   - Cowork chỉ nhận thông điệp SNS có thời điểm (Timestamp) **trong vòng 1 giờ qua** (và không quá 5 phút ở tương lai) để chống phát lại. Giữ **đồng hồ máy chủ Cowork đúng giờ** (NTP) và để chính sách gửi lại (*delivery policy*) của subscription ở **mặc định** — không kéo dài thời gian gửi lại quá 1 giờ. Nếu Cowork ngừng chạy hơn 1 giờ, sự kiện SES trong khoảng đó không được ghi (xem bảng Reputation của SES).
 6. Bấm **Gửi thư thử** (tới chính email của người bấm).
 
 Đổi mã webhook (khi nghi lộ URL): bấm **Đổi mã webhook** → sửa Endpoint của subscription trong SNS sang URL mới (URL cũ hết hiệu lực ngay).
@@ -139,7 +142,7 @@ Nghĩa: thư marketing chỉ gửi người đã tự đồng ý, có ghi căn c
 
 | Mục | Đặt | Ghi chú |
 |---|---|---|
-| Ngày bắt đầu khởi động tên miền gửi | Ngày gửi chiến dịch SES đầu tiên, dạng `20261110` | Từ ngày này trần mỗi ngày tăng dần |
+| Ngày bắt đầu khởi động tên miền gửi | **Tự đặt = ngày lưu kênh SES** nếu đang trống (màn hình báo khi lưu). Muốn bắt đầu ngày khác: sửa dạng `20261110` | Từ ngày này trần mỗi ngày tăng dần. Đặt ngày ở **tương lai** thì trước ngày đó chỉ áp trần ngày thường (5.000 khi dùng SES), chưa áp đường khởi động |
 | Số thư ngày đầu khởi động | 200 (mặc định) | |
 | Hệ số tăng mỗi ngày | 1,3 (mặc định) | ≈ 2 tuần lên ~5.000 |
 | Số thư chiến dịch tối đa mỗi ngày | Để trống = **mặc định 5.000** khi dùng SES | Không vượt hạn mức SES được cấp |
@@ -184,7 +187,7 @@ Nên đăng ký **Google Postmaster Tools** cho `tin.itwonline.com` (xác minh b
 - Chỉ gửi khi người nhận **đã đồng ý trước** → Sổ đồng ý email, bắt buộc khi duyệt.
 - Tiêu đề có nhãn **[QC]** ở đầu → Cowork tự gắn (đổi được nhãn, không bỏ được).
 - Tối đa **3 thư quảng cáo / địa chỉ / 24 giờ** (trừ khi người nhận đồng ý khác) → Cowork hoãn thư thứ 4.
-- Có cách từ chối và **xác nhận** khi nhận yêu cầu từ chối → liên kết huỷ nhận tin + thư xác nhận tự động.
+- Có cách từ chối và **xác nhận** khi nhận yêu cầu từ chối → liên kết huỷ nhận tin + thư xác nhận tự động; khách xin dừng qua điện thoại / thư mà nhân viên ghi **Rút đồng ý** ở Sổ đồng ý (hoặc ghi nhận từ chối trên lead / liên hệ) cũng nhận một thư xác nhận. Không gửi thư xác nhận tới địa chỉ đã bị trả lại vĩnh viễn (email hỏng).
 - Thông tin người gửi rõ ràng → chân thư bắt buộc (tên + địa chỉ công ty ở Hồ sơ công ty).
 
 ## F. Kiểm tra hằng ngày (5 phút)
@@ -204,6 +207,9 @@ Nên đăng ký **Google Postmaster Tools** cho `tin.itwonline.com` (xác minh b
 | "Email address is not verified" | Còn sandbox | B8 |
 | "SNS chưa xác nhận" mãi | Endpoint sai / đổi mã mà chưa sửa SNS / bật raw message delivery | Tạo lại subscription với URL đang dùng, tắt raw delivery |
 | Webhook trả 403 | Chủ đề trong Cowork khác topic thật, hoặc đã đổi mã | Sửa ARN ở Kết nối email / cập nhật Endpoint |
+| Webhook trả 403 "Chỉ nhận chữ ký SNS phiên bản 2" | Topic còn ký SHA1 (mặc định của AWS) | B6 bước 1b, rồi **Request confirmation** |
+| Webhook trả 403 "quá cũ" / "ở tương lai" | Đồng hồ máy chủ Cowork lệch, hoặc SNS gửi lại sau hơn 1 giờ | Đồng bộ giờ (NTP); delivery policy mặc định |
+| Lead từ Facebook / Zapier bị "Chưa có đồng ý" khi duyệt | Nguồn webhook chưa khai trường đồng ý, hoặc tên trường / giá trị khác | Marketing → Webhook nhận lead → **Đồng ý email** (A4) |
 | DKIM "Sai giá trị" | Nhập thừa tên miền gốc (`….itwonline.com.itwonline.com`) hoặc bật proxy | Sửa tên host, tắt proxy |
 | Nhiều người "Chưa có đồng ý nhận thư quảng cáo" khi duyệt | Chưa có dòng đồng ý trong sổ | Nhập CSV có căn cứ (A4); không tắt `email.bat_buoc_dong_y` cho thư quảng cáo |
 | Một số người "Chờ gửi" lâu | Đã đủ 3 thư quảng cáo / 24 giờ | Bình thường — máy tự gửi khi ra khỏi cửa sổ 24 giờ |

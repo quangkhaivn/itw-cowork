@@ -8,7 +8,7 @@ import {
   TRUONG_FORM,
   type KhoaTruongForm,
 } from "./hang-so";
-import { coKyTuDieuKhien, laSlugHopLe } from "./tinh-toan";
+import { chuanHoaGiaTriDongY, coKyTuDieuKhien, GIA_TRI_DONG_Y_MAC_DINH, laSlugHopLe, TOI_DA_GIA_TRI_DONG_Y, TOI_DA_TRUONG_DONG_Y } from "./tinh-toan";
 
 /** Lược đồ phân hệ Marketing. Luật MK-01 → MK-16 ở BUSINESS_RULES.md mục 22. */
 
@@ -151,13 +151,50 @@ export type DuLieuForm = z.infer<typeof LuocDoForm>;
 // Webhook
 // ---------------------------------------------------------------------------
 
-export const LuocDoNguonWebhook = z.object({
-  ten: z.string().trim().min(3, "Tên nguồn tối thiểu 3 ký tự.").max(255),
-  ma: slugTuyChon,
-  chienDichId: uuidTuyChon,
-  nguon: chuoiTuyChon(50),
+/**
+ * 0.18.0 — EG-08: trường / giá trị đồng ý nhận email quảng cáo của một nguồn webhook. Tên trường giữ
+ * đúng chữ (khóa JSON phân biệt hoa thường); giá trị lưu dạng đã chuẩn hóa (chữ thường). Khai trường
+ * mà bỏ trống giá trị → dùng bộ mặc định true / 1 / yes / có / đồng ý.
+ */
+const chuoiDongY = (nhan: string) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(60, `${nhan} tối đa 60 ký tự.`)
+    .refine((s) => !coKyTuDieuKhien(s), "Có ký tự không hợp lệ.");
+const truongDongY = z
+  .array(chuoiDongY("Tên trường"))
+  .max(TOI_DA_TRUONG_DONG_Y, `Tối đa ${TOI_DA_TRUONG_DONG_Y} trường đồng ý.`)
+  .optional()
+  .default([])
+  .transform((ds) => [...new Set(ds)]);
+const giaTriDongY = z
+  .array(chuoiDongY("Giá trị"))
+  .max(TOI_DA_GIA_TRI_DONG_Y, `Tối đa ${TOI_DA_GIA_TRI_DONG_Y} giá trị đồng ý.`)
+  .optional()
+  .default([])
+  .transform((ds) => [...new Set(ds.map(chuanHoaGiaTriDongY).filter(Boolean))]);
+const cauHinhDongY = <T extends { truongDongY: string[]; giaTriDongY: string[] }>(d: T): T => ({
+  ...d,
+  giaTriDongY: d.truongDongY.length === 0 ? [] : d.giaTriDongY.length ? d.giaTriDongY : [...GIA_TRI_DONG_Y_MAC_DINH],
 });
-export type DuLieuNguonWebhook = z.infer<typeof LuocDoNguonWebhook>;
+
+export const LuocDoDongYWebhook = z.object({ truongDongY, giaTriDongY }).transform(cauHinhDongY);
+export type DuLieuDongYWebhook = z.infer<typeof LuocDoDongYWebhook>;
+
+export const LuocDoNguonWebhook = z
+  .object({
+    ten: z.string().trim().min(3, "Tên nguồn tối thiểu 3 ký tự.").max(255),
+    ma: slugTuyChon,
+    chienDichId: uuidTuyChon,
+    nguon: chuoiTuyChon(50),
+    truongDongY,
+    giaTriDongY,
+  })
+  .transform(cauHinhDongY);
+/** Trường đồng ý không bắt buộc khi gọi thẳng service (bài thử, bàn giao) — thiếu = không mang đồng ý. */
+export type DuLieuNguonWebhook = Omit<z.infer<typeof LuocDoNguonWebhook>, "truongDongY" | "giaTriDongY"> & Partial<DuLieuDongYWebhook>;
 
 /**
  * Thân yêu cầu webhook. Nhận cả tên trường tiếng Việt lẫn tên thông dụng của các công cụ
@@ -180,7 +217,8 @@ export const LuocDoThanWebhook = z
     nhuCau: z.string().max(3000).optional(),
     message: z.string().max(3000).optional(),
     ghiChu: z.string().max(3000).optional(),
-    dongYNhanTin: z.boolean().optional(),
+    /** Không còn tự là "đồng ý": đồng ý đọc từ trường đã khai ở nguồn webhook (EG-08, docDongYWebhook). */
+    dongYNhanTin: z.union([z.boolean(), z.number(), z.string().max(200)]).optional(),
     utm_source: z.string().max(500).optional(),
     utm_medium: z.string().max(500).optional(),
     utm_campaign: z.string().max(500).optional(),
@@ -196,7 +234,6 @@ export const LuocDoThanWebhook = z
     maSoThue: (d.maSoThue ?? "").trim(),
     nhuCau: (d.nhuCau ?? d.message ?? "").trim(),
     ghiChu: (d.ghiChu ?? "").trim(),
-    dongYNhanTin: d.dongYNhanTin === true,
     utm: { utm_source: d.utm_source, utm_medium: d.utm_medium, utm_campaign: d.utm_campaign, utm_content: d.utm_content, utm_term: d.utm_term },
   }));
 

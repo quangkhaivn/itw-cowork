@@ -277,3 +277,50 @@ export function khoaNhanDien(d: { dienThoai?: string | null; email?: string | nu
   }
   return { dienThoai, email: chuanHoaEmail(d.email), maSoThue };
 }
+
+// ---------------------------------------------------------------------------
+// 0.18.0 — đồng ý nhận email quảng cáo qua webhook (EG-08)
+// ---------------------------------------------------------------------------
+
+/** Giá trị gợi ý khi nguồn khai trường đồng ý mà chưa khai giá trị (đã chuẩn hóa chữ thường). */
+export const GIA_TRI_DONG_Y_MAC_DINH = ["true", "1", "yes", "có", "đồng ý"] as const;
+export const TOI_DA_TRUONG_DONG_Y = 5;
+export const TOI_DA_GIA_TRI_DONG_Y = 10;
+
+/** Chuẩn hóa một giá trị để so: NFC, bỏ khoảng trắng hai đầu, chữ thường. */
+export function chuanHoaGiaTriDongY(s: string): string {
+  return s.normalize("NFC").trim().toLowerCase();
+}
+
+export interface DongYWebhook {
+  dongY: boolean;
+  /** Trường đã khớp (hoặc trường đầu tiên có mặt nhưng giá trị không được chấp nhận). */
+  truong: string | null;
+  /** Giá trị gốc đọc được (đã cắt 60 ký tự) — ghi vào căn cứ / nhật ký. */
+  giaTri: string | null;
+}
+
+/**
+ * Lead qua webhook chỉ là **đồng ý nhận email quảng cáo** khi thân yêu cầu có một trường đã khai ở
+ * nguồn webhook (`truong`, khóa cấp cao nhất, đúng chữ) mang giá trị nằm trong danh sách chấp nhận
+ * (`giaTri`, so sau chuẩn hóa). Nhận chuỗi, số, true/false — mảng / đối tượng không bao giờ là đồng ý.
+ * Nguồn chưa khai trường nào → không bao giờ đồng ý (lead vẫn được tạo). Hàm thuần.
+ */
+export function docDongYWebhook(than: unknown, truong: readonly string[], giaTri: readonly string[]): DongYWebhook {
+  const khong: DongYWebhook = { dongY: false, truong: null, giaTri: null };
+  if (!than || typeof than !== "object" || Array.isArray(than) || truong.length === 0) return khong;
+  const chapNhan = new Set((giaTri.length ? giaTri : GIA_TRI_DONG_Y_MAC_DINH).map(chuanHoaGiaTriDongY).filter(Boolean));
+  let coMat: DongYWebhook | null = null;
+  for (const t of truong) {
+    if (!Object.prototype.hasOwnProperty.call(than, t)) continue;
+    const v = (than as Record<string, unknown>)[t];
+    if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") {
+      coMat ??= { dongY: false, truong: t, giaTri: null };
+      continue;
+    }
+    const s = String(v).slice(0, 200);
+    if (chapNhan.has(chuanHoaGiaTriDongY(s))) return { dongY: true, truong: t, giaTri: s.slice(0, 60) };
+    coMat ??= { dongY: false, truong: t, giaTri: s.slice(0, 60) };
+  }
+  return coMat ?? khong;
+}

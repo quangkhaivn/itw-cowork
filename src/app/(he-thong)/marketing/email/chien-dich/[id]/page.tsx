@@ -139,7 +139,7 @@ export default async function TrangChiTietChienDich({ params, searchParams }: { 
         <p className="nho phu" style={{ margin: "0 0 12px" }}>
           Hạn mức hôm nay: {dinhDangSo(c.hanMuc.moiPhut)} thư/phút
           {c.hanMuc.tranHomNay !== null
-            ? ` · trần ${dinhDangSo(c.hanMuc.tranHomNay)} thư/ngày (đã gửi ${dinhDangSo(c.hanMuc.daGuiHomNay)})${c.hanMuc.khoiDong ? ` · đang khởi động, ngày thứ ${c.hanMuc.khoiDong.ngayThu}` : ""}${c.hanMuc.tranNgayMacDinhSes ? " · trần mặc định khi dùng SES" : ""}`
+            ? ` · trần ${dinhDangSo(c.hanMuc.tranHomNay)} thư/ngày (đã gửi ${dinhDangSo(c.hanMuc.daGuiHomNay)})${c.hanMuc.khoiDong ? ` · đang khởi động, ngày thứ ${c.hanMuc.khoiDong.ngayThu}` : c.hanMuc.khoiDongTuNgay ? ` · khởi động bắt đầu từ ngày ${c.hanMuc.khoiDongTuNgay}` : ""}${c.hanMuc.tranNgayMacDinhSes ? " · trần mặc định khi dùng SES" : ""}`
             : " · không chặn theo ngày"}
           {` · mỗi địa chỉ tối đa ${c.hanMuc.toiDaMoiDiaChi24h} thư quảng cáo/24 giờ (quá thì hoãn, không lỗi).`}
         </p>
