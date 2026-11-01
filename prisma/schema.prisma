@@ -3568,7 +3568,7 @@ model UserRecoveryCode {
 
 // ---------------------------------------------------------------------------
 // 0.19.0 — Nhân sự, giai đoạn 1: chấm công, nghỉ phép, tăng ca, bảng công tháng.
-// Luật: BUSINESS_RULES.md mục 30 (NS). Kiến trúc: ARCHITECTURE.md mục 7w. QĐ-100 → QĐ-109.
+// Luật: BUSINESS_RULES.md mục 30 (NS). Kiến trúc: ARCHITECTURE.md mục 7w. QĐ-100 → QĐ-112.
 // Mọi giờ lưu UTC (timestamptz); ngày công tính theo lịch giờ Việt Nam (+07:00 cố định).
 // ---------------------------------------------------------------------------
 
@@ -3739,7 +3739,7 @@ model EmploymentContract {
 }
 
 /// Máy chấm công vân tay (ZKTeco ADMS/PUSH). Số sê-ri (SN) duy nhất TOÀN HỆ THỐNG — máy gọi vào
-/// không kèm doanh nghiệp, hệ thống tra doanh nghiệp từ SN (hàm `tra_may_cham_cong`, QĐ-101).
+/// không kèm doanh nghiệp, hệ thống tra doanh nghiệp từ SN (hàm `tra_may_cham_cong`, QĐ-104).
 model AttendanceDevice {
   id               String    @id @default(uuid()) @db.Uuid
   tenantId         String    @map("tenant_id") @db.Uuid

@@ -6,7 +6,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 **Chưa triển khai lên máy thật.** Một migration mới (`20261102090001_nhan_su_cham_cong`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm mới + quyền EXECUTE hàm `tra_may_cham_cong`), chạy seed (cấp quyền `cham_cong.*` / `nhan_su.*`, tạo vai trò Nhân sự (HR) và Thực tập sinh, 4 loại nghỉ). **nginx máy chủ phải mở HTTP cho riêng `/iclock/`** nếu máy vân tay không hỗ trợ HTTPS (DEPLOYMENT.md). Chấm GPS cần Cowork chạy HTTPS.
 
-Luật nghiệp vụ: `BUSINESS_RULES.md` mục 30 (NS-01 → NS-62). Quyết định QĐ-100 → QĐ-109. Hướng dẫn cho Nhân sự: `docs/HUONG-DAN-CHAM-CONG.md`.
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 30 (NS-01 → NS-62). Quyết định QĐ-100 → QĐ-112. Hướng dẫn cho Nhân sự: `docs/HUONG-DAN-CHAM-CONG.md`.
 
 ### Thêm
 - **Chấm công GPS** (Nhân sự → Chấm công): trang cho điện thoại, hai nút lớn Vào ca / Ra ca; trong bán kính địa điểm → hợp lệ, ngoài vùng nhưng đang có phiếu hỗ trợ → hiện trường, còn lại → ngoài vùng chờ quản lý xem xét; cờ độ chính xác thấp / tốc độ bất thường / không lấy được vị trí; chống bấm trùng; giờ chấm là giờ máy chủ; lần đầu phải xác nhận thông báo dữ liệu vị trí (Luật 91/2025).

@@ -200,7 +200,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("customer", "approve"),
       ...tron(["dashboard", "kpi", "report", "alert", "project"], XEM_XUAT),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
     ],
   },
@@ -214,7 +214,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["product"], XEM_XUAT),
       ...tron(["order", "project", "inventory", "dashboard", "alert", "supplier"], CHI_XEM),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
     ],
   },
@@ -229,7 +229,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("marketing", "approve"),
       ...tron(["crm", "customer", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
     ],
     phamViRieng: rieng(CHAM_CONG_QUAN_LY, "team"),
@@ -243,7 +243,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["marketing", "task"], LAM_VIEC),
       ...tron(["crm", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
     ],
     phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
@@ -260,7 +260,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("project", "approve"),
       ...tron(["customer", "inventory", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
     ],
   },
@@ -273,7 +273,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["technical", "service_desk", "task"], LAM_VIEC),
       ...tron(["customer", "project", "inventory", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
     ],
   },
@@ -288,7 +288,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("project", "approve"),
       ...tron(["customer", "order", "inventory", "purchasing", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
     ],
   },
@@ -301,7 +301,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["purchasing", "supplier", "product", "task"], LAM_VIEC),
       ...tron(["inventory", "order", "project", "dashboard", "alert"], CHI_XEM),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
     ],
     phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
@@ -316,7 +316,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["product"], XEM_XUAT),
       ...tron(["order", "purchasing", "project", "dashboard", "alert", "supplier"], CHI_XEM),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
     ],
     phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
@@ -336,7 +336,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("purchasing", "approve"),
       ...tron(["order", "project", "customer", "purchasing", "dashboard", "kpi", "report", "alert"], XEM_XUAT),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
     ],
     phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
@@ -350,7 +350,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...tron(["service_desk", "customer", "crm", "task"], LAM_VIEC),
       ...tron(["order", "project", "dashboard", "alert", "product"], CHI_XEM),
       maQuyen("ai", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
     ],
     phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
@@ -367,7 +367,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("task", "view"),
       maQuyen("task", "update"),
       maQuyen("dashboard", "view"),
-      // 0.19.0: chấm công — QĐ-104.
+      // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
     ],
   },

@@ -219,7 +219,7 @@ export function phanHoiOk(soDong?: number): string {
 }
 
 /**
- * Bộ đọc thay được (QĐ-102): bài thử và — khi có mẫu máy thật khác chuẩn — một bản đọc riêng cắm vào
+ * Bộ đọc thay được (QĐ-105): bài thử và — khi có mẫu máy thật khác chuẩn — một bản đọc riêng cắm vào
  * đây mà không phải sửa route hay dịch vụ.
  */
 export interface BoDocAdms {

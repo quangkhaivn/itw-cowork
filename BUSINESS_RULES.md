@@ -643,7 +643,7 @@ Ngưỡng ở Cấu hình (nhóm *Email marketing*): `email.nguong_hong_phan_tra
 
 ## 30. Nhân sự – chấm công, nghỉ phép, tăng ca (0.19.0)
 
-Giai đoạn 1 của phân hệ Nhân sự (Giám đốc duyệt 01/11/2026). Chấm công bằng **đúng hai cách**: (1) máy chấm công vân tay ZKTeco gửi về qua giao thức ADMS / PUSH, (2) bấm Vào ca / Ra ca bằng GPS ngay trên Cowork. Quản lý xem trạng thái gần thời gian thực. Sinh viên thực tập là một **loại nhân sự** (phiếu đánh giá thực tập là giai đoạn 2). Quyết định QĐ-100 → QĐ-109. Hướng dẫn vận hành cho Nhân sự: `docs/HUONG-DAN-CHAM-CONG.md`.
+Giai đoạn 1 của phân hệ Nhân sự (Giám đốc duyệt 01/11/2026). Chấm công bằng **đúng hai cách**: (1) máy chấm công vân tay ZKTeco gửi về qua giao thức ADMS / PUSH, (2) bấm Vào ca / Ra ca bằng GPS ngay trên Cowork. Quản lý xem trạng thái gần thời gian thực. Sinh viên thực tập là một **loại nhân sự** (phiếu đánh giá thực tập là giai đoạn 2). Quyết định QĐ-100 → QĐ-112. Hướng dẫn vận hành cho Nhân sự: `docs/HUONG-DAN-CHAM-CONG.md`.
 
 | Việc | Quyền |
 |---|---|

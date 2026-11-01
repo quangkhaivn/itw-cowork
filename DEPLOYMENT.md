@@ -185,7 +185,7 @@ Máy phát triển / bài thử: `SAO_LUU_KHONG_DOCKER=1` cho cả hai script ch
 
 ## Máy chấm công vân tay — HTTP cho riêng `/iclock/` (0.19.0)
 
-Máy ZKTeco gửi dữ liệu theo giao thức ADMS / PUSH tới `http(s)://<máy chủ>:<cổng>/iclock/…` (QĐ-101 → QĐ-103). **Nhiều đời máy chỉ nói HTTP** (không TLS). nginx máy chủ hiện chuyển mọi yêu cầu HTTP sang HTTPS — máy sẽ không theo chuyển hướng và không gửi được. Cách làm: mở HTTP **chỉ cho tiền tố `/iclock/`**, mọi đường khác giữ nguyên chuyển hướng HTTPS (cookie phiên không bao giờ đi qua HTTP).
+Máy ZKTeco gửi dữ liệu theo giao thức ADMS / PUSH tới `http(s)://<máy chủ>:<cổng>/iclock/…` (QĐ-104 → QĐ-106). **Nhiều đời máy chỉ nói HTTP** (không TLS). nginx máy chủ hiện chuyển mọi yêu cầu HTTP sang HTTPS — máy sẽ không theo chuyển hướng và không gửi được. Cách làm: mở HTTP **chỉ cho tiền tố `/iclock/`**, mọi đường khác giữ nguyên chuyển hướng HTTPS (cookie phiên không bao giờ đi qua HTTP).
 
 Trong `/etc/nginx/conf.d/cowork.conf` (nginx máy chủ), khối `server` cổng 80 của tên miền Cowork:
 

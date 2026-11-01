@@ -15,7 +15,7 @@ import { CO } from "./tinh-toan";
 
 /**
  * Máy chấm công vân tay (ZKTeco ADMS/PUSH) — đăng ký máy, nhận dữ liệu máy đẩy lên, PIN chưa khớp,
- * nhập CSV dự phòng. Luật: BUSINESS_RULES.md mục 30 (NS-14 → NS-17). Quyết định QĐ-101 → QĐ-103.
+ * nhập CSV dự phòng. Luật: BUSINESS_RULES.md mục 30 (NS-14 → NS-17). Quyết định QĐ-104 → QĐ-106.
  *
  * Đường máy gọi vào (`/iclock/*`) KHÔNG có phiên đăng nhập: máy được nhận ra bằng số sê-ri (SN) đã được
  * Nhân sự đăng ký trước cho đúng doanh nghiệp + địa điểm. SN lạ → từ chối và ghi nhật ký máy chủ.
@@ -57,7 +57,7 @@ function ghiNhatKySnLa(sn: string, ip: string | null) {
   console.warn(`[cham-cong/adms] Máy chưa đăng ký gọi vào: SN=${sn} IP=${ip ?? "?"} — từ chối. Đăng ký ở Nhân sự → Máy chấm công nếu đây là máy của công ty.`);
 }
 
-/** Tra (doanh nghiệp, máy) theo SN qua hàm SECURITY DEFINER `tra_may_cham_cong` (QĐ-101). */
+/** Tra (doanh nghiệp, máy) theo SN qua hàm SECURITY DEFINER `tra_may_cham_cong` (QĐ-104). */
 export async function traMayTheoSn(sn: string): Promise<{ tenantId: string; deviceId: string } | null> {
   const dong = await prisma.$queryRaw<{ tenant_id: string; device_id: string }[]>`
     SELECT tenant_id::text AS tenant_id, device_id::text AS device_id FROM public.tra_may_cham_cong(${sn})
@@ -67,7 +67,7 @@ export async function traMayTheoSn(sn: string): Promise<{ tenantId: string; devi
 
 /**
  * Xử lý một yêu cầu của máy chấm công. Trả văn bản thuần theo giao thức PUSH. Bộ đọc thay được
- * (`boDoc`) — bài thử và bản đọc riêng cho mẫu máy khác chuẩn (QĐ-102).
+ * (`boDoc`) — bài thử và bản đọc riêng cho mẫu máy khác chuẩn (QĐ-105).
  */
 export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; bayGio?: () => Date } = {}): Promise<PhanHoiHttpAdms> {
   const boDoc = tuyChon.boDoc ?? BO_DOC_ZKTECO;

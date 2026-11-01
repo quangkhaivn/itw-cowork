@@ -106,7 +106,7 @@ END $$;
 -- 3b. (0.19.0) Lần chấm công `attendance_punches`: chỉ ghi thêm (NS-10). Ứng dụng cần
 --     UPDATE cho đúng một việc — gán người cho dòng PIN chưa khớp, trigger
 --     chan_sua_lan_cham kiểm — nhưng KHÔNG bao giờ được xóa.
---     Hàm tra_may_cham_cong (SECURITY DEFINER, QĐ-101): máy chấm công gọi vào không
+--     Hàm tra_may_cham_cong (SECURITY DEFINER, QĐ-104): máy chấm công gọi vào không
 --     kèm doanh nghiệp; hàm trả doanh nghiệp của đúng một số sê-ri đang hoạt động.
 -- --------------------------------------------------------------------------
 REVOKE DELETE ON public.attendance_punches FROM cowork_app;

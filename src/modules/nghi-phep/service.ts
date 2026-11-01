@@ -19,8 +19,8 @@ import { donChongNhau, phepChuyenSang, phepDaTichLuy, quyPhepNam, soDuPhep, soNg
  * lịch nghỉ của nhóm, quỹ phép năm. Luật: BUSINESS_RULES.md mục 30 (NS-30 → NS-35).
  *
  * Quỹ phép KHÔNG lưu thành cột: tính lúc đọc từ Cấu hình + ngày vào làm + điều chỉnh + đơn đã duyệt
- * (như công nợ — TC-06, QĐ-105). Chống tiêu trùng quỹ khi hai đơn được duyệt cùng lúc bằng khóa dòng
- * `leave_balances` (người, năm) — thứ tự khóa: đơn → quỹ (QĐ-106).
+ * (như công nợ — TC-06, QĐ-108). Chống tiêu trùng quỹ khi hai đơn được duyệt cùng lúc bằng khóa dòng
+ * `leave_balances` (người, năm) — thứ tự khóa: đơn → quỹ (QĐ-109).
  */
 
 export function cauHinhPhep(ch: CauHinhChamCong): CauHinhPhep {
