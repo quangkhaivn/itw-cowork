@@ -301,6 +301,10 @@ async function main() {
 
   // ------------------------------------------------------------------
   console.log("\n— NS-61: nhắc chưa chấm công —");
+  // Bước NS-17 ở trên quét bằng giờ THẬT: chạy bài thử vào giờ làm của một ngày làm việc thì đã có nhắc
+  // "chưa chấm công" cho hôm nay. Xóa trước để phần này chỉ đếm nhắc của các ngày thử tháng 10 (sửa ở 0.20.0
+  // — bài thử phụ thuộc giờ chạy, chỉ đạt khi chạy ngoài giờ làm).
+  await chu.notification.deleteMany({ where: { tenantId: T, type: { in: ["cham-cong-chua-vao", "cham-cong-nhan-vien-chua-vao"] } } });
   await quetChamCong(T, vn("2026-10-20T08:30:00"));
   dat("Ngày lễ: không nhắc ai", (await chu.notification.count({ where: { tenantId: T, type: "cham-cong-chua-vao" } })) === 0);
   await quetChamCong(T, vn("2026-10-25T09:30:00"));
