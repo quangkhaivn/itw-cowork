@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import type { NguCanh } from "@/lib/api";
-import { prisma, voiTenant, type ClientTenant } from "@/lib/db";
+import { HAN_GIAO_DICH_THEO_LO_MS, prisma, voiTenant, type ClientTenant } from "@/lib/db";
 import { demVaKiem } from "@/lib/gioi-han-toc-do";
 import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
@@ -57,7 +57,7 @@ function ghiNhatKySnLa(sn: string, ip: string | null) {
   console.warn(`[cham-cong/adms] Máy chưa đăng ký gọi vào: SN=${sn} IP=${ip ?? "?"} — từ chối. Đăng ký ở Nhân sự → Máy chấm công nếu đây là máy của công ty.`);
 }
 
-/** Tra (doanh nghiệp, máy) theo SN qua hàm SECURITY DEFINER `tra_may_cham_cong` (QĐ-104). */
+/** Tra (doanh nghiệp, máy) theo SN qua hàm SECURITY DEFINER `tra_may_cham_cong` (QĐ-104) — không phân biệt hoa thường. */
 export async function traMayTheoSn(sn: string): Promise<{ tenantId: string; deviceId: string } | null> {
   const dong = await prisma.$queryRaw<{ tenant_id: string; device_id: string }[]>`
     SELECT tenant_id::text AS tenant_id, device_id::text AS device_id FROM public.tra_may_cham_cong(${sn})
@@ -88,6 +88,9 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
     return { status: 401, than: "ERROR: UNKNOWN DEVICE" };
   }
 
+  // Lần đồng bộ đầu của máy gửi cả chục nghìn dòng (thân ≤ 2 MB ≈ 50.000 dòng): ghi theo lô có trần rõ ràng
+  // nên nới hạn giao dịch như các route theo lô (QĐ-56). Hạn mặc định 5 giây làm lô lớn hỏng 500 → máy gửi
+  // lại đúng lô đó mãi mãi và không bao giờ đồng bộ được (QA 0.19.0).
   return voiTenant(may.tenantId, async (tx) => {
     const tb = await tx.attendanceDevice.findFirst({
       where: { id: may.deviceId },
@@ -129,7 +132,7 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
     // OPERLOG, ATTPHOTO, BIODATA… — chưa dùng; nhận và báo OK để máy không gửi lại mãi.
     if (yc.bang === "OPERLOG" && yc.stamp) await tx.attendanceDevice.update({ where: { id: tb.id }, data: { operlogStamp: yc.stamp } });
     return { status: 200, than: boDoc.phanHoiOk(than.split(/\r?\n/).filter((d) => d.trim() !== "").length) };
-  });
+  }, { timeoutMs: HAN_GIAO_DICH_THEO_LO_MS });
 }
 
 function phanTichInfoAnToan(info: string): Prisma.InputJsonValue | null {
