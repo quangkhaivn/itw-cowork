@@ -4,14 +4,15 @@ import type { NguCanh } from "@/lib/api";
 import type { ClientTenant } from "@/lib/db";
 import { batBuocQuyen, coMotTrongCacQuyen, coQuyen } from "@/lib/phan-quyen";
 import { khoaChungTu } from "@/lib/khoa-chung-tu";
-import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
+import { laViPhamRangBuoc, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { LoiThieuQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { banDoTen } from "@/modules/cham-cong/chung";
 import { dateVeNgay, ngayVeDate } from "@/modules/crm/chung";
 import { taoThongBao } from "@/modules/thong-bao/service";
-import { thongKeBaoCaoTuan } from "@/modules/bao-cao-cong-viec/service";
+import { thongKeBaoCaoNgay, thongKeBaoCaoTuan } from "@/modules/bao-cao-cong-viec/service";
 import { chamDuoc, chotDuoc, docCauHinhDanhGia, locNguoiDanhGia, xepLoaiTu } from "./chung";
+import { napBanDoCapTren } from "./cap-tren";
 import { tinhChiSo, tomTatCong } from "./chi-so";
 import {
   bangXepLoaiHopLe,
@@ -165,7 +166,7 @@ export const LuocDoKy = z.object({
   loai: z.enum(LOAI_KY),
   nam: z.coerce.number().int().min(2020).max(2100),
   so: z.coerce.number().int().min(1).max(12),
-  /** Trống = mọi người có quản lý trực tiếp (không gồm thực tập sinh). */
+  /** Trống = mọi người có quản lý hiệu lực — kể cả người không khai quản lý (Giám đốc chấm, QĐ-132); không gồm thực tập sinh, Giám đốc. */
   nguoiIds: z.array(z.uuid()).max(1000).optional(),
 }).refine((k) => k.loai === "thang" || k.so <= 4, { message: "Quý chỉ từ 1 đến 4.", path: ["so"] });
 
@@ -187,6 +188,7 @@ async function tinhPhieu(tx: ClientTenant, userId: string, loai: LoaiKy, ky: Ret
   }
   const ctx = {
     baoCaoTuan: await thongKeBaoCaoTuan(tx, userId, ky.tu, ky.den),
+    baoCaoNgay: await thongKeBaoCaoNgay(tx, userId, ky.tu, ky.den),
     cong: await tomTatCong(tx, userId, ky.tu, ky.den),
     viec: {
       tongDiem: await tinhChiSo(tx, userId, "tong-diem-viec", k),
@@ -223,10 +225,14 @@ export async function taoKyDanhGia(nc: NguCanh, d: z.infer<typeof LuocDoKy>) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") throw new LoiNghiepVu(`Đã có kỳ ${ky.nhan}.`, 409, "trung-ky");
     throw e;
   }
-  const nguoi = await nc.tx.staffProfile.findMany({
-    where: { staffType: { not: "thuc-tap" }, user: { status: "hoat-dong", isSystem: false }, ...(d.nguoiIds?.length ? { userId: { in: d.nguoiIds } } : { managerId: { not: null } }) },
-    select: { userId: true, managerId: true, jobTitle: true, user: { select: { fullName: true, userRoles: { where: { status: "hoat-dong" }, select: { role: { select: { code: true } } } } } } },
-  });
+  const bd = await napBanDoCapTren(nc.tx);
+  const nguoi = (await nc.tx.staffProfile.findMany({
+    where: { staffType: { not: "thuc-tap" }, user: { status: "hoat-dong", isSystem: false }, ...(d.nguoiIds?.length && { userId: { in: d.nguoiIds } }) },
+    select: { userId: true, jobTitle: true, user: { select: { fullName: true, userRoles: { where: { status: "hoat-dong" }, select: { role: { select: { code: true } } } } } } },
+  }))
+    // QĐ-132: người chấm = quản lý hiệu lực (quản lý trực tiếp còn hoạt động → cấp trên → Giám đốc).
+    .map((n) => ({ ...n, managerId: bd.quanLyHieuLuc(n.userId) }))
+    .filter((n) => !!d.nguoiIds?.length || n.managerId !== null);
   const boKpi = await nc.tx.kpiSet.findMany({ where: { status: "hoat-dong" }, include: { items: { where: { status: "hoat-dong" }, orderBy: { position: "asc" } } } });
   const boChon = boKpi.map((b) => ({ ...b, chucDanh: b.jobTitle, maVaiTro: b.roleCode }));
   let soPhieu = 0;
@@ -260,6 +266,47 @@ export async function taoKyDanhGia(nc: NguCanh, d: z.infer<typeof LuocDoKy>) {
   return { id: kyMoi.id, nhan: ky.nhan, soPhieu };
 }
 
+export const LuocDoSuaKy = z.object({
+  loai: z.enum(LOAI_KY),
+  nam: z.coerce.number().int().min(2020).max(2100),
+  so: z.coerce.number().int().min(1).max(12),
+}).refine((k) => k.loai === "thang" || k.so <= 4, { message: "Quý chỉ từ 1 đến 4.", path: ["so"] });
+
+/**
+ * QĐ-140: sửa loại kỳ / năm / số kỳ (→ ngày bắt đầu, ngày kết thúc) của kỳ đánh giá. Kỳ đã có ít nhất một
+ * phiếu CHỐT → 409 `ky-da-chot` (trigger `evaluation_periods_da_chot` chặn cả SQL trực tiếp). Phiếu chưa chốt
+ * giữ nguyên chỉ tiêu; số liệu tự tính bấm "Làm mới số liệu" để tính theo khoảng mới.
+ */
+export async function suaKyDanhGia(nc: NguCanh, id: string, d: z.infer<typeof LuocDoSuaKy>) {
+  batBuocQuanLyNhanSu(nc, "evaluation_period");
+  const k0 = await nc.tx.evaluationPeriod.findFirst({ where: { id }, select: { id: true } });
+  if (!k0) throw new LoiKhongTimThay("Kỳ đánh giá");
+  await khoaChungTu(nc.tx, "evaluation_periods", id);
+  const goc = await nc.tx.evaluationPeriod.findUniqueOrThrow({ where: { id } });
+  let ky: ReturnType<typeof kyDanhGia>;
+  try {
+    ky = kyDanhGia(d.loai, d.nam, d.so);
+  } catch (e) {
+    if (e instanceof RangeError) throw new LoiNghiepVu(e.message, 422, "ky-sai");
+    throw e;
+  }
+  const doi = goc.kind !== d.loai || goc.year !== d.nam || goc.number !== d.so;
+  if (!doi) return { id, nhan: ky.nhan, daDoi: false };
+  const soChot = await nc.tx.evaluation.count({ where: { periodId: id, status: "da-chot" } });
+  if (soChot > 0) {
+    throw new LoiNghiepVu(`Kỳ đã có ${soChot} phiếu chốt — không đổi được loại kỳ, ngày bắt đầu, ngày kết thúc. Mở kỳ mới nếu cần.`, 409, "ky-da-chot");
+  }
+  try {
+    await nc.tx.evaluationPeriod.update({ where: { id }, data: { kind: d.loai, year: d.nam, number: d.so, startDate: ngayVeDate(ky.tu), endDate: ngayVeDate(ky.den) } });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") throw new LoiNghiepVu(`Đã có kỳ ${ky.nhan}.`, 409, "trung-ky");
+    if (laViPhamRangBuoc(e) || String(e).includes("da co phieu chot")) throw new LoiNghiepVu("Kỳ vừa có phiếu chốt — không đổi được ngày của kỳ.", 409, "ky-da-chot");
+    throw e;
+  }
+  await nc.kiemToan({ action: "sua-ky-danh-gia", objectType: "evaluation_period", objectId: id, before: { loai: goc.kind, nam: goc.year, so: goc.number }, after: { loai: d.loai, nam: d.nam, so: d.so } });
+  return { id, nhan: ky.nhan, daDoi: true };
+}
+
 export async function danhSachKy(nc: NguCanh) {
   if (!coMotTrongCacQuyen(nc.hoSo, ["danh_gia.view", "nhan_su.view"])) throw new LoiThieuQuyen("danh_gia.view", { objectType: "evaluation_period" });
   const loc = await locNguoiDanhGia(nc);
@@ -280,7 +327,11 @@ export async function danhSachPhieu(nc: NguCanh, kyId: string) {
   const ds = await nc.tx.evaluation.findMany({ where: { periodId: kyId, ...(await locNguoiDanhGia(nc)) }, include: { adjustments: { orderBy: { createdAt: "desc" }, take: 1 } } });
   const ten = await banDoTen(nc.tx, ds.flatMap((p) => [p.userId, p.managerId]));
   return {
-    ky: { id: k.id, nhan: kyCuaBanGhi(k).nhan, tu: dateVeNgay(k.startDate), den: dateVeNgay(k.endDate) },
+    ky: {
+      id: k.id, nhan: kyCuaBanGhi(k).nhan, tu: dateVeNgay(k.startDate), den: dateVeNgay(k.endDate), loai: k.kind as LoaiKy, nam: k.year, so: k.number,
+      /** QĐ-140: có phiếu chốt (toàn kỳ, không theo phạm vi xem) thì không đổi được ngày của kỳ. */
+      soChot: await nc.tx.evaluation.count({ where: { periodId: kyId, status: "da-chot" } }),
+    },
     phieu: ds
       .map((p) => {
         const dc = p.adjustments[0];
@@ -325,8 +376,8 @@ export async function chiTietPhieu(nc: NguCanh, id: string) {
   const toi = nc.hoSo.userId;
   const tamTinh = tongDiemKpi(p.items.map((c) => ({ trongSo: Number(c.weight), diem: diemChiTieu(c, ch.tranDatPhanTram) })));
   const dc = p.adjustments[p.adjustments.length - 1];
-  const laQuanLy = await chamDuoc(nc, p.userId);
-  const laNguoiChot = await chotDuoc(nc, p.userId);
+  const laQuanLy = await chamDuoc(nc, p.userId, p.managerId);
+  const laNguoiChot = await chotDuoc(nc, p.userId, ch);
   return {
     phieu: {
       id: p.id, nguoiId: p.userId, hoTen: ten.get(p.userId) ?? "—", quanLy: p.managerId ? (ten.get(p.managerId) ?? "—") : null,
@@ -358,7 +409,7 @@ export async function chiTietPhieu(nc: NguCanh, id: string) {
 export async function lamMoiSoLieu(nc: NguCanh, id: string) {
   const p = await docPhieu(nc, id, true);
   if (p.status === "da-chot") throw new LoiNghiepVu("Phiếu đã chốt — số liệu đã đóng băng.", 409, "da-chot");
-  if (!(p.userId === nc.hoSo.userId || (await chamDuoc(nc, p.userId)) || coQuyen(nc.hoSo, "nhan_su.update"))) throw new LoiNghiepVu("Không được làm mới phiếu này.", 403, "khong-duoc");
+  if (!(p.userId === nc.hoSo.userId || (await chamDuoc(nc, p.userId, p.managerId)) || coQuyen(nc.hoSo, "nhan_su.update"))) throw new LoiNghiepVu("Không được làm mới phiếu này.", 403, "khong-duoc");
   const ch = await docCauHinhDanhGia(nc.tx);
   const ky = kyCuaBanGhi(p.period);
   const { kq, ctx } = await tinhPhieu(nc.tx, p.userId, p.period.kind as LoaiKy, ky, p.items.map((c) => ({ metric: c.metric, source: c.source, direction: c.direction, target: so(c.target) })), ch.tranDatPhanTram);
@@ -410,8 +461,13 @@ export async function tuDanhGia(nc: NguCanh, id: string, d: z.infer<typeof LuocD
   return chiTietPhieu(nc, id);
 }
 
-/** Người được thông báo phiếu chờ chốt: quản lý của người chấm (trưởng phòng) nếu có `danh_gia.approve`; không thì người có `danh_gia.approve` toàn công ty. */
+/**
+ * Người được thông báo phiếu chờ chốt. Mặc định (QĐ-133) chỉ Giám đốc chốt → báo các Giám đốc. Cấu hình
+ * `danh_gia.truong_phong_duoc_chot` = 1: quản lý của người chấm (trưởng phòng) nếu có `danh_gia.approve`;
+ * không thì người có `danh_gia.approve` toàn công ty.
+ */
 async function nguoiChotDuKien(tx: ClientTenant, quanLyId: string | null): Promise<string[]> {
+  if ((await docCauHinhDanhGia(tx)).truongPhongDuocChot !== 1) return (await napBanDoCapTren(tx)).giamDoc.slice();
   if (quanLyId) {
     const tren = await tx.staffProfile.findFirst({ where: { userId: quanLyId }, select: { managerId: true } });
     if (tren?.managerId) {
@@ -429,7 +485,7 @@ async function nguoiChotDuKien(tx: ClientTenant, quanLyId: string | null): Promi
 /** DG-63: quản lý trực tiếp (hoặc `danh_gia.update` trong phạm vi) chấm chỉ tiêu tay + nhận xét; nộp → chờ chốt. */
 export async function quanLyCham(nc: NguCanh, id: string, d: z.infer<typeof LuocDoQuanLyCham>) {
   const p = await docPhieu(nc, id, true);
-  if (!(await chamDuoc(nc, p.userId))) throw new LoiNghiepVu("Chỉ quản lý trực tiếp hoặc người quản lý trong phạm vi chấm được phiếu này. Không ai tự chấm mình.", 403, "khong-duoc-cham");
+  if (!(await chamDuoc(nc, p.userId, p.managerId))) throw new LoiNghiepVu("Chỉ quản lý trực tiếp hoặc người quản lý trong phạm vi chấm được phiếu này. Không ai tự chấm mình.", 403, "khong-duoc-cham");
   if (!["nhan-vien", "quan-ly"].includes(p.status)) throw new LoiNghiepVu("Phiếu đã gửi chốt hoặc đã chốt.", 409, "sai-buoc");
   batBuocChiTieuCuaPhieu(p, d.chiTieu.map((c) => c.id));
   for (const c of d.chiTieu) await nc.tx.evaluationItem.update({ where: { id: c.id }, data: { managerScore: c.diem ?? null, managerNote: c.ghiChu || null } });
@@ -458,7 +514,7 @@ export async function quanLyCham(nc: NguCanh, id: string, d: z.infer<typeof Luoc
 /** DG-64, DG-65: chốt — điểm tổng, xếp loại, hệ số thưởng; sau đó bất biến. Khóa dòng phiếu: chốt hai lần → 409. */
 export async function chotPhieu(nc: NguCanh, id: string, d: z.infer<typeof LuocDoChot>) {
   const p = await docPhieu(nc, id, true);
-  if (!(await chotDuoc(nc, p.userId))) throw new LoiNghiepVu("Chỉ trưởng phòng / giám đốc có quyền chốt (trong phạm vi) chốt được phiếu này. Không ai tự chốt phiếu của mình.", 403, "khong-duoc-chot");
+  if (!(await chotDuoc(nc, p.userId))) throw new LoiNghiepVu("Chỉ Giám đốc chốt được phiếu đánh giá (Cấu hình có thể cho trưởng phòng chốt trong phạm vi). Không ai tự chốt phiếu của mình.", 403, "khong-duoc-chot");
   if (p.status === "da-chot") throw new LoiNghiepVu("Phiếu đã chốt.", 409, "da-chot");
   if (p.status !== "cho-chot") throw new LoiNghiepVu("Quản lý chưa chấm xong phiếu này.", 409, "sai-buoc");
   const ch = await docCauHinhDanhGia(nc.tx);
@@ -486,7 +542,7 @@ export async function chotPhieu(nc: NguCanh, id: string, d: z.infer<typeof LuocD
  */
 export async function dieuChinhPhieu(nc: NguCanh, id: string, d: z.infer<typeof LuocDoDieuChinh>) {
   const p = await docPhieu(nc, id, true);
-  if (!(await chotDuoc(nc, p.userId))) throw new LoiNghiepVu("Chỉ người có quyền chốt (trong phạm vi) điều chỉnh được.", 403, "khong-duoc-chot");
+  if (!(await chotDuoc(nc, p.userId))) throw new LoiNghiepVu("Chỉ người được chốt phiếu (mặc định Giám đốc) điều chỉnh được.", 403, "khong-duoc-chot");
   if (p.status !== "da-chot") throw new LoiNghiepVu("Phiếu chưa chốt — sửa trực tiếp ở bước chấm.", 409, "chua-chot");
   batBuocChiTieuCuaPhieu(p, d.chiTieu.map((c) => c.id));
   const ch = await docCauHinhDanhGia(nc.tx);

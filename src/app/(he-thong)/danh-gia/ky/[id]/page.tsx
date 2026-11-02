@@ -5,6 +5,8 @@ import TrongRong from "@/components/ui/TrongRong";
 import { taoNguCanh } from "@/lib/api";
 import { LoiKhongTimThay } from "@/lib/loi";
 import { docDuLieu, yeuCauQuyen } from "@/lib/trang";
+import { coQuyen } from "@/lib/phan-quyen";
+import SuaKy from "./SuaKy";
 import { danhSachPhieu } from "@/modules/danh-gia/service";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +29,12 @@ export default async function TrangKyDanhGia({ params }: { params: Promise<{ id:
   if (!d) notFound();
   return (
     <>
-      <DauTrang tieuDe={`Đánh giá ${d.ky.nhan}`} duongDan={[{ nhan: "Đánh giá nhân viên", href: "/danh-gia" }]} />
+      <DauTrang
+        tieuDe={`Đánh giá ${d.ky.nhan}`}
+        duongDan={[{ nhan: "Đánh giá nhân viên", href: "/danh-gia" }]}
+        moTa={`Từ ${d.ky.tu.split("-").reverse().join("/")} đến ${d.ky.den.split("-").reverse().join("/")}`}
+        hanhDong={coQuyen(nd.hoSo, "nhan_su.update") && <SuaKy ky={d.ky} />}
+      />
       <section className="the">
         {d.phieu.length === 0 ? <TrongRong tieuDe="Không có phiếu nào trong phạm vi của bạn" /> : (
           <div className="cuon-ngang"><table className="bang">

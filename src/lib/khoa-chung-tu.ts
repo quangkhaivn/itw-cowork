@@ -51,6 +51,8 @@ const BANG_KHOA = [
   "evaluations",
   "intern_evaluations",
   "intern_journals",
+  // QĐ-140: sửa kỳ đánh giá.
+  "evaluation_periods",
 ] as const;
 
 export type BangKhoa = (typeof BANG_KHOA)[number];

@@ -16,6 +16,7 @@ const NHAN_BUOC: Record<string, string> = { "nhan-vien": "Chờ tự đánh giá
 
 type BoiCanh = {
   baoCaoTuan?: { batBuoc: boolean; soTuan: number; dungHan: number; tre: number; thieu: number };
+  baoCaoNgay?: { batBuoc: boolean; soNgay: number; dungHan: number; tre: number; thieu: number };
   cong?: { congDuKien: number; congThucTe: number; ngayNghiPhep: number; phutDiMuon: number; phutVeSom: number; ngayVang: number; tyLeChuyenCan: number | null } | null;
   viec?: { tongDiem: number | null; tyLeDungHan: number | null; tyLeTraLai: number | null };
 };
@@ -64,6 +65,13 @@ export default async function TrangPhieuDanhGia({ params }: { params: Promise<{ 
             <div className="nhan">Báo cáo tuần</div>
             <div className="gia-tri" style={{ fontSize: 16 }}>{bc.baoCaoTuan.batBuoc ? `${bc.baoCaoTuan.dungHan}/${bc.baoCaoTuan.soTuan} đúng hạn` : "Không bắt buộc"}</div>
             <div className="ghi-chu">{bc.baoCaoTuan.tre} trễ · {bc.baoCaoTuan.thieu} thiếu</div>
+          </div>
+        )}
+        {bc.baoCaoNgay?.batBuoc && (
+          <div className={`the chi-so ${bc.baoCaoNgay.thieu ? "loi" : bc.baoCaoNgay.tre ? "canh-bao" : ""}`}>
+            <div className="nhan">Báo cáo ngày</div>
+            <div className="gia-tri" style={{ fontSize: 16 }}>{`${bc.baoCaoNgay.dungHan}/${bc.baoCaoNgay.soNgay} đúng hạn`}</div>
+            <div className="ghi-chu">{bc.baoCaoNgay.tre} trễ · {bc.baoCaoNgay.thieu} thiếu · chỉ tính ngày phải làm</div>
           </div>
         )}
         <div className="the chi-so">

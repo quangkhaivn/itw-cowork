@@ -94,7 +94,10 @@ export type HanhDong =
   | "chot-thuc-tap"
   // QA 0.19.0 (QĐ-116, QĐ-118)
   | "xet-ngay-thieu-gio"
-  | "ap-pin-chua-khop";
+  | "ap-pin-chua-khop"
+  // 0.20.0 chính sách (QĐ-135, QĐ-140)
+  | "chuyen-buoc-duyet"
+  | "sua-ky-danh-gia";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

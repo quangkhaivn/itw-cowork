@@ -203,6 +203,16 @@ export function tinhTrangBaoCao(han: Date, nopLuc: Date | null, bayGio: Date): "
   return bayGio.getTime() <= han.getTime() ? "chua-nop" : "thieu";
 }
 
+/**
+ * QĐ-138: một ngày có phải nộp BÁO CÁO NGÀY không. Không phải khi: ngày lễ, nghỉ phép đã duyệt **cả ngày**,
+ * hoặc ngày không có ca theo lịch làm việc của người đó (nghỉ hằng tuần). Nghỉ nửa ngày vẫn phải báo cáo.
+ * Người chưa được gán lịch làm việc: không đoán ngày nghỉ tuần — coi là ngày làm (trừ lễ / nghỉ cả ngày).
+ */
+export function laNgayPhaiBaoCaoNgay(d: { coLich: boolean; congDuKien: number; laNgayLe: boolean; nghiPhep: number }): boolean {
+  if (d.laNgayLe || d.nghiPhep >= 1) return false;
+  return !d.coLich || d.congDuKien > 0;
+}
+
 // ---------------------------------------------------------------------------
 // Kỳ đánh giá (DG-60) — ranh giới theo giờ Việt Nam
 // ---------------------------------------------------------------------------
