@@ -92,14 +92,6 @@ async function nemLoi(ten: string, kieu: KieuLoi, khoi: () => Promise<unknown>, 
     dat(ten, dungKieu && dungMa, e instanceof Error ? `${e.name}: ${e.message.slice(0, 200)}${e instanceof LoiNghiepVu ? ` [${e.ma}]` : ""}` : String(e));
   }
 }
-async function chan(ten: string, khoi: () => Promise<unknown>) {
-  try {
-    await khoi();
-    dat(ten, false, "không bị chặn");
-  } catch {
-    dat(ten, true);
-  }
-}
 
 const viecMoi = (tieuDe: string, them: Record<string, unknown> = {}) => LuocDoTaoViec.parse({ tieuDe, ...them });
 
