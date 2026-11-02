@@ -63,7 +63,8 @@
     "thu:cham-cong": "tsx --env-file-if-exists=.env thu/thu-cham-cong.ts",
     "thu:qa-cham-cong": "tsx --env-file-if-exists=.env thu/thu-qa-cham-cong.ts",
     "thu:luong": "tsx --env-file-if-exists=.env thu/thu-luong.ts",
-    "thu:qa-luong": "tsx --env-file-if-exists=.env thu/thu-qa-luong.ts"
+    "thu:qa-luong": "tsx --env-file-if-exists=.env thu/thu-qa-luong.ts",
+    "thu:qa-luong-http": "tsx --env-file-if-exists=.env thu/thu-qa-luong-http.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

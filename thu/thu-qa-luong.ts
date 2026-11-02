@@ -166,6 +166,7 @@ async function main() {
   dat("Công chuẩn của người mới = công chuẩn CẢ THÁNG (24), không phải số ngày từ lúc gán lịch (13)", vMoi.cong.chuan === 24, `chuẩn ${vMoi.cong.chuan}`);
   dat("…lễ trả: chỉ 24/03 (10/03 trước ngày vào làm, chưa có lịch, không trả); công thực tế 12 + lễ 1 = 13", vMoi.cong.le === 1 && vMoi.cong.thucTe === 12 && rMoi.congTinhLuong === 13, JSON.stringify(vMoi.cong));
   dat("Lương theo công = 12.000.000 × 13 / 24 = 6.500.000 (trước khi sửa: đủ 12.000.000)", rMoi.luongTheoCong === 6_500_000, String(rMoi.luongTheoCong));
+  dat("…kèm cảnh báo lịch bắt đầu giữa tháng (không chặn gửi duyệt)", (dMoi.warnings as unknown as { ma: string; muc: string }[]).some((c) => c.ma === "lich-tu-giua-thang" && c.muc === "canh-bao") && !dMoi.hasError);
   const rA = (await dong(k3.id, nvA)).result as unknown as KetQuaLuong;
   dat("Người đủ công cả tháng (22 công + 2 lễ) vẫn đủ lương (không ảnh hưởng)", rA.luongTheoCong === 17_345_678 && rA.congTinhLuong === 24);
   dat("Hoa hồng tiền đã thu ngày cuối tháng (31/03) được tính: 30tr × 2%", rA.hoaHong.tien === 600_000);
@@ -227,7 +228,7 @@ async function main() {
 
   // ==================================================================
   console.log("\n— D. 2 lớp bắt buộc: người có quyền rộng nhưng chưa bật 2 lớp —");
-  for (const [ten, f] of [
+  const viec2Lop: [string, (nc: NguCanh) => Promise<unknown>][] = [
     ["danh sách kỳ", (nc: NguCanh) => danhSachKyLuong(nc)],
     ["chi tiết kỳ", (nc: NguCanh) => chiTietKyLuong(nc, k3.id)],
     ["phiếu người khác", (nc: NguCanh) => chiTietPhieuLuong(nc, lB.id)],
@@ -238,7 +239,8 @@ async function main() {
     ["xuất bảng lương", (nc: NguCanh) => xuatBangLuong(nc, k3.id, "xls")],
     ["tính lương", (nc: NguCanh) => tinhKyLuong(nc, k3.id)],
     ["thêm khoản", (nc: NguCanh) => themKhoanLuong(nc, k3.id, LuocDoKhoan.parse({ nguoiId: nvA, chieu: "cong", loai: "thuong", soTien: 1, lyDo: "Thưởng thử 2 lớp" }))],
-  ] as const) {
+  ];
+  for (const [ten, f] of viec2Lop) {
     await biChan(`LU-61: Kế toán chưa 2 lớp — ${ten}`, () => voi(T, kt2, f), "luong-can-2-lop");
   }
   await biChan("LU-61: Nhân sự chưa 2 lớp — tạo hồ sơ lương", () => voi(T, hr2, (nc) => taoHoSoLuong(nc, hs({ nguoiId: nvA, luongCoBan: 1 }))), "luong-can-2-lop");

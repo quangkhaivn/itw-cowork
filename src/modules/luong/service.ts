@@ -323,6 +323,10 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
       thamSo,
     };
     const kqL = tinhLuong(dv);
+    const ngayLichDau = lichDau ? cacNgay.find((d) => l(d) !== null) : undefined;
+    if (ngayLichDau && ngayLichDau !== tu) {
+      kqL.canhBao.push({ ma: "lich-tu-giua-thang", muc: "canh-bao", noiDung: `Lịch làm việc bắt đầu từ ${ngayLichDau.split("-").reverse().join("/")} — công chuẩn vẫn tính cả tháng theo lịch đó, lương theo số công thực có. Nếu người này đã làm từ trước ngày đó, gán lịch từ ngày vào làm rồi sinh lại bảng công.` });
+    }
     if (coLoi(kqL.canhBao)) soLoi++;
     const nguon = { bangCongId: bang.id, bangCongKhoaLuc: bang.lockedAt, thamSo: ts.bo, kyDanhGiaId: kyDg?.id ?? null };
     await tx.payrollLine.create({
