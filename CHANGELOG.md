@@ -4,9 +4,9 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 ## 0.19.0 (chưa phát hành) — Nhân sự, giai đoạn 1: chấm công
 
-**Chưa triển khai lên máy thật.** Bốn migration mới (`20261102090001_nhan_su_cham_cong`, `…0002_nhan_su_cap_quyen`, `…0003_qa_cham_cong`, `…0004_qa_cham_cong_don_trung`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm mới + quyền EXECUTE hàm `tra_may_cham_cong`), chạy seed (cấp quyền `cham_cong.*` / `nhan_su.*`, tạo vai trò Nhân sự (HR) và Thực tập sinh, 4 loại nghỉ). **nginx máy chủ phải mở HTTP cho riêng `/iclock/`** nếu máy vân tay không hỗ trợ HTTPS (DEPLOYMENT.md). Chấm GPS cần Cowork chạy HTTPS.
+**Chưa triển khai lên máy thật.** Sáu migration mới (`20261102090001_nhan_su_cham_cong`, `…0002_nhan_su_cap_quyen`, `…0003_qa_cham_cong`, `…0004_qa_cham_cong_don_trung`, `…0005_qa_cham_cong_xet_thieu_gio`, `…0006_qa_cham_cong_moi_doanh_nghiep`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm mới + quyền EXECUTE hàm `tra_may_cham_cong`), chạy seed (cấp quyền `cham_cong.*` / `nhan_su.*`, tạo vai trò Nhân sự (HR) và Thực tập sinh, 4 loại nghỉ). **nginx máy chủ phải mở HTTP cho riêng `/iclock/`** nếu máy vân tay không hỗ trợ HTTPS (DEPLOYMENT.md). Chấm GPS cần Cowork chạy HTTPS.
 
-Luật nghiệp vụ: `BUSINESS_RULES.md` mục 30 (NS-01 → NS-62). Quyết định QĐ-100 → QĐ-112. Hướng dẫn cho Nhân sự: `docs/HUONG-DAN-CHAM-CONG.md`.
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 30 (NS-01 → NS-62). Quyết định QĐ-100 → QĐ-118. Hướng dẫn cho Nhân sự: `docs/HUONG-DAN-CHAM-CONG.md`.
 
 ### Thêm
 - **Chấm công GPS** (Nhân sự → Chấm công): trang cho điện thoại, hai nút lớn Vào ca / Ra ca; trong bán kính địa điểm → hợp lệ, ngoài vùng nhưng đang có phiếu hỗ trợ → hiện trường, còn lại → ngoài vùng chờ quản lý xem xét; cờ độ chính xác thấp / tốc độ bất thường / không lấy được vị trí; chống bấm trùng; giờ chấm là giờ máy chủ; lần đầu phải xác nhận thông báo dữ liệu vị trí (Luật 91/2025).
@@ -32,6 +32,16 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 30 (NS-01 → NS-62). Quyết đ
 - Nhân sự / Giám đốc (phạm vi duyệt toàn công ty) **không tự xem xét** lần chấm ngoài vùng của chính mình (NS-12).
 - Nghỉ nửa ngày chỉ tính khi lịch phải làm đúng nửa đó (xin nghỉ chiều thứ Bảy khi lịch chỉ làm sáng = 0 ngày, chặn — trước đây trừ 0,5 phép).
 - Xin phép năm bù cho ngày đã qua: lúc gửi dùng cùng mốc tích lũy với lúc duyệt (trước đây bị chặn "quỹ không đủ" dù duyệt được). Gửi đơn nghỉ xếp hàng theo người (không tạo hai đơn chồng nhau khi bấm đúp).
+
+### Chính sách sau QA (QĐ-113 → QĐ-118, Giám đốc giao điều phối quyết theo hướng an toàn)
+- **Giờ máy lệch / vô lý** (QĐ-113): lần chấm vân tay đi trước giờ máy chủ quá ngưỡng, đi trước > 1 ngày hoặc năm < 2020 → hàng chờ xem xét, **chưa tính công** tới khi quản lý chấp nhận (trước đây chỉ gắn cờ mà vẫn tính).
+- **Trần tốc độ máy chấm công** (QĐ-114): đếm theo (SN, IP nguồn) + trần tổng theo SN — người lạ biết SN không còn làm máy thật bị 429.
+- **Chấm hiện trường** (QĐ-115): chỉ theo phiếu giao cho chính mình, còn mở và có hoạt động trong 14 ngày; phiếu cũ hơn / vừa xong → vẫn nhận nhưng chờ chấp nhận.
+- **Thiếu giờ** (QĐ-116, NS-55): vào / ra sát nhau (có mặt < 50% giờ phải làm) → cờ trên bảng công + hàng chờ "Ngày công thiếu giờ"; quản lý quyết đủ / nửa / không công, không tự trừ. Bảng mới chỉ ghi thêm `attendance_day_reviews` (chạy lại `prisma/rls.sql`).
+- **Mọi doanh nghiệp** (QĐ-117): migration idempotent cấp vai trò Nhân sự / Thực tập sinh, loại nghỉ, quyền chấm công Giám đốc / Quản trị cho mọi doanh nghiệp đang có; `npm run db:seed` chạy cho mọi doanh nghiệp.
+- **Gán PIN** (QĐ-118): chỉ áp từ ngày vào làm, trong kỳ chưa khóa; kỳ đã khóa báo số lượng, "Áp cả kỳ đã khóa" cần quyền duyệt (dòng điều chỉnh kỳ sau); ghi kiểm toán.
+- Cấu hình mới (nhóm Chấm công): `cham_cong.gio_may_lech_toi_da_phut` (60), `cham_cong.gio_may_nam_toi_thieu` (2020), `cham_cong.adms_toi_da_phut_sn_ip` (120), `cham_cong.adms_toi_da_phut_sn` (600), `cham_cong.phieu_hien_truong_ngay` (14), `cham_cong.co_mat_toi_thieu_phan_tram` (50).
+- Kiểm thử: `thu/don-vi/cham-cong.test.ts` thêm 5 bài (giờ máy, cờ chờ chấp nhận, chọn phiếu, thiếu giờ, migration khớp `vai-tro.ts`); `thu:qa-cham-cong` thêm 43 kiểm tra (97 → 140: trần SN + IP, phiếu cũ, thiếu giờ, doanh nghiệp thứ hai qua migration và seed, gán PIN kỳ đã khóa).
 
 ## 0.18.0 — 01/11/2026 — Email marketing: gửi số lượng lớn
 
