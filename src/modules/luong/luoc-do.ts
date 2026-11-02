@@ -134,7 +134,11 @@ export const LuocDoKhoan = z
     soTien: soTienDuong,
     chiuThue: z.boolean().default(true),
     lyDo: z.string().trim().min(5, "Lý do ít nhất 5 ký tự.").max(1000),
-    kyGocId: z.uuid().nullable().optional(),
+    kyGocId: z
+      .union([z.uuid("Kỳ gốc không hợp lệ."), z.literal("")])
+      .nullable()
+      .optional()
+      .transform((v) => v || null),
   })
   .superRefine((d, ctx) => {
     if ((d.loai === "dieu-chinh") !== Boolean(d.kyGocId)) ctx.addIssue({ code: "custom", path: ["kyGocId"], message: "Khoản điều chỉnh phải chọn kỳ đã khóa được điều chỉnh (và chỉ khoản điều chỉnh)." });

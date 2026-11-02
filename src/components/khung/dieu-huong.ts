@@ -236,6 +236,17 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     ],
   },
   {
+    // 0.21.0 — Nhân sự giai đoạn 3: tính lương (BUSINESS_RULES mục 32). Màn hình quản lý chỉ hiện cho người tính /
+    // duyệt / lập hồ sơ / xuất; mọi nhân viên thấy "Phiếu lương của tôi".
+    nhan: "Tính lương",
+    muc: [
+      { nhan: "Kỳ lương", href: "/luong", quyen: ["luong.create", "luong.update", "luong.approve", "luong.export"], bieuTuong: "phieu-chi", tuKhoa: "bang luong tinh luong duyet khoa chi luong payroll" },
+      { nhan: "Hồ sơ lương", href: "/luong/ho-so", quyen: ["luong.create", "luong.update", "luong.approve", "luong.export"], bieuTuong: "nhan-su", tuKhoa: "luong co ban phu cap nguoi phu thuoc tai khoan ngan hang ma so thue" },
+      { nhan: "Tham số lương", href: "/luong/tham-so", quyen: ["luong.create", "luong.update", "luong.approve", "luong.export"], bieuTuong: "cau-hinh", tuKhoa: "bhxh bhyt bhtn giam tru gia canh bieu thue luong toi thieu vung tang ca hoa hong" },
+      { nhan: "Phiếu lương của tôi", href: "/luong/phieu-cua-toi", quyen: "luong.view", bieuTuong: "phieu-thu", tuKhoa: "phieu luong cua toi thuc linh payslip" },
+    ],
+  },
+  {
     nhan: "Trợ lý",
     muc: [{ nhan: "Trợ lý ITA", href: "/tro-ly", quyen: "ai.view", bieuTuong: "tro-ly", tuKhoa: "ai chatbot tro ly hoi dap ita" }],
   },

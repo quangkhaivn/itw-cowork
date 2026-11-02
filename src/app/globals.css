@@ -988,3 +988,10 @@ table.bang-tt .diem-tt { font-weight: 600; min-width: 60px; }
 .o-nhan-xet-tt .noi-dung-nx { min-height: 42px; white-space: pre-wrap; border-bottom: 1px dotted #999; }
 .o-nhan-xet-tt .cho-trong { color: #999; }
 .ngay-lap-tt { text-align: right; font-style: italic; margin: 16px 0 0; }
+
+/* 0.21.0 — phiếu lương in A4 (LU-43) */
+.phieu-luong { position: relative; }
+.phieu-luong .dau-nhap { position: absolute; top: 8px; right: 12px; color: #b42318; font-weight: 700; font-size: 11px; letter-spacing: .5px; }
+.phieu-luong dl.khach-in { display: grid; gap: 4px 24px; }
+.phieu-luong table.bang-in + table.bang-in { margin-top: 12px; }
+.bang-luong td.so, .bang-luong th.so { white-space: nowrap; }
