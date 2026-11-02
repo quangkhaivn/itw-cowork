@@ -9,7 +9,7 @@ import { seedDanhMucQuyen, seedDuLieuDoanhNghiep, seedNenMong } from "../prisma/
 import { POST as postIclock, GET as getIclock } from "../src/app/iclock/[...duong]/route";
 import { chamCongGps, duocTinhCong, quyetDinhMoiNhat, xacNhanThongBaoViTri, xemXetLanCham } from "../src/modules/cham-cong/service";
 import { bangTrucTiep } from "../src/modules/cham-cong/truc-tiep";
-import { anhXaPin, taoMay, suaMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
+import { anhXaPin, apDungPinChuaKhop, danhSachPinChuaKhop, taoMay, suaMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
 import { quetChamCong } from "../src/modules/cham-cong/nhac-viec";
 import { ngayThieuGioCanXemXet, xetNgayThieuGio } from "../src/modules/cham-cong/ngay-cong";
 import { tinhCong } from "../src/modules/cham-cong/tinh-cong";
@@ -613,6 +613,43 @@ async function main() {
   } });
   const ttCeo4 = await voi(T4, hoSoCeo4.id, (nc) => bangTrucTiep(nc, { phongBanId: null, diaDiemId: null }, vn("2026-10-15T09:00:00")));
   dat("QĐ-117: Giám đốc doanh nghiệp đó mở được bảng chấm công trực tiếp", Array.isArray(ttCeo4.dong));
+
+  // ==================================================================
+  console.log("\n— QĐ-118: gán PIN — chỉ từ ngày vào làm, chỉ kỳ chưa khóa —");
+  // Tháng 10 đã khóa ở phần bảng công phía trên.
+  const nvD = await nguoi(T, "nv-d", "sales", tp);
+  await chu.staffProfile.update({ where: { userId: nvD }, data: { hiredAt: new Date("2026-10-05T00:00:00Z") } });
+  await voi(T, hr, (nc) => ganLich(nc, { nguoiIds: [nvD], lichId: lich.id, tuNgay: "2026-01-01", ghiChu: null }));
+  const PIN_D = `7${DAU.slice(-5)}`.replace(/[^0-9A-Za-z]/g, "");
+  await chu.attendancePunch.createMany({ data: [
+    { tenantId: T, punchedAt: vn("2026-09-20T08:00:00"), source: "nhap-csv", pin: PIN_D }, // trước ngày vào làm
+    { tenantId: T, punchedAt: vn("2026-10-06T08:00:00"), source: "nhap-csv", pin: PIN_D }, // kỳ đã khóa
+    { tenantId: T, punchedAt: vn("2026-10-06T17:00:00"), source: "nhap-csv", pin: PIN_D },
+    { tenantId: T, punchedAt: vn("2026-11-03T08:00:00"), source: "nhap-csv", pin: PIN_D }, // kỳ chưa khóa
+    { tenantId: T, punchedAt: vn("2026-11-03T17:00:00"), source: "nhap-csv", pin: PIN_D },
+  ] });
+  const ghiHs = await voi(T, hr, (nc) => suaHoSoNhanSu(nc, nvD, LuocDoHoSoNhanSu.parse({ maChamCong: PIN_D })));
+  const conLai = async () => (await chu.attendancePunch.findMany({ where: { pin: PIN_D, tenantId: T, userId: null }, orderBy: { punchedAt: "asc" } })).map((p) => p.punchedAt.toISOString());
+  dat("QĐ-118: đặt mã chấm công → chỉ áp 2 lần chấm kỳ chưa khóa; báo 2 lần ở kỳ đã khóa chưa áp",
+    ghiHs.soLanChamGanLai === 2 && ghiHs.soKyDaKhoaChuaAp === 2, JSON.stringify(ghiHs));
+  dat("QĐ-118: lần chấm trước ngày vào làm và ở kỳ đã khóa vẫn chưa khớp", (await conLai()).length === 3);
+  const dsPin = await voi(T, hr, (nc) => danhSachPinChuaKhop(nc));
+  const dongPin = dsPin.find((x) => x.pin === PIN_D);
+  dat("QĐ-118: danh sách PIN chưa khớp cho biết PIN đã gán cho ai và số lần còn lại", dongPin?.soLanCham === 3 && dongPin.nguoiDaGan?.id === nvD && dongPin.nguoiDaGan.ngayVaoLam === "2026-10-05");
+  dat("QĐ-118: ghi nhật ký kiểm toán việc áp PIN (kèm số kỳ đã khóa)",
+    (await chu.auditLog.count({ where: { tenantId: T, action: "ap-pin-chua-khop", objectId: nvD } })) >= 1);
+  await nemLoi("QĐ-118: áp cả kỳ đã khóa cần quyền duyệt chấm công (nhân viên thường bị chặn)",
+    () => voi(T, nvA, (nc) => apDungPinChuaKhop(nc, PIN_D, nvD, { apCaKyDaKhoa: true })), undefined, "quyen");
+  await nemLoi("QĐ-118: không tự áp kỳ đã khóa cho chính mình (kể cả Nhân sự)",
+    () => voi(T, hr, (nc) => anhXaPin(nc, { pin: `8${DAU.slice(-5)}`.replace(/[^0-9A-Za-z]/g, ""), nguoiId: hr, apCaKyDaKhoa: true })), "khong-tu-duyet");
+  const lanHai = await voi(T, hr, (nc) => anhXaPin(nc, { pin: PIN_D, nguoiId: nvD }));
+  dat("QĐ-118: gán lại không chọn 'áp cả kỳ đã khóa' → không áp thêm, vẫn báo số lượng", lanHai.soLanCham === 0 && lanHai.soKyDaKhoa === 2 && lanHai.soTruocNgayVaoLam === 1);
+  const apKhoa = await voi(T, hr2, (nc) => anhXaPin(nc, { pin: PIN_D, nguoiId: nvD, apCaKyDaKhoa: true }));
+  dat("QĐ-118: chọn tường minh 'áp cả kỳ đã khóa' (Nhân sự khác, có quyền duyệt) → áp 2 lần; lần trước ngày vào làm vẫn không áp",
+    apKhoa.soLanCham === 2 && apKhoa.soTruocNgayVaoLam === 1 && (await conLai()).join() === vn("2026-09-20T08:00:00").toISOString(), JSON.stringify(apKhoa));
+  const bc11 = await voi(T, hr, (nc) => sinhBangCong(nc, { nam: 2026, thang: 11 }, vn("2026-12-01T09:00:00")));
+  const dcD = await chu.timesheetRow.findFirst({ where: { timesheetId: bc11.id, userId: nvD, isAdjustment: true, workDate: new Date("2026-10-06T00:00:00Z") } });
+  dat("QĐ-118: bảng công kỳ sau sinh dòng điều chỉnh cho ngày thuộc kỳ đã khóa (+1 công)", Boolean(dcD && Number(dcD.workValue) === 1), JSON.stringify(dcD && { cong: dcD.workValue, co: dcD.flags }));
 
   // ==================================================================
   console.log("\n— Nhắc việc —");

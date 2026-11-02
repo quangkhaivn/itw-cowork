@@ -9,9 +9,9 @@ import { batBuocQuyen } from "@/lib/phan-quyen";
 import { ghiSuKien, SU_KIEN } from "@/lib/su-kien";
 import { LuocDoAnhXaPin, LuocDoMayChamCong, LuocDoSuaMayChamCong } from "@/modules/nhan-su/luoc-do";
 import { BO_DOC_ZKTECO, laSoSeriHopLe, type BoDocAdms } from "./adms";
-import { docCauHinhChamCong, so } from "./chung";
+import { docCauHinhChamCong, kiemDuocDuyet, so } from "./chung";
 import { phanTichCsvChamCong } from "./nhap-csv";
-import { canChapNhanMoiTinh, danhGiaGioMay } from "./tinh-toan";
+import { canChapNhanMoiTinh, danhGiaGioMay, mocVN, ngayVNCua } from "./tinh-toan";
 
 /**
  * Máy chấm công vân tay (ZKTeco ADMS/PUSH) — đăng ký máy, nhận dữ liệu máy đẩy lên, PIN chưa khớp,
@@ -291,16 +291,56 @@ export async function suaMay(nc: NguCanh, id: string, d: z.infer<typeof LuocDoSu
 // PIN chưa khớp
 // ---------------------------------------------------------------------------
 
+export interface KetQuaApPin {
+  /** Số lần chấm vừa được gán cho người này. */
+  soLanCham: number;
+  /** Số lần chấm chưa khớp thuộc kỳ bảng công ĐÃ KHÓA — chỉ áp khi chọn tường minh (đã áp nếu `apCaKyDaKhoa`). */
+  soKyDaKhoa: number;
+  /** Số lần chấm trước ngày vào làm — không bao giờ áp (có thể là người cũ dùng lại PIN). */
+  soTruocNgayVaoLam: number;
+}
+
 /**
- * Gán người cho mọi lần chấm vân tay / CSV chưa khớp mang đúng PIN (NS-15). Cập nhật duy nhất mà
+ * Gán người cho các lần chấm vân tay / CSV chưa khớp mang đúng PIN (NS-15, QĐ-118). Cập nhật duy nhất mà
  * trigger `chan_sua_lan_cham` cho phép trên bảng chỉ-ghi-thêm: `user_id` NULL → có giá trị.
+ *  - chỉ lần chấm TỪ NGÀY VÀO LÀM trở đi (chưa khai ngày vào làm → không giới hạn);
+ *  - chỉ lần chấm thuộc kỳ CHƯA KHÓA; kỳ đã khóa → trả số lượng để người dùng biết, áp khi chọn tường minh
+ *    `apCaKyDaKhoa` (cần quyền duyệt chấm công với người này, không tự áp cho mình) — bảng công kỳ sau tự sinh
+ *    dòng điều chỉnh (NS-53);
+ *  - ghi nhật ký kiểm toán.
  */
-export async function apDungPinChuaKhop(nc: NguCanh, pin: string, userId: string): Promise<number> {
-  const kq = await nc.tx.attendancePunch.updateMany({ where: { pin, userId: null }, data: { userId, matchedAt: new Date() } });
-  if (kq.count > 0) {
-    await nc.suKien({ eventType: SU_KIEN.ATTENDANCE_PIN_MAPPED, objectType: "user", objectId: userId, payload: { pin, soLanCham: kq.count } });
+export async function apDungPinChuaKhop(nc: NguCanh, pin: string, userId: string, tuyChon: { apCaKyDaKhoa?: boolean } = {}): Promise<KetQuaApPin> {
+  const apKhoa = tuyChon.apCaKyDaKhoa === true;
+  if (apKhoa) {
+    if (userId === nc.hoSo.userId) throw new LoiNghiepVu("Không tự áp lần chấm ở kỳ đã khóa cho chính mình — người khác có quyền duyệt làm.", 403, "khong-tu-duyet");
+    batBuocQuyen(nc.hoSo, "cham_cong.approve", { objectType: "attendance_punch", objectId: pin });
+    await kiemDuocDuyet(nc, userId, { objectType: "attendance_punch", objectId: pin });
   }
-  return kq.count;
+  const hs = await nc.tx.staffProfile.findFirst({ where: { userId }, select: { hiredAt: true } });
+  const tu = hs?.hiredAt ? mocVN(hs.hiredAt.toISOString().slice(0, 10), 0) : null;
+  const kyKhoa = await nc.tx.timesheet.findMany({ where: { status: "da-khoa" }, select: { year: true, month: true } });
+  const trongKyKhoa = kyKhoa.map((k) => {
+    const dau = `${k.year}-${String(k.month).padStart(2, "0")}-01`;
+    const sau = k.month === 12 ? `${k.year + 1}-01-01` : `${k.year}-${String(k.month + 1).padStart(2, "0")}-01`;
+    return { punchedAt: { gte: mocVN(dau, 0), lt: mocVN(sau, 0) } };
+  });
+  const coSo = { pin, userId: null, ...(tu && { punchedAt: { gte: tu } }) };
+  const soTruocNgayVaoLam = tu ? await nc.tx.attendancePunch.count({ where: { pin, userId: null, punchedAt: { lt: tu } } }) : 0;
+  const soKyDaKhoa = trongKyKhoa.length ? await nc.tx.attendancePunch.count({ where: { AND: [coSo, { OR: trongKyKhoa }] } }) : 0;
+  const kq = await nc.tx.attendancePunch.updateMany({
+    where: apKhoa || trongKyKhoa.length === 0 ? coSo : { AND: [coSo, { NOT: { OR: trongKyKhoa } }] },
+    data: { userId, matchedAt: new Date() },
+  });
+  if (kq.count > 0 || soKyDaKhoa > 0 || soTruocNgayVaoLam > 0) {
+    await nc.kiemToan({
+      action: "ap-pin-chua-khop", objectType: "staff_profile", objectId: userId,
+      after: { pin, soLanChamGanLai: kq.count, soKyDaKhoa, apCaKyDaKhoa: apKhoa, soTruocNgayVaoLam, ngayVaoLam: tu ? ngayVNCua(tu) : null },
+    });
+  }
+  if (kq.count > 0) {
+    await nc.suKien({ eventType: SU_KIEN.ATTENDANCE_PIN_MAPPED, objectType: "user", objectId: userId, payload: { pin, soLanCham: kq.count, apCaKyDaKhoa: apKhoa } });
+  }
+  return { soLanCham: kq.count, soKyDaKhoa, soTruocNgayVaoLam };
 }
 
 export async function danhSachPinChuaKhop(nc: NguCanh) {
@@ -313,11 +353,23 @@ export async function danhSachPinChuaKhop(nc: NguCanh) {
     _max: { punchedAt: true },
     orderBy: { pin: "asc" },
   });
-  return nhom.map((n) => ({ pin: n.pin!, soLanCham: n._count._all, dauTien: n._min.punchedAt, ganNhat: n._max.punchedAt }));
+  // QĐ-118: PIN đã gán cho người mà vẫn còn lần chấm chưa khớp = phần thuộc kỳ đã khóa / trước ngày vào làm.
+  const chu = await nc.tx.staffProfile.findMany({
+    where: { attendancePin: { in: nhom.map((n) => n.pin!) } },
+    select: { attendancePin: true, hiredAt: true, user: { select: { id: true, fullName: true } } },
+  });
+  const theoPin = new Map(chu.map((c) => [c.attendancePin!, c]));
+  return nhom.map((n) => {
+    const c = theoPin.get(n.pin!);
+    return {
+      pin: n.pin!, soLanCham: n._count._all, dauTien: n._min.punchedAt, ganNhat: n._max.punchedAt,
+      nguoiDaGan: c ? { id: c.user.id, hoTen: c.user.fullName, ngayVaoLam: c.hiredAt ? c.hiredAt.toISOString().slice(0, 10) : null } : null,
+    };
+  });
 }
 
 /** Gán một PIN chưa khớp cho một người: đặt mã chấm công của người đó rồi áp lại các lần chấm cũ. */
-export async function anhXaPin(nc: NguCanh, d: z.infer<typeof LuocDoAnhXaPin>) {
+export async function anhXaPin(nc: NguCanh, d: z.input<typeof LuocDoAnhXaPin>) {
   batBuocQuyen(nc.hoSo, "nhan_su.update", { objectType: "staff_profile", objectId: d.nguoiId });
   const u = await nc.tx.user.findFirst({ where: { id: d.nguoiId, isSystem: false }, select: { id: true, fullName: true, staffProfile: { select: { attendancePin: true } } } });
   if (!u) throw new LoiKhongTimThay("Nhân viên");
@@ -331,9 +383,9 @@ export async function anhXaPin(nc: NguCanh, d: z.infer<typeof LuocDoAnhXaPin>) {
     update: { attendancePin: d.pin, updatedBy: nc.hoSo.userId },
     create: { tenantId: nc.tenantId, userId: d.nguoiId, attendancePin: d.pin, createdBy: nc.hoSo.userId, updatedBy: nc.hoSo.userId },
   });
-  const soLan = await apDungPinChuaKhop(nc, d.pin, d.nguoiId);
-  await nc.kiemToan({ action: "gan-ma-cham-cong", objectType: "staff_profile", objectId: d.nguoiId, after: { maChamCong: d.pin, soLanChamGanLai: soLan } });
-  return { soLanCham: soLan };
+  const kq = await apDungPinChuaKhop(nc, d.pin, d.nguoiId, { apCaKyDaKhoa: d.apCaKyDaKhoa });
+  await nc.kiemToan({ action: "gan-ma-cham-cong", objectType: "staff_profile", objectId: d.nguoiId, after: { maChamCong: d.pin, soLanChamGanLai: kq.soLanCham } });
+  return kq;
 }
 
 // ---------------------------------------------------------------------------

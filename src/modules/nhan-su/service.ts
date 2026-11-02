@@ -486,7 +486,14 @@ export async function suaHoSoNhanSu(nc: NguCanh, userId: string, d: z.infer<type
   }
 
   let soGanLai = 0;
-  if (d.maChamCong && d.maChamCong !== truoc.maChamCong) soGanLai = await apDungPinChuaKhop(nc, d.maChamCong, userId);
+  let soKyDaKhoaChuaAp = 0;
+  if (d.maChamCong && d.maChamCong !== truoc.maChamCong) {
+    // QĐ-118: chỉ áp lần chấm từ ngày vào làm, trong kỳ chưa khóa; kỳ đã khóa báo số lượng (áp ở màn hình
+    // Máy chấm công → PIN chưa khớp, cần quyền duyệt).
+    const ap = await apDungPinChuaKhop(nc, d.maChamCong, userId);
+    soGanLai = ap.soLanCham;
+    soKyDaKhoaChuaAp = ap.soKyDaKhoa;
+  }
 
   const laThucTap = (d.loaiNhanSu ?? truoc.loaiNhanSu) === "thuc-tap";
   if (d.thucTap && laThucTap) {
@@ -506,7 +513,7 @@ export async function suaHoSoNhanSu(nc: NguCanh, userId: string, d: z.infer<type
     await nc.kiemToan({ action: "gan-ma-cham-cong", objectType: "staff_profile", objectId: userId, before: { maChamCong: truoc.maChamCong }, after: { maChamCong: d.maChamCong, soLanChamGanLai: soGanLai } });
   }
   await nc.suKien({ eventType: SU_KIEN.STAFF_PROFILE_UPDATED, objectType: "user", objectId: userId, payload: { truong: Object.keys(d), soLanChamGanLai: soGanLai } });
-  return { id: userId, soLanChamGanLai: soGanLai };
+  return { id: userId, soLanChamGanLai: soGanLai, soKyDaKhoaChuaAp };
 }
 
 // ---------------------------------------------------------------------------
