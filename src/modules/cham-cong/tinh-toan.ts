@@ -155,6 +155,36 @@ export function duocTinhCong(p: { gpsResult: string | null; flags?: unknown }, q
   return true;
 }
 
+export interface PhieuUngVien {
+  id: string;
+  /** Trạng thái còn mở (Mới / Đang xử lý / Chờ khách). */
+  conMo: boolean;
+  /** Đã xử lý xong trong NGÀY (giờ VN) của lần chấm. */
+  xongHomNay: boolean;
+  /** Mốc hoạt động gần nhất: tạo, cập nhật, diễn biến xử lý. */
+  hoatDongCuoi: Date;
+}
+
+/**
+ * Chọn phiếu hỗ trợ để xếp lần chấm GPS ngoài vùng vào "hiện trường" (NS-11, QĐ-115). Phiếu phải giao cho
+ * chính người chấm (đã lọc ở truy vấn). Thứ tự ưu tiên:
+ *  1. phiếu còn mở có hoạt động trong `soNgay` ngày → hiện trường, tính công ngay (không cờ);
+ *  2. phiếu vừa xử lý xong trong ngày → hiện trường + cờ `phieu-da-xong` (chờ chấp nhận);
+ *  3. phiếu còn mở nhưng im lặng quá `soNgay` ngày → hiện trường + cờ `phieu-hien-truong-cu` (chờ chấp nhận).
+ * Không có phiếu nào → null (ngoài vùng).
+ */
+export function chonPhieuHienTruong<T extends PhieuUngVien>(ds: T[], bayGio: Date, soNgay: number): { phieu: T; co: string | null } | null {
+  const moc = bayGio.getTime() - soNgay * NGAY_MS;
+  const moiNhat = (a: T, b: T) => b.hoatDongCuoi.getTime() - a.hoatDongCuoi.getTime();
+  const moGanDay = ds.filter((p) => p.conMo && p.hoatDongCuoi.getTime() >= moc).sort(moiNhat);
+  if (moGanDay[0]) return { phieu: moGanDay[0], co: null };
+  const xong = ds.filter((p) => !p.conMo && p.xongHomNay).sort(moiNhat);
+  if (xong[0]) return { phieu: xong[0], co: CO.phieuDaXong };
+  const cu = ds.filter((p) => p.conMo).sort(moiNhat);
+  if (cu[0]) return { phieu: cu[0], co: CO.phieuHienTruongCu };
+  return null;
+}
+
 /** Máy đi trước giờ máy chủ quá mức này thì mốc chắc chắn sai (không chỉ lệch vài phút) — nhãn "vô lý". */
 const GIO_MAY_VO_LY_TUONG_LAI_MS = 86_400_000;
 

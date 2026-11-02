@@ -8,6 +8,8 @@ import { taoThongBao } from "@/modules/thong-bao/service";
 import { banDoTen, congDuKienCuaNguoi, docCauHinhChamCong, kiemDuocDuyet, nghiDaDuyet, so } from "./chung";
 import { PHIEN_BAN_THONG_BAO_VI_TRI, type DuLieuChamGps } from "./luoc-do";
 import {
+  canChapNhanMoiTinh,
+  chonPhieuHienTruong,
   CO,
   danhGiaViTri,
   duocTinhCong,
@@ -112,7 +114,7 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
     select: { id: true, punchedAt: true, direction: true, gpsResult: true },
   });
   if (truocGps && laBamTrung(truocGps.punchedAt, bayGio, so(ch.chongBamTrungGiay, 60))) {
-    return { id: truocGps.id, luc: truocGps.punchedAt, huong: truocGps.direction, ketQua: truocGps.gpsResult, trungLap: true, co: [] as string[], diaDiem: null, phieu: null, canXemXet: false };
+    return { id: truocGps.id, luc: truocGps.punchedAt, huong: truocGps.direction, ketQua: truocGps.gpsResult, trungLap: true, co: [] as string[], diaDiem: null, phieu: null, canXemXet: false, choChapNhan: false };
   }
 
   const viTri = d.viDo !== null && d.viDo !== undefined && d.kinhDo !== null && d.kinhDo !== undefined && !d.loiViTri
@@ -129,15 +131,34 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
   let ketQua: "hop-le" | "hien-truong" | "ngoai-vung" = dg.trongVung ? "hop-le" : "ngoai-vung";
   let phieu: { id: string; number: string; title: string } | null = null;
   if (!dg.trongVung && viTri) {
-    phieu = await nc.tx.supportTicket.findFirst({
-      where: {
-        assigneeId: userId,
-        OR: [{ status: { in: TRANG_THAI_PHIEU_MO } }, { resolvedAt: { gte: mocVN(ngayVNCua(bayGio), 0) } }],
-      },
+    // QĐ-115: chỉ phiếu GIAO CHO CHÍNH NGƯỜI CHẤM (phiếu chưa có danh sách kỹ thuật viên — chỉ một người
+    // xử lý `assignee_id`); còn mở + có hoạt động trong N ngày (Cấu hình) thì tính ngay; phiếu im lặng quá
+    // N ngày hoặc vừa xử lý xong → vẫn là hiện trường nhưng chờ quản lý chấp nhận mới tính công.
+    const dauNgay = mocVN(ngayVNCua(bayGio), 0);
+    const ung = await nc.tx.supportTicket.findMany({
+      where: { assigneeId: userId, OR: [{ status: { in: TRANG_THAI_PHIEU_MO } }, { resolvedAt: { gte: dauNgay } }] },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, number: true, title: true },
+      take: 50,
+      select: {
+        id: true, number: true, title: true, status: true, createdAt: true, updatedAt: true, resolvedAt: true,
+        events: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+      },
     });
-    if (phieu) ketQua = "hien-truong";
+    const chon = chonPhieuHienTruong(
+      ung.map((p) => ({
+        ...p,
+        conMo: TRANG_THAI_PHIEU_MO.includes(p.status),
+        xongHomNay: p.resolvedAt !== null && p.resolvedAt >= dauNgay,
+        hoatDongCuoi: new Date(Math.max(p.createdAt.getTime(), p.updatedAt.getTime(), p.events[0]?.createdAt.getTime() ?? 0)),
+      })),
+      bayGio,
+      so(ch.phieuHienTruongNgay, 14),
+    );
+    if (chon) {
+      phieu = { id: chon.phieu.id, number: chon.phieu.number, title: chon.phieu.title };
+      ketQua = "hien-truong";
+      if (chon.co) co.push(chon.co);
+    }
   }
 
   // Tốc độ so với lần chấm trước có toạ độ (GPS, hoặc máy vân tay — lấy toạ độ địa điểm đặt máy).
@@ -191,7 +212,7 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
       await taoThongBao(nc.tx, nc.tenantId, {
         nguoiNhanId: hs.managerId,
         loai: "cham-cong-can-xem-xet",
-        mucDo: ketQua === "ngoai-vung" ? "canh-bao" : "thong-tin",
+        mucDo: canChapNhanMoiTinh({ gpsResult: ketQua, flags: co }) ? "canh-bao" : "thong-tin",
         tieuDe: `${nc.hoSo.hoTen} chấm ${d.huong === "vao" ? "vào" : "ra"} ca ${NHAN_KET_QUA_GPS[ketQua].toLowerCase()}`,
         noiDung: [phieu ? `Phiếu ${phieu.number}: ${phieu.title}` : null, ...co.map((c) => NHAN_CO[c] ?? c)].filter(Boolean).join(" · ") || null,
         duongDan: "/cham-cong/truc-tiep",
@@ -212,6 +233,8 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
     diaDiem: dg.diaDiem,
     phieu: phieu ? { id: phieu.id, so: phieu.number } : null,
     canXemXet,
+    /** Lần chấm chưa tính công cho tới khi quản lý chấp nhận (ngoài vùng, phiếu cũ / đã xong). */
+    choChapNhan: canChapNhanMoiTinh({ gpsResult: ketQua, flags: co }),
   };
 }
 

@@ -303,6 +303,37 @@ async function main() {
   const gK3 = await voi(T, ktv2, (nc) => chamCongGps(nc, { huong: "vao", viDo: XA.lat, kinhDo: XA.lng, doChinhXacM: 20 }, vn("2026-10-13T08:00:00")));
   dat("Phiếu đang mở giao cho mình → hiện trường, gắn đúng phiếu", gK3.ketQua === "hien-truong" && gK3.phieu?.id === phieuKhac.id);
 
+  // QĐ-115: phiếu phải còn mở + có hoạt động trong N ngày (Cấu hình, mặc định 14) mới tính ngay.
+  const ktv3 = await nguoi(T, "ktv3", "technical");
+  await voi(T, hr, (nc) => ganLich(nc, { nguoiIds: [ktv3], lichId: lich.id, tuNgay: "2026-01-01", ghiChu: null }));
+  await voi(T, ktv3, (nc) => xacNhanThongBaoViTri(nc));
+  const cu = vn("2026-09-20T09:00:00");
+  const phieuCu = await chu.supportTicket.create({ data: {
+    tenantId: T, number: `HT4-${DAU}`, customerId: kh.id, type: "bao-tri", title: "Bảo trì định kỳ (bỏ quên)", ownerId: tp, assigneeId: ktv3, status: "DANG_XU_LY",
+    createdAt: cu, updatedAt: cu,
+  } });
+  const ghiLai = await chu.supportTicket.findUniqueOrThrow({ where: { id: phieuCu.id } });
+  dat("(chuẩn bị) phiếu thử giữ đúng mốc cập nhật cũ", ghiLai.updatedAt.getTime() === cu.getTime(), ghiLai.updatedAt.toISOString());
+  const gCu = await voi(T, ktv3, (nc) => chamCongGps(nc, { huong: "vao", viDo: XA.lat, kinhDo: XA.lng, doChinhXacM: 20 }, vn("2026-10-16T08:00:00")));
+  const pCu = await chu.attendancePunch.findUniqueOrThrow({ where: { id: gCu.id } });
+  dat("QĐ-115: phiếu còn mở nhưng im lặng 26 ngày (> 14) → vẫn nhận là hiện trường, gắn phiếu, cờ phiếu cũ, CHƯA tính công",
+    gCu.ketQua === "hien-truong" && gCu.phieu?.id === phieuCu.id && gCu.co.includes("phieu-hien-truong-cu") && gCu.choChapNhan && pCu.needsReview && !duocTinhCong(pCu, undefined));
+  await chu.tenantSetting.create({ data: { tenantId: T, key: "cham_cong.phieu_hien_truong_ngay", value: 30 } });
+  const gCu30 = await voi(T, ktv3, (nc) => chamCongGps(nc, { huong: "ra", viDo: XA.lat, kinhDo: XA.lng, doChinhXacM: 20 }, vn("2026-10-16T17:00:00")));
+  dat("QĐ-115: số ngày lấy từ Cấu hình — đặt 30 thì cùng phiếu đó tính ngay", gCu30.ketQua === "hien-truong" && !gCu30.co.includes("phieu-hien-truong-cu") && !gCu30.choChapNhan);
+  await chu.tenantSetting.deleteMany({ where: { tenantId: T, key: "cham_cong.phieu_hien_truong_ngay" } });
+  await chu.supportTicketEvent.create({ data: { tenantId: T, ticketId: phieuCu.id, type: "ghi-chu", content: "Hẹn khách thứ Hai", createdAt: vn("2026-10-17T10:00:00") } });
+  const gEv = await voi(T, ktv3, (nc) => chamCongGps(nc, { huong: "vao", viDo: XA.lat, kinhDo: XA.lng, doChinhXacM: 20 }, vn("2026-10-19T08:00:00")));
+  dat("QĐ-115: phiếu có diễn biến xử lý gần đây (ghi chú 2 ngày trước) → hiện trường tính ngay", gEv.ketQua === "hien-truong" && !gEv.choChapNhan);
+  await chu.supportTicket.update({ where: { id: phieuCu.id }, data: { status: "HOAN_THANH", resolution: "Xong", resolvedAt: vn("2026-10-20T10:00:00"), updatedAt: vn("2026-10-20T10:00:00") } });
+  const gXong = await voi(T, ktv3, (nc) => chamCongGps(nc, { huong: "ra", viDo: XA.lat, kinhDo: XA.lng, doChinhXacM: 20 }, vn("2026-10-20T11:00:00")));
+  dat("QĐ-115: phiếu đã xử lý xong trong ngày (không còn mở) → hiện trường + cờ phiếu đã xong, chờ chấp nhận",
+    gXong.ketQua === "hien-truong" && gXong.co.includes("phieu-da-xong") && gXong.choChapNhan);
+  await nemLoi("QĐ-115: kỹ thuật viên không tự chấp nhận lần chấm theo phiếu cũ của mình", () => voi(T, ktv3, (nc) => xemXetLanCham(nc, gCu.id, { quyetDinh: "chap-nhan", ghiChu: null })), undefined, "bat-ky");
+  await voi(T, hr, (nc) => xemXetLanCham(nc, gCu.id, { quyetDinh: "chap-nhan", ghiChu: "Đã gọi khách xác nhận" }));
+  const qdCu = await voiTenant(T, (tx) => quyetDinhMoiNhat(tx, [gCu.id]));
+  dat("QĐ-115: Nhân sự chấp nhận → lần chấm theo phiếu cũ được tính công", duocTinhCong(pCu, qdCu.get(gCu.id)));
+
   // Tốc độ: đổi qua lại hai điểm cách 5 km trong 2 phút (bấm trùng 60 giây không chặn) → cờ.
   const s1 = await voi(T, nvB, (nc) => chamCongGps(nc, { huong: "vao", viDo: VP.lat, kinhDo: VP.lng, doChinhXacM: 10 }, vn("2026-10-14T08:00:00")));
   const s2 = await voi(T, nvB, (nc) => chamCongGps(nc, { huong: "ra", viDo: XA.lat, kinhDo: XA.lng, doChinhXacM: 10 }, vn("2026-10-14T08:01:30")));

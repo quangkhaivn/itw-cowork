@@ -65,7 +65,7 @@ export default function ChamCong({ duLieu }: { duLieu: DuLieu }) {
     const than = viTri
       ? { huong, viDo: viTri.coords.latitude, kinhDo: viTri.coords.longitude, doChinhXacM: viTri.coords.accuracy, gioMay: new Date().toISOString() }
       : { huong, loiViTri: loiViTri(loiVt), gioMay: new Date().toISOString() };
-    const kq = await goi<{ ketQua: string; trungLap: boolean; co: string[]; diaDiem: { ten: string; khoangCachM: number } | null; phieu: { so: string } | null; luc: string }>(
+    const kq = await goi<{ ketQua: string; trungLap: boolean; choChapNhan: boolean; co: string[]; diaDiem: { ten: string; khoangCachM: number } | null; phieu: { so: string } | null; luc: string }>(
       "/api/v1/cham-cong/gps", "POST", than,
     );
     datDangLayViTri(false);
@@ -81,7 +81,7 @@ export default function ChamCong({ duLieu }: { duLieu: DuLieu }) {
       ].filter(Boolean).join(" · ");
       datKetQua({
         lop: kq.ketQua === "hop-le" && kq.co.length === 0 ? "tot" : "canh-bao",
-        chu: `${huong === "vao" ? "Vào ca" : "Ra ca"} lúc ${gio(kq.luc)} — ${nhan}${them ? ` (${them})` : ""}.${kq.ketQua !== "hop-le" || kq.co.length ? " Quản lý sẽ xem lại lần chấm này." : ""}`,
+        chu: `${huong === "vao" ? "Vào ca" : "Ra ca"} lúc ${gio(kq.luc)} — ${nhan}${them ? ` (${them})` : ""}.${kq.choChapNhan ? " Lần chấm này chưa được tính công cho tới khi quản lý chấp nhận." : kq.ketQua !== "hop-le" || kq.co.length ? " Quản lý sẽ xem lại lần chấm này." : ""}`,
       });
     }
     router.refresh();

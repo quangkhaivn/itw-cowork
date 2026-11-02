@@ -32,6 +32,7 @@ import {
   tongHopThang,
   trangThaiHomNay,
   canChapNhanMoiTinh,
+  chonPhieuHienTruong,
   danhGiaGioMay,
   type CaLam,
   type DongCongThang,
@@ -533,5 +534,18 @@ describe("QA 0.19.0 — quyết định chính sách (QĐ-113 → QĐ-118)", () 
     // Cờ chỉ để xem lại (độ chính xác, tốc độ) vẫn tính ngay như trước.
     assert.equal(duocTinhCong({ gpsResult: "hop-le", flags: ["do-chinh-xac-thap", "toc-do-bat-thuong"] }, undefined), true);
     assert.equal(canChapNhanMoiTinh({ gpsResult: "hop-le", flags: "rac" }), false);
+  });
+  it("QĐ-115: chọn phiếu hiện trường — còn mở + hoạt động trong N ngày tính ngay; phiếu cũ / đã xong chờ chấp nhận", () => {
+    const luc = new Date("2026-10-20T01:00:00Z");
+    const ngayTruoc = (n: number) => new Date(luc.getTime() - n * 86_400_000);
+    const p = (id: string, conMo: boolean, xongHomNay: boolean, n: number) => ({ id, conMo, xongHomNay, hoatDongCuoi: ngayTruoc(n) });
+    assert.equal(chonPhieuHienTruong([], luc, 14), null);
+    assert.deepEqual(chonPhieuHienTruong([p("cu", true, false, 20), p("moi", true, false, 3)], luc, 14), { phieu: p("moi", true, false, 3), co: null });
+    assert.equal(chonPhieuHienTruong([p("bien", true, false, 14)], luc, 14)?.co, null, "đúng N ngày vẫn còn hiệu lực");
+    assert.equal(chonPhieuHienTruong([p("cu", true, false, 15)], luc, 14)?.co, "phieu-hien-truong-cu");
+    assert.equal(chonPhieuHienTruong([p("cu", true, false, 15)], luc, 30)?.co, null, "N lấy từ Cấu hình");
+    assert.deepEqual(chonPhieuHienTruong([p("cu", true, false, 40), p("xong", false, true, 0)], luc, 14), { phieu: p("xong", false, true, 0), co: "phieu-da-xong" });
+    assert.equal(chonPhieuHienTruong([p("xong", false, true, 0), p("moi", true, false, 1)], luc, 14)?.phieu.id, "moi", "phiếu mở gần đây được ưu tiên");
+    assert.equal(chonPhieuHienTruong([p("dong", false, false, 0)], luc, 14), null, "phiếu đã đóng từ trước → không phải hiện trường");
   });
 });
