@@ -23,6 +23,9 @@ export default function TacVuViec({ id, trangThai }: { id: string; trangThai: st
     if (kq) router.refresh();
   }
 
+  // 0.20.0: việc đang chờ duyệt chỉ người duyệt thao tác (trên trang chi tiết).
+  if (trangThai === "cho-duyet") return <span className="huy-hieu canh-bao">{NHAN_TRANG_THAI_VIEC["cho-duyet"]}</span>;
+
   return (
     <div className="tac-vu-viec">
       <input
@@ -33,7 +36,7 @@ export default function TacVuViec({ id, trangThai }: { id: string; trangThai: st
         onChange={(e) => doi(e.target.checked ? "xong" : "mo")}
       />
       <select aria-label="Trạng thái" value={trangThai} disabled={dangGui} onChange={(e) => doi(e.target.value)}>
-        {TRANG_THAI_VIEC.map((t) => (
+        {TRANG_THAI_VIEC.filter((t) => t !== "cho-duyet").map((t) => (
           <option key={t} value={t}>
             {NHAN_TRANG_THAI_VIEC[t]}
           </option>

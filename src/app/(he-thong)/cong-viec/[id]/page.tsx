@@ -11,10 +11,18 @@ import { NHAN_DANH_GIA_KET_QUA, NHAN_TRANG_THAI_VIEC, NHAN_UU_TIEN } from "@/mod
 import { chiTietViec } from "@/modules/cong-viec/service";
 import TacVuChiTietViec from "./TacVuChiTietViec";
 import DanhSachKiemTra from "./DanhSachKiemTra";
+import BaoTienDo from "./BaoTienDo";
+import FormNhanh from "@/components/nhan-su/FormNhanh";
+import NutHanhDong from "@/components/danh-gia/NutHanhDong";
+import { lichSuGiaoViec } from "@/modules/cong-viec/giao-viec";
+import { NHAN_CHAT_LUONG, NHAN_DO_KHO, NHAN_TRANG_THAI_NHAN } from "@/modules/danh-gia/tinh-toan";
 
 export const dynamic = "force-dynamic";
 
-const LOP_TRANG_THAI: Record<string, string> = { mo: "", "dang-lam": "chinh", xong: "tot", huy: "" };
+const LOP_TRANG_THAI: Record<string, string> = { mo: "", "dang-lam": "chinh", "cho-duyet": "canh-bao", xong: "tot", huy: "" };
+const CHAT_LUONG = [5, 4, 3, 2, 1].map((d) => ({ giaTri: String(d), nhan: `${d} — ${NHAN_CHAT_LUONG[d]}` }));
+const NHAN_HANH_DONG: Record<string, string> = { "gui-duyet": "Gửi duyệt", duyet: "Duyệt", "tra-lai": "Trả lại" };
+const NHAN_GIA_HAN: Record<string, string> = { "cho-duyet": "Chờ người giao", "da-duyet": "Đã duyệt", "tu-choi": "Từ chối" };
 const LOP_DANH_GIA: Record<string, string> = { dat: "tot", "mot-phan": "canh-bao", "khong-dat": "loi", "can-theo-doi": "chinh" };
 const LOP_UU_TIEN: Record<string, string> = { khan: "loi", cao: "canh-bao", "trung-binh": "", thap: "" };
 
@@ -33,7 +41,7 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
     try {
       const ct = await chiTietViec(nc, id);
       const nguoiGiaoLai = ct.quyen.giaoLai ? await danhSachNguoiPhuTrach(nc, "task.update") : [];
-      return { ...ct, nguoiGiaoLai };
+      return { ...ct, nguoiGiaoLai, ls: await lichSuGiaoViec(nc, id) };
     } catch (loi) {
       if (loi instanceof LoiKhongTimThay) return null;
       throw loi;
@@ -42,7 +50,10 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
   if (!du) notFound();
 
   const v = du.viec;
+  const ls = du.ls;
   const chuaXong = v.trangThai === "mo" || v.trangThai === "dang-lam";
+  // 0.20.0: đang chờ duyệt / đã duyệt thì thao tác 0.17 (sửa, mở lại, giao lại) không áp dụng.
+  const khoaThaoTac = v.trangThai === "cho-duyet" || !!v.duyetLuc;
   const tiepTheoId = layMot(sp.tiepTheo);
 
   return (
@@ -59,7 +70,7 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
           </>
         }
         hanhDong={
-          du.quyen.sua && (
+          du.quyen.sua && !khoaThaoTac && (
             <TacVuChiTietViec
               id={v.id}
               tieuDe={v.tieuDe}
@@ -85,6 +96,13 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
               <Link href={`/cong-viec/${tiepTheoId}`}>Mở việc tiếp theo đã hẹn</Link>
             </>
           )}
+        </div>
+      )}
+
+      {v.trangThai === "cho-duyet" && (
+        <div className="hop-thong-bao thong-tin" role="status">
+          Việc đã làm xong và đang chờ duyệt — cấp {v.capDangCho}: {ls.nguoiDuyet.find((n) => n.cap === v.capDangCho)?.hoTen ?? "—"}
+          {v.guiDuyetLuc ? ` (gửi lúc ${dinhDangNgayGio(v.guiDuyetLuc)})` : ""}. Người duyệt duyệt kèm chấm chất lượng, hoặc trả lại kèm lý do.
         </div>
       )}
 
@@ -183,6 +201,170 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
           </div>
         </section>
       </div>
+
+      <section className="the">
+        <div className="dau">
+          <h2>Giao nhận và duyệt</h2>
+          <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {ls.quyen.nhan && <NutHanhDong url={`/api/v1/cong-viec/${v.id}/nhan`} nhan="Nhận việc" lopNut="nut chinh nho" />}
+            {ls.quyen.nhan && (
+              <FormNhanh nhanNut="Từ chối" tieuDe="Từ chối việc" url={`/api/v1/cong-viec/${v.id}/tu-choi`} lopNut="nut nho"
+                truong={[{ ten: "lyDo", nhan: "Lý do từ chối", kieu: "textarea", batBuoc: true, caDong: true, goiY: "Việc quay về người giao để giao lại hoặc sửa." }]} />
+            )}
+            {ls.quyen.baoTienDo && <BaoTienDo id={v.id} tienDo={v.tienDo} />}
+            {ls.quyen.xinGiaHan && (
+              <FormNhanh nhanNut="Xin gia hạn" tieuDe="Xin gia hạn" url={`/api/v1/cong-viec/${v.id}/gia-han`} lopNut="nut nho"
+                truong={[
+                  { ten: "hanMoi", nhan: "Hạn mới", kieu: "datetime-local", batBuoc: true },
+                  { ten: "lyDo", nhan: "Lý do", kieu: "textarea", batBuoc: true, caDong: true },
+                ]} />
+            )}
+            {ls.quyen.duyet && (
+              <FormNhanh nhanNut="Duyệt + chấm điểm" tieuDe="Duyệt việc" url={`/api/v1/cong-viec/${v.id}/duyet`} lopNut="nut chinh nho"
+                truong={[
+                  { ten: "chatLuong", nhan: "Chất lượng", kieu: "select", luaChon: CHAT_LUONG, caDong: true, goiY: "Điểm việc = độ khó × chất lượng × hệ số đúng hạn (máy tự tính đúng hạn theo hạn cuối cùng)." },
+                  { ten: "nhanXet", nhan: "Nhận xét", kieu: "textarea", caDong: true },
+                ]}
+                giaTriDau={{ chatLuong: "4" }} />
+            )}
+            {ls.quyen.duyet && (
+              <FormNhanh nhanNut="Trả lại" tieuDe="Trả lại việc" url={`/api/v1/cong-viec/${v.id}/tra-lai`} lopNut="nut nho"
+                truong={[{ ten: "lyDo", nhan: "Lý do trả lại", kieu: "textarea", batBuoc: true, caDong: true, goiY: "Việc về Đang làm; người làm sửa rồi gửi duyệt lại." }]} />
+            )}
+          </span>
+        </div>
+        {v.trangThaiNhan === "tu-choi" && (
+          <div className="hop-thong-bao canh-bao" role="status">
+            Người làm đã từ chối{v.tuChoiLuc ? ` lúc ${dinhDangNgayGio(v.tuChoiLuc)}` : ""}: “{v.lyDoTuChoi}”. Người giao: giao lại cho người khác, hoặc sửa việc rồi lưu để gửi lại.
+          </div>
+        )}
+        <dl className="bang-thong-tin">
+          <dt>Độ khó</dt>
+          <dd>{v.doKho} — {NHAN_DO_KHO[v.doKho]}</dd>
+          <dt>Nhận việc</dt>
+          <dd>{v.trangThaiNhan ? `${NHAN_TRANG_THAI_NHAN[v.trangThaiNhan]}${v.nhanLuc ? ` (${dinhDangNgayGio(v.nhanLuc)})` : ""}` : "Không cần (tự tạo)"}</dd>
+          <dt>Cần duyệt</dt>
+          <dd>
+            {v.canDuyet ? (
+              <>
+                Có —{" "}
+                {ls.nguoiDuyet.map((n) => (
+                  <span key={n.cap} className={`huy-hieu ${v.capDangCho === n.cap ? "canh-bao" : ""}`}>Cấp {n.cap}: {n.hoTen}</span>
+                ))}
+              </>
+            ) : "Không"}
+          </dd>
+          <dt>Tiến độ</dt>
+          <dd>{v.tienDo}%</dd>
+          {v.hanBanDau && v.han && v.hanBanDau.getTime() !== v.han.getTime() && (
+            <>
+              <dt>Hạn ban đầu</dt>
+              <dd>{dinhDangNgayGio(v.hanBanDau)} → hạn hiện tại {dinhDangNgayGio(v.han)}</dd>
+            </>
+          )}
+        </dl>
+      </section>
+
+      {(ls.xemDiem && v.duyetLuc) || v.danhGia ? (
+        <section className="the">
+          <div className="dau">
+            <h2>Đánh giá công việc</h2>
+            {ls.quyen.dieuChinhDiem && (
+              <FormNhanh nhanNut="Điều chỉnh điểm" tieuDe="Điều chỉnh điểm (ghi thêm, bắt buộc lý do)" url={`/api/v1/cong-viec/${v.id}/dieu-chinh-diem`} lopNut="nut nho"
+                truong={[
+                  { ten: "chatLuong", nhan: "Chất lượng mới", kieu: "select", luaChon: CHAT_LUONG, caDong: true },
+                  { ten: "lyDo", nhan: "Lý do điều chỉnh", kieu: "textarea", batBuoc: true, caDong: true },
+                ]}
+                giaTriDau={{ chatLuong: String(v.chatLuong ?? 3) }} />
+            )}
+          </div>
+          <div className="luoi-chi-so">
+            <div className="the chi-so">
+              <div className="nhan">Người làm tự đánh giá</div>
+              <div className="gia-tri" style={{ fontSize: 16 }}>{v.danhGia ? NHAN_DANH_GIA_KET_QUA[v.danhGia] : "—"}</div>
+            </div>
+            {ls.xemDiem && v.duyetLuc && (
+              <>
+                <div className="the chi-so">
+                  <div className="nhan">Người duyệt chấm chất lượng</div>
+                  <div className="gia-tri">{v.chatLuong}/5</div>
+                  <div className="ghi-chu">{v.chatLuong ? NHAN_CHAT_LUONG[v.chatLuong] : ""}</div>
+                </div>
+                <div className="the chi-so">
+                  <div className="nhan">Hệ số đúng hạn</div>
+                  <div className="gia-tri">{v.heSoDungHan}</div>
+                  <div className="ghi-chu">Duyệt {dinhDangNgayGio(v.duyetLuc)}</div>
+                </div>
+                <div className="the chi-so tot">
+                  <div className="nhan">Điểm việc</div>
+                  <div className="gia-tri">{v.diemViec}</div>
+                  <div className="ghi-chu">{v.doKho} × {v.chatLuong} × {v.heSoDungHan}{ls.dieuChinhDiem.length ? " (đã điều chỉnh)" : ""}</div>
+                </div>
+              </>
+            )}
+          </div>
+          {ls.dieuChinhDiem.length > 0 && (
+            <ul className="phu nho">
+              {ls.dieuChinhDiem.map((d) => (
+                <li key={d.id}>{dinhDangNgayGio(d.luc)} — {d.nguoi}: {d.diemCu} → {d.diemMoi} (chất lượng {d.chatLuongCu} → {d.chatLuongMoi}). Lý do: {d.lyDo}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {(ls.tienDo.length > 0 || ls.giaHan.length > 0 || ls.nhatKyDuyet.length > 0) && (
+        <section className="the">
+          <div className="dau"><h2>Nhật ký việc</h2></div>
+          {ls.tienDo.length > 0 && (
+            <>
+              <h3>Tiến độ</h3>
+              <ul>
+                {ls.tienDo.map((t) => (
+                  <li key={t.id}>
+                    {dinhDangNgayGio(t.luc)} — {t.nguoi}: <strong>{t.phanTram}%</strong>{t.ghiChu ? ` · ${t.ghiChu}` : ""}
+                    {t.tep.map((f) => <span key={f.id}> · <a href={`/api/v1/dinh-kem/${f.id}/tai`}>{f.ten}</a></span>)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {ls.giaHan.length > 0 && (
+            <>
+              <h3>Gia hạn</h3>
+              <ul>
+                {ls.giaHan.map((g) => (
+                  <li key={g.id}>
+                    {dinhDangNgayGio(g.luc)} — {g.nguoiXin} xin {g.hanCu ? dinhDangNgayGio(g.hanCu) : "—"} → {dinhDangNgayGio(g.hanMoi)}: “{g.lyDo}” ·{" "}
+                    <span className={`huy-hieu ${g.trangThai === "da-duyet" ? "tot" : g.trangThai === "tu-choi" ? "loi" : "canh-bao"}`}>{NHAN_GIA_HAN[g.trangThai]}</span>
+                    {g.nguoiQuyetDinh && ` (${g.nguoiQuyetDinh}${g.ghiChu ? `: ${g.ghiChu}` : ""})`}
+                    {g.trangThai === "cho-duyet" && ls.quyen.quyetDinhGiaHan && (
+                      <span style={{ display: "inline-flex", gap: 6, marginLeft: 8 }}>
+                        <NutHanhDong url={`/api/v1/cong-viec/gia-han/${g.id}`} nhan="Đồng ý" lopNut="nut chinh nho" than={{ dongY: true, ghiChu: "" }} />
+                        <FormNhanh nhanNut="Từ chối" tieuDe="Từ chối gia hạn" url={`/api/v1/cong-viec/gia-han/${g.id}`} lopNut="nut nho" themVaoThan={{ dongY: false }}
+                          truong={[{ ten: "ghiChu", nhan: "Lý do", kieu: "textarea", batBuoc: true, caDong: true }]} />
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {ls.nhatKyDuyet.length > 0 && (
+            <>
+              <h3>Duyệt</h3>
+              <ul>
+                {ls.nhatKyDuyet.map((n) => (
+                  <li key={n.id}>
+                    {dinhDangNgayGio(n.luc)} — lần {n.vong}{n.cap ? `, cấp ${n.cap}` : ""}: <strong>{NHAN_HANH_DONG[n.hanhDong]}</strong> bởi {n.nguoi}
+                    {n.chatLuong ? ` · chất lượng ${n.chatLuong}/5` : ""}{n.diem !== null ? ` · điểm ${n.diem}` : ""}{n.lyDo ? ` · “${n.lyDo}”` : ""}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
 
       <DanhSachKiemTra
         taskId={v.id}

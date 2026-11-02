@@ -10,6 +10,8 @@ import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { danhSachNguoiPhuTrach } from "@/modules/crm/chung";
 import { NHAN_DANH_GIA_KET_QUA, NHAN_TRANG_THAI_VIEC, NHAN_UU_TIEN, TRANG_THAI_VIEC } from "@/modules/crm/hang-so";
 import { danhSachViec, LuocDoLocViec } from "@/modules/cong-viec/service";
+import { danhSachMauViec } from "@/modules/cong-viec/mau-lap";
+import { NHAN_TRANG_THAI_NHAN } from "@/modules/danh-gia/tinh-toan";
 import TacVuViec from "./TacVuViec";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +26,7 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
   const tt = layMot(sp.trangThai);
   const idViec = layMot(sp.id);
   const boLoc = LuocDoLocViec.parse({
-    cheDo: ["cua-toi", "toi-giao", "qua-han", "tat-ca"].includes(cheDo) ? cheDo : "cua-toi",
+    cheDo: ["cua-toi", "toi-giao", "qua-han", "tat-ca", "cho-toi-duyet", "cho-nhan"].includes(cheDo) ? cheDo : "cua-toi",
     trangThai: tt === "tat-ca" || (TRANG_THAI_VIEC as readonly string[]).includes(tt) ? tt : "",
     nguoiPhuTrach: /^[0-9a-f-]{36}$/i.test(layMot(sp.nguoiPhuTrach)) ? layMot(sp.nguoiPhuTrach) : "",
     q: layMot(sp.q),
@@ -32,12 +34,13 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
     trang: layMot(sp.trang) || 1,
   });
 
-  const { kq, nguoiXem, nguoiGiao } = await docDuLieu(nd, async (tx) => {
+  const { kq, nguoiXem, nguoiGiao, mauViec } = await docDuLieu(nd, async (tx) => {
     const nc = taoNguCanh(tx, nd.phien.tenantId, nd.hoSo);
     return {
       kq: await danhSachViec(nc, boLoc),
       nguoiXem: await danhSachNguoiPhuTrach(nc, "task.view"),
       nguoiGiao: coQuyen(nd.hoSo, "task.create") ? await danhSachNguoiPhuTrach(nc, "task.create") : [],
+      mauViec: coQuyen(nd.hoSo, "task.create") ? await danhSachMauViec(nc) : [],
     };
   });
 
@@ -46,6 +49,9 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
     // 0.17.0 (CV-08): việc mình giao cho người khác — theo dõi tới lúc xong và đọc kết quả.
     ...(nguoiGiao.length > 1 ? [{ ma: "toi-giao", nhan: "Tôi giao" }] : []),
     { ma: "qua-han", nhan: "Quá hạn", so: kq.soQuaHanCuaToi },
+    // 0.20.0: việc chờ chính mình duyệt (DG-20), việc được giao chờ mình bấm Nhận (DG-03).
+    { ma: "cho-toi-duyet", nhan: "Chờ tôi duyệt", so: kq.soChoToiDuyet },
+    { ma: "cho-nhan", nhan: "Chờ tôi nhận", so: kq.soChoNhan },
     ...(nguoiXem.length > 1 ? [{ ma: "tat-ca", nhan: "Cả nhóm" }] : []),
   ];
 
@@ -54,7 +60,21 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
       <DauTrang
         tieuDe="Công việc"
         moTa="Việc cần làm có hạn, gắn với khách hàng, lead hoặc cơ hội. Việc đã xảy ra (cuộc gọi, cuộc gặp) ghi ở phần Tương tác."
-        hanhDong={coQuyen(nd.hoSo, "task.create") && <NutTaoViec nguoiPhuTrach={nguoiGiao} toiId={nd.hoSo.userId} lopNut="nut chinh" moNgay={layMot(sp.tao) === "1"} />}
+        hanhDong={
+          <span style={{ display: "flex", gap: 6 }}>
+            <Link className="nut" href="/cong-viec/nhom">Việc của nhóm</Link>
+            {coQuyen(nd.hoSo, "task.create") && <Link className="nut" href="/cong-viec/mau">Mẫu &amp; định kỳ</Link>}
+            {coQuyen(nd.hoSo, "task.create") && (
+              <NutTaoViec
+                nguoiPhuTrach={nguoiGiao}
+                toiId={nd.hoSo.userId}
+                lopNut="nut chinh"
+                moNgay={layMot(sp.tao) === "1"}
+                mauViec={mauViec.map((m) => ({ id: m.id, ten: m.ten, tieuDe: m.tieuDe, doKho: m.doKho, canDuyet: m.canDuyet, mucKiemTra: m.mucKiemTra }))}
+              />
+            )}
+          </span>
+        }
       />
 
       {boLoc.id ? (
@@ -137,6 +157,12 @@ export default async function TrangCongViec({ searchParams }: { searchParams: Th
                         {v.tieuDe}
                       </Link>{" "}
                       {v.uuTien !== "trung-binh" && <span className={`huy-hieu ${LOP_UU_TIEN[v.uuTien]}`}>{NHAN_UU_TIEN[v.uuTien]}</span>}
+                      {v.trangThaiNhan && v.trangThaiNhan !== "da-nhan" && (
+                        <span className={`huy-hieu ${v.trangThaiNhan === "tu-choi" ? "loi" : "canh-bao"}`}>{NHAN_TRANG_THAI_NHAN[v.trangThaiNhan]}</span>
+                      )}
+                      {v.canDuyet && v.trangThai !== "xong" && <span className="huy-hieu" title="Xong thì chờ người duyệt chấm điểm">Cần duyệt</span>}
+                      {v.diemViec !== null && <span className="huy-hieu tot" title="Điểm việc = độ khó × chất lượng × hệ số đúng hạn">{v.diemViec} điểm</span>}
+                      {v.tienDo > 0 && v.trangThai !== "xong" && <span className="huy-hieu">{v.tienDo}%</span>}
                       {v.kiemTra.tong > 0 && (
                         <span className={`huy-hieu ${v.kiemTra.batBuocConThieu ? "canh-bao" : ""}`} title="Danh sách kiểm tra">
                           ☑ {v.kiemTra.daTich}/{v.kiemTra.tong}

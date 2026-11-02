@@ -11,7 +11,7 @@ import { loiCua, useGoiApi } from "@/components/ui/goi-api";
  * thật nằm ở máy chủ — form chỉ gom dữ liệu và hiện lỗi từng trường.
  */
 
-export type KieuTruong = "text" | "number" | "time" | "date" | "select" | "checkbox" | "textarea" | "tuan" | "nhieu" | "dong-ip";
+export type KieuTruong = "text" | "number" | "time" | "date" | "datetime-local" | "select" | "checkbox" | "textarea" | "tuan" | "nhieu" | "dong-ip";
 
 export interface TruongForm {
   ten: string;
