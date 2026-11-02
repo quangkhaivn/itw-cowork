@@ -158,7 +158,7 @@ export function phamViCuaQuyen(dn: DinhNghiaVaiTro, ma: string): PhamVi {
 const CHAM_CONG_CA_NHAN = [maQuyen("cham_cong", "view"), maQuyen("cham_cong", "create")];
 const CHAM_CONG_QUAN_LY = [...CHAM_CONG_CA_NHAN, maQuyen("cham_cong", "approve")];
 /**
- * 0.20.0 — đánh giá (QĐ-115). Mọi nhân viên: xem phiếu / báo cáo / nhật ký CỦA MÌNH và tự viết (`own`).
+ * 0.20.0 — đánh giá (QĐ-121). Mọi nhân viên: xem phiếu / báo cáo / nhật ký CỦA MÌNH và tự viết (`own`).
  * Trưởng phòng: xem, chấm, nhận xét, chốt trong phạm vi vai trò. Nhân sự: xem toàn công ty (bộ KPI, kỳ,
  * mẫu phiếu quản lý bằng `nhan_su.update`), không chốt. Giám đốc: toàn quyền. Trợ lý AI: không có.
  */
@@ -213,7 +213,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
-      // 0.20.0: đánh giá — QĐ-115.
+      // 0.20.0: đánh giá — QĐ-121.
       ...DANH_GIA_QUAN_LY,
     ],
   },

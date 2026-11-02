@@ -317,7 +317,7 @@ Luật: `BUSINESS_RULES.md` mục 30 (NS-01 → NS-62). Quyết định QĐ-100 
 
 ## 7x. Đánh giá và KPI (0.20.0)
 
-Luật: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết định QĐ-113 → QĐ-124. Migration `20261103090001_nhan_su_danh_gia`. Bài thử `npm run thu:danh-gia`, `thu/don-vi/danh-gia.test.ts`. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
+Luật: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết định QĐ-119 → QĐ-130. Migration `20261103090001_nhan_su_danh_gia`. Bài thử `npm run thu:danh-gia`, `thu/don-vi/danh-gia.test.ts`. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
 
 - **Phần thuần**: `src/modules/danh-gia/tinh-toan.ts` — chuỗi duyệt, hệ số đúng hạn + hạn cuối sau gia hạn, điểm việc, lịch lặp, hạn báo cáo, kỳ đánh giá (mốc UTC của 00:00 giờ VN), % đạt KPI có trần, điểm tổng có trọng số, xếp loại, chọn bộ KPI, lược đồ + chấm phiếu thực tập (thang 10 / chữ), mẫu phiếu chung.
 - **Công việc** (`src/modules/cong-viec/`): `service.ts` (tạo / sửa mở rộng: cần duyệt, chuỗi duyệt, nhận ngầm, xin gia hạn bắt buộc, `cho-duyet`), `duyet.ts` (lõi chuỗi duyệt, nhật ký, thông báo — tách để không vòng import), `giao-viec.ts` (nhận / từ chối, giao nhiều người, tiến độ, gia hạn, duyệt / trả lại / điều chỉnh điểm, lịch sử, việc của nhóm), `mau-lap.ts` (mẫu, việc định kỳ + `sinhViecDinhKy`), `nhac-viec.ts` (nhắc chưa nhận / quá hạn duyệt). Mọi chuyển trạng thái **khóa dòng `tasks`** trước khi đọc (QĐ-77) — hai lần duyệt cùng lúc: lần sau thấy đã chuyển, 409.

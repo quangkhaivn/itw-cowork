@@ -6,7 +6,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 **Chưa triển khai lên máy thật.** Hai migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`), chạy lại `prisma/rls.sql` (6 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
 
-Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết định QĐ-113 → QĐ-124. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết định QĐ-119 → QĐ-130. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
 
 ### Thêm
 - **Giao việc mở rộng**: độ khó 1–5; cờ **cần duyệt** (mặc định bật khi giao cho người khác) + chuỗi người duyệt (mặc định người giao, tối đa 5 cấp, không ai tự duyệt); người được giao **Nhận / Từ chối kèm lý do**; nhắc người giao khi quá hạn nhận; **xin gia hạn** → người giao duyệt (giữ lịch sử, hạn ban đầu); **mẫu việc**; **việc định kỳ** ngày / tuần / tháng do worker sinh (không trùng); **giao nhiều người** (mỗi người một việc, chung nhóm). Thẻ "Chờ tôi duyệt", "Chờ tôi nhận"; trang **Việc của nhóm**.

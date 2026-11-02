@@ -740,7 +740,7 @@ Ngưỡng ở Cấu hình (nhóm **Chấm công**): `cham_cong.ban_kinh_mac_dinh
 
 ## 31. Nhân sự – giao việc, báo cáo, duyệt, đánh giá, KPI, thực tập (0.20.0)
 
-Giai đoạn 2 của phân hệ Nhân sự (Giám đốc duyệt 01/11/2026). Công việc 0.17 (CV-04 → CV-11) giữ nguyên và được mở rộng thành vòng khép kín **giao → nhận → làm và báo cáo → duyệt → chấm điểm**; điểm việc cộng dồn vào KPI tháng / quý. Sinh viên thực tập có nhật ký tuần và phiếu đánh giá theo mẫu của trường. Quyết định QĐ-113 → QĐ-124. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
+Giai đoạn 2 của phân hệ Nhân sự (Giám đốc duyệt 01/11/2026). Công việc 0.17 (CV-04 → CV-11) giữ nguyên và được mở rộng thành vòng khép kín **giao → nhận → làm và báo cáo → duyệt → chấm điểm**; điểm việc cộng dồn vào KPI tháng / quý. Sinh viên thực tập có nhật ký tuần và phiếu đánh giá theo mẫu của trường. Quyết định QĐ-119 → QĐ-130. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
 
 | Việc | Quyền |
 |---|---|
