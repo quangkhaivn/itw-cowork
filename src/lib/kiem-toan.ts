@@ -94,7 +94,23 @@ export type HanhDong =
   | "chot-thuc-tap"
   // QA 0.19.0 (QĐ-116, QĐ-118)
   | "xet-ngay-thieu-gio"
-  | "ap-pin-chua-khop";
+  | "ap-pin-chua-khop"
+  // 0.21.0 — tính lương (LU-*). KHÔNG ghi số tiền vào nhật ký (QĐ-148).
+  | "xem-luong"
+  | "tao-ho-so-luong"
+  | "tao-tham-so-luong"
+  | "xac-nhan-tham-so-luong"
+  | "tao-ky-luong"
+  | "tinh-luong"
+  | "them-khoan-luong"
+  | "xoa-khoan-luong"
+  | "gui-duyet-luong"
+  | "duyet-luong"
+  | "tra-lai-luong"
+  | "khoa-luong"
+  | "chi-luong"
+  | "xuat-luong"
+  | "gui-phieu-luong";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

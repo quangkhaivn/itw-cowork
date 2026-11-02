@@ -49,7 +49,8 @@ BEGIN
           AND c.table_name NOT IN ('business_events', 'audit_logs', 'email_consents', 'email_sns_messages',
                                    'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                                    'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
-                                   'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews')
+                                   'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
+                                   'salary_profiles')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -71,7 +72,8 @@ END $$;
 --    sử duyệt việc task_approval_logs, điều chỉnh điểm việc task_score_adjustments, nhật ký
 --    tiến độ task_progress_logs, nhận xét báo cáo work_report_comments, phiên điều chỉnh
 --    đánh giá evaluation_adjustments, nhận xét nhật ký thực tập intern_journal_comments,
---    và (QA 0.19.0) xét ngày công thiếu giờ attendance_day_reviews (QĐ-116)
+--    và (QA 0.19.0) xét ngày công thiếu giờ attendance_day_reviews (QĐ-116), và (0.21.0) phiên bản
+--    hồ sơ lương salary_profiles (LU-02 — sửa = phiên bản mới)
 --    Không cấp UPDATE/DELETE cho ứng dụng, và chặn thêm bằng trigger để kể cả
 --    chủ sở hữu cũng không lỡ tay sửa lịch sử.
 -- --------------------------------------------------------------------------
@@ -88,7 +90,8 @@ DECLARE
     ds_bang text[] := ARRAY['business_events', 'audit_logs', 'email_consents', 'email_sns_messages',
                             'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                             'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
-                            'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews'];
+                            'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
+                            'salary_profiles'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -118,6 +121,11 @@ END $$;
 --     kèm doanh nghiệp; hàm trả doanh nghiệp của đúng một số sê-ri đang hoạt động.
 -- --------------------------------------------------------------------------
 REVOKE DELETE ON public.attendance_punches FROM cowork_app;
+-- 0.21.0 (LU-10, LU-40): bộ tham số lương chỉ ghi thêm (UPDATE chỉ để đặt xác nhận — trigger chan_sua_tham_so_luong);
+-- kỳ lương và các dòng của nó không bao giờ bị xóa bởi ứng dụng (sửa sai = khoản điều chỉnh kỳ sau). Dòng lương,
+-- khoản cộng / trừ, hoa hồng của kỳ NHÁP vẫn xóa được (tính lại) — trigger chan_sua_ky_luong_da_khoa chặn kỳ đã khóa.
+REVOKE DELETE ON public.payroll_param_sets FROM cowork_app;
+REVOKE DELETE ON public.payroll_runs FROM cowork_app;
 REVOKE ALL ON FUNCTION public.tra_may_cham_cong(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.tra_may_cham_cong(text) TO cowork_app;
 

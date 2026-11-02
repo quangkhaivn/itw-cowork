@@ -51,6 +51,8 @@ const BANG_KHOA = [
   "evaluations",
   "intern_evaluations",
   "intern_journals",
+  // 0.21.0 — tính lương: kỳ lương (mọi chuyển trạng thái / tính / khoản cộng trừ khóa dòng kỳ trước).
+  "payroll_runs",
 ] as const;
 
 export type BangKhoa = (typeof BANG_KHOA)[number];

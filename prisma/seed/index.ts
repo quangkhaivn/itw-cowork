@@ -6,6 +6,7 @@ import { LOAI_DU_LIEU_GOC } from "../../src/modules/du-lieu-goc/loai";
 import { kiemTraMatKhauManh } from "../../src/lib/mat-khau";
 import { TRANG_THAI_KHOI_TAO } from "../../src/modules/hanh-trinh/moc";
 import { MAU_PHIEU_MAC_DINH } from "../../src/modules/danh-gia/tinh-toan";
+import { PHU_CAP_MAC_DINH, THAM_SO_MAC_DINH } from "../../src/modules/luong/tinh-toan";
 
 /**
  * Seed nền móng.
@@ -215,6 +216,8 @@ export async function seedDuLieuDoanhNghiep(db: PrismaClient, tenant: { id: stri
             { permission: { code: { endsWith: ".delete" } } },
             // 0.20.0 (DG-80): không bao giờ đọc được đánh giá nhân sự.
             { permission: { module: "danh_gia" } },
+            // 0.21.0 (LU-60): không bao giờ có quyền lương.
+            { permission: { module: "luong" } },
           ],
         },
       });
@@ -274,6 +277,25 @@ export async function seedDuLieuDoanhNghiep(db: PrismaClient, tenant: { id: stri
     });
     console.log("✓ Mẫu phiếu đánh giá thực tập chung");
   }
+
+  // ---- 5e. Tính lương (0.21.0): tham số nạp sẵn (CHƯA xác nhận — LU-11) + danh mục phụ cấp, chỉ thêm phần còn thiếu ----
+  // Khớp migration 20261104090002 (bài thử thu-luong so hai đường).
+  let thamSoMoi = 0;
+  for (const t of THAM_SO_MAC_DINH) {
+    const hieuLuc = new Date(`${t.hieuLucTu}T00:00:00.000Z`);
+    const daCo = await db.payrollParamSet.findFirst({ where: { tenantId: tenant.id, kind: t.loai, effectiveFrom: hieuLuc, source: "mac-dinh" }, select: { id: true } });
+    if (daCo) continue;
+    await db.payrollParamSet.create({ data: { tenantId: tenant.id, kind: t.loai, effectiveFrom: hieuLuc, values: t.giaTri as object, note: t.ghiChu, source: "mac-dinh" } });
+    thamSoMoi++;
+  }
+  for (const pc of PHU_CAP_MAC_DINH) {
+    await db.salaryAllowanceType.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: pc.ma } },
+      update: {},
+      create: { tenantId: tenant.id, code: pc.ma, name: pc.ten, taxable: pc.chiuThue, insurable: pc.tinhBH, basis: pc.theo, sortOrder: pc.thuTu },
+    });
+  }
+  console.log(`✓ Tham số lương nạp sẵn: ${THAM_SO_MAC_DINH.length} bộ (${thamSoMoi} bộ mới — chờ kế toán xác nhận)`);
 
   // ---- 6. Tài khoản máy cho trợ lý ITA ----
   const ita = await db.user.upsert({

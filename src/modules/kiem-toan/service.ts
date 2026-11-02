@@ -29,6 +29,22 @@ export const NHAN_HANH_DONG: Record<string, string> = {
   "gop-khach": "Gộp khách hàng",
   "ban-giao": "Bàn giao khi nghỉ việc",
   "xuat-csv": "Xuất CSV",
+  // 0.21.0 — tính lương
+  "xem-luong": "Xem dữ liệu lương",
+  "tao-ho-so-luong": "Tạo phiên bản hồ sơ lương",
+  "tao-tham-so-luong": "Tạo bộ tham số lương",
+  "xac-nhan-tham-so-luong": "Xác nhận tham số lương",
+  "tao-ky-luong": "Tạo kỳ lương",
+  "tinh-luong": "Tính lương",
+  "them-khoan-luong": "Thêm khoản cộng / trừ",
+  "xoa-khoan-luong": "Xóa khoản cộng / trừ",
+  "gui-duyet-luong": "Gửi duyệt bảng lương",
+  "duyet-luong": "Duyệt bảng lương",
+  "tra-lai-luong": "Trả lại bảng lương",
+  "khoa-luong": "Khóa bảng lương",
+  "chi-luong": "Đánh dấu đã chi lương",
+  "xuat-luong": "Xuất file lương",
+  "gui-phieu-luong": "Gửi email phiếu lương",
 };
 
 export const NHAN_DOI_TUONG: Record<string, string> = {
@@ -78,6 +94,13 @@ export const NHAN_DOI_TUONG: Record<string, string> = {
   goods_receipt: "Phiếu nhận hàng",
   supplier_bill: "Hóa đơn nhà cung cấp",
   supplier_payment: "Phiếu chi",
+  payroll_run: "Kỳ lương",
+  payroll_line: "Phiếu lương",
+  payroll_item: "Khoản cộng / trừ lương",
+  salary_profile: "Hồ sơ lương",
+  salary_dependent: "Người phụ thuộc",
+  salary_allowance_type: "Loại phụ cấp",
+  payroll_param_set: "Tham số lương",
 };
 
 export const LuocDoLocKiemToan = z.object({

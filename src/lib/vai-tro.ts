@@ -45,6 +45,9 @@ export const PHAN_HE = [
   // 0.20.0 — Nhân sự giai đoạn 2: báo cáo công việc, đánh giá định kỳ, KPI cá nhân, nhật ký + phiếu
   // thực tập. Tách khỏi `kpi` (trợ lý AI có `kpi.view`) để AI không bao giờ đọc được đánh giá (DG-80).
   "danh_gia",
+  // 0.21.0 — Nhân sự giai đoạn 3: tính lương (QĐ-141). view own = phiếu của mình, view rộng hơn = xem lương người
+  // khác; create = tính; update = hồ sơ lương; approve = duyệt + khóa; export = xuất file + đánh dấu đã chi.
+  "luong",
 ] as const;
 
 // Thêm phân hệ mới: thêm vào CUỐI mảng trên + MO_TA_PHAN_HE, rồi khai quyền cho
@@ -108,6 +111,7 @@ export const MO_TA_PHAN_HE: Record<PhanHe, string> = {
   cham_cong: "Chấm công",
   nhan_su: "Nhân sự",
   danh_gia: "Đánh giá nhân sự",
+  luong: "Tính lương",
 };
 
 export const MO_TA_HANH_DONG: Record<HanhDongQuyen, string> = {
@@ -164,6 +168,12 @@ const CHAM_CONG_QUAN_LY = [...CHAM_CONG_CA_NHAN, maQuyen("cham_cong", "approve")
  */
 const DANH_GIA_CA_NHAN = [maQuyen("danh_gia", "view"), maQuyen("danh_gia", "create")];
 const DANH_GIA_QUAN_LY = [...DANH_GIA_CA_NHAN, maQuyen("danh_gia", "update"), maQuyen("danh_gia", "approve"), maQuyen("danh_gia", "export")];
+/**
+ * 0.21.0 — tính lương (QĐ-141). Mọi nhân viên / thực tập sinh: `luong.view` phạm vi `own` = chỉ phiếu lương của
+ * mình (sau khi kỳ khóa). Kế toán: xem toàn công ty + tính + xuất. Nhân sự: xem toàn công ty + hồ sơ lương, KHÔNG
+ * duyệt. Giám đốc / Quản trị: toàn quyền (duyệt, khóa). Trợ lý AI: không có (LU-60).
+ */
+const LUONG_CUA_TOI = maQuyen("luong", "view");
 function rieng(ds: string[], pv: PhamVi): Record<string, PhamVi> {
   return Object.fromEntries(ds.map((m) => [m, pv]));
 }
@@ -215,7 +225,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...CHAM_CONG_QUAN_LY,
       // 0.20.0: đánh giá — QĐ-121.
       ...DANH_GIA_QUAN_LY,
+      // 0.21.0: phiếu lương của mình — QĐ-141.
+      LUONG_CUA_TOI,
     ],
+    phamViRieng: { [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "sales",
@@ -230,7 +243,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
+      LUONG_CUA_TOI,
     ],
+    phamViRieng: { [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "marketing-manager",
@@ -246,8 +261,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
       ...DANH_GIA_QUAN_LY,
+      LUONG_CUA_TOI,
     ],
-    phamViRieng: { ...rieng(CHAM_CONG_QUAN_LY, "team"), ...rieng(DANH_GIA_QUAN_LY, "team") },
+    phamViRieng: { ...rieng(CHAM_CONG_QUAN_LY, "team"), ...rieng(DANH_GIA_QUAN_LY, "team"), [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "marketing",
@@ -261,8 +277,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
+      LUONG_CUA_TOI,
     ],
-    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
+    phamViRieng: { ...rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"), [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "technical-manager",
@@ -279,7 +296,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
       ...DANH_GIA_QUAN_LY,
+      LUONG_CUA_TOI,
     ],
+    phamViRieng: { [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "technical",
@@ -293,7 +312,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
+      LUONG_CUA_TOI,
     ],
+    phamViRieng: { [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "project-manager",
@@ -309,7 +330,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
       ...DANH_GIA_QUAN_LY,
+      LUONG_CUA_TOI,
     ],
+    phamViRieng: { [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "purchasing",
@@ -323,8 +346,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
+      LUONG_CUA_TOI,
     ],
-    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
+    phamViRieng: { ...rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"), [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "warehouse",
@@ -339,8 +363,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
+      LUONG_CUA_TOI,
     ],
-    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
+    phamViRieng: { ...rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"), [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "finance",
@@ -360,6 +385,10 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
+      // 0.21.0: tính lương, xuất file, xem bảng lương toàn công ty (QĐ-141).
+      maQuyen("luong", "view"),
+      maQuyen("luong", "create"),
+      maQuyen("luong", "export"),
     ],
     phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
   },
@@ -375,8 +404,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
+      LUONG_CUA_TOI,
     ],
-    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
+    phamViRieng: { ...rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"), [LUONG_CUA_TOI]: "own" },
   },
   {
     code: "marketing-intern",
@@ -393,7 +423,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
+      LUONG_CUA_TOI,
     ],
+    phamViRieng: { [LUONG_CUA_TOI]: "own" },
   },
   {
     // 0.19.0 — Nhân sự giai đoạn 1 (BUSINESS_RULES mục 30). Toàn công ty với chấm công / nhân sự;
@@ -414,6 +446,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("danh_gia", "view"),
       maQuyen("danh_gia", "create"),
       maQuyen("danh_gia", "export"),
+      // 0.21.0: hồ sơ lương + xem bảng lương toàn công ty, KHÔNG duyệt (QĐ-141).
+      maQuyen("luong", "view"),
+      maQuyen("luong", "update"),
     ],
     phamViRieng: { ...rieng(tron(["task"], LAM_VIEC), "own"), [maQuyen("danh_gia", "create")]: "own" },
   },
@@ -424,7 +459,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     name: "Thực tập sinh",
     phamVi: "own",
     description: "Sinh viên thực tập: chỉ xem / cập nhật công việc được giao và chấm công của chính mình.",
-    quyen: [maQuyen("task", "view"), maQuyen("task", "update"), ...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN],
+    quyen: [maQuyen("task", "view"), maQuyen("task", "update"), ...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN, LUONG_CUA_TOI],
   },
   {
     code: "ai-assistant",
@@ -456,7 +491,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
 export function kiemTraGioiHanAI(): { dat: boolean; viPham: string[] } {
   const ai = VAI_TRO.find((v) => v.code === "ai-assistant");
   if (!ai || ai.quyen === "*") return { dat: false, viPham: ["Vai trò AI đang có toàn quyền"] };
-  // 0.20.0 (DG-80): AI không có bất kỳ quyền đánh giá nhân sự nào.
-  const viPham = ai.quyen.filter((q) => q.endsWith(".approve") || q.endsWith(".delete") || q.startsWith("danh_gia."));
+  // 0.20.0 (DG-80): AI không có bất kỳ quyền đánh giá nhân sự nào. 0.21.0 (LU-60): không có quyền lương nào.
+  const viPham = ai.quyen.filter((q) => q.endsWith(".approve") || q.endsWith(".delete") || q.startsWith("danh_gia.") || q.startsWith("luong."));
   return { dat: viPham.length === 0, viPham };
 }

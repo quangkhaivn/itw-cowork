@@ -29,161 +29,170 @@ model Tenant {
   createdBy String?  @map("created_by") @db.Uuid
   updatedBy String?  @map("updated_by") @db.Uuid
 
-  settings             TenantSetting[]
-  users                User[]
-  departments          Department[]
-  roles                Role[]
-  staffProfiles        StaffProfile[]
-  userRoles            UserRole[]
-  events               BusinessEvent[]
-  auditLogs            AuditLog[]
-  masterData           MasterDataItem[]
+  settings               TenantSetting[]
+  users                  User[]
+  departments            Department[]
+  roles                  Role[]
+  staffProfiles          StaffProfile[]
+  userRoles              UserRole[]
+  events                 BusinessEvent[]
+  auditLogs              AuditLog[]
+  masterData             MasterDataItem[]
   // Phase 2 — CRM
-  sequences            DocumentSequence[]
-  customers            Customer[]
-  contacts             Contact[]
-  leads                Lead[]
-  interactions         Interaction[]
-  opportunities        Opportunity[]
-  tasks                Task[]
-  taskChecklistItems   TaskChecklistItem[]
+  sequences              DocumentSequence[]
+  customers              Customer[]
+  contacts               Contact[]
+  leads                  Lead[]
+  interactions           Interaction[]
+  opportunities          Opportunity[]
+  tasks                  Task[]
+  taskChecklistItems     TaskChecklistItem[]
   // Phase 3 — Sản phẩm và bảng giá
-  productCategories    ProductCategory[]
-  brands               Brand[]
-  suppliers            Supplier[]
-  products             Product[]
-  supplierPrices       SupplierProductPrice[]
-  priceHistory         PriceHistory[]
-  importJobs           ImportJob[]
+  productCategories      ProductCategory[]
+  brands                 Brand[]
+  suppliers              Supplier[]
+  products               Product[]
+  supplierPrices         SupplierProductPrice[]
+  priceHistory           PriceHistory[]
+  importJobs             ImportJob[]
   // Phase 4 — Báo giá
-  quotations           Quotation[]
-  quotationVersions    QuotationVersion[]
-  quotationItems       QuotationItem[]
-  quotationApprovals   QuotationApproval[]
+  quotations             Quotation[]
+  quotationVersions      QuotationVersion[]
+  quotationItems         QuotationItem[]
+  quotationApprovals     QuotationApproval[]
   // Phase 5 — Đơn hàng và kho
-  warehouses           Warehouse[]
-  salesOrders          SalesOrder[]
-  salesOrderItems      SalesOrderItem[]
-  inventoryBalances    InventoryBalance[]
-  inventoryTxns        InventoryTransaction[]
-  deliveries           Delivery[]
-  deliveryItems        DeliveryItem[]
-  serialNumbers        SerialNumber[]
+  warehouses             Warehouse[]
+  salesOrders            SalesOrder[]
+  salesOrderItems        SalesOrderItem[]
+  inventoryBalances      InventoryBalance[]
+  inventoryTxns          InventoryTransaction[]
+  deliveries             Delivery[]
+  deliveryItems          DeliveryItem[]
+  serialNumbers          SerialNumber[]
   // Phase 6 — Dự án, bảo hành, phiếu hỗ trợ
-  warranties           Warranty[]
-  projects             Project[]
-  projectMilestones    ProjectMilestone[]
-  supportTickets       SupportTicket[]
-  ticketEvents         SupportTicketEvent[]
+  warranties             Warranty[]
+  projects               Project[]
+  projectMilestones      ProjectMilestone[]
+  supportTickets         SupportTicket[]
+  ticketEvents           SupportTicketEvent[]
   // Phase 7 — Tài chính
-  invoices             Invoice[]
-  invoiceItems         InvoiceItem[]
-  payments             Payment[]
-  paymentAllocations   PaymentAllocation[]
+  invoices               Invoice[]
+  invoiceItems           InvoiceItem[]
+  payments               Payment[]
+  paymentAllocations     PaymentAllocation[]
   // Phase 8 — Tự động hóa
-  notifications        Notification[]
-  automationRules      AutomationRule[]
-  jobRuns              JobRun[]
-  dailyActionItems     DailyActionItem[]
-  maintenanceOrders    MaintenanceContract[]
-  renewals             Renewal[]
+  notifications          Notification[]
+  automationRules        AutomationRule[]
+  jobRuns                JobRun[]
+  dailyActionItems       DailyActionItem[]
+  maintenanceOrders      MaintenanceContract[]
+  renewals               Renewal[]
   // Phase 9 — Trợ lý AI
-  aiConversations      AiConversation[]
-  aiMessages           AiMessage[]
-  aiToolCalls          AiToolCall[]
-  aiActions            AiAction[]
+  aiConversations        AiConversation[]
+  aiMessages             AiMessage[]
+  aiToolCalls            AiToolCall[]
+  aiActions              AiAction[]
   // Mua hàng (phần để lại từ Phase 5)
-  purchaseRequests     PurchaseRequest[]
-  purchaseReqItems     PurchaseRequestItem[]
-  purchaseOrders       PurchaseOrder[]
-  purchaseOrderItems   PurchaseOrderItem[]
-  goodsReceipts        GoodsReceipt[]
-  goodsReceiptItems    GoodsReceiptItem[]
+  purchaseRequests       PurchaseRequest[]
+  purchaseReqItems       PurchaseRequestItem[]
+  purchaseOrders         PurchaseOrder[]
+  purchaseOrderItems     PurchaseOrderItem[]
+  goodsReceipts          GoodsReceipt[]
+  goodsReceiptItems      GoodsReceiptItem[]
   // Công nợ phải trả
-  supplierBills        SupplierBill[]
-  supplierBillItems    SupplierBillItem[]
-  supplierPayments     SupplierPayment[]
-  supplierPayAllocs    SupplierPaymentAllocation[]
+  supplierBills          SupplierBill[]
+  supplierBillItems      SupplierBillItem[]
+  supplierPayments       SupplierPayment[]
+  supplierPayAllocs      SupplierPaymentAllocation[]
   // Trả hàng và đổi máy
-  salesReturns         SalesReturn[]
-  salesReturnItems     SalesReturnItem[]
-  salesReturnAllocs    SalesReturnAllocation[]
-  purchaseReturns      PurchaseReturn[]
-  purchaseReturnItems  PurchaseReturnItem[]
-  purchaseReturnAllocs PurchaseReturnAllocation[]
+  salesReturns           SalesReturn[]
+  salesReturnItems       SalesReturnItem[]
+  salesReturnAllocs      SalesReturnAllocation[]
+  purchaseReturns        PurchaseReturn[]
+  purchaseReturnItems    PurchaseReturnItem[]
+  purchaseReturnAllocs   PurchaseReturnAllocation[]
   // Chuyển kho nội bộ
-  stockTransfers       StockTransfer[]
-  stockTransferItems   StockTransferItem[]
+  stockTransfers         StockTransfer[]
+  stockTransferItems     StockTransferItem[]
   // Tệp đính kèm
-  attachments          Attachment[]
+  attachments            Attachment[]
   // Khách hàng nâng cao (0.16.0)
-  journeyStages        CustomerJourneyStage[]
-  journeyHistory       CustomerJourneyHistory[]
-  customerGroups       CustomerGroup[]
-  customerGroupMembers CustomerGroupMember[]
-  savedViews           SavedView[]
-  listPreferences      UserListPreference[]
+  journeyStages          CustomerJourneyStage[]
+  journeyHistory         CustomerJourneyHistory[]
+  customerGroups         CustomerGroup[]
+  customerGroupMembers   CustomerGroupMember[]
+  savedViews             SavedView[]
+  listPreferences        UserListPreference[]
   // Marketing và thu lead
-  marketingCampaigns   MarketingCampaign[]
-  marketingCosts       MarketingCost[]
-  leadAssignees        MarketingLeadAssignee[]
-  marketingForms       MarketingForm[]
-  webhookSources       MarketingWebhookSource[]
-  leadCaptures         LeadCapture[]
-  marketingSegments    MarketingSegment[]
-  landingPages         LandingPage[]
+  marketingCampaigns     MarketingCampaign[]
+  marketingCosts         MarketingCost[]
+  leadAssignees          MarketingLeadAssignee[]
+  marketingForms         MarketingForm[]
+  webhookSources         MarketingWebhookSource[]
+  leadCaptures           LeadCapture[]
+  marketingSegments      MarketingSegment[]
+  landingPages           LandingPage[]
   // Email marketing + xác thực 2 lớp (0.16.0)
-  emailSettings        EmailSetting[]
-  emailTemplates       EmailTemplate[]
-  emailCampaigns       EmailCampaign[]
-  emailRecipients      EmailRecipient[]
-  emailEvents          EmailEvent[]
-  emailSuppressions    EmailSuppression[]
-  emailConsents        EmailConsent[]
-  emailSnsMessages     EmailSnsMessage[]
-  emailTransactionals  EmailTransactional[]
-  recoveryCodes        UserRecoveryCode[]
+  emailSettings          EmailSetting[]
+  emailTemplates         EmailTemplate[]
+  emailCampaigns         EmailCampaign[]
+  emailRecipients        EmailRecipient[]
+  emailEvents            EmailEvent[]
+  emailSuppressions      EmailSuppression[]
+  emailConsents          EmailConsent[]
+  emailSnsMessages       EmailSnsMessage[]
+  emailTransactionals    EmailTransactional[]
+  recoveryCodes          UserRecoveryCode[]
   // 0.19.0 — Nhân sự – chấm công
-  workLocations        WorkLocation[]
-  workShifts           WorkShift[]
-  workSchedules        WorkSchedule[]
-  scheduleAssignments  ScheduleAssignment[]
-  holidays             Holiday[]
-  internProfiles       InternProfile[]
-  taskApprovers        TaskApprover[]
-  taskApprovalLogs     TaskApprovalLog[]
-  taskExtensions       TaskExtension[]
-  taskProgressLogs     TaskProgressLog[]
-  taskScoreAdjustments TaskScoreAdjustment[]
-  taskTemplates        TaskTemplate[]
-  taskRecurrences      TaskRecurrence[]
-  workReports          WorkReport[]
-  workReportComments   WorkReportComment[]
-  kpiSets              KpiSet[]
-  kpiItems             KpiItem[]
-  evaluationPeriods    EvaluationPeriod[]
-  evaluations          Evaluation[]
-  evaluationItems      EvaluationItem[]
-  evaluationAdjustments EvaluationAdjustment[]
-  internJournals       InternJournal[]
-  internJournalComments InternJournalComment[]
-  internEvalTemplates  InternEvalTemplate[]
-  internEvaluations    InternEvaluation[]
-  employmentContracts  EmploymentContract[]
-  attendanceDevices    AttendanceDevice[]
-  attendancePunches    AttendancePunch[]
-  punchReviews         AttendancePunchReview[]
-  dayReviews           AttendanceDayReview[]
-  attendanceConsents   AttendanceConsent[]
-  attendanceCorrections AttendanceCorrection[]
-  leaveTypes           LeaveType[]
-  leaveBalances        LeaveBalance[]
-  leaveAdjustments     LeaveAdjustment[]
-  leaveRequests        LeaveRequest[]
-  overtimeRequests     OvertimeRequest[]
-  timesheets           Timesheet[]
-  timesheetRows        TimesheetRow[]
-  timesheetFeedback    TimesheetFeedback[]
+  workLocations          WorkLocation[]
+  workShifts             WorkShift[]
+  workSchedules          WorkSchedule[]
+  scheduleAssignments    ScheduleAssignment[]
+  holidays               Holiday[]
+  internProfiles         InternProfile[]
+  taskApprovers          TaskApprover[]
+  taskApprovalLogs       TaskApprovalLog[]
+  taskExtensions         TaskExtension[]
+  taskProgressLogs       TaskProgressLog[]
+  taskScoreAdjustments   TaskScoreAdjustment[]
+  taskTemplates          TaskTemplate[]
+  taskRecurrences        TaskRecurrence[]
+  workReports            WorkReport[]
+  workReportComments     WorkReportComment[]
+  kpiSets                KpiSet[]
+  kpiItems               KpiItem[]
+  evaluationPeriods      EvaluationPeriod[]
+  evaluations            Evaluation[]
+  evaluationItems        EvaluationItem[]
+  evaluationAdjustments  EvaluationAdjustment[]
+  internJournals         InternJournal[]
+  internJournalComments  InternJournalComment[]
+  internEvalTemplates    InternEvalTemplate[]
+  internEvaluations      InternEvaluation[]
+  employmentContracts    EmploymentContract[]
+  attendanceDevices      AttendanceDevice[]
+  attendancePunches      AttendancePunch[]
+  punchReviews           AttendancePunchReview[]
+  dayReviews             AttendanceDayReview[]
+  attendanceConsents     AttendanceConsent[]
+  attendanceCorrections  AttendanceCorrection[]
+  leaveTypes             LeaveType[]
+  leaveBalances          LeaveBalance[]
+  leaveAdjustments       LeaveAdjustment[]
+  leaveRequests          LeaveRequest[]
+  overtimeRequests       OvertimeRequest[]
+  timesheets             Timesheet[]
+  timesheetRows          TimesheetRow[]
+  timesheetFeedback      TimesheetFeedback[]
+  // 0.21.0 — Nhân sự giai đoạn 3: tính lương (BUSINESS_RULES mục 32).
+  salaryAllowanceTypes   SalaryAllowanceType[]
+  salaryProfiles         SalaryProfile[]
+  salaryDependents       SalaryDependent[]
+  payrollParamSets       PayrollParamSet[]
+  payrollRuns            PayrollRun[]
+  payrollLines           PayrollLine[]
+  payrollItems           PayrollItem[]
+  payrollCommissionItems PayrollCommissionItem[]
 
   @@map("tenants")
 }
@@ -209,18 +218,18 @@ model TenantSetting {
 
 /// Phòng ban. Cho phép lồng nhau qua parent_id.
 model Department {
-  id        String   @id @default(uuid()) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
-  code      String   @db.VarChar(50)
-  name      String   @db.VarChar(255)
-  parentId  String?  @map("parent_id") @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  code        String   @db.VarChar(50)
+  name        String   @db.VarChar(255)
+  parentId    String?  @map("parent_id") @db.Uuid
   /// 0.20.0 — bật báo cáo ngày cho phòng này (DG-41).
-  dailyReport Boolean @default(false) @map("daily_report")
-  status    String   @default("hoat-dong") @db.VarChar(30)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy String?  @map("created_by") @db.Uuid
-  updatedBy String?  @map("updated_by") @db.Uuid
+  dailyReport Boolean  @default(false) @map("daily_report")
+  status      String   @default("hoat-dong") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedBy   String?  @map("updated_by") @db.Uuid
 
   tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   parent   Department?    @relation("PhongBanCha", fields: [parentId], references: [id], onDelete: SetNull)
@@ -264,63 +273,63 @@ model User {
   createdBy          String?   @map("created_by") @db.Uuid
   updatedBy          String?   @map("updated_by") @db.Uuid
 
-  tenant               Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  staffProfile         StaffProfile?            @relation("HoSoCuaNguoiDung")
-  userRoles            UserRole[]
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile          StaffProfile?            @relation("HoSoCuaNguoiDung")
+  userRoles             UserRole[]
   /// Những người nhận người này làm quản lý trực tiếp.
-  reports              StaffProfile[]           @relation("QuanLyTrucTiep")
+  reports               StaffProfile[]           @relation("QuanLyTrucTiep")
   // Phase 2 — người phụ trách
-  ownedCustomers       Customer[]               @relation("KhachPhuTrach")
-  ownedLeads           Lead[]                   @relation("LeadPhuTrach")
-  ownedInteractions    Interaction[]            @relation("TuongTacCua")
-  ownedOpportunities   Opportunity[]            @relation("CoHoiPhuTrach")
-  ownedTasks           Task[]                   @relation("ViecPhuTrach")
-  taskResults          Task[]                   @relation("ViecGhiKetQua")
-  assignedTasks        Task[]                   @relation("ViecNguoiGiao")
-  checklistTicks       TaskChecklistItem[]      @relation("MucKiemTraNguoiTich")
-  ownedQuotations      Quotation[]              @relation("BaoGiaPhuTrach")
-  ownedSalesOrders     SalesOrder[]             @relation("DonHangPhuTrach")
-  managedProjects      Project[]                @relation("DuAnPhuTrach")
-  ownedTickets         SupportTicket[]          @relation("PhieuHoTroTiepNhan")
-  assignedTickets      SupportTicket[]          @relation("PhieuHoTroXuLy")
-  ownedInvoices        Invoice[]                @relation("HoaDonPhuTrach")
+  ownedCustomers        Customer[]               @relation("KhachPhuTrach")
+  ownedLeads            Lead[]                   @relation("LeadPhuTrach")
+  ownedInteractions     Interaction[]            @relation("TuongTacCua")
+  ownedOpportunities    Opportunity[]            @relation("CoHoiPhuTrach")
+  ownedTasks            Task[]                   @relation("ViecPhuTrach")
+  taskResults           Task[]                   @relation("ViecGhiKetQua")
+  assignedTasks         Task[]                   @relation("ViecNguoiGiao")
+  checklistTicks        TaskChecklistItem[]      @relation("MucKiemTraNguoiTich")
+  ownedQuotations       Quotation[]              @relation("BaoGiaPhuTrach")
+  ownedSalesOrders      SalesOrder[]             @relation("DonHangPhuTrach")
+  managedProjects       Project[]                @relation("DuAnPhuTrach")
+  ownedTickets          SupportTicket[]          @relation("PhieuHoTroTiepNhan")
+  assignedTickets       SupportTicket[]          @relation("PhieuHoTroXuLy")
+  ownedInvoices         Invoice[]                @relation("HoaDonPhuTrach")
   // Phase 8
-  notifications        Notification[]           @relation("ThongBaoCuaNguoiDung")
-  dailyActionItems     DailyActionItem[]        @relation("ViecHomNayCuaNguoiDung")
-  ownedMaintenance     MaintenanceContract[]    @relation("BaoTriPhuTrach")
-  ownedRenewals        Renewal[]                @relation("GiaHanPhuTrach")
+  notifications         Notification[]           @relation("ThongBaoCuaNguoiDung")
+  dailyActionItems      DailyActionItem[]        @relation("ViecHomNayCuaNguoiDung")
+  ownedMaintenance      MaintenanceContract[]    @relation("BaoTriPhuTrach")
+  ownedRenewals         Renewal[]                @relation("GiaHanPhuTrach")
   // Phase 9
-  aiConversations      AiConversation[]         @relation("HoiThoaiCuaNguoiDung")
+  aiConversations       AiConversation[]         @relation("HoiThoaiCuaNguoiDung")
   // Mua hàng
-  purchaseRequests     PurchaseRequest[]        @relation("DeNghiMuaCua")
-  ownedPurchaseOrders  PurchaseOrder[]          @relation("DonMuaPhuTrach")
-  ownedSupplierBills   SupplierBill[]           @relation("HoaDonMuaPhuTrach")
-  ownedSalesReturns    SalesReturn[]            @relation("TraHangBanPhuTrach")
-  ownedPurchaseReturns PurchaseReturn[]         @relation("TraHangMuaPhuTrach")
-  ownedStockTransfers  StockTransfer[]          @relation("ChuyenKhoPhuTrach")
-  uploadedAttachments  Attachment[]             @relation("TepDinhKemNguoiTai")
-  savedViews           SavedView[]              @relation("BoLocCua")
-  listPreferences      UserListPreference[]     @relation("TuyChonDanhSachCua")
+  purchaseRequests      PurchaseRequest[]        @relation("DeNghiMuaCua")
+  ownedPurchaseOrders   PurchaseOrder[]          @relation("DonMuaPhuTrach")
+  ownedSupplierBills    SupplierBill[]           @relation("HoaDonMuaPhuTrach")
+  ownedSalesReturns     SalesReturn[]            @relation("TraHangBanPhuTrach")
+  ownedPurchaseReturns  PurchaseReturn[]         @relation("TraHangMuaPhuTrach")
+  ownedStockTransfers   StockTransfer[]          @relation("ChuyenKhoPhuTrach")
+  uploadedAttachments   Attachment[]             @relation("TepDinhKemNguoiTai")
+  savedViews            SavedView[]              @relation("BoLocCua")
+  listPreferences       UserListPreference[]     @relation("TuyChonDanhSachCua")
   // Marketing
-  ownedCampaigns       MarketingCampaign[]      @relation("ChienDichPhuTrach")
-  leadAssignee         MarketingLeadAssignee[]  @relation("NhanLeadVongTron")
-  ownedForms           MarketingForm[]          @relation("FormPhuTrach")
-  ownedWebhookSources  MarketingWebhookSource[] @relation("NguonWebhookPhuTrach")
-  ownedSegments        MarketingSegment[]       @relation("PhanKhucPhuTrach")
-  ownedLandingPages    LandingPage[]            @relation("LandingPhuTrach")
+  ownedCampaigns        MarketingCampaign[]      @relation("ChienDichPhuTrach")
+  leadAssignee          MarketingLeadAssignee[]  @relation("NhanLeadVongTron")
+  ownedForms            MarketingForm[]          @relation("FormPhuTrach")
+  ownedWebhookSources   MarketingWebhookSource[] @relation("NguonWebhookPhuTrach")
+  ownedSegments         MarketingSegment[]       @relation("PhanKhucPhuTrach")
+  ownedLandingPages     LandingPage[]            @relation("LandingPhuTrach")
   // Xác thực 2 lớp
-  recoveryCodes        UserRecoveryCode[]
+  recoveryCodes         UserRecoveryCode[]
   // 0.19.0 — Nhân sự – chấm công
-  internProfile        InternProfile?           @relation("HoSoThucTap")
-  menteeProfiles       InternProfile[]          @relation("NguoiHuongDanThucTap")
-  employmentContracts  EmploymentContract[]     @relation("HopDongLaoDong")
-  scheduleAssignments  ScheduleAssignment[]     @relation("LichLamCuaNguoi")
-  attendancePunches    AttendancePunch[]        @relation("LanChamCuaNguoi")
-  attendanceCorrections AttendanceCorrection[]  @relation("GiaiTrinhCuaNguoi")
-  leaveRequests        LeaveRequest[]           @relation("DonNghiCuaNguoi")
-  overtimeRequests     OvertimeRequest[]        @relation("DonTangCaCuaNguoi")
-  timesheetRows        TimesheetRow[]           @relation("DongCongCuaNguoi")
-  timesheetFeedback    TimesheetFeedback[]      @relation("PhanHoiCongCuaNguoi")
+  internProfile         InternProfile?           @relation("HoSoThucTap")
+  menteeProfiles        InternProfile[]          @relation("NguoiHuongDanThucTap")
+  employmentContracts   EmploymentContract[]     @relation("HopDongLaoDong")
+  scheduleAssignments   ScheduleAssignment[]     @relation("LichLamCuaNguoi")
+  attendancePunches     AttendancePunch[]        @relation("LanChamCuaNguoi")
+  attendanceCorrections AttendanceCorrection[]   @relation("GiaiTrinhCuaNguoi")
+  leaveRequests         LeaveRequest[]           @relation("DonNghiCuaNguoi")
+  overtimeRequests      OvertimeRequest[]        @relation("DonTangCaCuaNguoi")
+  timesheetRows         TimesheetRow[]           @relation("DongCongCuaNguoi")
+  timesheetFeedback     TimesheetFeedback[]      @relation("PhanHoiCongCuaNguoi")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -329,31 +338,31 @@ model User {
 
 /// Hồ sơ nhân sự gắn với tài khoản. Tách khỏi users để users chỉ lo việc đăng nhập.
 model StaffProfile {
-  id           String    @id @default(uuid()) @db.Uuid
-  tenantId     String    @map("tenant_id") @db.Uuid
-  userId       String    @unique @map("user_id") @db.Uuid
-  departmentId String?   @map("department_id") @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  userId            String    @unique @map("user_id") @db.Uuid
+  departmentId      String?   @map("department_id") @db.Uuid
   /// Quản lý trực tiếp — dùng cho phạm vi dữ liệu "team".
-  managerId    String?   @map("manager_id") @db.Uuid
-  employeeCode String?   @map("employee_code") @db.VarChar(50)
-  jobTitle     String?   @map("job_title") @db.VarChar(255)
-  hiredAt      DateTime? @map("hired_at") @db.Date
+  managerId         String?   @map("manager_id") @db.Uuid
+  employeeCode      String?   @map("employee_code") @db.VarChar(50)
+  jobTitle          String?   @map("job_title") @db.VarChar(255)
+  hiredAt           DateTime? @map("hired_at") @db.Date
   /// 0.19.0 — loại nhân sự: chinh-thuc | thu-viec | thuc-tap | cong-tac-vien (NS-01).
-  staffType    String    @default("chinh-thuc") @map("staff_type") @db.VarChar(20)
+  staffType         String    @default("chinh-thuc") @map("staff_type") @db.VarChar(20)
   /// 0.19.0 — mã chấm công (PIN khai trên máy vân tay), duy nhất trong doanh nghiệp (NS-02).
-  attendancePin String?  @map("attendance_pin") @db.VarChar(20)
+  attendancePin     String?   @map("attendance_pin") @db.VarChar(20)
   /// 0.19.0 — địa điểm làm việc mặc định (máy chấm công / bán kính GPS).
-  defaultLocationId String? @map("default_location_id") @db.Uuid
-  status       String    @default("hoat-dong") @db.VarChar(30)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy    String?   @map("created_by") @db.Uuid
-  updatedBy    String?   @map("updated_by") @db.Uuid
+  defaultLocationId String?   @map("default_location_id") @db.Uuid
+  status            String    @default("hoat-dong") @db.VarChar(30)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy         String?   @map("created_by") @db.Uuid
+  updatedBy         String?   @map("updated_by") @db.Uuid
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user       User        @relation("HoSoCuaNguoiDung", fields: [userId], references: [id], onDelete: Cascade)
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  manager    User?       @relation("QuanLyTrucTiep", fields: [managerId], references: [id], onDelete: SetNull)
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user            User          @relation("HoSoCuaNguoiDung", fields: [userId], references: [id], onDelete: Cascade)
+  department      Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  manager         User?         @relation("QuanLyTrucTiep", fields: [managerId], references: [id], onDelete: SetNull)
   defaultLocation WorkLocation? @relation("DiaDiemMacDinh", fields: [defaultLocationId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, employeeCode])
@@ -824,82 +833,82 @@ model Opportunity {
 
 /// Công việc có hạn ("Activity" trong prompt; Task mục P1).
 model Task {
-  id            String    @id @default(uuid()) @db.Uuid
-  tenantId      String    @map("tenant_id") @db.Uuid
-  title         String    @db.VarChar(255)
-  description   String?   @db.Text
-  ownerId       String    @map("owner_id") @db.Uuid
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  title                String    @db.VarChar(255)
+  description          String?   @db.Text
+  ownerId              String    @map("owner_id") @db.Uuid
   /// thap | trung-binh | cao | khan
-  priority      String    @default("trung-binh") @db.VarChar(20)
-  dueAt         DateTime? @map("due_at") @db.Timestamptz(6)
+  priority             String    @default("trung-binh") @db.VarChar(20)
+  dueAt                DateTime? @map("due_at") @db.Timestamptz(6)
   /// mo | dang-lam | xong | huy
-  status        String    @default("mo") @db.VarChar(20)
-  completedAt   DateTime? @map("completed_at") @db.Timestamptz(6)
-  customerId    String?   @map("customer_id") @db.Uuid
-  leadId        String?   @map("lead_id") @db.Uuid
-  opportunityId String?   @map("opportunity_id") @db.Uuid
+  status               String    @default("mo") @db.VarChar(20)
+  completedAt          DateTime? @map("completed_at") @db.Timestamptz(6)
+  customerId           String?   @map("customer_id") @db.Uuid
+  leadId               String?   @map("lead_id") @db.Uuid
+  opportunityId        String?   @map("opportunity_id") @db.Uuid
   /// Việc thuộc một dự án triển khai (Phase 6).
-  projectId     String?   @map("project_id") @db.Uuid
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy     String?   @map("created_by") @db.Uuid
-  updatedBy     String?   @map("updated_by") @db.Uuid
+  projectId            String?   @map("project_id") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy            String?   @map("created_by") @db.Uuid
+  updatedBy            String?   @map("updated_by") @db.Uuid
   /// 0.17.0 — kết quả công việc (CV-04). Bắt buộc khi đánh dấu xong (CV-05, kiểm ở service).
-  result        String?   @db.Text
+  result               String?   @db.Text
   /// dat | mot-phan | khong-dat | can-theo-doi (CHECK ở migration)
-  outcome       String?   @db.VarChar(20)
-  resultAt      DateTime? @map("result_at") @db.Timestamptz(6)
-  resultBy      String?   @map("result_by") @db.Uuid
+  outcome              String?   @db.VarChar(20)
+  resultAt             DateTime? @map("result_at") @db.Timestamptz(6)
+  resultBy             String?   @map("result_by") @db.Uuid
   /// 0.17.0 — ai giao, lúc nào giao cho người đang phụ trách (CV-08).
-  assignedBy    String?   @map("assigned_by") @db.Uuid
-  assignedAt    DateTime? @map("assigned_at") @db.Timestamptz(6)
+  assignedBy           String?   @map("assigned_by") @db.Uuid
+  assignedAt           DateTime? @map("assigned_at") @db.Timestamptz(6)
   /// 0.20.0 — giao việc mở rộng (DG-01 → DG-12). Độ khó 1–5.
-  difficulty     Int       @default(3) @db.SmallInt
+  difficulty           Int       @default(3) @db.SmallInt
   /// Cần duyệt: xong thì sang `cho-duyet` thay vì `xong` (DG-20).
-  needsApproval  Boolean   @default(false) @map("needs_approval")
+  needsApproval        Boolean   @default(false) @map("needs_approval")
   /// cho-nhan | da-nhan | tu-choi; NULL = việc tự tạo / việc cũ, không cần nhận (DG-03).
-  acceptStatus   String?   @map("accept_status") @db.VarChar(20)
-  acceptedAt     DateTime? @map("accepted_at") @db.Timestamptz(6)
-  declinedAt     DateTime? @map("declined_at") @db.Timestamptz(6)
-  declineReason  String?   @map("decline_reason") @db.Text
+  acceptStatus         String?   @map("accept_status") @db.VarChar(20)
+  acceptedAt           DateTime? @map("accepted_at") @db.Timestamptz(6)
+  declinedAt           DateTime? @map("declined_at") @db.Timestamptz(6)
+  declineReason        String?   @map("decline_reason") @db.Text
   /// % hoàn thành mới nhất (bản sao của dòng tiến độ cuối, DG-13).
-  progress       Int       @default(0) @db.SmallInt
+  progress             Int       @default(0) @db.SmallInt
   /// Giao cho nhiều người: các việc cùng một lần giao có chung `group_id` (DG-08).
-  groupId        String?   @map("group_id") @db.Uuid
-  templateId     String?   @map("template_id") @db.Uuid
-  recurrenceId   String?   @map("recurrence_id") @db.Uuid
-  recurrenceDate DateTime? @map("recurrence_date") @db.Date
+  groupId              String?   @map("group_id") @db.Uuid
+  templateId           String?   @map("template_id") @db.Uuid
+  recurrenceId         String?   @map("recurrence_id") @db.Uuid
+  recurrenceDate       DateTime? @map("recurrence_date") @db.Date
   /// Người được lịch lặp giao (không đổi khi chuyển việc) — khóa chống trùng (DG-07).
-  recurrenceAssigneeId String? @map("recurrence_assignee_id") @db.Uuid
+  recurrenceAssigneeId String?   @map("recurrence_assignee_id") @db.Uuid
   /// Hạn ban đầu, trước mọi lần gia hạn (DG-05).
-  originalDueAt  DateTime? @map("original_due_at") @db.Timestamptz(6)
-  submittedAt    DateTime? @map("submitted_at") @db.Timestamptz(6)
-  approvalRound  Int       @default(0) @map("approval_round")
+  originalDueAt        DateTime? @map("original_due_at") @db.Timestamptz(6)
+  submittedAt          DateTime? @map("submitted_at") @db.Timestamptz(6)
+  approvalRound        Int       @default(0) @map("approval_round")
   /// Cấp duyệt đang chờ (1…5) khi `cho-duyet`.
-  approvalLevel  Int?      @map("approval_level") @db.SmallInt
-  approvedAt     DateTime? @map("approved_at") @db.Timestamptz(6)
-  qualityScore   Int?      @map("quality_score") @db.SmallInt
-  onTimeFactor   Decimal?  @map("on_time_factor") @db.Decimal(4, 2)
+  approvalLevel        Int?      @map("approval_level") @db.SmallInt
+  approvedAt           DateTime? @map("approved_at") @db.Timestamptz(6)
+  qualityScore         Int?      @map("quality_score") @db.SmallInt
+  onTimeFactor         Decimal?  @map("on_time_factor") @db.Decimal(4, 2)
   /// Điểm việc hiện hành = độ khó × chất lượng × hệ số đúng hạn, hoặc điểm sau điều chỉnh (DG-30, DG-32).
-  taskScore      Decimal?  @map("task_score") @db.Decimal(6, 2)
+  taskScore            Decimal?  @map("task_score") @db.Decimal(6, 2)
   /// Việc sinh từ vướng mắc của một báo cáo (DG-44).
-  sourceReportId String?   @map("source_report_id") @db.Uuid
+  sourceReportId       String?   @map("source_report_id") @db.Uuid
 
-  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner       User                @relation("ViecPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
-  resultUser  User?               @relation("ViecGhiKetQua", fields: [resultBy], references: [id], onDelete: SetNull)
-  assigner    User?               @relation("ViecNguoiGiao", fields: [assignedBy], references: [id], onDelete: SetNull)
-  checklist   TaskChecklistItem[]
-  customer    Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  lead        Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  opportunity Opportunity?        @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  project     Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  template    TaskTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  recurrence  TaskRecurrence?     @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
-  approvers   TaskApprover[]
-  approvalLogs TaskApprovalLog[]
-  extensions  TaskExtension[]
-  progressLogs TaskProgressLog[]
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner            User                  @relation("ViecPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
+  resultUser       User?                 @relation("ViecGhiKetQua", fields: [resultBy], references: [id], onDelete: SetNull)
+  assigner         User?                 @relation("ViecNguoiGiao", fields: [assignedBy], references: [id], onDelete: SetNull)
+  checklist        TaskChecklistItem[]
+  customer         Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lead             Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity      Opportunity?          @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  project          Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  template         TaskTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  recurrence       TaskRecurrence?       @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
+  approvers        TaskApprover[]
+  approvalLogs     TaskApprovalLog[]
+  extensions       TaskExtension[]
+  progressLogs     TaskProgressLog[]
   scoreAdjustments TaskScoreAdjustment[]
 
   @@index([tenantId, ownerId, status, dueAt])
@@ -4192,20 +4201,20 @@ model TaskApprover {
 
 /// Lịch sử gửi duyệt / duyệt / trả lại — CHỈ GHI THÊM (DG-24).
 model TaskApprovalLog {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @map("tenant_id") @db.Uuid
-  taskId       String   @map("task_id") @db.Uuid
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  taskId       String    @map("task_id") @db.Uuid
   round        Int
-  level        Int?     @db.SmallInt
+  level        Int?      @db.SmallInt
   /// gui-duyet | duyet | tra-lai
-  action       String   @db.VarChar(20)
-  actorId      String   @map("actor_id") @db.Uuid
-  reason       String?  @db.Text
-  quality      Int?     @db.SmallInt
+  action       String    @db.VarChar(20)
+  actorId      String    @map("actor_id") @db.Uuid
+  reason       String?   @db.Text
+  quality      Int?      @db.SmallInt
   dueAt        DateTime? @map("due_at") @db.Timestamptz(6)
-  onTimeFactor Decimal? @map("on_time_factor") @db.Decimal(4, 2)
-  score        Decimal? @db.Decimal(6, 2)
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  onTimeFactor Decimal?  @map("on_time_factor") @db.Decimal(4, 2)
+  score        Decimal?  @db.Decimal(6, 2)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -4629,4 +4638,233 @@ model InternEvaluation {
 
   @@index([tenantId, userId])
   @@map("intern_evaluations")
+}
+
+// ---------------------------------------------------------------------------
+// 0.21.0 — Nhân sự giai đoạn 3: tính lương (BUSINESS_RULES mục 32, QĐ-141 → QĐ-153).
+// Tiền là số nguyên VND (BigInt). Cột người (created_by, approved_by…) là khóa ngoại SQL, không khai quan hệ
+// Prisma (như QĐ-119). Hồ sơ lương, tham số: chỉ ghi thêm (sửa = phiên bản mới). Kỳ lương đã khóa: bất biến.
+// ---------------------------------------------------------------------------
+
+/// Danh mục phụ cấp (LU-03): ăn trưa, xăng xe, điện thoại… Cờ chịu thuế / tính bảo hiểm, cố định tháng hoặc theo ngày công.
+model SalaryAllowanceType {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String   @db.VarChar(50)
+  name      String   @db.VarChar(255)
+  taxable   Boolean  @default(true)
+  insurable Boolean  @default(false)
+  /// thang | ngay-cong
+  basis     String   @default("thang") @db.VarChar(20)
+  sortOrder Int      @default(0) @map("sort_order")
+  status    String   @default("hoat-dong") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@map("salary_allowance_types")
+}
+
+/// Hồ sơ lương — MỘT PHIÊN BẢN có hiệu lực từ ngày (LU-01, LU-02). Chỉ ghi thêm: sửa = phiên bản mới.
+/// Phiên bản áp cho ngày D = hiệu lực lớn nhất ≤ D, cùng ngày thì bản tạo sau.
+model SalaryProfile {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  effectiveFrom     DateTime @map("effective_from") @db.Date
+  /// chinh-thuc | thu-viec | thoi-vu | thuc-tap
+  contractType      String   @map("contract_type") @db.VarChar(20)
+  /// % lương thử việc (chỉ loại thu-viec).
+  probationPercent  Decimal? @map("probation_percent") @db.Decimal(5, 2)
+  /// thang | ngay | gio
+  payBasis          String   @default("thang") @map("pay_basis") @db.VarChar(10)
+  baseSalary        BigInt   @map("base_salary")
+  /// Lương đóng bảo hiểm (0 = không tham gia bảo hiểm bắt buộc).
+  insuranceSalary   BigInt   @default(0) @map("insurance_salary")
+  /// Mức thưởng KPI chuẩn — nhân hệ số thưởng của phiếu đánh giá đã chốt.
+  kpiBonus          BigInt   @default(0) @map("kpi_bonus")
+  commissionEnabled Boolean  @default(false) @map("commission_enabled")
+  /// luy-tien | khau-tru-10 | khong
+  taxMethod         String   @map("tax_method") @db.VarChar(20)
+  /// [{ loaiId, soTien }] — cờ thuế / bảo hiểm đọc từ danh mục lúc tính và chụp vào dòng lương.
+  allowances        Json     @default("[]")
+  bankAccount       String?  @map("bank_account") @db.VarChar(50)
+  bankName          String?  @map("bank_name") @db.VarChar(255)
+  accountHolder     String?  @map("account_holder") @db.VarChar(255)
+  taxCode           String?  @map("tax_code") @db.VarChar(20)
+  note              String?  @db.Text
+  createdBy         String?  @map("created_by") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, effectiveFrom])
+  @@map("salary_profiles")
+}
+
+/// Người phụ thuộc đăng ký giảm trừ gia cảnh, có hiệu lực từ tháng (LU-04).
+model SalaryDependent {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  fullName     String    @map("full_name") @db.VarChar(255)
+  relationship String    @db.VarChar(50)
+  idNumber     String?   @map("id_number") @db.VarChar(30)
+  /// Ngày đầu tháng bắt đầu giảm trừ.
+  fromMonth    DateTime  @map("from_month") @db.Date
+  /// Ngày đầu tháng cuối cùng còn giảm trừ (trống = chưa kết thúc).
+  toMonth      DateTime? @map("to_month") @db.Date
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@map("salary_dependents")
+}
+
+/// Bộ tham số lương có hiệu lực theo ngày (LU-10): bảo hiểm, lương tối thiểu vùng, giảm trừ, biểu thuế, khấu trừ 10%,
+/// thử việc, tăng ca, hoa hồng. Chỉ ghi thêm (sửa = bộ mới); chỉ được đặt người / lúc xác nhận một lần (trigger).
+model PayrollParamSet {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  kind          String    @db.VarChar(30)
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  values        Json
+  note          String?   @db.Text
+  /// mac-dinh (nạp sẵn — cần kế toán xác nhận) | nhap-tay
+  source        String    @default("nhap-tay") @db.VarChar(20)
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  confirmedBy   String?   @map("confirmed_by") @db.Uuid
+  confirmedAt   DateTime? @map("confirmed_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, kind, effectiveFrom])
+  @@map("payroll_param_sets")
+}
+
+/// Kỳ lương tháng (LU-20): nhap → cho-duyet → da-duyet → da-khoa → da-chi. Từ "đã khóa" bất biến (trigger).
+model PayrollRun {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  year         Int
+  month        Int
+  status       String    @default("nhap") @db.VarChar(20)
+  timesheetId  String?   @map("timesheet_id") @db.Uuid
+  /// Có thay đổi (khoản cộng / trừ, điều chỉnh) sau lần tính gần nhất → phải tính lại trước khi gửi duyệt.
+  dirty        Boolean   @default(true)
+  warnings     Json      @default("[]")
+  calculatedAt DateTime? @map("calculated_at") @db.Timestamptz(6)
+  calculatedBy String?   @map("calculated_by") @db.Uuid
+  submittedAt  DateTime? @map("submitted_at") @db.Timestamptz(6)
+  submittedBy  String?   @map("submitted_by") @db.Uuid
+  approvedAt   DateTime? @map("approved_at") @db.Timestamptz(6)
+  approvedBy   String?   @map("approved_by") @db.Uuid
+  lockedAt     DateTime? @map("locked_at") @db.Timestamptz(6)
+  lockedBy     String?   @map("locked_by") @db.Uuid
+  paidAt       DateTime? @map("paid_at") @db.Timestamptz(6)
+  paidBy       String?   @map("paid_by") @db.Uuid
+  returnReason String?   @map("return_reason") @db.Text
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines           PayrollLine[]
+  items           PayrollItem[]
+  commissionItems PayrollCommissionItem[]
+
+  @@unique([tenantId, year, month])
+  @@map("payroll_runs")
+}
+
+/// Dòng lương một người trong kỳ: số chính + ẢNH CHỤP ĐẦU VÀO (công, tham số, hồ sơ) + chi tiết kết quả (LU-28).
+model PayrollLine {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  runId             String   @map("run_id") @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  fullName          String   @map("full_name") @db.VarChar(255)
+  profileId         String?  @map("profile_id") @db.Uuid
+  grossIncome       BigInt   @map("gross_income")
+  taxableIncome     BigInt   @map("taxable_income")
+  employeeInsurance BigInt   @map("employee_insurance")
+  personalIncomeTax BigInt   @map("personal_income_tax")
+  otherDeductions   BigInt   @map("other_deductions")
+  netPay            BigInt   @map("net_pay")
+  employerInsurance BigInt   @map("employer_insurance")
+  inputs            Json
+  result            Json
+  warnings          Json     @default("[]")
+  hasError          Boolean  @default(false) @map("has_error")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  run    PayrollRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, userId])
+  @@index([tenantId, userId])
+  @@map("payroll_lines")
+}
+
+/// Khoản cộng / trừ nhập tay (tạm ứng, phạt, thưởng đột xuất) và DÒNG ĐIỀU CHỈNH kỳ trước (LU-25, LU-31).
+model PayrollItem {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  runId        String    @map("run_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  /// cong | tru
+  direction    String    @db.VarChar(10)
+  /// thuong | phu-cap-khac | tam-ung | phat | dieu-chinh | khac
+  category     String    @db.VarChar(20)
+  amount       BigInt
+  taxable      Boolean   @default(true)
+  reason       String    @db.Text
+  /// Kỳ đã khóa mà khoản này điều chỉnh (chỉ category = dieu-chinh).
+  adjustsRunId String?   @map("adjusts_run_id") @db.Uuid
+  createdBy    String    @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  approvedBy   String?   @map("approved_by") @db.Uuid
+  approvedAt   DateTime? @map("approved_at") @db.Timestamptz(6)
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  run    PayrollRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, runId, userId])
+  @@map("payroll_items")
+}
+
+/// Hoa hồng theo TỪNG phân bổ phiếu thu (LU-23, LU-24): `thu` (tiền thu trong kỳ) hoặc `truy-thu` (phiếu thu bị hủy
+/// sau khi kỳ chứa nó đã khóa). Mỗi phân bổ chỉ được tính `thu` một lần và truy thu một lần (chỉ mục duy nhất riêng phần).
+model PayrollCommissionItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  runId        String   @map("run_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  /// thu | truy-thu
+  kind         String   @db.VarChar(10)
+  paymentId    String   @map("payment_id") @db.Uuid
+  allocationId String   @map("allocation_id") @db.Uuid
+  paymentNo    String   @map("payment_no") @db.VarChar(30)
+  receivedAt   DateTime @map("received_at") @db.Date
+  /// Số tiền phân bổ (doanh số thu) — luôn dương.
+  amount       BigInt
+  /// Tỷ lệ áp dụng (phần vạn) — chụp lúc tính; truy thu dùng đúng tỷ lệ của kỳ gốc.
+  rateBp       Int      @map("rate_bp")
+  /// Hoa hồng có dấu: dương với `thu`, âm với `truy-thu`.
+  commission   BigInt
+  sourceRunId  String?  @map("source_run_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  run    PayrollRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, runId, userId])
+  @@map("payroll_commission_items")
 }
