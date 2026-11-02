@@ -754,6 +754,19 @@ async function main() {
   dat("…đề nghị gia hạn đã quyết giữ nguyên người quyết định", (await chu.taskExtension.findUniqueOrThrow({ where: { id: gh5.id } })).status === "da-duyet");
   dat("…Giám đốc không nhận thông báo 'bạn thành người duyệt' rác cho việc đã xong", (await chu.notification.count({ where: { userId: gd, objectId: v5.id, type: { in: ["viec-cho-duyet", "viec-chuyen-buoc-duyet"] } } })) === 0);
 
+  // ==================================================================
+  console.log("\n— QA v2: QĐ-131 — thang Có / Không chỉ nhận đúng hai giá trị —");
+  const mauCk = await voi(T, hr, (nc) => taoMauPhieu(nc, LuocDoMauPhieuLuu.parse({ ma: `co-khong-${DAU}`.slice(0, 50), ten: "Mẫu có / không QA", boCuc: {
+    tieuDe: "PHIẾU CÓ KHÔNG", phan: [{ ten: "A", tieuChi: [{ ma: "dung-gio", ten: "Đi làm đúng giờ", trongSo: 1, thang: "co-khong" }, { ma: "ket-qua", ten: "Kết quả", trongSo: 1, thang: "10" }] }],
+  } })));
+  const ptCk = await voi(T, nvA, (nc) => taoPhieuThucTap(nc, LuocDoTaoPhieuThucTap.parse({ nguoiId: tt, mauId: mauCk.id })));
+  for (const la of ["toString", "__proto__", "valueOf"]) {
+    await nemLoi(`Thang Có / Không: giá trị "${la}" bị chặn (không lọt thành điểm trống mà vẫn chốt được)`, "nghiep-vu",
+      () => voi(T, nvA, (nc) => chamPhieuThucTap(nc, ptCk.id, { thongTin: {}, diem: { "dung-gio": la, "ket-qua": 8 }, nhanXet: {} })), "diem-sai");
+  }
+  const ckDung = await voi(T, nvA, (nc) => chamPhieuThucTap(nc, ptCk.id, { thongTin: {}, diem: { "dung-gio": "co", "ket-qua": 8 }, nhanXet: {} }));
+  dat("Thang Có / Không: 'co' = 10 → tổng (10 + 8) / 2 = 9", ckDung.ketQua?.tong === 9, String(ckDung.ketQua?.tong));
+
   await chu.$disconnect();
   ketLuan("QA 0.20.0 — Nhân sự giai đoạn 2");
 }

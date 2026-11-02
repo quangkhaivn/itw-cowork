@@ -499,7 +499,10 @@ export function tinhPhieuThucTap(mau: MauPhieu, diemNhap: Record<string, string 
           if (!Number.isFinite(so) || so < 0 || so > 10) throw new RangeError(`Điểm tiêu chí “${t.ten}” phải từ 0 đến 10.`);
           diem10 = lamTron2(so);
         } else if (t.thang === "co-khong") {
-          const g = GIA_TRI_CO_KHONG[String(nhap).trim() as "co" | "khong"];
+          // QA 0.20.0 v2: chỉ khóa riêng của bảng — "toString", "__proto__"… trước đây lọt qua (thuộc tính kế thừa),
+          // điểm thành undefined: tiêu chí không bị báo thiếu, tính như 0, bản in để trống mà phiếu vẫn chốt được.
+          const k = String(nhap).trim();
+          const g = Object.hasOwn(GIA_TRI_CO_KHONG, k) ? GIA_TRI_CO_KHONG[k as "co" | "khong"] : undefined;
           if (!g) throw new RangeError(`Tiêu chí “${t.ten}” chấm Có / Không: chọn Đạt hoặc Không đạt.`);
           diem10 = g.diem;
         } else {
