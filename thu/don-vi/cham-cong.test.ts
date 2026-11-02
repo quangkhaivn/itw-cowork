@@ -587,7 +587,9 @@ describe("QA 0.19.0 — quyết định chính sách (QĐ-113 → QĐ-118)", () 
     for (const code of ["nhan-su-hr", "sinh-vien-thuc-tap"]) {
       const dn = VAI_TRO.find((x) => x.code === code)!;
       assert.ok(dn.quyen !== "*");
-      assert.deepEqual([...dsMa(`'${code}'`)].sort(), [...new Set(dn.quyen)].sort(), code);
+      // Mã quyền của phân hệ ra đời SAU 0.19.0 (đánh giá 0.20.0, lương 0.21.0) do migration của bản đó cấp — không so ở đây.
+      const sau019 = (m: string) => m.startsWith("danh_gia.") || m.startsWith("luong.");
+      assert.deepEqual([...dsMa(`'${code}'`)].sort(), [...new Set(dn.quyen)].filter((m) => !sau019(m)).sort(), code);
     }
     // Phạm vi: HR "all" trừ công việc "own"; Thực tập sinh "own".
     const hrDn = VAI_TRO.find((x) => x.code === "nhan-su-hr")!;
