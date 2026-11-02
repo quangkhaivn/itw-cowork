@@ -90,7 +90,11 @@ export async function chuyenBuocChoCuaNguoi(nc: NguCanh, nguoiId: string, lyDo: 
   });
   for (const c of capDuyet) {
     await khoaChungTu(nc.tx, "tasks", c.taskId);
-    const v = await nc.tx.task.findUniqueOrThrow({ where: { id: c.taskId }, select: { id: true, title: true, ownerId: true, status: true, approvalLevel: true, approvalRound: true } });
+    // QA 0.20.0 v2: đọc lại SAU khi khóa — trong lúc chờ khóa, việc có thể vừa được duyệt xong (không chuyển nữa,
+    // nếu không người duyệt cấp cuối của việc đã chấm điểm bị thay) hoặc chuỗi duyệt vừa được ghi lại (dòng cũ mất).
+    const v = await nc.tx.task.findUniqueOrThrow({ where: { id: c.taskId }, select: { id: true, title: true, ownerId: true, status: true, approvalLevel: true, approvalRound: true, approvedAt: true } });
+    const conCho = await nc.tx.taskApprover.count({ where: { id: c.id, approverId: nguoiId } });
+    if (!conCho || v.approvedAt || !VIEC_CHUA_DUYET.includes(v.status)) continue;
     const chuoi = (await nc.tx.taskApprover.findMany({ where: { taskId: v.id }, select: { approverId: true } })).map((x) => x.approverId);
     const sang = chon(bd, nguoiId, [v.ownerId, ...chuoi]);
     if (!sang) {
@@ -120,7 +124,10 @@ export async function chuyenBuocChoCuaNguoi(nc: NguCanh, nguoiId: string, lyDo: 
     select: { id: true, taskId: true, requestedBy: true, task: { select: { title: true, ownerId: true } } },
   });
   for (const g of giaHan) {
+    await khoaChungTu(nc.tx, "tasks", g.taskId);
     await khoaChungTu(nc.tx, "task_extensions", g.id);
+    // QA 0.20.0 v2: đề nghị có thể vừa được quyết định trong lúc chờ khóa — đề nghị đã quyết bất biến (trigger).
+    if ((await nc.tx.taskExtension.count({ where: { id: g.id, status: "cho-duyet" } })) === 0) continue;
     const sang = chon(bd, nguoiId, [g.requestedBy, g.task.ownerId]);
     if (!sang) {
       kq.khongChuyenDuoc += 1;
@@ -158,6 +165,8 @@ export async function chuyenBuocChoCuaNguoi(nc: NguCanh, nguoiId: string, lyDo: 
   const phieu = await nc.tx.evaluation.findMany({ where: { managerId: nguoiId, status: { in: ["nhan-vien", "quan-ly"] } }, select: { id: true, userId: true } });
   for (const p of phieu) {
     await khoaChungTu(nc.tx, "evaluations", p.id);
+    // QA 0.20.0 v2: phiếu có thể vừa được gửi chốt / đổi người chấm trong lúc chờ khóa.
+    if ((await nc.tx.evaluation.count({ where: { id: p.id, managerId: nguoiId, status: { in: ["nhan-vien", "quan-ly"] } } })) === 0) continue;
     const sang = chon(bd, nguoiId, [p.userId]);
     if (!sang) {
       kq.khongChuyenDuoc += 1;
@@ -194,6 +203,7 @@ export async function goTuDuyet(nc: NguCanh, nguoiLamId: string, bayGio = new Da
   let n = 0;
   for (const c of ds) {
     await khoaChungTu(nc.tx, "tasks", c.taskId);
+    if ((await nc.tx.taskApprover.count({ where: { id: c.id, approverId: nguoiLamId, task: { ownerId: nguoiLamId, approvedAt: null, status: { in: VIEC_CHUA_DUYET } } } })) === 0) continue;
     const chuoi = (await nc.tx.taskApprover.findMany({ where: { taskId: c.taskId }, select: { approverId: true } })).map((x) => x.approverId);
     const sang = chon(bd, nguoiLamId, chuoi);
     if (!sang) continue;
