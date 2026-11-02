@@ -960,3 +960,31 @@ table.tong-itw .bang-chu td { text-align: left; font-style: italic; font-weight:
   .cham-cong-nut .nut { min-height: 104px; font-size: 22px; }
   .cham-cong-gio { font-size: 48px; }
 }
+
+/* --------------------------------------------------------------------------
+ * 0.20.0 — Phiếu đánh giá thực tập khổ A4 (DG-76)
+ * ------------------------------------------------------------------------ */
+.phieu-tt { position: relative; }
+.phieu-tt .dau-nhap { position: absolute; top: 8px; right: 12px; color: #b42318; font-weight: 700; font-size: 11px; letter-spacing: .5px; }
+.dau-phieu-tt { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.dau-phieu-tt .don-vi { flex: 1 1 0; text-transform: uppercase; font-size: 12px; }
+.dau-phieu-tt .quoc-hieu { flex: 1 1 0; text-align: center; font-size: 12px; }
+.dau-phieu-tt .tieu-ngu { font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.tieu-de-tt { text-align: center; margin: 18px 0 2px !important; font-size: 17px !important; }
+.tieu-de-phu-tt { text-align: center; margin: 0 0 12px; font-style: italic; color: #333; }
+table.thong-tin-tt { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
+table.thong-tin-tt th { text-align: left; font-weight: 400; color: #333; width: 34%; padding: 2px 6px 2px 0; vertical-align: top; }
+table.thong-tin-tt td { padding: 2px 0; font-weight: 600; }
+table.bang-tt { width: 100%; border-collapse: collapse; }
+table.bang-tt th, table.bang-tt td { border: 1px solid #555; padding: 4px 6px; vertical-align: top; }
+table.bang-tt th { background: #f2f2f2; }
+table.bang-tt .giua { text-align: center; white-space: nowrap; }
+table.bang-tt .dong-phan td { font-weight: 700; background: #fafafa; }
+table.bang-tt .dong-tong td { font-weight: 700; }
+table.bang-tt .diem-tt { font-weight: 600; min-width: 60px; }
+.ghi-chu-tt { font-size: 11.5px; color: #333; margin: 6px 0; }
+.o-nhan-xet-tt { margin-top: 10px; page-break-inside: avoid; }
+.o-nhan-xet-tt h3 { margin: 0 0 4px !important; }
+.o-nhan-xet-tt .noi-dung-nx { min-height: 42px; white-space: pre-wrap; border-bottom: 1px dotted #999; }
+.o-nhan-xet-tt .cho-trong { color: #999; }
+.ngay-lap-tt { text-align: right; font-style: italic; margin: 16px 0 0; }
