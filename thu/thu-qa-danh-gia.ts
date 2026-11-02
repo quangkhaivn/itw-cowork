@@ -215,7 +215,7 @@ async function main() {
   await voi(T, qt, (nc) => duyetViec(nc, vGd.id, { chatLuong: 3, nhanXet: "" }));
   await nemLoi("Giám đốc không tự điều chỉnh điểm việc của mình", "nghiep-vu", () => voi(T, gd, (nc) => dieuChinhDiem(nc, vGd.id, { chatLuong: 5, lyDo: "Tôi là giám đốc mà" })), "tu-duyet");
   await nemLoi("Quản trị không là người duyệt việc của chính mình (giao từ giám đốc)", "nghiep-vu", () => voi(T, gd, (nc) => taoViec(nc, viecMoi("Việc của quản trị", { nguoiPhuTrachId: qt, nguoiDuyetIds: [qt] }))), "tu-duyet");
-  const vQt = await voi(T, gd, (nc) => taoViec(nc, viecMoi("Việc của quản trị 2", { nguoiPhuTrachId: qt, nguoiDuyetIds: [tp] })));
+  const vQt = await voi(T, gd, (nc) => taoViec(nc, viecMoi("Việc của quản trị 2", { nguoiPhuTrachId: qt, nguoiDuyetIds: [tp, gd] })));
   await nemLoi("Không chuyển việc cho người đang đứng trong chuỗi duyệt của nó", "nghiep-vu", () => voi(T, gd, (nc) => suaViec(nc, vQt.id, { nguoiPhuTrachId: tp })), "tu-duyet");
   const kyGd = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 1, nguoiIds: [gd, qt, tp] }));
   const pGd = await chu.evaluation.findFirstOrThrow({ where: { periodId: kyGd.id, userId: gd }, include: { items: true } });
@@ -581,7 +581,7 @@ async function main() {
   const vGh = await voi(T, tp3, (nc) => taoViec(nc, viecMoi("QĐ-135 việc xin gia hạn", { nguoiPhuTrachId: nv3, canDuyet: false, han: new Date(Date.now() + 2 * GIO).toISOString() })));
   const gh135 = await voi(T, nv3, (nc) => xinGiaHan(nc, vGh.id, { hanMoi: new Date(Date.now() + 72 * GIO), lyDo: "Chờ linh kiện về" }));
   // Việc của chính Giám đốc mà TP3 là người duyệt: chuyển lên quản lý của TP3 = Giám đốc = người làm → đi tiếp lên.
-  const vCuaGd = await voi(T, qt, (nc) => taoViec(nc, viecMoi("QĐ-135 việc của giám đốc", { nguoiPhuTrachId: gd, nguoiDuyetIds: [tp3] })));
+  const vCuaGd = await voi(T, qt, (nc) => taoViec(nc, viecMoi("QĐ-135 việc của giám đốc", { nguoiPhuTrachId: gd, nguoiDuyetIds: [tp3, qt] })));
   const bc135 = await voi(T, nv3, (nc) => luuBaoCao(nc, LuocDoBaoCao.parse({ loai: "tuan", ngay: congNgay(homNayVN(), -7), daLam: "Gặp 5 khách", nop: true })));
   const ky135 = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 6, nguoiIds: [nv3] }));
   const p135 = await chu.evaluation.findFirstOrThrow({ where: { periodId: ky135.id, userId: nv3 } });
@@ -613,8 +613,8 @@ async function main() {
   // Bàn giao thủ công: việc của A chuyển cho B mà B đang là người duyệt của việc đó → bước duyệt lên cấp trên của B.
   const nvA4 = await nguoi("NV A4 nghỉ QA", "sales", { quanLy: tp, phong: pbKD });
   const nvB4 = await nguoi("NV B4 nhận QA", "sales", { quanLy: tp, phong: pbKD });
-  const v4 = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-135 việc bàn giao", { nguoiPhuTrachId: nvA4, nguoiDuyetIds: [nvB4] })));
-  const vDuyetA4 = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-135 việc A4 đang duyệt", { nguoiPhuTrachId: nvB, nguoiDuyetIds: [nvA4] })));
+  const v4 = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-135 việc bàn giao", { nguoiPhuTrachId: nvA4, nguoiDuyetIds: [nvB4, gd] })));
+  const vDuyetA4 = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-135 việc A4 đang duyệt", { nguoiPhuTrachId: nvB, nguoiDuyetIds: [nvA4, gd] })));
   const bg = await voi(T, qt, (nc) => banGiao(nc, nvA4, { nguoiNhanId: nvB4, khoaTaiKhoan: true, ghiChu: null }));
   const cap4 = await chu.taskApprover.findFirstOrThrow({ where: { taskId: v4.id, level: 1 } });
   dat("Bàn giao: người nhận đang là người duyệt của việc vừa nhận → bước đó lên quản lý của họ", cap4.approverId === tp && bg.goTuDuyet === 1, cap4.approverId);

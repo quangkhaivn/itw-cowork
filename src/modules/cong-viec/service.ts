@@ -440,11 +440,12 @@ export async function taoViec(nc: NguCanh, dauVao: DuLieuTaoViec, them: ThemKhiT
     // QĐ-154: chuỗi gửi lên kiểm nghiêm (vi phạm → 403); chuỗi dựng tự động (mặc định / theo mẫu) chuẩn hóa.
     if (d.nguoiDuyetIds?.length) {
       chuoi = d.nguoiDuyetIds;
+      await kiemNguoiDuyet(nc, chuoi, ownerId);
       await kiemChuoiDuyetKhiGiao(nc, chuoi, ownerId, nc.hoSo.userId);
     } else {
       chuoi = await chuoiDuyetTuDong(nc, { chuoi: mau?.chuoiDuyet ?? [], nguoiLamId: ownerId, nguoiGiaoId: nc.hoSo.userId });
+      await kiemNguoiDuyet(nc, chuoi, ownerId);
     }
-    await kiemNguoiDuyet(nc, chuoi, ownerId);
   }
 
   const v = await nc.tx.task.create({
@@ -674,7 +675,10 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
     // để đứng duyệt sau khi tạo.
     if (d.nguoiDuyetIds?.length) {
       chuoiMoi = d.nguoiDuyetIds;
-      if (doiChuoiYeuCau) await kiemChuoiDuyetKhiGiao(nc, chuoiMoi, nguoiLamMoi, goc.assignedBy ?? toi);
+      if (doiChuoiYeuCau) {
+        await kiemNguoiDuyet(nc, chuoiMoi, nguoiLamMoi);
+        await kiemChuoiDuyetKhiGiao(nc, chuoiMoi, nguoiLamMoi, goc.assignedBy ?? toi);
+      }
     } else if (chuoiCu.length === 0) chuoiMoi = await chuoiDuyetTuDong(nc, { chuoi: [], nguoiLamId: nguoiLamMoi, nguoiGiaoId: goc.assignedBy ?? toi });
     if (chuoiMoi || doiNguoi || (d.canDuyet && !goc.needsApproval)) await kiemNguoiDuyet(nc, chuoiMoi ?? chuoiCu, nguoiLamMoi);
   } else if (goc.needsApproval && chuoiCu.length) {
