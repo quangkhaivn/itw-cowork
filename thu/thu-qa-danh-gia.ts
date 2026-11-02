@@ -755,6 +755,19 @@ async function main() {
   dat("…Giám đốc không nhận thông báo 'bạn thành người duyệt' rác cho việc đã xong", (await chu.notification.count({ where: { userId: gd, objectId: v5.id, type: { in: ["viec-cho-duyet", "viec-chuyen-buoc-duyet"] } } })) === 0);
 
   // ==================================================================
+  console.log("\n— QA v2: QĐ-137 — người không phải người giao không 'gửi lại' việc bị từ chối —");
+  const vTuChoi = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QA v2 việc bị từ chối", { nguoiPhuTrachId: nvB, canDuyet: false })));
+  await voi(T, nvB, (nc) => tuChoiViec(nc, vTuChoi.id, { lyDo: "Đang bận việc khác" }));
+  await voi(T, mk, (nc) => suaViec(nc, vTuChoi.id, { tieuDe: "QA v2 việc bị từ chối (Marketing sửa tên)" }));
+  const vTcSau = await chu.task.findUniqueOrThrow({ where: { id: vTuChoi.id } });
+  dat("NV Marketing sửa tiêu đề việc bị từ chối: việc vẫn 'bị từ chối', lý do giữ nguyên, người làm không bị báo giao lại",
+    vTcSau.acceptStatus === "tu-choi" && vTcSau.declineReason === "Đang bận việc khác" && (await chu.notification.count({ where: { userId: nvB, type: "viec-duoc-giao", objectId: vTuChoi.id } })) === 1,
+    `${vTcSau.acceptStatus} / ${await chu.notification.count({ where: { userId: nvB, type: "viec-duoc-giao", objectId: vTuChoi.id } })} thông báo`);
+  await voi(T, tp, (nc) => suaViec(nc, vTuChoi.id, { moTa: "Đã sắp xếp lại việc, nhờ em làm" }));
+  dat("Người giao sửa → việc về chờ nhận và người làm được báo", (await chu.task.findUniqueOrThrow({ where: { id: vTuChoi.id } })).acceptStatus === "cho-nhan"
+    && (await chu.notification.count({ where: { userId: nvB, type: "viec-duoc-giao", objectId: vTuChoi.id } })) === 2);
+
+  // ==================================================================
   console.log("\n— QA v2: QĐ-131 — thang Có / Không chỉ nhận đúng hai giá trị —");
   const mauCk = await voi(T, hr, (nc) => taoMauPhieu(nc, LuocDoMauPhieuLuu.parse({ ma: `co-khong-${DAU}`.slice(0, 50), ten: "Mẫu có / không QA", boCuc: {
     tieuDe: "PHIẾU CÓ KHÔNG", phan: [{ ten: "A", tieuChi: [{ ma: "dung-gio", ten: "Đi làm đúng giờ", trongSo: 1, thang: "co-khong" }, { ma: "ket-qua", ten: "Kết quả", trongSo: 1, thang: "10" }] }],

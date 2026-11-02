@@ -675,6 +675,9 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
   const guiDuyet = xongMoi && canDuyetMoi;
 
   const bayGio = new Date();
+  // QA 0.20.0 v2 (QĐ-137): "gửi lại" việc bị từ chối là việc của người giao / quản lý trực tiếp / Giám đốc / Quản
+  // trị — người có task.update khác sửa tiêu đề không được tự đưa việc về "chờ nhận" và báo người làm.
+  const guiLaiTuChoi = !doiNguoi && goc.acceptStatus === "tu-choi" && !laNguoiLam && (await duocDoiThuocTinhChamDiem(nc, goc));
   const ngamNhan = laNguoiLam && goc.acceptStatus === "cho-nhan" && (d.trangThai !== undefined || doiKetQuaYeuCau);
   const v = await nc.tx.task.update({
     where: { id },
@@ -693,7 +696,7 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
         declineReason: null,
       }),
       // Người giao "gửi lại" việc đã bị từ chối cho cùng người: sửa gì đó thì việc về chờ nhận.
-      ...(!doiNguoi && goc.acceptStatus === "tu-choi" && !laNguoiLam && { acceptStatus: "cho-nhan", declinedAt: null, declineReason: null, assignedAt: bayGio }),
+      ...(guiLaiTuChoi && { acceptStatus: "cho-nhan", declinedAt: null, declineReason: null, assignedAt: bayGio }),
       // Người làm bắt tay vào việc / hoàn thành mà chưa bấm Nhận: coi như đã nhận (DG-03).
       ...(ngamNhan && { acceptStatus: "da-nhan", acceptedAt: bayGio }),
       ...(d.uuTien !== undefined && { priority: d.uuTien }),
@@ -735,7 +738,7 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
     await nc.suKien({ eventType: SU_KIEN.TASK_ASSIGNED, objectType: "task", objectId: id, payload: { tu: goc.ownerId, sang: sau.nguoiPhuTrach.id } });
     await baoDuocGiao(nc, sau, true);
     await baoChuyenDi(nc, sau, goc.ownerId);
-  } else if (goc.acceptStatus === "tu-choi" && !laNguoiLam) {
+  } else if (guiLaiTuChoi) {
     await baoDuocGiao(nc, sau, false);
   }
 
