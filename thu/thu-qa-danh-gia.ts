@@ -270,6 +270,11 @@ async function main() {
   dat("Thực tập sinh chỉ thấy việc của mình", dsTt.dong.length >= 1 && dsTt.dong.every((v) => v.nguoiPhuTrach.id === tt) && dsTt.dong.some((v) => v.id === viecTt.id));
   await nemLoi("Thực tập sinh không mở việc của nhân viên", "khong-thay", () => voi(T, tt, (nc) => chiTietViec(nc, vd)));
 
+  const vHuy = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QA việc bị hủy khi chờ nhận", { nguoiPhuTrachId: nvB })));
+  await voi(T, tp, (nc) => suaViec(nc, vHuy.id, { trangThai: "huy" }));
+  await nemLoi("DG-03: không nhận việc người giao đã hủy", "nghiep-vu", () => voi(T, nvB, (nc) => nhanViec(nc, vHuy.id)), "viec-da-khoa");
+  await nemLoi("DG-03: không từ chối việc người giao đã hủy (không báo rác cho người giao)", "nghiep-vu", () => voi(T, nvB, (nc) => tuChoiViec(nc, vHuy.id, { lyDo: "Không làm nữa" })), "viec-da-khoa");
+
   // ==================================================================
   console.log("\n— Đồng thời —");
   const vn = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QA nhận / từ chối cùng lúc", { nguoiPhuTrachId: nvB })));

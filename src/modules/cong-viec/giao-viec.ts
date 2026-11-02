@@ -80,6 +80,7 @@ export async function nhanViec(nc: NguCanh, id: string) {
   const v = await khoaVaDoc(nc, id);
   batBuocLaNguoiLam(nc, v);
   if (v.acceptStatus !== "cho-nhan") throw new LoiNghiepVu("Việc không ở trạng thái chờ nhận.", 409, "khong-cho-nhan");
+  if (!["mo", "dang-lam"].includes(v.status)) throw new LoiNghiepVu("Việc đã xong hoặc đã hủy.", 409, "viec-da-khoa");
   await nc.tx.task.update({ where: { id }, data: { acceptStatus: "da-nhan", acceptedAt: new Date(), updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "nhan-viec", objectType: "task", objectId: id });
   await nc.suKien({ eventType: SU_KIEN.TASK_ACCEPTED, objectType: "task", objectId: id });
@@ -92,6 +93,8 @@ export async function tuChoiViec(nc: NguCanh, id: string, d: z.infer<typeof Luoc
   const v = await khoaVaDoc(nc, id);
   batBuocLaNguoiLam(nc, v);
   if (v.acceptStatus !== "cho-nhan") throw new LoiNghiepVu("Chỉ từ chối được việc đang chờ nhận. Đã nhận thì trao đổi với người giao.", 409, "khong-cho-nhan");
+  // QA 0.20.0: việc người giao đã hủy không còn gì để nhận / từ chối (trước đây vẫn ghi và báo người giao).
+  if (!["mo", "dang-lam"].includes(v.status)) throw new LoiNghiepVu("Việc đã xong hoặc đã hủy.", 409, "viec-da-khoa");
   await nc.tx.task.update({ where: { id }, data: { acceptStatus: "tu-choi", declinedAt: new Date(), declineReason: d.lyDo, updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "tu-choi-viec", objectType: "task", objectId: id, after: { lyDo: d.lyDo } });
   await nc.suKien({ eventType: SU_KIEN.TASK_DECLINED, objectType: "task", objectId: id, payload: { lyDo: d.lyDo } });
