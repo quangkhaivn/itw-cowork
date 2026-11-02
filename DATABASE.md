@@ -147,6 +147,16 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `intern_journals`, `intern_journal_comments` | Nhật ký tuần của thực tập sinh + nhận xét | 0.20.0. Duy nhất `(tenant_id, user_id, week_start)`; nhật ký đã nộp bất biến; nhận xét chỉ ghi thêm |
 | `intern_eval_templates` | Mẫu phiếu đánh giá thực tập (bố cục JSON) | 0.20.0. Duy nhất `(tenant_id, code)`; `version` tăng mỗi lần sửa; seed mẫu `mau-chung` |
 | `intern_evaluations` | Phiếu đánh giá thực tập | 0.20.0. `template_snapshot` (chụp mẫu), `header`, `scores`, `comments`, `auto_values`; trigger bất biến khi `da-chot` |
+| `salary_allowance_types` | Danh mục phụ cấp (LU-03) | 0.21.0. Duy nhất `(tenant_id, code)`; cờ `taxable`, `insurable`, `basis` thang / ngay-cong |
+| `salary_profiles` | Hồ sơ lương — **phiên bản** theo `effective_from` (LU-01, LU-02) | 0.21.0. **Chỉ ghi thêm** (trigger + chỉ SELECT/INSERT); tiền `BIGINT` VND; CHECK loại hợp đồng / cách trả / cách khấu trừ thuế, `probation_percent` chỉ với thử việc; `allowances` JSON `[{loaiId, soTien}]` |
+| `salary_dependents` | Người phụ thuộc giảm trừ gia cảnh (LU-04) | 0.21.0. `from_month` / `to_month` là ngày đầu tháng; kết thúc chứ không xóa |
+| `payroll_param_sets` | Bộ tham số lương có hiệu lực theo ngày (LU-10 → LU-13) | 0.21.0. `kind` (8 loại), `values` JSON, `source` mac-dinh / nhap-tay, `confirmed_by/at`. **Chỉ ghi thêm**: trigger `chan_sua_tham_so_luong` chỉ cho đặt xác nhận một lần; REVOKE DELETE |
+| `payroll_runs` | Kỳ lương tháng (LU-20) | 0.21.0. Duy nhất `(tenant_id, year, month)`; trạng thái nhap → cho-duyet → da-duyet → da-khoa → da-chi; CHECK người duyệt / khóa ≠ người tính; `warnings` cấp kỳ; `dirty` = cần tính lại. Từ đã khóa bất biến (trigger `chan_sua_ky_luong_da_khoa`, chỉ cho da-khoa → da-chi); REVOKE DELETE |
+| `payroll_lines` | Dòng lương (LU-28) | 0.21.0. Duy nhất `(run_id, user_id)`; cột tiền chính + `inputs` (ảnh chụp đầu vào) + `result` + `warnings`, `has_error`. Bất biến khi kỳ đã khóa |
+| `payroll_items` | Khoản cộng / trừ nhập tay, điều chỉnh kỳ trước (LU-25, LU-31) | 0.21.0. CHECK tiền > 0, lý do ≥ 5 (điều chỉnh ≥ 10 + `adjusts_run_id`); `approved_by/at` ghi lúc duyệt kỳ. Bất biến khi kỳ đã khóa |
+| `payroll_commission_items` | Hoa hồng theo từng phân bổ phiếu thu (LU-23, LU-24) | 0.21.0. `kind` thu / truy-thu, `rate_bp` (phần vạn), `commission` có dấu; chỉ mục duy nhất riêng phần `allocation_id` cho mỗi `kind` (mọi kỳ). Bất biến khi kỳ đã khóa |
+
+Thay đổi 0.21.0: `email_transactionals.kind` nhận thêm `phieu-luong` (migration `20261104090003`).
 
 Cột thêm 0.20.0: `tasks` — `difficulty` (1–5), `needs_approval`, `accept_status` (cho-nhan / da-nhan / tu-choi, CHECK từ chối có lý do), `accepted_at`, `declined_at`, `decline_reason`, `progress` (0–100), `group_id`, `template_id`, `recurrence_id` + `recurrence_date` + `recurrence_assignee_id` (chỉ mục duy nhất riêng phần chống sinh trùng), `original_due_at`, `submitted_at`, `approval_round`, `approval_level`, `approved_at`, `quality_score`, `on_time_factor`, `task_score`, `source_report_id`; trạng thái thêm `cho-duyet` (CHECK `tasks_cho_duyet_check`). `departments.daily_report`. `attachments` nhận loại `task_progress`. Quyền mới `danh_gia.*`.
 

@@ -847,3 +847,94 @@ Cấp quyền dựng sẵn: mọi nhân viên + Thực tập sinh `danh_gia.view
 Ngưỡng ở Cấu hình: nhóm **Công việc – giao và duyệt** (`cong_viec.han_nhan_gio` 24, `cong_viec.han_duyet_gio` 24, `danh_gia.he_so_dung_han` 1, `danh_gia.tre_nhe_toi_da_gio` 24, `danh_gia.he_so_tre_nhe` 0,8, `danh_gia.he_so_tre_nang` 0,5, `danh_gia.he_so_khong_han` 1); **Báo cáo công việc** (`bao_cao.han_tuan_thu` 5, `bao_cao.han_tuan_gio` 17, `bao_cao.han_ngay_gio` 20, `bao_cao.nhac_truoc_gio` 2 — khóa "hạn báo cáo tuần" tách thành thứ + giờ vì ô Cấu hình chỉ nhận số); **Đánh giá nhân sự** (`danh_gia.ky_thang` 1, `danh_gia.tran_dat_phan_tram` 120, `danh_gia.nguong_a/b/c` 90/75/60, `danh_gia.he_so_thuong_a/b/c/d` 1,2/1/0,8/0). Giá trị là **mặc định** khi chưa đặt.
 
 **Chưa làm ở giai đoạn này**: tính lương / thưởng (giai đoạn 3 đọc `ketQuaHieuLuc`), bàn giao chuỗi duyệt khi người duyệt nghỉ việc, trình soạn mẫu phiếu dạng kéo thả (hiện sửa bố cục JSON có kiểm lỗi), đánh dấu thực tập sinh tốt để mời làm, xuất Excel kết quả đánh giá.
+
+## 32. Nhân sự – tính lương (0.21.0)
+
+Giai đoạn 3 của phân hệ Nhân sự (Giám đốc duyệt phương án 01/11/2026). Một luồng mỗi tháng: **Nhân sự khóa bảng công (0.19.0) → Kế toán tính và kiểm → gửi duyệt → Giám đốc duyệt → khóa → chi lương**. Công lấy từ bảng công đã khóa, thưởng KPI từ phiếu đánh giá đã chốt (0.20.0), hoa hồng từ tiền đã thu thực tế. Quyết định QĐ-141 → QĐ-153. Hướng dẫn cho kế toán: `docs/HUONG-DAN-LUONG.md`.
+
+| Việc | Quyền |
+|---|---|
+| Xem phiếu lương **của mình** (khi kỳ đã khóa) | `luong.view` phạm vi `own` — mọi vai trò dựng sẵn trừ Trợ lý AI |
+| Xem bảng lương / hồ sơ lương / phiếu lương **người khác** | `luong.view` phạm vi rộng hơn `own` (Kế toán, Nhân sự, Giám đốc, Quản trị: `all`) **+ đã bật 2 lớp** |
+| Tạo kỳ, tính, khoản cộng / trừ / điều chỉnh, gửi duyệt; nhập / xác nhận tham số | `luong.create` (Kế toán) |
+| Hồ sơ lương, danh mục phụ cấp, người phụ thuộc | `luong.update` (Nhân sự) |
+| Duyệt, trả lại, khóa | `luong.approve` (Giám đốc) — không phải người tính, không có dòng trong bảng |
+| Xuất file, gửi email phiếu lương, đánh dấu **đã chi** | `luong.export` (Kế toán) |
+
+Kế toán: `luong.view` (all) + `create` + `export`; Nhân sự: `luong.view` (all) + `update`, **không** duyệt; Giám đốc / Quản trị: toàn quyền; mọi nhân viên / thực tập sinh: `luong.view` phạm vi `own`. Cấp cho **mọi doanh nghiệp** bằng migration idempotent `20261104090002` + seed (như QĐ-117). `luong.delete` không dùng.
+
+### Hồ sơ lương
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| LU-01 | Hồ sơ lương theo nhân viên: loại hợp đồng (chính thức / thử việc + % lương / thời vụ – khoán / thực tập sinh), cách trả (tháng theo công / ngày / giờ), lương cơ bản, **lương đóng bảo hiểm tách riêng** (0 = không tham gia), mức thưởng KPI, hưởng hoa hồng, cách khấu trừ thuế (lũy tiến / 10% / không khấu trừ — gợi ý theo loại hợp đồng), phụ cấp, tài khoản ngân hàng, mã số thuế | [CSDL] CHECK · [SV] Zod · [TH] |
+| LU-02 | **Phiên bản theo ngày hiệu lực, chỉ ghi thêm**: sửa = phiên bản mới; phiên bản áp cho ngày D = hiệu lực lớn nhất ≤ D, cùng ngày → bản tạo sau. Kỳ lương dùng phiên bản hiệu lực ngày cuối tháng. Nhật ký ghi **tên trường đổi**, không ghi số tiền | [CSDL] trigger `chan_sua_xoa` + chỉ cấp SELECT/INSERT · [SV] `hoSoApDung` · [TH] |
+| LU-03 | Danh mục phụ cấp: chịu thuế / không, tính bảo hiểm / không, cố định tháng hoặc × **công thực tế**. Nạp sẵn ăn trưa (không chịu thuế, theo ngày công), xăng xe (chịu thuế), điện thoại (không chịu thuế) — giả định, kế toán sửa. Đổi cờ chỉ áp cho lần tính sau | [CSDL] CHECK · [SV] · [ĐV] |
+| LU-04 | Người phụ thuộc: họ tên, quan hệ, số giấy tờ, **giảm trừ từ tháng → đến tháng**; kết thúc chứ không xóa. Số người tính theo tháng của kỳ | [CSDL] CHECK ngày đầu tháng · [SV] · [ĐV] · [TH] |
+| LU-05 | Xem hồ sơ người khác: `luong.view` rộng + 2 lớp + ghi nhật ký xem; ngoài phạm vi → 404 | [SV] · [TH] |
+
+### Tham số có hiệu lực theo ngày
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| LU-10 | Bảng tham số `payroll_param_sets` theo loại: bảo hiểm (tỷ lệ NLĐ / DN, KPCĐ, lương cơ sở, trần 20 × lương cơ sở cho BHXH/BHYT, 20 × lương tối thiểu vùng cho BHTN, số ngày nghỉ không lương thôi đóng), lương tối thiểu vùng + vùng doanh nghiệp, giảm trừ bản thân / người phụ thuộc, biểu thuế lũy tiến (danh sách bậc), khấu trừ 10% + ngưỡng 2.000.000, % lương thử việc tối thiểu, hệ số tăng ca, chính sách hoa hồng. **Chỉ ghi thêm** — sửa = bộ mới | [CSDL] trigger `chan_sua_tham_so_luong` + REVOKE DELETE · [SV] Zod theo loại · [TH] |
+| LU-11 | **Mọi giá trị nạp sẵn gắn cờ "cần kế toán xác nhận"** (nguồn `mac-dinh`): màn hình hiện băng cảnh báo cho tới khi Kế toán bấm xác nhận từng bộ (ghi người + lúc, một lần). Kỳ lương dùng bộ chưa xác nhận → lỗi cấp kỳ, **không gửi duyệt được** (QĐ-143). Bộ do Kế toán nhập tay được coi là đã xác nhận bởi chính người nhập | [CSDL] trigger · [SV] · [TH] |
+| LU-12 | Bộ áp cho kỳ tháng M = bộ hiệu lực ngày cuối tháng M (hiệu lực lớn nhất ≤ ngày, cùng ngày → bộ tạo sau). Thiếu loại nào → chặn tính, báo loại thiếu. Tham số đổi sau lần tính → chặn gửi duyệt, phải tính lại | [SV] hàm thuần `chonBoHieuLuc` · [ĐV] · [TH] |
+| LU-13 | Nhập bộ mới bắt buộc ghi căn cứ (≥ 5 ký tự). Biểu thuế: bậc "đến" tăng dần, chỉ bậc cuối để trống | [SV] `bieuThueHopLe` · [ĐV] · [TH] |
+
+Giá trị nạp sẵn (theo hiểu biết lúc làm phần mềm, **kế toán phải đối chiếu văn bản hiện hành**): lương cơ sở 2.340.000 (từ 01/07/2024); NLĐ 8 / 1,5 / 1 %, DN 17,5 / 3 / 1 %, KPCĐ 2 %; lương tối thiểu vùng I–IV 4.960.000 / 4.410.000 / 3.860.000 / 3.450.000 (từ 01/07/2024) và 5.310.000 / 4.730.000 / 4.140.000 / 3.700.000 (từ 01/01/2026); giảm trừ 11.000.000 / 4.400.000 (2020–2025) và **15.500.000 / 6.200.000 từ kỳ thuế 2026**; biểu 7 bậc (5–35 %) và biểu 5 bậc từ 2026 (≤10tr 5 %, ≤30tr 10 %, ≤50tr 20 %, ≤100tr 30 %, >100tr 35 %); khấu trừ 10 % từ 2.000.000; thử việc ≥ 85 %; tăng ca 150 / 200 / 300 %, đêm 210 / 270 / 390 %; hoa hồng 0 % (công ty tự nhập).
+
+### Kỳ lương và cách tính
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| LU-20 | Một kỳ mỗi tháng: **Nháp → Chờ duyệt → Đã duyệt → Đã khóa → Đã chi**. Trả lại (chờ duyệt / đã duyệt → nháp) bắt buộc lý do. Mọi chuyển trạng thái **khóa dòng kỳ** trước khi đọc (QĐ-77): hai lần bấm cùng lúc → một thành công, lần kia 409 | [CSDL] CHECK bước · [SV] `khoaChungTu` · [TH] (hai giao dịch song song) |
+| LU-21 | **Chỉ tính khi bảng công tháng đó đã khóa**; công lấy từ bảng công đã khóa, gồm cả **dòng điều chỉnh** của kỳ khóa. **Công tính lương = công thực tế + nghỉ phép có lương + ngày lễ** (lễ rơi vào ngày phải làm theo lịch, từ ngày vào làm). Nghỉ ốm và không lương không trả (BHXH chi ốm đau). **Công chuẩn** = công dự kiến theo lịch làm việc 0.19 coi như không có lễ (tháng 28–31 ngày tự đúng). Đi muộn / về sớm **không trừ tiền**, chỉ hiện trên phiếu | [SV] · [ĐV] · [TH] |
+| LU-22 | Ngày "thiếu giờ" (QĐ-116) đã được quyết: bảng công sinh sau quyết định đã theo quyết định. Ngày **còn chờ quyết** (cờ chờ xét, chưa có quyết định nào) → **chặn tính**, báo danh sách người + ngày. Quyết định có SAU khi khóa bảng công → tính theo số đã khóa + cảnh báo; chênh lệch vào dòng điều chỉnh bảng công tháng sau (NS-53) | [SV] · [TH] |
+| LU-23 | **Hoa hồng** theo **tiền đã thu thực tế**: phân bổ của phiếu thu còn hiệu lực có ngày thu trong tháng, theo người phụ trách đơn (không có đơn: người phụ trách hóa đơn); hồ sơ phải bật "hưởng hoa hồng". Tỷ lệ phẳng hoặc bậc thang theo doanh số thu (đạt bậc nào áp tỷ lệ bậc đó cho toàn bộ). Mỗi phân bổ ghi riêng, chỉ tính một lần trên mọi kỳ. Phiếu thu tháng trước **ghi vào hệ thống sau khi kỳ tháng đó đã tính** → vào kỳ đang tính (dò `luong.hoa_hong_lui_thang` tháng). **Không đọc giá vốn** | [CSDL] chỉ mục duy nhất riêng phần · [SV] · [ĐV] · [TH] |
+| LU-24 | Phiếu thu đã tính hoa hồng bị **hủy trước khi khóa** → chặn gửi duyệt / khóa (tính lại). Hủy **sau khi khóa** → **dòng truy thu** ở kỳ sau đúng số đã trả (tỷ lệ của kỳ gốc), một lần; người nhận không có dòng kỳ sau → cảnh báo cấp kỳ | [CSDL] duy nhất · [SV] · [ĐV] · [TH] |
+| LU-25 | Khoản nhập tay: thưởng đột xuất, phụ cấp khác (cộng, chọn chịu thuế), tạm ứng, phạt (trừ sau thuế), khác — mỗi khoản có lý do ≥ 5 ký tự; chỉ khi kỳ còn nháp; thêm / xóa → kỳ "cần tính lại" | [CSDL] CHECK · [SV] · [TH] |
+| LU-26 | **Thưởng KPI** = mức thưởng KPI hồ sơ × **hệ số thưởng của phiếu đánh giá đã chốt** (kết quả hiệu lực sau điều chỉnh) của kỳ đánh giá tháng; không có kỳ tháng mà tháng này cuối quý → kỳ quý. Chưa chốt / không có phiếu → 0 + cảnh báo | [SV] · [ĐV] · [TH] |
+| LU-27 | **Tăng ca**: chỉ giờ của đơn **đã duyệt** (bảng công 0.19); lương giờ = lương tháng × % thử việc / công chuẩn / `luong.so_gio_ngay` (lương ngày ÷ giờ / ngày; lương giờ giữ nguyên); hệ số theo ngày thường / nghỉ tuần / lễ, tách đêm. Phần cao hơn giờ bình thường không chịu thuế (cờ trong tham số) | [SV] · [ĐV] |
+| LU-28 | Mỗi dòng lương lưu **ảnh chụp đầu vào** (công, hồ sơ, phụ cấp + cờ, số người phụ thuộc, KPI, từng phân bổ phiếu thu, khoản, toàn bộ tham số + mã bộ, mã bảng công) và kết quả chi tiết. "Kiểm lại" tính lại từ ảnh chụp và so với số đã lưu | [SV] `tinhLuong` thuần · [ĐV] · [TH] |
+| LU-30 | Tiền là số nguyên VND; mỗi khoản làm tròn **một lần** (nửa đồng làm tròn ra xa 0) ở `chiaLamTron` | [SV] · [ĐV] |
+| LU-31 | Sai sót của kỳ đã khóa sửa bằng **khoản điều chỉnh ở kỳ sau**: loại "Điều chỉnh kỳ trước", chọn kỳ đã khóa, lý do ≥ 10 ký tự; người duyệt = người duyệt kỳ chứa khoản | [CSDL] CHECK · [SV] · [TH] |
+| LU-32 | Thử việc: lương × % trong hồ sơ; dưới mức tối thiểu của tham số → **lỗi** dòng | [SV] · [ĐV] |
+| LU-33 | **Bảo hiểm NLĐ / DN** trên lương đóng BH + phụ cấp tính BH: BHXH, BHYT, KPCĐ chặn ở trần lương cơ sở; BHTN chặn ở trần lương tối thiểu vùng. Không làm / không hưởng lương ≥ N ngày (công chuẩn − công tính lương) → tháng đó không đóng + cảnh báo. Lương đóng BH dưới lương tối thiểu vùng → cảnh báo | [SV] · [ĐV] |
+| LU-34 | Thuế lũy tiến: thu nhập tính thuế = thu nhập chịu thuế − BH NLĐ − giảm trừ bản thân − giảm trừ người phụ thuộc (≥ 0), biểu bậc tháng, làm tròn một lần | [SV] `thueLuyTien` · [ĐV] |
+| LU-35 | Khấu trừ 10 % trên thu nhập chịu thuế khi ≥ ngưỡng (2.000.000), không giảm trừ gia cảnh; "không khấu trừ" khi có cam kết 08/CK-TNCN | [SV] · [ĐV] |
+| LU-36 | Thực lĩnh = tổng thu nhập − BH NLĐ − thuế − khoản trừ. **Thực lĩnh âm, thiếu lịch (công chuẩn 0), thử việc dưới mức → lỗi dòng**; còn lỗi dòng hoặc lỗi cấp kỳ → **không gửi duyệt được**. Chi phí doanh nghiệp = tổng thu nhập + BH + KPCĐ doanh nghiệp | [SV] · [ĐV] · [TH] |
+
+### Duyệt, khóa, phiếu lương
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| LU-40 | Từ **Đã khóa**: kỳ, dòng lương, khoản, hoa hồng **bất biến** — trigger chặn mọi thêm / sửa / xóa, kể cả vai chủ sở hữu và SQL thẳng qua `cowork_app`; ngoại lệ duy nhất: Đã khóa → Đã chi (chỉ đổi trạng thái, người + lúc chi). Ứng dụng không có quyền DELETE kỳ lương | [CSDL] trigger `chan_sua_ky_luong_da_khoa` + REVOKE · [TH] |
+| LU-41 | **Người tính không duyệt / khóa** (CHECK `approved_by`, `locked_by` ≠ `calculated_by`); **không ai duyệt / khóa bảng lương có dòng của chính mình** | [CSDL] CHECK · [SV] · [TH] |
+| LU-42 | Nhân viên / thực tập sinh xem **phiếu của chính mình chỉ khi kỳ đã khóa** (không cần 2 lớp); phiếu người khác → từ chối | [SV] · [TH] |
+| LU-43 | Bản in phiếu lương A4 tiếng Việt (in / lưu PDF bằng trình duyệt, QĐ-21): thu nhập từng khoản, khấu trừ, thực lĩnh, hoa hồng theo phiếu thu, ô ký; kỳ chưa khóa in chữ "BẢN NHÁP" | giao diện · [TH] (dựng HTML) |
+| LU-44 | Gửi email phiếu lương (kỳ đã khóa): xếp vào hàng chờ thư giao dịch `email_transactionals` (loại `phieu-luong`), mỗi dòng một lần; worker dựng thư lúc gửi qua kết nối email của doanh nghiệp; hàng chờ không giữ số tiền | [CSDL] duy nhất `dedupe_key` · [SV] · [TH] |
+| LU-45 | Khóa → báo từng người "phiếu lương đã có"; gửi duyệt → báo người có `luong.approve`; trả lại → báo người tính | [SV] |
+
+### Xuất file
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| LU-50 | Bảng lương Excel (SpreadsheetML `.xls`, Excel mở trực tiếp) hoặc CSV, có dòng tổng; kỳ chưa khóa → tên tệp có `NHAP` | [SV] · [TH] |
+| LU-51 | File chi lương ngân hàng (CSV / Excel): **chỉ kỳ đã khóa**, thực lĩnh > 0, cột + thứ tự + mẫu nội dung chuyển khoản cấu hình được (bỏ dấu tùy chọn); tài khoản lấy từ hồ sơ **hiện hành**; thiếu tài khoản → chặn, báo tên | [SV] · [TH] |
+| LU-52 | **Chống chèn công thức**: mọi ô chữ bắt đầu bằng `= + - @` (tab, xuống dòng) được thêm `'` (CSV-01), cả CSV lẫn Excel | [SV] `voHieuCongThuc` · [TH] |
+| LU-53 | Bút toán lương CSV tổng hợp theo cặp tài khoản (chưa có module MISA): Nợ chi phí / Có 334 (tổng thu nhập), Nợ chi phí / Có 3383-3384-3386-3382 (BH + KPCĐ doanh nghiệp), Nợ 334 / Có 3383-3384-3386 (BH NLĐ), Nợ 334 / Có 3335 (thuế), Nợ 334 / Có 141 (tạm ứng), Nợ 334 / Có 1388 (khấu trừ khác), Nợ 334 / Có 1121 khi đã chi. Tài khoản ở Cấu hình nhóm **Tính lương** | [SV] hàm thuần `butToanLuong` · [ĐV] · [TH] |
+| LU-54 | Mỗi lần xuất ghi kiểm toán (loại, số dòng) | [SV] |
+
+### Bảo mật
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| LU-60 | Trợ lý AI **không có `luong.*`** (bất biến `kiemTraGioiHanAI`, seed + migration gỡ nếu lỡ có), không đọc được số lương | [SV] · seed · [ĐV] · [TH] |
+| LU-61 | **Bắt buộc 2 lớp** với mọi thao tác lương trừ xem phiếu của mình: chưa bật → 403 `luong-can-2-lop`, giao diện hướng dẫn bật ở Tài khoản của tôi. Kiểm ở máy chủ, không phụ thuộc danh sách vai trò bắt buộc 2 lớp của Cấu hình | [SV] `batBuoc2Lop` · [TH] |
+| LU-62 | **Nhật ký mỗi lần xem** dữ liệu lương người khác (danh sách kỳ, bảng lương, phiếu, hồ sơ, xuất file): kiểm toán `xem-luong` — ai, lúc nào (tự điền), xem gì, những ai bị xem. Nhật ký và sự kiện **không bao giờ chứa số tiền** | [SV] · [TH] |
+| LU-63 | Mọi bảng mới có RLS theo doanh nghiệp; đọc ngoài phạm vi → 404 | [CSDL] `rls.sql` · [TH] |
+
+Ngưỡng ở Cấu hình nhóm **Tính lương**: `luong.so_gio_ngay` (8), `luong.hoa_hong_lui_thang` (3), tài khoản `luong.tk_chi_phi` (6421), `luong.tk_phai_tra` (334), `luong.tk_bhxh` (3383), `luong.tk_bhyt` (3384), `luong.tk_bhtn` (3386), `luong.tk_kpcd` (3382), `luong.tk_thue_tncn` (3335), `luong.tk_tam_ung` (141), `luong.tk_khau_tru_khac` (1388), `luong.tk_tien` (1121). Mẫu file ngân hàng: `tenant_settings` khóa `luong.xuat_ngan_hang` (JSON, sửa ở Tham số lương).
+
+**Chưa làm ở giai đoạn này**: hoa hồng theo lãi gộp, quyết toán thuế TNCN năm, tờ khai BHXH (D02-TS), chế độ thai sản / ốm đau trả thay BHXH, lương tháng 13, nhiều vùng lương trong một doanh nghiệp, chi phí lương theo phòng ban (một tài khoản chi phí), xuất đúng khuôn nhập MISA (chưa có mẫu tệp MISA của công ty).

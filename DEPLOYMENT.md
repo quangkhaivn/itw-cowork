@@ -228,6 +228,14 @@ Rồi `nginx -t && systemctl reload nginx`. Kiểm từ ngoài: `curl -i "http:/
 - Trước khi triển khai migration có sửa dữ liệu: **diễn tập nâng cấp** — dựng CSDL giống hệt bản đang chạy (migration cũ + seed cũ), áp migration mới + seed mới, kiểm kết quả. Bản 19/09 đã diễn tập đúng như vậy.
 - Không bao giờ chạy `prisma db push` hay `migrate dev` trên máy thật.
 
+### Nâng cấp lên 0.21.0 (Nhân sự giai đoạn 3: tính lương)
+
+- Ba migration: `20261104090001_nhan_su_luong` (8 bảng mới, CHECK, trigger bất biến) → `20261104090002_luong_cap_quyen_moi_doanh_nghiep` (một khối DO idempotent: quyền `luong.*` cho vai trò dựng sẵn của **mọi** doanh nghiệp, gỡ khỏi Trợ lý AI; tham số lương nạp sẵn + 3 loại phụ cấp còn thiếu) → `20261104090003_luong_email_phieu_luong` (loại thư `phieu-luong`). Sau đó chạy lại `prisma/rls.sql`, `npm run db:seed`, khởi động lại worker.
+- **Trước khi tính lương tháng đầu**: Kế toán mở Tính lương → Tham số, đối chiếu từng bộ nạp sẵn với văn bản pháp luật hiện hành rồi xác nhận (hoặc nhập bộ mới) — chưa xác nhận thì bảng lương không gửi duyệt được. Nhập chính sách hoa hồng thật (nạp sẵn 0 %). Đặt vùng lương tối thiểu của doanh nghiệp nếu không phải vùng I.
+- Mọi người tính / duyệt / xem lương người khác (Kế toán, Nhân sự, Giám đốc, Quản trị) **phải bật xác thực 2 lớp** trước — không thì trang lương chỉ hiện hướng dẫn bật.
+- Giám đốc có hồ sơ lương thì **không tự duyệt / khóa** được bảng lương có dòng của mình — cần người thứ hai có `luong.approve` (vd Phó giám đốc, hoặc Quản trị).
+- Thư phiếu lương dùng kết nối email của doanh nghiệp (Quản trị → Kết nối email); chưa kết nối thì thư nằm ở hàng chờ.
+
 ### Nâng cấp lên 0.20.0 (Nhân sự giai đoạn 2: giao việc, báo cáo, đánh giá, KPI, thực tập)
 
 - Hai migration: `20261103090001_nhan_su_danh_gia` (19 bảng mới, cột mới trên `tasks`, bật báo cáo ngày cho Kinh doanh / Kỹ thuật, cấp `danh_gia.*` cho vai trò dựng sẵn) → `20261103090002_qa_danh_gia_quyen` (cấp `danh_gia.*` cho Giám đốc / Quản trị của **mọi** doanh nghiệp, sửa phạm vi `danh_gia.create` của Nhân sự). Chạy lại `rls.sql` (6 bảng chỉ ghi thêm mới), `db:seed`, khởi động lại worker.

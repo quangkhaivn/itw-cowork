@@ -2,6 +2,28 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.21.0 (chưa phát hành) — Nhân sự, giai đoạn 3: tính lương
+
+**Chưa triển khai lên máy thật.** Ba migration mới (`20261104090001_nhan_su_luong`, `20261104090002_luong_cap_quyen_moi_doanh_nghiep`, `20261104090003_luong_email_phieu_luong`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm `salary_profiles`, REVOKE DELETE `payroll_param_sets` / `payroll_runs`) và `npm run db:seed`. Khởi động lại worker (thư phiếu lương). Dựa trên 0.20.0 (chưa phát hành). `version` trong package.json giữ nguyên.
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 32 (LU-01 → LU-63). Quyết định QĐ-141 → QĐ-153. Hướng dẫn kế toán: `docs/HUONG-DAN-LUONG.md`.
+
+### Thêm
+- **Hồ sơ lương** theo phiên bản có hiệu lực từ ngày (chỉ ghi thêm): loại hợp đồng (chính thức / thử việc + % / thời vụ / thực tập), lương tháng theo công / ngày / giờ, lương đóng bảo hiểm riêng, mức thưởng KPI, hưởng hoa hồng, cách khấu trừ thuế, phụ cấp (danh mục: chịu thuế, tính BH, tháng / ngày công), người phụ thuộc theo tháng, tài khoản ngân hàng, mã số thuế.
+- **Tham số có hiệu lực theo ngày**: BHXH / BHYT / BHTN / KPCĐ, lương cơ sở + trần, lương tối thiểu vùng, giảm trừ gia cảnh (15.500.000 / 6.200.000 từ 2026), biểu thuế lũy tiến, khấu trừ 10 %, thử việc tối thiểu, hệ số tăng ca, chính sách hoa hồng. Giá trị nạp sẵn **cần kế toán xác nhận** (băng cảnh báo, chặn gửi duyệt tới khi xác nhận).
+- **Kỳ lương tháng**: Nháp → tính và kiểm → gửi duyệt → duyệt → khóa → đã chi. Chỉ tính khi bảng công đã khóa, chặn khi còn ngày thiếu giờ chờ quyết; công tính lương = công thực tế + phép có lương + lễ; tăng ca theo đơn đã duyệt; thưởng KPI từ phiếu đánh giá đã chốt; hoa hồng theo tiền đã thu (truy thu phiếu bị hủy ở kỳ sau); khoản cộng / trừ có lý do; BH NLĐ / DN có trần; thuế lũy tiến hoặc 10 %; thực lĩnh; chi phí doanh nghiệp. Ảnh chụp đầu vào từng dòng + "kiểm lại". Bất biến sau khóa; sai sót = điều chỉnh kỳ sau. Không tự duyệt, người tính không duyệt.
+- **Phiếu lương**: nhân viên xem của mình sau khóa; bản in A4; gửi email qua hàng chờ thư giao dịch.
+- **Xuất**: bảng lương Excel (SpreadsheetML) / CSV, file chi lương ngân hàng (cột cấu hình được), bút toán lương CSV theo tài khoản; chống chèn công thức.
+- Quyền mới `luong.*`; **bắt buộc 2 lớp** khi xem / tính lương người khác; **nhật ký mỗi lần xem**; Trợ lý AI không có quyền lương. 12 khóa Cấu hình nhóm **Tính lương**. Menu **Tính lương**. Hồ sơ lương mẫu DEMO trong `db:seed:mau`.
+
+### Thay đổi đáng lưu ý
+- Hàng chờ thư giao dịch nhận thêm loại `phieu-luong` (worker cần khởi động lại).
+- Bài thử đơn vị QĐ-117 (`cham-cong.test.ts`) bỏ qua mã quyền của phân hệ ra đời sau 0.19.0 (`danh_gia.*`, `luong.*`) — bài này hỏng từ khi gộp 0.20.0.
+
+### Kiểm thử
+- `thu/don-vi/luong.test.ts` (36 bài: làm tròn, BH có trần, thuế từng biên bậc 5 và 7 bậc, khấu trừ 10 % ở ngưỡng, thử việc, người phụ thuộc, phụ cấp không chịu thuế, tăng ca, KPI, hoa hồng bậc thang + truy thu, lương âm, tháng có lễ / 28–31 ngày, chọn tham số theo ngày, bút toán, thư phiếu lương).
+- `npm run thu:luong` (104 kiểm tra, nối cuối `thu:tich-hop`): toàn luồng; chặn bảng công chưa khóa / ngày thiếu giờ chờ quyết; tham số chưa xác nhận; bất biến sau khóa kể cả SQL qua `cowork_app` và chủ sở hữu; điều chỉnh kỳ sau; hoa hồng theo tiền thu, phiếu hủy trước / sau khóa, phiếu ghi muộn; thưởng KPI từ phiếu chốt; phân quyền, IDOR, RLS giữa doanh nghiệp; 2 lớp bắt buộc; nhật ký xem; duyệt đồng thời; không tự duyệt; xuất file chống chèn công thức; phiếu của tôi sau khóa; bản in; migration khớp seed và chạy lại an toàn.
+
 ## 0.20.0 (chưa phát hành) — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
 
 **Chưa triển khai lên máy thật.** Hai migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`), chạy lại `prisma/rls.sql` (6 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.

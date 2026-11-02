@@ -248,7 +248,7 @@ describe("Tháng có lễ, tháng 28 – 31 ngày (LU-21)", () => {
   });
 });
 
-describe("Tăng ca (LU-24)", () => {
+describe("Tăng ca (LU-27)", () => {
   it("hệ số theo loại ngày / đêm; phần vượt không chịu thuế", () => {
     const k = tinhLuong(dv({ hoSo: { luongCoBan: 20_800_000 }, cong: { tangCaPhut: { thuong: 120, thuongDem: 60, nghiTuan: 0, nghiTuanDem: 0, le: 60, leDem: 0 } } }));
     assert.equal(k.tangCa.tien, 300_000 + 210_000 + 300_000);
