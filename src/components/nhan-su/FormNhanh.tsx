@@ -50,7 +50,7 @@ export default function FormNhanh({
   nhanNut: string;
   tieuDe: string;
   url: string;
-  phuongThuc?: "POST" | "PUT";
+  phuongThuc?: "POST" | "PUT" | "PATCH";
   truong: TruongForm[];
   giaTriDau?: Record<string, GiaTri>;
   lopNut?: string;

@@ -41,7 +41,11 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
     try {
       const ct = await chiTietViec(nc, id);
       const nguoiGiaoLai = ct.quyen.giaoLai ? await danhSachNguoiPhuTrach(nc, "task.update") : [];
-      return { ...ct, nguoiGiaoLai, ls: await lichSuGiaoViec(nc, id) };
+      const ls = await lichSuGiaoViec(nc, id);
+      const nguoiDuyetChon = ls.quyen.suaCauHinhDuyet
+        ? await tx.user.findMany({ where: { status: "hoat-dong", isSystem: false }, select: { id: true, fullName: true }, orderBy: { fullName: "asc" } })
+        : [];
+      return { ...ct, nguoiGiaoLai, ls, nguoiDuyetChon };
     } catch (loi) {
       if (loi instanceof LoiKhongTimThay) return null;
       throw loi;
@@ -206,6 +210,15 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
         <div className="dau">
           <h2>Giao nhận và duyệt</h2>
           <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {ls.quyen.suaCauHinhDuyet && chuaXong && (
+              <FormNhanh nhanNut="Sửa độ khó / duyệt" tieuDe="Độ khó và người duyệt" url={`/api/v1/cong-viec/${v.id}`} phuongThuc="PATCH" lopNut="nut nho"
+                truong={[
+                  { ten: "doKho", nhan: "Độ khó", kieu: "select", luaChon: [1, 2, 3, 4, 5].map((d) => ({ giaTri: String(d), nhan: `${d} — ${NHAN_DO_KHO[d]}` })) },
+                  { ten: "canDuyet", nhan: "Cần duyệt khi xong", kieu: "checkbox" },
+                  { ten: "nguoiDuyetIds", nhan: "Người duyệt (chọn nhiều = nhiều cấp, theo thứ tự trong danh sách)", kieu: "nhieu", luaChon: du.nguoiDuyetChon.filter((n) => n.id !== v.nguoiPhuTrach.id).map((n) => ({ giaTri: n.id, nhan: n.fullName })) },
+                ]}
+                giaTriDau={{ doKho: String(v.doKho), canDuyet: v.canDuyet, nguoiDuyetIds: ls.nguoiDuyet.map((n) => n.id) }} />
+            )}
             {ls.quyen.nhan && <NutHanhDong url={`/api/v1/cong-viec/${v.id}/nhan`} nhan="Nhận việc" lopNut="nut chinh nho" />}
             {ls.quyen.nhan && (
               <FormNhanh nhanNut="Từ chối" tieuDe="Từ chối việc" url={`/api/v1/cong-viec/${v.id}/tu-choi`} lopNut="nut nho"

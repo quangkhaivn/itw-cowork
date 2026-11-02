@@ -2,6 +2,31 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.20.0 (chưa phát hành) — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
+
+**Chưa triển khai lên máy thật.** Một migration mới (`20261103090001_nhan_su_danh_gia`), chạy lại `prisma/rls.sql` (6 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
+
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết định QĐ-113 → QĐ-124. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
+
+### Thêm
+- **Giao việc mở rộng**: độ khó 1–5; cờ **cần duyệt** (mặc định bật khi giao cho người khác) + chuỗi người duyệt (mặc định người giao, tối đa 5 cấp, không ai tự duyệt); người được giao **Nhận / Từ chối kèm lý do**; nhắc người giao khi quá hạn nhận; **xin gia hạn** → người giao duyệt (giữ lịch sử, hạn ban đầu); **mẫu việc**; **việc định kỳ** ngày / tuần / tháng do worker sinh (không trùng); **giao nhiều người** (mỗi người một việc, chung nhóm). Thẻ "Chờ tôi duyệt", "Chờ tôi nhận"; trang **Việc của nhóm**.
+- **Tiến độ** trên từng việc: % + ghi chú + ảnh / tệp, chỉ ghi thêm, người giao thấy ngay.
+- **Duyệt + chấm điểm**: Xong → Chờ duyệt; Duyệt (chất lượng 1–5) hoặc Trả lại kèm lý do; nhiều cấp; nhắc người duyệt quá hạn; **điểm việc = độ khó × chất lượng × hệ số đúng hạn** (hệ số trong Cấu hình, theo hạn sau gia hạn); điều chỉnh điểm có lý do; tự đánh giá của người làm hiện cạnh điểm.
+- **Báo cáo ngày / tuần**: ba phần Đã làm / Sẽ làm / Vướng mắc, máy điền sẵn việc + số liệu; tuần bắt buộc (hạn thứ Sáu 17:00), ngày theo phòng (bật sẵn Kinh doanh, Kỹ thuật); nhắc trước hạn, báo thiếu; trang nhóm cho quản lý, nhận xét, **một nút chuyển vướng mắc thành việc**.
+- **KPI theo vị trí** (11 chỉ số tự tính từ Cowork + chỉ tiêu quản lý chấm) và **đánh giá định kỳ** tháng / quý: điền sẵn → tự đánh giá → quản lý chấm → chốt → xếp loại A/B/C/D + hệ số thưởng (Cấu hình); đã chốt bất biến, điều chỉnh có lý do; bối cảnh báo cáo tuần + bảng công.
+- **Sinh viên thực tập**: nhật ký tuần + nhận xét của người hướng dẫn; **mẫu phiếu đánh giá cấu hình được** (thang 10 / thang chữ, nguồn tự động chuyên cần / việc đạt / chất lượng), mẫu chung dựng sẵn; phiếu chụp mẫu, người hướng dẫn chấm, máy tính tổng, chốt bất biến; **bản in A4** theo bố cục mẫu.
+- Quyền mới `danh_gia.*`; 20 khóa Cấu hình mới (nhóm Công việc – giao và duyệt, Báo cáo công việc, Đánh giá nhân sự); menu Công việc / Nhân sự thêm mục.
+
+### Thay đổi đáng lưu ý
+- Trạng thái việc thêm **Chờ duyệt** (`cho-duyet`). Việc **giao cho người khác mặc định cần duyệt**: người làm bấm Xong thì việc chờ duyệt thay vì xong ngay (tắt cờ khi giao nếu không cần). Bài thử `thu-cong-viec` / `thu-crm` đặt `canDuyet: false` cho các việc thử luật 0.17.
+- Người làm việc do người khác giao **không tự đổi hạn** nữa — gửi đề nghị gia hạn.
+- Việc đã duyệt không mở lại / sửa kết quả được.
+- Người giao và người duyệt luôn xem được việc (kể cả ngoài phạm vi `task.view`); tệp đính kèm theo cùng điều kiện.
+- Trợ lý AI không thấy điểm việc, không có quyền đánh giá.
+
+### Kiểm thử
+- `thu/don-vi/danh-gia.test.ts` (32 bài: điểm, hệ số đúng hạn + gia hạn, chuỗi duyệt, lịch lặp, hạn báo cáo, kỳ giờ VN, % đạt, điểm tổng, xếp loại, chọn bộ KPI, phiếu thực tập thang 10 / chữ); `npm run thu:danh-gia` (179 kiểm tra, nối vào `thu:tich-hop`): mọi luồng trên, hai lần duyệt / chốt cùng lúc, phạm vi quản lý khác nhóm, cách ly thực tập sinh, bất biến sau chốt, việc định kỳ không trùng (kể cả hai worker), dựng bản in phiếu thực tập, RLS.
+
 ## 0.19.0 (chưa phát hành) — Nhân sự, giai đoạn 1: chấm công
 
 **Chưa triển khai lên máy thật.** Một migration mới (`20261102090001_nhan_su_cham_cong`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm mới + quyền EXECUTE hàm `tra_may_cham_cong`), chạy seed (cấp quyền `cham_cong.*` / `nhan_su.*`, tạo vai trò Nhân sự (HR) và Thực tập sinh, 4 loại nghỉ). **nginx máy chủ phải mở HTTP cho riêng `/iclock/`** nếu máy vân tay không hỗ trợ HTTPS (DEPLOYMENT.md). Chấm GPS cần Cowork chạy HTTPS.

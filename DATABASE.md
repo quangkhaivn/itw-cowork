@@ -130,6 +130,24 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `timesheets` | Bảng công tháng (`nhap` / `da-khoa`) | 0.19.0. Duy nhất `(tenant_id, year, month)`; trigger `chan_sua_bang_cong_da_khoa` |
 | `timesheet_rows` | Dòng công (người × ngày), `is_adjustment` = chênh lệch kỳ đã khóa | 0.19.0. Duy nhất `(timesheet_id, user_id, work_date, is_adjustment)`; bất biến khi bảng khóa |
 | `timesheet_feedback` | Phản hồi của nhân viên về bảng nháp | 0.19.0. Bất biến khi bảng khóa |
+| `task_approvers` | Chuỗi người duyệt của một việc (cấp 1 → 5) | 0.20.0. Duy nhất `(task_id, level)` và `(task_id, approver_id)`; CHECK cấp 1–5; người duyệt ≠ người làm kiểm ở service (DG-21) |
+| `task_approval_logs` | Lịch sử gửi duyệt / duyệt / trả lại | 0.20.0. **Chỉ ghi thêm** (`chan_sua_xoa`); CHECK trả lại có lý do ≥ 5, duyệt có chất lượng 1–5; chụp hạn, hệ số đúng hạn, điểm |
+| `task_score_adjustments` | Điều chỉnh điểm việc sau khi duyệt | 0.20.0. **Chỉ ghi thêm**; lý do ≥ 10, điểm / chất lượng cũ → mới |
+| `task_extensions` | Xin gia hạn | 0.20.0. Một đề nghị đang chờ mỗi việc (chỉ mục riêng phần); trigger `chan_sua_gia_han_da_quyet` — đã quyết thì không sửa, không bao giờ xóa |
+| `task_progress_logs` | Nhật ký tiến độ (% + ghi chú) | 0.20.0. **Chỉ ghi thêm**; tệp ở `attachments` loại `task_progress` |
+| `task_templates` | Mẫu việc | 0.20.0. Duy nhất `(tenant_id, name)`; `checklist`, `approval_chain` JSON (kiểm Zod khi ghi và đọc) |
+| `task_recurrences` | Việc định kỳ | 0.20.0. `frequency` ngay/tuan/thang, `weekdays int[]` ⊂ 1–7, `month_day`, `due_minute`, `assignee_ids uuid[]` (1–50), `last_run_date` |
+| `work_reports` | Báo cáo ngày / tuần | 0.20.0. Duy nhất `(tenant_id, user_id, kind, period_start)`; `auto_data` (chụp lúc nộp), `deadline_at`, `is_late`; trigger `chan_sua_bao_cao_da_nop` |
+| `work_report_comments` | Nhận xét của quản lý; `created_task_id` = vướng mắc đã thành việc | 0.20.0. **Chỉ ghi thêm** |
+| `kpi_sets`, `kpi_items` | Bộ KPI theo vị trí và chỉ tiêu | 0.20.0. Duy nhất `(tenant_id, code)`; CHECK trọng số 0–100, tự tính ⇔ có `metric`, chiều cao-tot / thap-tot. Tổng trọng số = 100 kiểm ở service |
+| `evaluation_periods` | Kỳ đánh giá tháng / quý | 0.20.0. Duy nhất `(tenant_id, kind, year, number)` |
+| `evaluations`, `evaluation_items` | Phiếu đánh giá + chỉ tiêu (chụp lúc mở kỳ) | 0.20.0. Duy nhất `(period_id, user_id)`; CHECK bước, đã chốt ⇒ đủ điểm / xếp loại / hệ số / người chốt; trigger `chan_sua_danh_gia_da_chot` (phiếu và chỉ tiêu bất biến khi đã chốt, kể cả chủ sở hữu) |
+| `evaluation_adjustments` | Phiên điều chỉnh sau khi chốt | 0.20.0. **Chỉ ghi thêm**; lý do ≥ 10; kết quả hiệu lực = dòng mới nhất |
+| `intern_journals`, `intern_journal_comments` | Nhật ký tuần của thực tập sinh + nhận xét | 0.20.0. Duy nhất `(tenant_id, user_id, week_start)`; nhật ký đã nộp bất biến; nhận xét chỉ ghi thêm |
+| `intern_eval_templates` | Mẫu phiếu đánh giá thực tập (bố cục JSON) | 0.20.0. Duy nhất `(tenant_id, code)`; `version` tăng mỗi lần sửa; seed mẫu `mau-chung` |
+| `intern_evaluations` | Phiếu đánh giá thực tập | 0.20.0. `template_snapshot` (chụp mẫu), `header`, `scores`, `comments`, `auto_values`; trigger bất biến khi `da-chot` |
+
+Cột thêm 0.20.0: `tasks` — `difficulty` (1–5), `needs_approval`, `accept_status` (cho-nhan / da-nhan / tu-choi, CHECK từ chối có lý do), `accepted_at`, `declined_at`, `decline_reason`, `progress` (0–100), `group_id`, `template_id`, `recurrence_id` + `recurrence_date` + `recurrence_assignee_id` (chỉ mục duy nhất riêng phần chống sinh trùng), `original_due_at`, `submitted_at`, `approval_round`, `approval_level`, `approved_at`, `quality_score`, `on_time_factor`, `task_score`, `source_report_id`; trạng thái thêm `cho-duyet` (CHECK `tasks_cho_duyet_check`). `departments.daily_report`. `attachments` nhận loại `task_progress`. Quyền mới `danh_gia.*`.
 
 Cột thêm 0.19.0: `staff_profiles.staff_type` (chinh-thuc / thu-viec / thuc-tap / cong-tac-vien), `attendance_pin` (duy nhất `(tenant_id, attendance_pin)`, CHECK chữ / số 1–20), `default_location_id`. `attachments_loai_doi_tuong_check` thêm `employment_contract`. Migration `20261102090001_nhan_su_cham_cong`.
 
