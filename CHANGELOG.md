@@ -2,7 +2,7 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.19.0 (chưa phát hành) — Nhân sự, giai đoạn 1: chấm công
+## 0.19.0 — 02/11/2026 — Nhân sự, giai đoạn 1: chấm công
 
 **Chưa triển khai lên máy thật.** Sáu migration mới (`20261102090001_nhan_su_cham_cong`, `…0002_nhan_su_cap_quyen`, `…0003_qa_cham_cong`, `…0004_qa_cham_cong_don_trung`, `…0005_qa_cham_cong_xet_thieu_gio`, `…0006_qa_cham_cong_moi_doanh_nghiep`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm mới + quyền EXECUTE hàm `tra_may_cham_cong`), chạy seed (cấp quyền `cham_cong.*` / `nhan_su.*`, tạo vai trò Nhân sự (HR) và Thực tập sinh, 4 loại nghỉ). **nginx máy chủ phải mở HTTP cho riêng `/iclock/`** nếu máy vân tay không hỗ trợ HTTPS (DEPLOYMENT.md). Chấm GPS cần Cowork chạy HTTPS.
 
