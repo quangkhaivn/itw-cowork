@@ -6,6 +6,9 @@ import { homNayVN } from "../src/modules/crm/chung";
 import { guiLoThu } from "../src/modules/email/gui";
 import { ghiNhipSong } from "./nhip";
 import { quetChamCong } from "../src/modules/cham-cong/nhac-viec";
+import { quetCongViec } from "../src/modules/cong-viec/nhac-viec";
+import { sinhViecDinhKy } from "../src/modules/cong-viec/mau-lap";
+import { quetBaoCao } from "../src/modules/bao-cao-cong-viec/service";
 
 /**
  * Tiến trình nền — Phase 8.
@@ -128,6 +131,26 @@ async function motNhip() {
       }
     } catch (loi) {
       console.error(`[worker] ${luc} — quét chấm công doanh nghiệp ${t.code} hỏng:`, loi);
+    }
+    // 0.20.0 — việc định kỳ (DG-07), nhắc nhận việc / duyệt việc (DG-04, DG-25), nhắc báo cáo (DG-42).
+    // Mỗi phần một giao dịch riêng: phần này hỏng không kéo phần khác.
+    try {
+      const kq = await sinhViecDinhKy(t.id);
+      if (kq.soViec || kq.boQua) console.log(`[worker] ${t.code}: việc định kỳ — sinh ${kq.soViec}, bỏ qua ${kq.boQua}.`);
+    } catch (loi) {
+      console.error(`[worker] ${luc} — sinh việc định kỳ doanh nghiệp ${t.code} hỏng:`, loi);
+    }
+    try {
+      const kq = await quetCongViec(t.id);
+      if (kq.soNhacNhan || kq.soNhacDuyet) console.log(`[worker] ${t.code}: công việc — nhắc ${kq.soNhacNhan} chưa nhận, ${kq.soNhacDuyet} quá hạn duyệt.`);
+    } catch (loi) {
+      console.error(`[worker] ${luc} — nhắc công việc doanh nghiệp ${t.code} hỏng:`, loi);
+    }
+    try {
+      const kq = await quetBaoCao(t.id);
+      if (kq.soNhac || kq.soThieu) console.log(`[worker] ${t.code}: báo cáo — nhắc ${kq.soNhac}, báo thiếu ${kq.soThieu}.`);
+    } catch (loi) {
+      console.error(`[worker] ${luc} — nhắc báo cáo doanh nghiệp ${t.code} hỏng:`, loi);
     }
   }
 }
