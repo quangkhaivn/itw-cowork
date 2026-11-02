@@ -690,6 +690,70 @@ async function main() {
   await nemLoi("Sửa trùng một kỳ đã có → 409 trung-ky", "nghiep-vu", () => voi(T, hr, (nc) => suaKyDanhGia(nc, kyMo.id, { loai: "thang", nam: 2025, so: 6 })), "trung-ky");
   await nemLoi("Trưởng phòng không sửa kỳ (cần nhan_su.update)", "quyen", () => voi(T, tp, (nc) => suaKyDanhGia(nc, kyMo.id, { loai: "thang", nam: 2025, so: 9 })));
 
+  // ==================================================================
+  console.log("\n— QA v2: QĐ-140 — sửa kỳ phải tính lại số liệu phiếu chưa chốt; chốt và sửa kỳ không chạy chéo —");
+  const nKpi = await nguoi("NV KPI kỳ QA", "sales", { quanLy: tp, phong: pbKD });
+  const cdKpi = `KPI kỳ QA ${DAU}`;
+  await chu.staffProfile.update({ where: { userId: nKpi }, data: { jobTitle: cdKpi } });
+  await voi(T, hr, (nc) => taoBoKpi(nc, LuocDoBoKpi.parse({ ma: `ky-${DAU}`, ten: "Bộ KPI sửa kỳ", chucDanh: cdKpi, chiTieu: [
+    { ten: "Điểm việc", trongSo: 50, nguon: "tu-dong", chiSo: "tong-diem-viec", mucTieuThang: 10, mucTieuQuy: 30 },
+    { ten: "Thái độ", trongSo: 50, nguon: "thu-cong" },
+  ] })));
+  const vKy = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QA v2 việc tháng 9", { nguoiPhuTrachId: nKpi, doKho: 3 })));
+  await voi(T, nKpi, (nc) => suaViec(nc, vKy.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await voi(T, tp, (nc) => duyetViec(nc, vKy.id, { chatLuong: 4, nhanXet: "" }));
+  await chu.task.update({ where: { id: vKy.id }, data: { approvedAt: new Date("2025-09-15T03:00:00Z") } });
+  const kySai = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 10, nguoiIds: [nKpi] }));
+  const pKy = await chu.evaluation.findFirstOrThrow({ where: { periodId: kySai.id, userId: nKpi }, include: { items: { orderBy: { position: "asc" } } } });
+  dat("Chuẩn bị: kỳ mở nhầm tháng 10 — điểm việc tự tính = 0", Number(pKy.items[0].actual) === 0 && Number(pKy.items[0].target) === 10);
+  await voi(T, hr, (nc) => suaKyDanhGia(nc, kySai.id, { loai: "quy", nam: 2025, so: 3 }));
+  const itKy = await chu.evaluationItem.findMany({ where: { evaluationId: pKy.id }, orderBy: { position: "asc" } });
+  dat("Sửa kỳ (tháng 10 → quý 3): số liệu tự tính tính lại theo khoảng mới (12 điểm)", Number(itKy[0].actual) === 12, String(itKy[0].actual));
+  dat("…đổi loại kỳ: mục tiêu lấy mục tiêu quý (30), % đạt = 40", Number(itKy[0].target) === 30 && Number(itKy[0].achievement) === 40, `${itKy[0].target} / ${itKy[0].achievement}`);
+  await voi(T, tp, (nc) => quanLyCham(nc, pKy.id, { nhanXet: "", chiTieu: [{ id: itKy[1].id, diem: 80, ghiChu: "" }], nop: true }));
+  // Chốt chạy trong lúc một giao dịch sửa kỳ đang giữ dòng kỳ: phải chờ, rồi chốt theo số liệu kỳ mới.
+  const ngu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const suaDangChay = voiTenant(T, async (tx) => {
+    const hs = await layHoSoQuyen(tx, hr);
+    await suaKyDanhGia(taoNguCanh(tx, T, hs!, "127.0.0.1", "thu-qa"), kySai.id, { loai: "thang", nam: 2025, so: 9 });
+    await ngu(1500);
+  }, { timeoutMs: 20_000 });
+  await ngu(400);
+  const chotSong = voi(T, gd, (nc) => chotPhieu(nc, pKy.id, { ghiChu: "" }));
+  const [rSua, rChot] = await Promise.allSettled([suaDangChay, chotSong]);
+  const pChot = await chu.evaluation.findUniqueOrThrow({ where: { id: pKy.id }, include: { period: true, items: { orderBy: { position: "asc" } } } });
+  dat("Chốt cùng lúc với sửa kỳ: cả hai thành công nối tiếp nhau", rSua.status === "fulfilled" && rChot.status === "fulfilled", [rSua, rChot].map((r) => (r.status === "rejected" ? String(r.reason) : "ok")).join(" | "));
+  dat("…phiếu chốt theo đúng kỳ hiện tại (tháng 9: mục tiêu 10, thực tế 12, % đạt 120 → tổng 100)",
+    pChot.status === "da-chot" && pChot.period.number === 9 && Number(pChot.items[0].target) === 10 && Number(pChot.items[0].achievement) === 120 && Number(pChot.totalScore) === 100,
+    `${pChot.period.kind} ${pChot.period.number} / ${pChot.items[0].target} / ${pChot.items[0].achievement} / ${pChot.totalScore}`);
+
+  // ==================================================================
+  console.log("\n— QA v2: QĐ-135 — chuyển bước chạy cùng lúc với duyệt / quyết định gia hạn —");
+  const tp5 = await nguoi("TP5 nghỉ đúng lúc duyệt QA", "sales-manager", { quanLy: gd, phong: pbKD });
+  const nv5 = await nguoi("NV5 QA", "sales", { quanLy: tp5, phong: pbKD });
+  const v5 = await voi(T, tp5, (nc) => taoViec(nc, viecMoi("QA v2 việc TP5 đang duyệt", { nguoiPhuTrachId: nv5 })));
+  await voi(T, nv5, (nc) => suaViec(nc, v5.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  const v5b = await voi(T, tp5, (nc) => taoViec(nc, viecMoi("QA v2 gia hạn TP5 đang quyết", { nguoiPhuTrachId: nv5, canDuyet: false, han: new Date(Date.now() + 2 * GIO).toISOString() })));
+  const gh5 = await voi(T, nv5, (nc) => xinGiaHan(nc, v5b.id, { hanMoi: new Date(Date.now() + 72 * GIO), lyDo: "Chờ khách ký" }));
+  // TP5 đang duyệt (giữ khóa dòng việc / dòng đề nghị) thì Quản trị khóa tài khoản TP5.
+  const duyetDangChay = voiTenant(T, async (tx) => {
+    const hs = await layHoSoQuyen(tx, tp5);
+    const nc = taoNguCanh(tx, T, hs!, "127.0.0.1", "thu-qa");
+    await duyetViec(nc, v5.id, { chatLuong: 5, nhanXet: "" });
+    await quyetDinhGiaHan(nc, gh5.id, { dongY: true, ghiChu: "" });
+    await ngu(1500);
+  }, { timeoutMs: 20_000 });
+  await ngu(400);
+  const khoaDangChay = voi(T, qt, (nc) => suaNguoiDung(nc, tp5, { trangThai: "ngung-hoat-dong" }));
+  const [rDuyet, rKhoa] = await Promise.allSettled([duyetDangChay, khoaDangChay]);
+  dat("Duyệt + quyết định gia hạn cùng lúc với khóa người duyệt: cả hai thành công (không lỗi máy)", rDuyet.status === "fulfilled" && rKhoa.status === "fulfilled",
+    [rDuyet, rKhoa].map((r) => (r.status === "rejected" ? String(r.reason).slice(0, 200) : "ok")).join(" | "));
+  const cap5 = await chu.taskApprover.findFirstOrThrow({ where: { taskId: v5.id, level: 1 } });
+  const ls5 = await chu.approvalTransfer.count({ where: { tenantId: T, fromUserId: tp5 } });
+  dat("…việc đã duyệt xong không bị đổi người duyệt sau khi chấm (người duyệt cấp cuối vẫn là TP5), không ghi chuyển bước", cap5.approverId === tp5 && ls5 === 0, `${cap5.approverId === tp5 ? "TP5" : cap5.approverId} / ${ls5} dòng chuyển`);
+  dat("…đề nghị gia hạn đã quyết giữ nguyên người quyết định", (await chu.taskExtension.findUniqueOrThrow({ where: { id: gh5.id } })).status === "da-duyet");
+  dat("…Giám đốc không nhận thông báo 'bạn thành người duyệt' rác cho việc đã xong", (await chu.notification.count({ where: { userId: gd, objectId: v5.id, type: { in: ["viec-cho-duyet", "viec-chuyen-buoc-duyet"] } } })) === 0);
+
   await chu.$disconnect();
   ketLuan("QA 0.20.0 — Nhân sự giai đoạn 2");
 }

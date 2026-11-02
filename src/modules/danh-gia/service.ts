@@ -303,7 +303,23 @@ export async function suaKyDanhGia(nc: NguCanh, id: string, d: z.infer<typeof Lu
     if (laViPhamRangBuoc(e) || String(e).includes("da co phieu chot")) throw new LoiNghiepVu("Kỳ vừa có phiếu chốt — không đổi được ngày của kỳ.", 409, "ky-da-chot");
     throw e;
   }
-  await nc.kiemToan({ action: "sua-ky-danh-gia", objectType: "evaluation_period", objectId: id, before: { loai: goc.kind, nam: goc.year, so: goc.number }, after: { loai: d.loai, nam: d.nam, so: d.so } });
+  // QA 0.20.0 v2: số liệu tự tính của phiếu chưa chốt đang theo khoảng ngày CŨ — tính lại ngay (đổi loại kỳ thì
+  // lấy lại mục tiêu tháng / quý từ chỉ tiêu gốc), nếu không phiếu có thể bị chốt bằng số liệu của kỳ khác.
+  const ch = await docCauHinhDanhGia(nc.tx);
+  const phieu = await nc.tx.evaluation.findMany({ where: { periodId: id, status: { not: "da-chot" } }, include: { items: { orderBy: { position: "asc" } } } });
+  const goc2 = new Map(
+    (await nc.tx.kpiItem.findMany({ where: { id: { in: phieu.flatMap((p) => p.items.map((c) => c.kpiItemId).filter((x): x is string => !!x)) } }, select: { id: true, targetMonth: true, targetQuarter: true } }))
+      .map((x) => [x.id, d.loai === "thang" ? so(x.targetMonth) : so(x.targetQuarter)]),
+  );
+  for (const p of phieu) {
+    const muc = p.items.map((c) => ({ ...c, target: goc.kind !== d.loai && c.kpiItemId && goc2.has(c.kpiItemId) ? goc2.get(c.kpiItemId)! : so(c.target) }));
+    const { kq, ctx } = await tinhPhieu(nc.tx, p.userId, d.loai, ky, muc.map((c) => ({ metric: c.metric, source: c.source, direction: c.direction, target: c.target })), ch.tranDatPhanTram);
+    for (const [i, c] of muc.entries()) {
+      if (c.source === "tu-dong" || c.target !== so(p.items[i].target)) await nc.tx.evaluationItem.update({ where: { id: c.id }, data: { target: c.target, ...(c.source === "tu-dong" && { actual: kq[i].actual, achievement: kq[i].achievement }) } });
+    }
+    await nc.tx.evaluation.update({ where: { id: p.id }, data: { context: ctx, metricsAt: new Date() } });
+  }
+  await nc.kiemToan({ action: "sua-ky-danh-gia", objectType: "evaluation_period", objectId: id, before: { loai: goc.kind, nam: goc.year, so: goc.number }, after: { loai: d.loai, nam: d.nam, so: d.so, soPhieuTinhLai: phieu.length } });
   return { id, nhan: ky.nhan, daDoi: true };
 }
 
@@ -513,6 +529,10 @@ export async function quanLyCham(nc: NguCanh, id: string, d: z.infer<typeof Luoc
 
 /** DG-64, DG-65: chốt — điểm tổng, xếp loại, hệ số thưởng; sau đó bất biến. Khóa dòng phiếu: chốt hai lần → 409. */
 export async function chotPhieu(nc: NguCanh, id: string, d: z.infer<typeof LuocDoChot>) {
+  // QA 0.20.0 v2 (QĐ-140): khóa dòng KỲ trước phiếu — chốt và sửa kỳ (khóa kỳ trước) không chạy chéo, để không
+  // có phiếu chốt bằng số liệu của khoảng ngày cũ trong khi kỳ vừa đổi ngày.
+  const p0 = await nc.tx.evaluation.findFirst({ where: { id }, select: { periodId: true } });
+  if (p0) await khoaChungTu(nc.tx, "evaluation_periods", p0.periodId);
   const p = await docPhieu(nc, id, true);
   if (!(await chotDuoc(nc, p.userId))) throw new LoiNghiepVu("Chỉ Giám đốc chốt được phiếu đánh giá (Cấu hình có thể cho trưởng phòng chốt trong phạm vi). Không ai tự chốt phiếu của mình.", 403, "khong-duoc-chot");
   if (p.status === "da-chot") throw new LoiNghiepVu("Phiếu đã chốt.", 409, "da-chot");
