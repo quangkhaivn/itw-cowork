@@ -134,7 +134,11 @@ export async function taoDonNghi(nc: NguCanh, d: z.infer<typeof LuocDoDonNghi>) 
   await kiemChongNhau(nc.tx, nc.hoSo.userId, d);
   if (loai.usesBalance) {
     const ch = cauHinhPhep(await docCauHinhChamCong(nc.tx));
-    const sd = await tinhSoDuPhep(nc.tx, nc.hoSo.userId, Number(d.tuNgay.slice(0, 4)), d.tuNgay, ch);
+    // Cùng mốc tích lũy với lúc duyệt (quyetDinhNghi): nghỉ ở tương lai → tới ngày nghỉ; nghỉ đã qua
+    // (xin bù) → tới hôm nay. Trước đây lấy luôn ngày nghỉ: xin bù phép tháng 1 vào tháng 11 bị chặn vì chỉ
+    // tính 1/12 quỹ, trong khi duyệt lại cho qua (QA 0.19.0).
+    const homNay = ngayVNCua(new Date());
+    const sd = await tinhSoDuPhep(nc.tx, nc.hoSo.userId, Number(d.tuNgay.slice(0, 4)), d.tuNgay > homNay ? d.tuNgay : homNay, ch);
     const conDuoc = Math.round((sd.duocDung - sd.dangCho) * 10) / 10;
     if (soNgay > conDuoc) {
       throw new LoiNghiepVu(`Quỹ phép không đủ: xin ${soNgay} ngày, còn được dùng ${Math.max(0, conDuoc)} ngày (đã trừ đơn đang chờ).`, 422, "vuot-quy-phep", { soDu: sd });
