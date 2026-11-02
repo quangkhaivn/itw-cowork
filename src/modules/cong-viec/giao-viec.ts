@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { NguCanh } from "@/lib/api";
-import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
+import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
 import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
@@ -8,8 +8,9 @@ import { dinhDangNgayGio } from "@/lib/dinh-dang";
 import { thoiDiemTuyChon } from "@/modules/crm/chung";
 import { taoThongBao } from "@/modules/thong-bao/service";
 import { banDoTen } from "@/modules/cham-cong/chung";
-import { chotDuoc, docCauHinhDanhGia, dungHanTu, xemDuocDanhGiaCua } from "@/modules/danh-gia/chung";
-import { diemViec, heSoDungHan, NHAN_CHAT_LUONG, NHAN_LOAI_DUNG_HAN } from "@/modules/danh-gia/tinh-toan";
+import { capDuoi, chotDuoc, docCauHinhDanhGia, dungHanTu, nguoiXemDuocDanhGia, xemDuocDanhGiaCua } from "@/modules/danh-gia/chung";
+import { mocVN, ngayVNCua } from "@/modules/cham-cong/tinh-toan";
+import { dauTuan, diemViec, heSoDungHan, NHAN_CHAT_LUONG, NHAN_LOAI_DUNG_HAN } from "@/modules/danh-gia/tinh-toan";
 import { baoChoDuyet, ghiNhatKyDuyet } from "./duyet";
 import {
   anDiem,
@@ -406,3 +407,41 @@ export async function lichSuGiaoViec(nc: NguCanh, id: string) {
 }
 
 export { anDiem, batBuocSuaDuoc };
+
+// ---------------------------------------------------------------------------
+// "Việc của nhóm" — ai đang làm gì, quá hạn, khối lượng tuần, điểm tháng
+// ---------------------------------------------------------------------------
+
+/**
+ * Trang tổng hợp cho quản lý: mỗi người trong phạm vi `task.view` (+ cấp dưới trực tiếp) — việc đang mở,
+ * quá hạn, chờ nhận, chờ duyệt, xong trong tuần (giờ VN), điểm việc tháng này (chỉ khi xem được đánh giá).
+ */
+export async function viecCuaNhom(nc: NguCanh, bayGio = new Date()) {
+  batBuocQuyen(nc.hoSo, "task.view");
+  const pv = await idNguoiTrongPhamVi(nc.tx, nc.hoSo, "task.view");
+  const ds = pv === "tat-ca"
+    ? (await nc.tx.user.findMany({ where: { status: "hoat-dong", isSystem: false }, select: { id: true } })).map((u) => u.id)
+    : [...new Set([...pv, ...(await capDuoi(nc.tx, nc.hoSo.userId))])];
+  const homNay = ngayVNCua(bayGio);
+  const dauT = mocVN(dauTuan(homNay), 0);
+  const dauThang = mocVN(`${homNay.slice(0, 7)}-01`, 0);
+  const nhom = async (where: Record<string, unknown>) =>
+    new Map((await nc.tx.task.groupBy({ by: ["ownerId"], where: { ownerId: { in: ds }, ...where }, _count: { _all: true } })).map((x) => [x.ownerId, x._count._all]));
+  const mo = await nhom({ status: { in: ["mo", "dang-lam"] } });
+  const quaHan = await nhom({ status: { in: ["mo", "dang-lam"] }, dueAt: { lt: bayGio } });
+  const choNhan = await nhom({ status: { in: ["mo", "dang-lam"] }, acceptStatus: "cho-nhan" });
+  const choDuyet = await nhom({ status: "cho-duyet" });
+  const xongTuan = await nhom({ status: "xong", completedAt: { gte: dauT } });
+  const diem = new Map(
+    (await nc.tx.task.groupBy({ by: ["ownerId"], where: { ownerId: { in: ds }, approvedAt: { gte: dauThang } }, _sum: { taskScore: true } })).map((x) => [x.ownerId, Number(x._sum.taskScore ?? 0)]),
+  );
+  const pvDiem = await nguoiXemDuocDanhGia(nc);
+  const ten = await banDoTen(nc.tx, ds);
+  return ds
+    .map((id) => ({
+      id, hoTen: ten.get(id) ?? "—", dangMo: mo.get(id) ?? 0, quaHan: quaHan.get(id) ?? 0, choNhan: choNhan.get(id) ?? 0,
+      choDuyet: choDuyet.get(id) ?? 0, xongTuan: xongTuan.get(id) ?? 0,
+      diemThang: pvDiem === "tat-ca" || pvDiem.includes(id) ? (diem.get(id) ?? 0) : null,
+    }))
+    .sort((a, b) => b.quaHan - a.quaHan || b.dangMo - a.dangMo || a.hoTen.localeCompare(b.hoTen, "vi"));
+}
