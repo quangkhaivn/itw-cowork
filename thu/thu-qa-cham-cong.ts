@@ -571,6 +571,8 @@ async function main() {
     for (const r of ds) {
       // Giám đốc / Quản trị: chỉ so phần Nhân sự (phần khác đã có từ trước, không thuộc QĐ này).
       if (["ceo", "admin"].includes(r.role.code) && !/^(cham_cong|nhan_su)\./.test(r.permission.code)) continue;
+      // Phân hệ ra đời SAU 0.19.0 (đánh giá 0.20.0, lương 0.21.0) do migration của bản đó cấp — không thuộc QĐ này.
+      if (/^(danh_gia|luong)\./.test(r.permission.code)) continue;
       (kq[r.role.code] ??= []).push(`${r.permission.code}:${r.dataScope}`);
     }
     for (const k of Object.keys(kq)) kq[k].sort();
