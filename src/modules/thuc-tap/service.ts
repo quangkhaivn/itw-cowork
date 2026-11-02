@@ -6,7 +6,7 @@ import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { banDoTen } from "@/modules/cham-cong/chung";
-import { congNgay, mocVN } from "@/modules/cham-cong/tinh-toan";
+import { congNgay, laNgayHopLe, mocVN } from "@/modules/cham-cong/tinh-toan";
 import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { taoThongBao } from "@/modules/thong-bao/service";
 import { chamDuoc, locNguoiDanhGia, xemDuocDanhGiaCua } from "@/modules/danh-gia/chung";
@@ -42,8 +42,11 @@ async function batBuocLaThucTap(nc: NguCanh, userId: string) {
 // Nhật ký tuần (DG-70, DG-71)
 // ---------------------------------------------------------------------------
 
+/** Ngày yyyy-mm-dd có thật (chặn 30/02, 13/45 — QA 0.20.0: trước đây ra lỗi máy hoặc lặng lẽ sang tháng sau). */
+const ngayThat = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày dạng yyyy-mm-dd.").refine(laNgayHopLe, "Ngày không có thật.");
+
 export const LuocDoNhatKy = z.object({
-  ngay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  ngay: ngayThat.optional(),
   daLam: z.string().trim().max(10000).optional().default(""),
   hocDuoc: z.string().trim().max(10000).optional().default(""),
   vuongMac: z.string().trim().max(10000).optional().default(""),
@@ -58,6 +61,7 @@ function sangNhatKy(j: { id: string; userId: string; weekStart: Date; did: strin
 export async function luuNhatKy(nc: NguCanh, d: z.infer<typeof LuocDoNhatKy>) {
   batBuocQuyen(nc.hoSo, "danh_gia.create", { objectType: "intern_journal" });
   await batBuocLaThucTap(nc, nc.hoSo.userId);
+  if (d.ngay && !laNgayHopLe(d.ngay)) throw new LoiNghiepVu("Ngày không có thật.", 400, "ngay-sai");
   const tuan = dauTuan(d.ngay ?? homNayVN());
   if (tuan > homNayVN()) throw new LoiNghiepVu("Chưa tới tuần này.", 422, "ky-tuong-lai");
   if (d.nop && !d.daLam) throw new LoiNghiepVu("Ghi ít nhất phần Đã làm trước khi nộp.", 422, "nhat-ky-trong");
@@ -185,8 +189,8 @@ export async function suaMauPhieu(nc: NguCanh, id: string, d: z.infer<typeof Luo
 export const LuocDoTaoPhieuThucTap = z.object({
   nguoiId: z.uuid(),
   mauId: z.uuid(),
-  tuNgay: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal("")]).optional(),
-  denNgay: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal("")]).optional(),
+  tuNgay: z.union([ngayThat, z.literal("")]).optional(),
+  denNgay: z.union([ngayThat, z.literal("")]).optional(),
 });
 export const LuocDoChamThucTap = z.object({
   thongTin: z.record(z.string(), z.string().max(500)).optional().default({}),
@@ -241,6 +245,7 @@ export async function taoPhieuThucTap(nc: NguCanh, d: z.infer<typeof LuocDoTaoPh
   if (!m) throw new LoiKhongTimThay("Mẫu phiếu");
   const mau = LuocDoMauPhieu.parse(m.layout);
   const ip = await nc.tx.internProfile.findFirst({ where: { userId: d.nguoiId }, select: { startDate: true, endDate: true, mentorId: true } });
+  if ((d.tuNgay && !laNgayHopLe(d.tuNgay)) || (d.denNgay && !laNgayHopLe(d.denNgay))) throw new LoiNghiepVu("Ngày không có thật.", 400, "ngay-sai");
   const tu = d.tuNgay || dateVeNgay(ip?.startDate) || congNgay(homNayVN(), -60);
   const den = d.denNgay || dateVeNgay(ip?.endDate) || homNayVN();
   if (den < tu) throw new LoiNghiepVu("Đến ngày phải sau từ ngày.", 422, "khoang-sai");

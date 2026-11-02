@@ -5,7 +5,7 @@ import { voiTenant } from "@/lib/db";
 import { batBuocQuyen, coQuyen, layHoSoQuyen } from "@/lib/phan-quyen";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { banDoTen } from "@/modules/cham-cong/chung";
-import { gioVePhut, mocVN, ngayVNCua, phutVeGio } from "@/modules/cham-cong/tinh-toan";
+import { gioVePhut, laNgayHopLe, mocVN, ngayVNCua, phutVeGio } from "@/modules/cham-cong/tinh-toan";
 import { chuoiTuyChon, dateVeNgay, kiemTraNguoiPhuTrach, ngayVeDate, trongPhamVi } from "@/modules/crm/chung";
 import { UU_TIEN } from "@/modules/crm/hang-so";
 import { laNgayLap, LuocDoChuoiDuyet, TAN_SUAT, TOI_DA_NGUOI_MOT_LAN_GIAO, type CapDuyet } from "@/modules/danh-gia/tinh-toan";
@@ -107,7 +107,8 @@ export async function suaMauViec(nc: NguCanh, id: string, d: DuLieuMauViec) {
 // Việc định kỳ
 // ---------------------------------------------------------------------------
 
-const ngay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày dạng yyyy-mm-dd.");
+// QA 0.20.0: ngày phải có thật (30/02 trước đây lặng lẽ thành 02/03), giờ hạn phải là giờ thật (25:99 trước đây lặng lẽ thành 17:00).
+const ngay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày dạng yyyy-mm-dd.").refine(laNgayHopLe, "Ngày không có thật.");
 export const LuocDoLapViec = z
   .object({
     ten: z.string().trim().min(3).max(255),
@@ -122,7 +123,7 @@ export const LuocDoLapViec = z
     tanSuat: z.enum(TAN_SUAT),
     thu: z.array(z.coerce.number().int().min(1).max(7)).max(7).optional().default([]),
     ngayThang: z.union([z.coerce.number().int().min(1).max(31), z.literal(""), z.null()]).transform((x) => (x === "" ? null : x)).optional().default(null),
-    gioHan: z.string().regex(/^\d{2}:\d{2}$/, "Giờ dạng HH:mm.").optional().default("17:00"),
+    gioHan: z.string().regex(/^\d{2}:\d{2}$/, "Giờ dạng HH:mm.").refine((g) => gioVePhut(g) !== null, "Giờ không hợp lệ (00:00 – 23:59).").optional().default("17:00"),
     nguoiIds: z.array(z.uuid()).min(1, "Chọn ít nhất một người.").max(TOI_DA_NGUOI_MOT_LAN_GIAO),
     tuNgay: ngay,
     denNgay: z.union([ngay, z.literal(""), z.null()]).transform((x) => x || null).optional().default(null),
