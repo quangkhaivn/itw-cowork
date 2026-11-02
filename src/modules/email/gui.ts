@@ -10,6 +10,8 @@ import { docChanThu } from "./service";
 import { LoiNghiepVu } from "@/lib/loi";
 import { cauLoiGui, CUA_SO_DIA_CHI_MS, docMaThuSes, dungThu, dungThuXacNhanTuChoi, lyDoTamDung, LuocDoDanhSachKhoi, phanLoaiLoiGui, THE_SES, thieuChanThu, tieuDeSes, xetGioiHanDiaChi } from "./tinh-toan";
 import { taoVanChuyen, type VanChuyenThu } from "./van-chuyen";
+import { dungThuPhieuLuong } from "@/modules/luong/thu-phieu";
+import type { KetQuaLuong } from "@/modules/luong/tinh-toan";
 
 /**
  * Gửi chiến dịch email — chạy trong worker (`worker/index.ts`), mỗi nhịp một lô cho mỗi doanh
@@ -424,15 +426,37 @@ export async function guiThuGiaoDich(tenantId: string, bayGio: Date = new Date()
     const viec = tatCa.filter((v) => !hong.has(v.email));
     if (!viec.length) return null;
     await tx.emailTransactional.updateMany({ where: { id: { in: viec.map((v) => v.id) } }, data: { status: "SENDING", attemptAt: bayGio } });
-    return { viec, ketNoi, chan: await docChanThu(tx, tenantId) };
+    // 0.21.0 (LU-44): phiếu lương — đọc dòng lương ĐÃ KHÓA lúc gửi; hàng chờ chỉ giữ mã dòng, không giữ số tiền.
+    const maDong = viec.filter((v) => v.kind === "phieu-luong").map((v) => String((v.payload as { dongId?: string } | null)?.dongId ?? ""));
+    const dongLuong = maDong.length
+      ? await tx.payrollLine.findMany({
+          where: { id: { in: maDong.filter((x) => /^[0-9a-f-]{36}$/i.test(x)) }, run: { status: { in: ["da-khoa", "da-chi"] } } },
+          select: { id: true, fullName: true, result: true, run: { select: { year: true, month: true } } },
+        })
+      : [];
+    return { viec, ketNoi, chan: await docChanThu(tx, tenantId), dongLuong: new Map(dongLuong.map((d) => [d.id, d])) };
   });
   if (!nhan) return 0;
   const vc = taoVanChuyen(nhan.ketNoi.smtp);
   let soGui = 0;
   try {
     for (const v of nhan.viec) {
-      const p = (v.payload ?? {}) as { nhanLuc?: string; dungTu?: string };
-      const thu = dungThuXacNhanTuChoi(nhan.chan.tenCongTy, new Date(p.nhanLuc ?? bayGio), new Date(p.dungTu ?? p.nhanLuc ?? bayGio));
+      const p = (v.payload ?? {}) as { nhanLuc?: string; dungTu?: string; dongId?: string };
+      let thu: { tieuDe: string; html: string; text: string };
+      if (v.kind === "phieu-luong") {
+        const dl = nhan.dongLuong.get(p.dongId ?? "");
+        if (!dl) {
+          await voiTenant(tenantId, (tx) => tx.emailTransactional.update({ where: { id: v.id }, data: { status: "FAILED", reason: "Không tìm thấy phiếu lương đã khóa." } }));
+          continue;
+        }
+        const goc = process.env.APP_URL?.replace(/\/$/, "");
+        thu = dungThuPhieuLuong(nhan.chan.tenCongTy, {
+          hoTen: dl.fullName, nam: dl.run.year, thang: dl.run.month, ketQua: dl.result as unknown as KetQuaLuong,
+          duongDan: goc ? `${goc}/luong/phieu-cua-toi` : null,
+        });
+      } else {
+        thu = dungThuXacNhanTuChoi(nhan.chan.tenCongTy, new Date(p.nhanLuc ?? bayGio), new Date(p.dungTu ?? p.nhanLuc ?? bayGio));
+      }
       try {
         const kq = await vc.gui({
           tu: nhan.ketNoi.tu,
