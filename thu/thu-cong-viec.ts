@@ -114,6 +114,8 @@ async function main() {
       khachHangId: khach.id,
       leadId: null,
       coHoiId: null,
+      // 0.20.0: giao cho người khác mặc định "cần duyệt" (DG-02) — bài này thử luật 0.17 nên tắt cờ.
+      canDuyet: false,
       mucKiemTra: [
         { nhan: "Chụp ảnh vị trí lắp", batBuoc: true },
         { nhan: "Đo khoảng cách đi dây", batBuoc: true },
@@ -214,7 +216,7 @@ async function main() {
   // ------------------------------------------------------------------
   console.log("\n— CV-09: 'Cần làm tiếp' phải hẹn việc tiếp theo —");
   const viec2 = await voi(T, tp, (nc) =>
-    taoViec(nc, { tieuDe: "Gửi báo giá camera", moTa: null, nguoiPhuTrachId: nvA, uuTien: "trung-binh", han: null, khachHangId: khach.id, leadId: null, coHoiId: null }),
+    taoViec(nc, { tieuDe: "Gửi báo giá camera", moTa: null, nguoiPhuTrachId: nvA, uuTien: "trung-binh", han: null, khachHangId: khach.id, leadId: null, coHoiId: null, canDuyet: false }),
   );
   await nemLoi("'Cần làm tiếp' mà không hẹn việc tiếp theo bị chặn", "nghiep-vu", () =>
     voi(T, nvA, (nc) => suaViec(nc, viec2.id, { trangThai: "xong", ketQua: "Khách cần thêm thời gian so sánh giá.", danhGia: "can-theo-doi" })),

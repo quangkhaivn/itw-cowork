@@ -324,7 +324,8 @@ async function main() {
     "ngoai-pham-vi",
   );
   const viec = await voi(T, tp, (nc) =>
-    taoViec(nc, { tieuDe: "Gọi lại khách Ánh Dương", nguoiPhuTrachId: nv1, uuTien: "khan", han: new Date(Date.now() - 3600000), khachHangId: k1.id, leadId: null, coHoiId: null, moTa: null }),
+    // 0.20.0: giao cho người khác mặc định "cần duyệt" (DG-02) — bài này thử CV-01 nên tắt cờ.
+    taoViec(nc, { tieuDe: "Gọi lại khách Ánh Dương", nguoiPhuTrachId: nv1, uuTien: "khan", han: new Date(Date.now() - 3600000), khachHangId: k1.id, leadId: null, coHoiId: null, moTa: null, canDuyet: false }),
   );
   dat("Trưởng phòng giao việc cho cấp dưới", viec.nguoiPhuTrach.id === nv1 && viec.quaHan);
   const dsViec = await voi(T, nv1, (nc) => danhSachViec(nc, { cheDo: "qua-han", trangThai: "", nguoiPhuTrach: "", q: "", id: "", trang: 1, coTrang: 30 }));

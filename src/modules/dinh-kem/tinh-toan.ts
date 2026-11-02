@@ -19,6 +19,8 @@ export const LOAI_DOI_TUONG = [
   "task",
   // 0.19.0 (NS-03): tệp hợp đồng lao động — quyền theo nhan_su.view / nhan_su.update.
   "employment_contract",
+  // 0.20.0 (DG-13): ảnh / tệp kèm một dòng tiến độ công việc — quyền mượn từ công việc chứa dòng đó.
+  "task_progress",
 ] as const;
 export type LoaiDoiTuong = (typeof LOAI_DOI_TUONG)[number];
 
@@ -31,6 +33,7 @@ export const NHAN_LOAI_DOI_TUONG: Record<string, string> = {
   support_ticket: "Phiếu hỗ trợ",
   task: "Công việc",
   employment_contract: "Hợp đồng lao động",
+  task_progress: "Tiến độ công việc",
 };
 
 /**

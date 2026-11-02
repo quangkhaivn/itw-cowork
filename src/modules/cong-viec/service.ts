@@ -12,7 +12,11 @@ import { danhGiaHoSoKhach } from "@/modules/khach-hang/ho-so";
 import { batBuocThayCoHoi } from "@/modules/co-hoi/service";
 import { batBuocThayLead } from "@/modules/lead/service";
 import { taoThongBao } from "@/modules/thong-bao/service";
+import { khoaChungTu } from "@/lib/khoa-chung-tu";
+import { nguoiXemDuocDanhGia } from "@/modules/danh-gia/chung";
+import { TOI_DA_CAP_DUYET, TOI_DA_NGUOI_MOT_LAN_GIAO } from "@/modules/danh-gia/tinh-toan";
 import { DO_DAI_KET_QUA_TOI_THIEU, kiemTraTruocKhiXong, type KetQuaKiemTra } from "./kiem-tra";
+import { baoChoDuyet, chuoiDuyetCuaViec, dungChuoiDuyetChoViec, ghiNhatKyDuyet, ghiChuoiDuyet, kiemNguoiDuyet, mauViecDung } from "./duyet";
 
 /**
  * Công việc — việc SẮP làm, có hạn ("Activity" trong prompt). Luật CV-01 → CV-11.
@@ -21,6 +25,11 @@ import { DO_DAI_KET_QUA_TOI_THIEU, kiemTraTruocKhiXong, type KetQuaKiemTra } fro
  * 0.17.0 "Công việc thông suốt": việc xong phải có kết quả (CV-04, CV-05), máy kiểm tra trước
  * khi cho xong (CV-06), danh sách kiểm tra (CV-07), báo cho người nhận khi được giao và cho
  * người giao khi xong (CV-08), "Cần làm tiếp" phải hẹn việc tiếp theo (CV-09), đính kèm (CV-10).
+ *
+ * 0.20.0 (BUSINESS_RULES mục 31): độ khó, cờ "cần duyệt" + chuỗi người duyệt (DG-01, DG-02, DG-21),
+ * người được giao phải Nhận / Từ chối (DG-03), đổi hạn việc người khác giao phải xin gia hạn (DG-05),
+ * mẫu việc (DG-06), giao nhiều người (DG-08); việc cần duyệt bấm Xong thì sang `cho-duyet` (DG-20).
+ * Nhận / từ chối, tiến độ, gia hạn, duyệt / trả lại / chấm điểm nằm ở `giao-viec.ts`.
  */
 
 /** Tối đa mục kiểm tra trên một việc — trần kỹ thuật, không phải chính sách. */
@@ -42,9 +51,25 @@ export const LuocDoTaoViec = z.object({
   coHoiId: uuidTuyChon,
   /** 0.17.0 — danh sách kiểm tra lập cùng lúc với việc. */
   mucKiemTra: z.array(LuocDoMucKiemTra).max(TOI_DA_MUC_KIEM_TRA, `Tối đa ${TOI_DA_MUC_KIEM_TRA} mục kiểm tra.`).optional().default([]),
+  /** 0.20.0 — độ khó 1–5 (trống = theo mẫu, không mẫu = 3). */
+  doKho: z.coerce.number().int().min(1, "Độ khó từ 1 đến 5.").max(5, "Độ khó từ 1 đến 5.").optional(),
+  /** Trống = mặc định: bật khi giao cho người khác, tắt khi tự tạo (DG-02). */
+  canDuyet: z.boolean().optional(),
+  /** Chuỗi người duyệt theo thứ tự cấp. Trống = theo mẫu, không mẫu = người giao (DG-21). */
+  nguoiDuyetIds: z.array(z.uuid()).max(TOI_DA_CAP_DUYET, `Tối đa ${TOI_DA_CAP_DUYET} cấp duyệt.`).optional(),
+  mauViecId: uuidTuyChon,
+  /** Giao cho nhiều người: mỗi người một việc, chung một nhóm (DG-08). */
+  nguoiPhuTrachIds: z.array(z.uuid()).max(TOI_DA_NGUOI_MOT_LAN_GIAO, `Tối đa ${TOI_DA_NGUOI_MOT_LAN_GIAO} người một lần giao.`).optional(),
 });
 /** Kết quả đã qua lược đồ; `mucKiemTra` tùy chọn để mọi chỗ gọi cũ (trợ lý AI, bài thử) giữ nguyên. */
 export type DuLieuTaoViec = Omit<z.infer<typeof LuocDoTaoViec>, "mucKiemTra"> & { mucKiemTra?: z.infer<typeof LuocDoMucKiemTra>[] };
+
+/** Gắn thêm khi tạo từ máy (việc định kỳ, vướng mắc báo cáo, giao nhiều người) — không nhận từ API. */
+export interface ThemKhiTaoViec {
+  nhomId?: string;
+  lap?: { id: string; ngay: Date; nguoiId: string };
+  baoCaoId?: string;
+}
 
 const LuocDoViecTiepTheo = z.object({
   tieuDe: z.string().trim().min(3, "Việc tiếp theo tối thiểu 3 ký tự.").max(255),
@@ -71,6 +96,10 @@ export const LuocDoSuaViec = z.object({
   danhGia: z.enum(DANH_GIA_KET_QUA).nullable().optional(),
   /** CV-09 — việc tiếp theo tạo cùng lúc với lần đánh dấu xong. */
   viecTiepTheo: LuocDoViecTiepTheo.nullable().optional(),
+  /** 0.20.0 — chỉ người giao / quản lý (không phải người làm việc được giao) đổi được (DG-02). */
+  doKho: z.coerce.number().int().min(1).max(5).optional(),
+  canDuyet: z.boolean().optional(),
+  nguoiDuyetIds: z.array(z.uuid()).max(TOI_DA_CAP_DUYET).optional(),
 });
 export type DuLieuSuaViec = z.infer<typeof LuocDoSuaViec>;
 
@@ -81,9 +110,9 @@ export const LuocDoKiemTraViec = z.object({
 });
 
 export const LuocDoLocViec = z.object({
-  /** cua-toi | toi-giao | qua-han | tat-ca (trong phạm vi) */
-  cheDo: z.enum(["cua-toi", "toi-giao", "qua-han", "tat-ca"]).optional().default("cua-toi"),
-  /** "" = chưa xong (mo + dang-lam); "tat-ca"; hoặc một trạng thái */
+  /** cua-toi | toi-giao | qua-han | tat-ca (trong phạm vi) | cho-toi-duyet | cho-nhan (0.20.0) */
+  cheDo: z.enum(["cua-toi", "toi-giao", "qua-han", "tat-ca", "cho-toi-duyet", "cho-nhan"]).optional().default("cua-toi"),
+  /** "" = đang mở (mo + dang-lam + cho-duyet); "tat-ca"; hoặc một trạng thái */
   trangThai: z.enum(["", "tat-ca", ...TRANG_THAI_VIEC]).optional().default(""),
   nguoiPhuTrach: z.union([z.uuid(), z.literal("")]).optional().default(""),
   q: z.string().trim().max(100).optional().default(""),
@@ -94,7 +123,10 @@ export const LuocDoLocViec = z.object({
 });
 export type BoLocViec = z.infer<typeof LuocDoLocViec>;
 
+/** Việc còn phải làm (tính quá hạn). */
 const CHUA_XONG = ["mo", "dang-lam"];
+/** Việc chưa khép lại: còn làm hoặc đang chờ duyệt (lọc mặc định). */
+const DANG_MO = ["mo", "dang-lam", "cho-duyet"];
 
 const CHON_VIEC = {
   id: true,
@@ -112,6 +144,24 @@ const CHON_VIEC = {
   resultAt: true,
   assignedBy: true,
   assignedAt: true,
+  difficulty: true,
+  needsApproval: true,
+  acceptStatus: true,
+  acceptedAt: true,
+  declinedAt: true,
+  declineReason: true,
+  progress: true,
+  groupId: true,
+  templateId: true,
+  recurrenceId: true,
+  originalDueAt: true,
+  submittedAt: true,
+  approvalRound: true,
+  approvalLevel: true,
+  approvedAt: true,
+  qualityScore: true,
+  onTimeFactor: true,
+  taskScore: true,
   owner: { select: { id: true, fullName: true } },
   assigner: { select: { id: true, fullName: true } },
   resultUser: { select: { id: true, fullName: true } },
@@ -146,6 +196,26 @@ function chuyenDoi(v: BanGhiViec) {
     lead: v.lead ? { id: v.lead.id, ma: v.lead.code, ten: v.lead.fullName } : null,
     coHoi: v.opportunity ? { id: v.opportunity.id, ma: v.opportunity.code, ten: v.opportunity.title } : null,
     quaHan: CHUA_XONG.includes(v.status) && !!v.dueAt && v.dueAt < new Date(),
+    // 0.20.0
+    doKho: v.difficulty,
+    canDuyet: v.needsApproval,
+    trangThaiNhan: v.acceptStatus,
+    nhanLuc: v.acceptedAt,
+    tuChoiLuc: v.declinedAt,
+    lyDoTuChoi: v.declineReason,
+    tienDo: v.progress,
+    nhomId: v.groupId,
+    mauViecId: v.templateId,
+    lapId: v.recurrenceId,
+    hanBanDau: v.originalDueAt,
+    guiDuyetLuc: v.submittedAt,
+    lanGuiDuyet: v.approvalRound,
+    capDangCho: v.approvalLevel,
+    duyetLuc: v.approvedAt,
+    /** Điểm chỉ hiện cho người xem được đánh giá của người làm (DG-80) — `anDiem` gỡ khi không. */
+    chatLuong: v.qualityScore as number | null,
+    heSoDungHan: v.onTimeFactor === null ? null : Number(v.onTimeFactor),
+    diemViec: v.taskScore === null ? null : Number(v.taskScore),
     kiemTra: {
       tong: v.checklist.length,
       daTich: v.checklist.filter((m) => m.doneAt).length,
@@ -154,6 +224,15 @@ function chuyenDoi(v: BanGhiViec) {
   };
 }
 export type CongViec = ReturnType<typeof chuyenDoi>;
+
+/** Gỡ điểm khỏi việc khi người xem không được xem đánh giá của người làm (trợ lý AI luôn rơi vào đây). */
+export function anDiem<T extends CongViec>(v: T, xemDuoc: boolean): T {
+  return xemDuoc ? v : { ...v, chatLuong: null, heSoDungHan: null, diemViec: null };
+}
+async function boLocDiem(nc: NguCanh): Promise<(ownerId: string) => boolean> {
+  const pv = await nguoiXemDuocDanhGia(nc);
+  return (id) => pv === "tat-ca" || pv.includes(id);
+}
 
 function anhChup(v: CongViec) {
   return {
@@ -167,24 +246,32 @@ function anhChup(v: CongViec) {
     coHoiId: v.coHoi?.id ?? null,
     ketQua: v.ketQua,
     danhGia: v.danhGia,
+    doKho: v.doKho,
+    canDuyet: v.canDuyet,
   };
 }
 
-const duongDanViec = (id: string) => `/cong-viec/${id}`;
+export const duongDanViec = (id: string) => `/cong-viec/${id}`;
 
 export async function danhSachViec(nc: NguCanh, boLoc: BoLocViec) {
   batBuocQuyen(nc.hoSo, "task.view");
-  const dieuKien: Prisma.TaskWhereInput[] = [await locTheoPhamVi(nc, "task.view")];
+  // "Chờ tôi duyệt": quan hệ người duyệt cho thấy việc dù người làm ngoài phạm vi (DG-21).
+  const dieuKien: Prisma.TaskWhereInput[] =
+    boLoc.cheDo === "cho-toi-duyet" && !boLoc.id
+      ? [{ id: { in: await viecChoToiDuyet(nc) } }]
+      : [await dieuKienXemViec(nc)];
   // Mở đúng một việc: bỏ qua chế độ và trạng thái, vẫn giữ phạm vi.
   if (boLoc.id) {
     dieuKien.push({ id: boLoc.id });
     boLoc = { ...boLoc, cheDo: "tat-ca", trangThai: "tat-ca" };
   }
+  if (boLoc.cheDo === "cho-toi-duyet" && boLoc.trangThai === "") boLoc = { ...boLoc, trangThai: "tat-ca" };
   if (boLoc.cheDo === "cua-toi") dieuKien.push({ ownerId: nc.hoSo.userId });
+  if (boLoc.cheDo === "cho-nhan") dieuKien.push({ ownerId: nc.hoSo.userId, acceptStatus: "cho-nhan" });
   // "Tôi giao": việc mình giao cho NGƯỜI KHÁC — để người giao theo dõi được tới lúc xong (CV-08).
   if (boLoc.cheDo === "toi-giao") dieuKien.push({ assignedBy: nc.hoSo.userId, ownerId: { not: nc.hoSo.userId } });
   if (boLoc.cheDo === "qua-han") dieuKien.push({ status: { in: CHUA_XONG }, dueAt: { lt: new Date() } });
-  if (boLoc.trangThai === "") dieuKien.push({ status: { in: CHUA_XONG } });
+  if (boLoc.trangThai === "") dieuKien.push({ status: { in: DANG_MO } });
   else if (boLoc.trangThai !== "tat-ca") dieuKien.push({ status: boLoc.trangThai });
   if (boLoc.nguoiPhuTrach) dieuKien.push({ ownerId: boLoc.nguoiPhuTrach });
   if (boLoc.q) dieuKien.push({ OR: [{ title: { contains: boLoc.q, mode: "insensitive" } }, { customer: { name: { contains: boLoc.q, mode: "insensitive" } } }] });
@@ -201,23 +288,42 @@ export async function danhSachViec(nc: NguCanh, boLoc: BoLocViec) {
   });
   const soQuaHanCuaToi = await nc.tx.task.count({ where: { ownerId: nc.hoSo.userId, status: { in: CHUA_XONG }, dueAt: { lt: new Date() } } });
   const pvSua = coQuyen(nc.hoSo, "task.update");
+  const xemDiem = await boLocDiem(nc);
   const ketQua = [];
-  for (const v of dong) ketQua.push({ ...chuyenDoi(v), duocSua: pvSua && (await trongPhamVi(nc, "task.update", v.ownerId)) });
-  return { tong, trang: boLoc.trang, coTrang: boLoc.coTrang, dong: ketQua, soQuaHanCuaToi };
+  for (const v of dong) ketQua.push({ ...anDiem(chuyenDoi(v), xemDiem(v.ownerId)), duocSua: pvSua && (await trongPhamVi(nc, "task.update", v.ownerId)) });
+  const soChoToiDuyet = (await viecChoToiDuyet(nc)).length;
+  const soChoNhan = await nc.tx.task.count({ where: { ownerId: nc.hoSo.userId, acceptStatus: "cho-nhan", status: { in: CHUA_XONG } } });
+  return { tong, trang: boLoc.trang, coTrang: boLoc.coTrang, dong: ketQua, soQuaHanCuaToi, soChoToiDuyet, soChoNhan };
 }
 
-/** Điều kiện Prisma "người đang xem thấy được việc này" — tệp đính kèm mượn đúng điều kiện này (DK-02). */
+/**
+ * Điều kiện Prisma "người đang xem thấy được việc này" — tệp đính kèm mượn đúng điều kiện này (DK-02).
+ * 0.20.0: ngoài phạm vi `task.view`, người giao và người trong chuỗi duyệt luôn thấy việc (DG-21).
+ */
 export async function dieuKienXemViec(nc: NguCanh): Promise<Prisma.TaskWhereInput> {
-  return locTheoPhamVi(nc, "task.view");
+  const pv = await locTheoPhamVi(nc, "task.view");
+  if (!pv.ownerId) return {};
+  return { OR: [pv, { assignedBy: nc.hoSo.userId }, { approvers: { some: { approverId: nc.hoSo.userId } } }] };
 }
 
-async function docViecTrongPhamVi(nc: NguCanh, id: string) {
-  const v = await nc.tx.task.findFirst({ where: { id, ...(await locTheoPhamVi(nc, "task.view")) }, select: CHON_VIEC });
+/** Id các việc đang chờ CHÍNH tôi duyệt ở cấp hiện tại. */
+export async function viecChoToiDuyet(nc: NguCanh): Promise<string[]> {
+  const dong = await nc.tx.$queryRaw<{ id: string }[]>`
+    SELECT t.id::text AS id FROM tasks t
+    JOIN task_approvers a ON a.task_id = t.id AND a.level = t.approval_level
+    WHERE t.status = 'cho-duyet' AND a.approver_id = ${nc.hoSo.userId}::uuid`;
+  return dong.map((d) => d.id);
+}
+
+export async function docViecTrongPhamVi(nc: NguCanh, id: string) {
+  const v = await nc.tx.task.findFirst({ where: { AND: [{ id }, await dieuKienXemViec(nc)] }, select: CHON_VIEC });
   if (!v) throw new LoiKhongTimThay("Công việc");
   return v;
 }
+export type { BanGhiViec };
+export { chuyenDoi, CHON_VIEC };
 
-async function batBuocSuaDuoc(nc: NguCanh, v: { ownerId: string }) {
+export async function batBuocSuaDuoc(nc: NguCanh, v: { ownerId: string }) {
   if (!(await trongPhamVi(nc, "task.update", v.ownerId))) {
     throw new LoiNghiepVu("Bạn chỉ xem được công việc này, không sửa được.", 403, "ngoai-pham-vi");
   }
@@ -247,7 +353,7 @@ async function baoDuocGiao(nc: NguCanh, v: CongViec, laChuyen: boolean) {
     loai: "viec-duoc-giao",
     mucDo: v.uuTien === "khan" ? "khan" : v.uuTien === "cao" ? "canh-bao" : "thong-tin",
     tieuDe: `${laChuyen ? "Được chuyển việc" : "Được giao việc"}: ${v.tieuDe}`.slice(0, 300),
-    noiDung: `${nc.hoSo.hoTen} ${laChuyen ? "chuyển" : "giao"} cho bạn${gan}.${v.han ? ` Hạn: ${dinhDangNgayGio(v.han)}.` : " Không có hạn."}`,
+    noiDung: `${nc.hoSo.hoTen} ${laChuyen ? "chuyển" : "giao"} cho bạn${gan}.${v.han ? ` Hạn: ${dinhDangNgayGio(v.han)}.` : " Không có hạn."}${v.trangThaiNhan === "cho-nhan" ? " Mở việc để bấm Nhận, hoặc Từ chối kèm lý do." : ""}${v.canDuyet ? " Việc cần duyệt khi xong." : ""}`,
     duongDan: duongDanViec(v.id),
     doiTuong: "task",
     doiTuongId: v.id,
@@ -292,22 +398,39 @@ async function baoDaXong(nc: NguCanh, v: CongViec, nguoiTaoId: string | null) {
 // Tạo, sửa, hoàn thành
 // ---------------------------------------------------------------------------
 
-export async function taoViec(nc: NguCanh, dauVao: DuLieuTaoViec) {
-  const d = { ...dauVao, mucKiemTra: dauVao.mucKiemTra ?? [] };
+export async function taoViec(nc: NguCanh, dauVao: DuLieuTaoViec, them: ThemKhiTaoViec = {}) {
   batBuocQuyen(nc.hoSo, "task.create", { objectType: "task" });
+  // DG-06: mẫu việc điền phần người giao bỏ trống (danh sách kiểm tra, độ khó, cần duyệt, hạn, chuỗi duyệt).
+  const mau = dauVao.mauViecId ? await mauViecDung(nc, dauVao.mauViecId) : null;
+  const d = {
+    ...dauVao,
+    mucKiemTra: dauVao.mucKiemTra?.length ? dauVao.mucKiemTra : (mau?.mucKiemTra ?? []),
+    han: dauVao.han ?? (mau?.soNgayHan !== null && mau?.soNgayHan !== undefined ? new Date(Date.now() + mau.soNgayHan * 86_400_000) : null),
+  };
   const ownerId = d.nguoiPhuTrachId ?? nc.hoSo.userId;
   await kiemTraNguoiPhuTrach(nc, "task.create", ownerId);
   const khachId = await kiemTraGanKem(nc, d);
   const bayGio = new Date();
+  const giaoNguoiKhac = ownerId !== nc.hoSo.userId;
+  // DG-02: mặc định cần duyệt khi giao cho người khác, tự tạo thì không; người giao tắt / bật được.
+  const canDuyet = d.canDuyet ?? mau?.canDuyet ?? giaoNguoiKhac;
+  let chuoi: string[] = [];
+  if (canDuyet) {
+    chuoi = d.nguoiDuyetIds?.length
+      ? d.nguoiDuyetIds
+      : await dungChuoiDuyetChoViec(nc, { chuoi: mau?.chuoiDuyet ?? [], nguoiLamId: ownerId, nguoiGiaoId: nc.hoSo.userId });
+    await kiemNguoiDuyet(nc, chuoi, ownerId);
+  }
 
   const v = await nc.tx.task.create({
     data: {
       tenantId: nc.tenantId,
       title: d.tieuDe,
-      description: d.moTa ?? null,
+      description: d.moTa ?? mau?.moTa ?? null,
       ownerId,
       priority: d.uuTien,
       dueAt: d.han ?? null,
+      originalDueAt: d.han ?? null,
       customerId: khachId,
       leadId: d.leadId ?? null,
       opportunityId: d.coHoiId ?? null,
@@ -315,6 +438,16 @@ export async function taoViec(nc: NguCanh, dauVao: DuLieuTaoViec) {
       updatedBy: nc.hoSo.userId,
       assignedBy: nc.hoSo.userId,
       assignedAt: bayGio,
+      difficulty: d.doKho ?? mau?.doKho ?? 3,
+      needsApproval: canDuyet,
+      // DG-03: giao cho người khác thì người đó phải Nhận hoặc Từ chối.
+      acceptStatus: giaoNguoiKhac ? "cho-nhan" : null,
+      templateId: mau?.id ?? null,
+      groupId: them.nhomId ?? null,
+      recurrenceId: them.lap?.id ?? null,
+      recurrenceDate: them.lap?.ngay ?? null,
+      recurrenceAssigneeId: them.lap?.nguoiId ?? null,
+      sourceReportId: them.baoCaoId ?? null,
       checklist: d.mucKiemTra.length
         ? {
             create: d.mucKiemTra.map((m, i) => ({
@@ -329,8 +462,12 @@ export async function taoViec(nc: NguCanh, dauVao: DuLieuTaoViec) {
     },
     select: CHON_VIEC,
   });
+  if (chuoi.length) await ghiChuoiDuyet(nc, v.id, chuoi);
   const kq = chuyenDoi(v);
-  await nc.kiemToan({ action: "tao", objectType: "task", objectId: v.id, after: { ...anhChup(kq), soMucKiemTra: d.mucKiemTra.length } });
+  await nc.kiemToan({
+    action: "tao", objectType: "task", objectId: v.id,
+    after: { ...anhChup(kq), soMucKiemTra: d.mucKiemTra.length, nguoiDuyet: chuoi, mauViecId: mau?.id ?? null, nhomId: them.nhomId ?? null },
+  });
   await nc.suKien({ eventType: SU_KIEN.TASK_CREATED, objectType: "task", objectId: v.id, payload: { nguoiPhuTrachId: ownerId } });
   if (ownerId !== nc.hoSo.userId) {
     await nc.suKien({ eventType: SU_KIEN.TASK_ASSIGNED, objectType: "task", objectId: v.id, payload: { nguoiPhuTrachId: ownerId } });
@@ -396,14 +533,45 @@ export async function kiemTraViec(nc: NguCanh, id: string, d: z.infer<typeof Luo
 
 export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
   batBuocQuyen(nc.hoSo, "task.update", { objectType: "task", objectId: id });
+  // 0.20.0: khóa dòng việc trước khi đọc — hoàn thành / gửi duyệt và duyệt không chạy chéo nhau (QĐ-77).
+  await khoaChungTu(nc.tx, "tasks", id);
   const goc = await docViecTrongPhamVi(nc, id);
   await batBuocSuaDuoc(nc, goc);
   const truoc = chuyenDoi(goc);
+  const toi = nc.hoSo.userId;
   const doiNguoi = !!d.nguoiPhuTrachId && d.nguoiPhuTrachId !== goc.ownerId;
   if (doiNguoi) await kiemTraNguoiPhuTrach(nc, "task.update", d.nguoiPhuTrachId!);
 
   const trangThaiMoi = d.trangThai ?? goc.status;
   const xongMoi = trangThaiMoi === "xong" && goc.status !== "xong";
+  const laNguoiLam = goc.ownerId === toi;
+  // Việc người khác giao cho mình: người làm không tự đổi độ khó, cờ duyệt, người duyệt, hạn (DG-02, DG-05).
+  const viecDuocGiao = laNguoiLam && !!goc.assignedBy && goc.assignedBy !== toi;
+
+  // DG-20: đang chờ duyệt thì chỉ người duyệt thao tác (duyệt / trả lại) — không sửa, không giao lại.
+  if (goc.status === "cho-duyet") {
+    throw new LoiNghiepVu("Việc đang chờ duyệt. Người duyệt duyệt hoặc trả lại trước khi sửa.", 409, "dang-cho-duyet");
+  }
+  if (d.trangThai === "cho-duyet") {
+    throw new LoiNghiepVu("Bấm Xong để gửi duyệt — không đặt thẳng trạng thái chờ duyệt.", 422, "sai-trang-thai");
+  }
+  // DG-31: việc đã duyệt + chấm điểm không mở lại, không sửa kết quả; sai thì điều chỉnh điểm có lý do.
+  const doiKetQuaYeuCau = d.ketQua !== undefined || d.danhGia !== undefined;
+  if (goc.approvedAt && ((d.trangThai !== undefined && d.trangThai !== goc.status) || doiKetQuaYeuCau)) {
+    throw new LoiNghiepVu("Việc đã được duyệt và chấm điểm nên không mở lại / sửa kết quả được. Sai điểm thì điều chỉnh điểm kèm lý do.", 409, "viec-da-duyet");
+  }
+  // DG-03: đã từ chối thì người làm không làm tiếp; người giao giao lại / sửa rồi gửi lại.
+  if (goc.acceptStatus === "tu-choi" && laNguoiLam && !doiNguoi && (d.trangThai !== undefined || doiKetQuaYeuCau)) {
+    throw new LoiNghiepVu("Bạn đã từ chối việc này. Người giao sẽ giao lại hoặc sửa rồi gửi lại.", 409, "viec-da-tu-choi");
+  }
+  if (viecDuocGiao && (d.doKho !== undefined || d.canDuyet !== undefined || d.nguoiDuyetIds !== undefined)) {
+    throw new LoiNghiepVu("Độ khó, cờ cần duyệt và người duyệt do người giao đặt.", 403, "chi-nguoi-giao");
+  }
+  const hanCu = goc.dueAt?.getTime() ?? null;
+  const doiHan = d.han !== undefined && (d.han?.getTime() ?? null) !== hanCu;
+  if (doiHan && viecDuocGiao) {
+    throw new LoiNghiepVu("Việc do người khác giao: muốn đổi hạn thì gửi đề nghị gia hạn để người giao duyệt.", 403, "phai-xin-gia-han");
+  }
 
   // Việc cũ (trước 0.17) đã xong mà chưa có kết quả: chỉ được mở lại hoặc ghi kết quả,
   // không lặng lẽ sửa thứ khác cho tới khi có kết quả (CV-05).
@@ -446,37 +614,82 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
     }
   }
 
+  // Chuỗi duyệt sau thay đổi (DG-21): người làm mới không được đứng trong chuỗi.
+  const nguoiLamMoi = doiNguoi ? d.nguoiPhuTrachId! : goc.ownerId;
+  const canDuyetMoi = d.canDuyet ?? goc.needsApproval;
+  const chuoiCu = await chuoiDuyetCuaViec(nc.tx, id);
+  let chuoiMoi: string[] | null = null;
+  if (canDuyetMoi) {
+    if (d.nguoiDuyetIds?.length) chuoiMoi = d.nguoiDuyetIds;
+    else if (chuoiCu.length === 0) chuoiMoi = await dungChuoiDuyetChoViec(nc, { chuoi: [], nguoiLamId: nguoiLamMoi, nguoiGiaoId: doiNguoi ? toi : (goc.assignedBy ?? toi) });
+    if (chuoiMoi || doiNguoi || (d.canDuyet && !goc.needsApproval)) await kiemNguoiDuyet(nc, chuoiMoi ?? chuoiCu, nguoiLamMoi);
+  } else if (goc.needsApproval && chuoiCu.length) {
+    chuoiMoi = [];
+  }
+  // DG-20: việc cần duyệt bấm Xong → chờ duyệt (cấp 1), chưa xong.
+  const guiDuyet = xongMoi && canDuyetMoi;
+
   const bayGio = new Date();
+  const ngamNhan = laNguoiLam && goc.acceptStatus === "cho-nhan" && (d.trangThai !== undefined || doiKetQuaYeuCau);
   const v = await nc.tx.task.update({
     where: { id },
     data: {
       ...(d.tieuDe !== undefined && { title: d.tieuDe }),
       ...(d.moTa !== undefined && { description: d.moTa }),
-      ...(doiNguoi && { ownerId: d.nguoiPhuTrachId!, assignedBy: nc.hoSo.userId, assignedAt: bayGio }),
-      ...(d.uuTien !== undefined && { priority: d.uuTien }),
-      ...(d.han !== undefined && { dueAt: d.han }),
-      ...(d.trangThai !== undefined && {
-        status: d.trangThai,
-        completedAt: d.trangThai === "xong" ? (goc.completedAt ?? bayGio) : null,
+      ...(doiNguoi && {
+        ownerId: d.nguoiPhuTrachId!,
+        assignedBy: toi,
+        assignedAt: bayGio,
+        acceptStatus: d.nguoiPhuTrachId === toi ? null : "cho-nhan",
+        acceptedAt: null,
+        declinedAt: null,
+        declineReason: null,
       }),
+      // Người giao "gửi lại" việc đã bị từ chối cho cùng người: sửa gì đó thì việc về chờ nhận.
+      ...(!doiNguoi && goc.acceptStatus === "tu-choi" && !laNguoiLam && { acceptStatus: "cho-nhan", declinedAt: null, declineReason: null, assignedAt: bayGio }),
+      // Người làm bắt tay vào việc / hoàn thành mà chưa bấm Nhận: coi như đã nhận (DG-03).
+      ...(ngamNhan && { acceptStatus: "da-nhan", acceptedAt: bayGio }),
+      ...(d.uuTien !== undefined && { priority: d.uuTien }),
+      ...(d.han !== undefined && { dueAt: d.han, ...(goc.originalDueAt === null && { originalDueAt: d.han }) }),
+      ...(d.doKho !== undefined && { difficulty: d.doKho }),
+      ...(d.canDuyet !== undefined && { needsApproval: d.canDuyet }),
+      ...(guiDuyet
+        ? { status: "cho-duyet", completedAt: null, submittedAt: bayGio, approvalRound: { increment: 1 }, approvalLevel: 1 }
+        : d.trangThai !== undefined && {
+            status: d.trangThai,
+            completedAt: d.trangThai === "xong" ? (goc.completedAt ?? bayGio) : null,
+          }),
       ...(doiKetQua && {
         result: ketQuaMoi ?? null,
         outcome: danhGiaMoi ?? null,
         resultAt: ketQuaMoi ? bayGio : null,
-        resultBy: ketQuaMoi ? nc.hoSo.userId : null,
+        resultBy: ketQuaMoi ? toi : null,
       }),
-      updatedBy: nc.hoSo.userId,
+      updatedBy: toi,
     },
     select: CHON_VIEC,
   });
+  if (chuoiMoi) await ghiChuoiDuyet(nc, id, chuoiMoi);
+  // DG-05: người giao / quản lý đổi thẳng hạn việc đã có hạn → ghi như một lần gia hạn đã duyệt (giữ lịch sử).
+  if (doiHan && hanCu !== null && d.han) {
+    await nc.tx.taskExtension.create({
+      data: {
+        tenantId: nc.tenantId, taskId: id, requestedBy: toi, oldDueAt: goc.dueAt, newDueAt: d.han,
+        reason: "Người giao đổi hạn trực tiếp.", status: "da-duyet", decidedBy: toi, decidedAt: bayGio,
+      },
+    });
+  }
   const sau = chuyenDoi(v);
-  await nc.kiemToan({ action: "sua", objectType: "task", objectId: id, before: anhChup(truoc), after: anhChup(sau) });
-  await nc.suKien({ eventType: xongMoi ? SU_KIEN.TASK_COMPLETED : SU_KIEN.TASK_UPDATED, objectType: "task", objectId: id });
+  await nc.kiemToan({ action: "sua", objectType: "task", objectId: id, before: anhChup(truoc), after: { ...anhChup(sau), ...(chuoiMoi && { nguoiDuyet: chuoiMoi }) } });
+  await nc.suKien({ eventType: guiDuyet ? SU_KIEN.TASK_SUBMITTED : xongMoi ? SU_KIEN.TASK_COMPLETED : SU_KIEN.TASK_UPDATED, objectType: "task", objectId: id });
+  if (ngamNhan) await nc.suKien({ eventType: SU_KIEN.TASK_ACCEPTED, objectType: "task", objectId: id, payload: { ngam: true } });
 
   if (doiNguoi) {
     await nc.suKien({ eventType: SU_KIEN.TASK_ASSIGNED, objectType: "task", objectId: id, payload: { tu: goc.ownerId, sang: sau.nguoiPhuTrach.id } });
     await baoDuocGiao(nc, sau, true);
     await baoChuyenDi(nc, sau, goc.ownerId);
+  } else if (goc.acceptStatus === "tu-choi" && !laNguoiLam) {
+    await baoDuocGiao(nc, sau, false);
   }
 
   let viecTiepTheo: CongViec | null = null;
@@ -494,7 +707,12 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
         coHoiId: sau.coHoi?.id ?? null,
       });
     }
-    await baoDaXong(nc, sau, goc.createdBy);
+    if (guiDuyet) {
+      await ghiNhatKyDuyet(nc, { taskId: id, vong: v.approvalRound, cap: null, hanhDong: "gui-duyet", han: v.dueAt });
+      await baoChoDuyet(nc, sau, 1);
+    } else {
+      await baoDaXong(nc, sau, goc.createdBy);
+    }
   }
   return { ...sau, viecTiepTheo };
 }
@@ -514,8 +732,10 @@ export async function chiTietViec(nc: NguCanh, id: string) {
   const duocSua = coQuyen(nc.hoSo, "task.update") && (await trongPhamVi(nc, "task.update", v.ownerId));
   const kiemTra = await chayKiemTra(nc, v, { coViecTiepTheo: false });
   const hoSoKhach = await hoSoKhachCuaViec(nc, v.customer?.id ?? null);
+  const xemDiem = (await boLocDiem(nc))(v.ownerId);
   return {
-    viec: chuyenDoi(v),
+    viec: anDiem(chuyenDoi(v), xemDiem),
+    xemDiem,
     mucKiemTra: muc.map((m) => ({ id: m.id, nhan: m.label, batBuoc: m.required, daTich: !!m.doneAt, tichLuc: m.doneAt, nguoiTich: m.doneUser?.fullName ?? null })),
     kiemTra,
     hoSoKhach,

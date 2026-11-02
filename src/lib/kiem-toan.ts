@@ -67,7 +67,31 @@ export type HanhDong =
   | "xem-xet-lan-cham"
   | "sinh-bang-cong"
   | "khoa-bang-cong"
-  | "phan-hoi-bang-cong";
+  | "phan-hoi-bang-cong"
+  // 0.20.0 — giao việc, báo cáo, duyệt, đánh giá, thực tập
+  | "nhan-viec"
+  | "tu-choi-viec"
+  | "giao-nhieu-nguoi"
+  | "xin-gia-han"
+  | "duyet-gia-han"
+  | "tu-choi-gia-han"
+  | "duyet-viec"
+  | "tra-lai-viec"
+  | "dieu-chinh-diem-viec"
+  | "sinh-viec-dinh-ky"
+  | "nop-bao-cao"
+  | "nhan-xet-bao-cao"
+  | "chuyen-vuong-mac"
+  | "tao-ky-danh-gia"
+  | "tu-danh-gia"
+  | "quan-ly-cham"
+  | "chot-danh-gia"
+  | "dieu-chinh-danh-gia"
+  | "lam-moi-so-lieu"
+  | "nop-nhat-ky"
+  | "nhan-xet-nhat-ky"
+  | "cham-thuc-tap"
+  | "chot-thuc-tap";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

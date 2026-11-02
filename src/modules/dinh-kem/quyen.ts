@@ -50,6 +50,13 @@ async function coTrongPhamVi(nc: NguCanh, loai: LoaiDoiTuong, id: string): Promi
       const n = await nc.tx.task.count({ where: { AND: [{ id }, await dieuKienXemViec(nc)] } });
       return n > 0;
     }
+    case "task_progress": {
+      // 0.20.0 (DG-13): tệp của một dòng tiến độ — xem được khi xem được công việc chứa dòng đó.
+      const dong = await nc.tx.taskProgressLog.findFirst({ where: { id }, select: { taskId: true } });
+      if (!dong) return false;
+      const n = await nc.tx.task.count({ where: { AND: [{ id: dong.taskId }, await dieuKienXemViec(nc)] } });
+      return n > 0;
+    }
     case "employment_contract": {
       // 0.19.0 (NS-03): hợp đồng lao động — theo phạm vi nhan_su.view của người có hợp đồng.
       const n = await nc.tx.employmentContract.count({ where: { AND: [{ id }, await dieuKienXemHopDong(nc)] } });
@@ -73,6 +80,7 @@ const QUYEN_XEM: Record<LoaiDoiTuong, string[]> = {
   support_ticket: ["service_desk.view"],
   task: ["task.view"],
   employment_contract: ["nhan_su.view"],
+  task_progress: ["task.view"],
 };
 
 /** Mã quyền cần có để **đính kèm hoặc gỡ** tệp của từng loại. */
@@ -85,6 +93,7 @@ const QUYEN_SUA: Record<LoaiDoiTuong, string[]> = {
   support_ticket: ["service_desk.update"],
   task: ["task.update"],
   employment_contract: ["nhan_su.update"],
+  task_progress: ["task.update"],
 };
 
 export async function duocXemChungTu(nc: NguCanh, loai: LoaiDoiTuong, id: string): Promise<boolean> {

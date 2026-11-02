@@ -88,11 +88,13 @@ export const NHAN_TUONG_TAC: Record<string, string> = {
 // Công việc
 // ---------------------------------------------------------------------------
 
-export const TRANG_THAI_VIEC = ["mo", "dang-lam", "xong", "huy"] as const;
+/** 0.20.0: thêm `cho-duyet` — việc cần duyệt đã làm xong, chờ người duyệt (DG-20). */
+export const TRANG_THAI_VIEC = ["mo", "dang-lam", "cho-duyet", "xong", "huy"] as const;
 export type TrangThaiViec = (typeof TRANG_THAI_VIEC)[number];
 export const NHAN_TRANG_THAI_VIEC: Record<string, string> = {
   mo: "Chưa làm",
   "dang-lam": "Đang làm",
+  "cho-duyet": "Chờ duyệt",
   xong: "Xong",
   huy: "Đã hủy",
 };
