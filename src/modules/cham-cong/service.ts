@@ -10,6 +10,7 @@ import { PHIEN_BAN_THONG_BAO_VI_TRI, type DuLieuChamGps } from "./luoc-do";
 import {
   CO,
   danhGiaViTri,
+  duocTinhCong,
   duongDanBanDo,
   ganNgayCong,
   laBamTrung,
@@ -36,6 +37,9 @@ export const NHAN_CO: Record<string, string> = {
   [CO.tocDoBatThuong]: "Tốc độ di chuyển bất thường",
   [CO.thieuQuyenViTri]: "Không lấy được vị trí",
   [CO.gioMayLech]: "Giờ máy chấm công lệch",
+  [CO.gioMayVoLy]: "Giờ máy chấm công vô lý",
+  [CO.phieuHienTruongCu]: "Phiếu hỗ trợ không còn hoạt động gần đây",
+  [CO.phieuDaXong]: "Phiếu hỗ trợ đã xử lý xong",
   "di-muon": "Đi muộn",
   "ve-som": "Về sớm",
   "vang-mat": "Vắng mặt",
@@ -256,15 +260,8 @@ export async function quyetDinhMoiNhat(tx: ClientTenant, punchIds: string[]): Pr
   return kq;
 }
 
-/**
- * Lần chấm có được TÍNH CÔNG không (NS-12): bị từ chối → không; GPS "ngoài vùng" → chỉ khi đã được
- * chấp nhận; còn lại (trong vùng, hiện trường, vân tay, bổ sung, CSV) → có, kể cả khi đang chờ xem xét.
- */
-export function duocTinhCong(p: { gpsResult: string | null }, quyetDinh: string | undefined): boolean {
-  if (quyetDinh === "tu-choi") return false;
-  if (p.gpsResult === "ngoai-vung") return quyetDinh === "chap-nhan";
-  return true;
-}
+/** Thuần — ở tinh-toan.ts (có kiểm thử đơn vị); xuất lại cho các tệp dịch vụ cũ. */
+export { duocTinhCong } from "./tinh-toan";
 
 // ---------------------------------------------------------------------------
 // Chấm công của tôi
@@ -337,14 +334,18 @@ export async function chamCongCuaToi(nc: NguCanh, bayGio = new Date()) {
 export async function lanChamCanXemXet(nc: NguCanh, nguoiIds: string[] | "tat-ca", tu: Date) {
   const ds = await nc.tx.attendancePunch.findMany({
     where: {
-      needsReview: true, punchedAt: { gte: tu }, ...(nguoiIds !== "tat-ca" && { userId: { in: nguoiIds } }), reviews: { none: {} },
+      needsReview: true, ...(nguoiIds !== "tat-ca" && { userId: { in: nguoiIds } }), reviews: { none: {} },
+      // Lần chấm vân tay mang giờ máy vô lý (vd 2000-01-01) nằm ngoài mọi khoảng gần đây theo GIỜ CHẤM —
+      // vẫn phải hiện để quản lý biết, nên lấy cả theo lúc máy chủ NHẬN.
+      OR: [{ punchedAt: { gte: tu } }, { createdAt: { gte: tu } }],
       // Không bao giờ hiện lần chấm của chính người xem (NS-12: không tự xem xét).
       NOT: { userId: nc.hoSo.userId },
     },
     orderBy: { punchedAt: "desc" },
     take: 200,
     select: {
-      id: true, userId: true, punchedAt: true, direction: true, gpsResult: true, flags: true, latitude: true, longitude: true, distanceM: true, ticketId: true,
+      id: true, userId: true, punchedAt: true, source: true, direction: true, gpsResult: true, flags: true, latitude: true, longitude: true, distanceM: true, ticketId: true,
+      device: { select: { name: true } },
     },
   });
   const ten = await banDoTen(nc.tx, ds.map((p) => p.userId));
@@ -354,9 +355,13 @@ export async function lanChamCanXemXet(nc: NguCanh, nguoiIds: string[] | "tat-ca
     id: p.id,
     nguoi: { id: p.userId, hoTen: ten.get(p.userId ?? "") ?? "—" },
     luc: p.punchedAt,
+    nguon: p.source,
+    may: p.device?.name ?? null,
     huong: p.direction,
     ketQuaGps: p.gpsResult,
     co: Array.isArray(p.flags) ? (p.flags as string[]) : [],
+    /** Lần chấm này CHƯA tính công cho tới khi được chấp nhận. */
+    chuaTinh: !duocTinhCong(p, undefined),
     khoangCachM: p.distanceM,
     phieu: p.ticketId ? { id: p.ticketId, so: soPhieu.get(p.ticketId) ?? "" } : null,
     banDo: p.latitude !== null && p.longitude !== null ? duongDanBanDo(p.latitude, p.longitude) : null,

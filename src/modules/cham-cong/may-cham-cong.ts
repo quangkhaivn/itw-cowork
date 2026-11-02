@@ -11,7 +11,7 @@ import { LuocDoAnhXaPin, LuocDoMayChamCong, LuocDoSuaMayChamCong } from "@/modul
 import { BO_DOC_ZKTECO, laSoSeriHopLe, type BoDocAdms } from "./adms";
 import { docCauHinhChamCong, so } from "./chung";
 import { phanTichCsvChamCong } from "./nhap-csv";
-import { CO } from "./tinh-toan";
+import { canChapNhanMoiTinh, danhGiaGioMay } from "./tinh-toan";
 
 /**
  * Máy chấm công vân tay (ZKTeco ADMS/PUSH) — đăng ký máy, nhận dữ liệu máy đẩy lên, PIN chưa khớp,
@@ -25,8 +25,6 @@ import { CO } from "./tinh-toan";
 export const ADMS_THAN_TOI_DA_BYTE = 2 * 1024 * 1024;
 const ADMS_TOI_DA_MOI_PHUT_THEO_SN = 120;
 const ADMS_TOI_DA_MOI_PHUT_THEO_IP = 600;
-/** Giờ trên máy đi trước giờ máy chủ quá mức này thì gắn cờ "giờ máy lệch" (máy mất pin đồng hồ, đặt sai). */
-const ADMS_GIO_MAY_DI_TRUOC_TOI_DA_MS = 60 * 60_000;
 /** Không ghi "lần cuối thấy máy" quá dày: một lần mỗi 30 giây là đủ cho cảnh báo mất kết nối tính bằng phút. */
 const ADMS_GHI_NHIP_MOI_MS = 30_000;
 
@@ -158,6 +156,10 @@ async function ghiAttlog(
   bayGio: Date,
 ): Promise<number> {
   if (dong.length === 0) return 0;
+  // Giờ máy lệch / vô lý (NS-14, QĐ-113): ngưỡng ở Cấu hình; lần chấm mang cờ vào hàng chờ xem xét và
+  // CHƯA tính công cho tới khi quản lý chấp nhận (như GPS ngoài vùng).
+  const ch = await docCauHinhChamCong(tx);
+  const nguongGio = { lechToiDaPhut: so(ch.gioMayLechToiDaPhut, 60), namToiThieu: so(ch.gioMayNamToiThieu, 2020) };
   const pins = [...new Set(dong.map((d) => d.pin))];
   const hs = await tx.staffProfile.findMany({ where: { attendancePin: { in: pins } }, select: { userId: true, attendancePin: true } });
   const theoPin = new Map(hs.map((h) => [h.attendancePin!, h.userId]));
@@ -167,21 +169,25 @@ async function ghiAttlog(
     const lo = dong.slice(i, i + 1000);
     const kq = await tx.attendancePunch.createMany({
       skipDuplicates: true,
-      data: lo.map((d) => ({
-        tenantId,
-        userId: theoPin.get(d.pin) ?? null,
-        matchedAt: theoPin.has(d.pin) ? bayGio : null,
-        pin: d.pin,
-        punchedAt: d.luc,
-        source: "van-tay",
-        deviceId: may.id,
-        locationId: may.locationId,
-        deviceStatus: d.trangThai,
-        verifyCode: d.xacThuc,
-        workCode: d.maCongViec,
-        rawLine: d.dongGoc,
-        flags: d.luc.getTime() - bayGio.getTime() > ADMS_GIO_MAY_DI_TRUOC_TOI_DA_MS ? [CO.gioMayLech] : [],
-      })),
+      data: lo.map((d) => {
+        const co = danhGiaGioMay(d.luc, bayGio, nguongGio);
+        return {
+          tenantId,
+          userId: theoPin.get(d.pin) ?? null,
+          matchedAt: theoPin.has(d.pin) ? bayGio : null,
+          pin: d.pin,
+          punchedAt: d.luc,
+          source: "van-tay",
+          deviceId: may.id,
+          locationId: may.locationId,
+          deviceStatus: d.trangThai,
+          verifyCode: d.xacThuc,
+          workCode: d.maCongViec,
+          rawLine: d.dongGoc,
+          flags: co,
+          needsReview: canChapNhanMoiTinh({ gpsResult: null, flags: co }),
+        };
+      }),
     });
     soMoi += kq.count;
   }

@@ -31,6 +31,8 @@ import {
   tocDoToiThieuKmh,
   tongHopThang,
   trangThaiHomNay,
+  canChapNhanMoiTinh,
+  danhGiaGioMay,
   type CaLam,
   type DongCongThang,
   type PhanNgay,
@@ -504,5 +506,32 @@ describe("NS-70: quyền và vai trò chấm công", () => {
     assert.equal(md("cham_cong.han_phan_hoi_ngay"), 3);
     assert.equal(md("cham_cong.tang_ca_toi_da_thang"), null);
     assert.equal(md("nghi_phep.so_ngay_nam"), 12);
+  });
+});
+
+describe("QA 0.19.0 — quyết định chính sách (QĐ-113 → QĐ-118)", () => {
+  const NG = { lechToiDaPhut: 60, namToiThieu: 2020 };
+  const bay = new Date("2026-10-10T02:00:00Z"); // 09:00 giờ VN
+  it("QĐ-113: giờ máy đi trước > ngưỡng → lệch; > 1 ngày hoặc năm < 2020 → vô lý; trong ngưỡng / quá khứ gần → không cờ", () => {
+    assert.deepEqual(danhGiaGioMay(new Date(bay.getTime() + 30 * 60_000), bay, NG), []);
+    assert.deepEqual(danhGiaGioMay(new Date(bay.getTime() + 61 * 60_000), bay, NG), ["gio-may-lech"]);
+    assert.deepEqual(danhGiaGioMay(new Date(bay.getTime() + 25 * 3_600_000), bay, NG), ["gio-may-lech", "gio-may-vo-ly"]);
+    assert.deepEqual(danhGiaGioMay(new Date("2000-01-01T00:00:00+07:00"), bay, NG), ["gio-may-vo-ly"]);
+    assert.deepEqual(danhGiaGioMay(new Date("2019-12-31T23:59:00+07:00"), bay, NG), ["gio-may-vo-ly"]);
+    assert.deepEqual(danhGiaGioMay(new Date("2020-01-01T00:00:00+07:00"), bay, NG), []);
+    assert.deepEqual(danhGiaGioMay(new Date("2026-01-05T08:00:00+07:00"), bay, NG), [], "lần đồng bộ đầu gửi lại dữ liệu cũ hợp lệ — không cờ");
+    // Ngưỡng lấy từ Cấu hình, không cố định.
+    assert.deepEqual(danhGiaGioMay(new Date(bay.getTime() + 30 * 60_000), bay, { lechToiDaPhut: 10, namToiThieu: 2020 }), ["gio-may-lech"]);
+  });
+  it("QĐ-113 / QĐ-115: lần chấm mang cờ chờ chấp nhận không tính công tới khi được chấp nhận", () => {
+    for (const co of ["gio-may-lech", "gio-may-vo-ly", "phieu-hien-truong-cu", "phieu-da-xong"]) {
+      assert.equal(canChapNhanMoiTinh({ gpsResult: null, flags: [co] }), true, co);
+      assert.equal(duocTinhCong({ gpsResult: null, flags: [co] }, undefined), false, co);
+      assert.equal(duocTinhCong({ gpsResult: "hien-truong", flags: [co] }, "chap-nhan"), true, co);
+      assert.equal(duocTinhCong({ gpsResult: null, flags: [co] }, "tu-choi"), false, co);
+    }
+    // Cờ chỉ để xem lại (độ chính xác, tốc độ) vẫn tính ngay như trước.
+    assert.equal(duocTinhCong({ gpsResult: "hop-le", flags: ["do-chinh-xac-thap", "toc-do-bat-thuong"] }, undefined), true);
+    assert.equal(canChapNhanMoiTinh({ gpsResult: "hop-le", flags: "rac" }), false);
   });
 });

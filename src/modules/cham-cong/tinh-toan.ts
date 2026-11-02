@@ -121,7 +121,56 @@ export const CO = {
   tocDoBatThuong: "toc-do-bat-thuong",
   thieuQuyenViTri: "thieu-quyen-vi-tri",
   gioMayLech: "gio-may-lech",
+  /** Mốc giờ máy vô lý: đi trước giờ máy chủ quá 1 ngày, hoặc năm nhỏ hơn `cham_cong.gio_may_nam_toi_thieu` (QA 0.19.0). */
+  gioMayVoLy: "gio-may-vo-ly",
+  /** Chấm "hiện trường" theo phiếu hỗ trợ không có hoạt động trong `cham_cong.phieu_hien_truong_ngay` ngày. */
+  phieuHienTruongCu: "phieu-hien-truong-cu",
+  /** Chấm "hiện trường" theo phiếu đã xử lý xong trong ngày (không còn mở). */
+  phieuDaXong: "phieu-da-xong",
 } as const;
+
+/**
+ * Cờ của LẦN CHẤM khiến lần chấm CHƯA ĐƯỢC TÍNH CÔNG cho tới khi quản lý chấp nhận (như GPS ngoài vùng).
+ * Các cờ khác (độ chính xác thấp, tốc độ bất thường…) vẫn tính ngay, quản lý xem lại sau (NS-12).
+ */
+export const CO_CHO_CHAP_NHAN: readonly string[] = [CO.gioMayLech, CO.gioMayVoLy, CO.phieuHienTruongCu, CO.phieuDaXong];
+
+function coCua(flags: unknown): string[] {
+  return Array.isArray(flags) ? flags.filter((x): x is string => typeof x === "string") : [];
+}
+
+/** Lần chấm mang cờ phải chờ chấp nhận. */
+export function canChapNhanMoiTinh(p: { gpsResult: string | null; flags?: unknown }): boolean {
+  return p.gpsResult === "ngoai-vung" || coCua(p.flags).some((c) => CO_CHO_CHAP_NHAN.includes(c));
+}
+
+/**
+ * Lần chấm có được TÍNH CÔNG không (NS-12): bị từ chối → không; GPS "ngoài vùng" hoặc mang cờ chờ chấp
+ * nhận (giờ máy lệch / vô lý, phiếu hiện trường cũ / đã xong) → chỉ khi đã được chấp nhận; còn lại (trong
+ * vùng, hiện trường hợp lệ, vân tay, bổ sung, CSV) → có, kể cả khi đang chờ xem xét.
+ */
+export function duocTinhCong(p: { gpsResult: string | null; flags?: unknown }, quyetDinh: string | undefined): boolean {
+  if (quyetDinh === "tu-choi") return false;
+  if (canChapNhanMoiTinh(p)) return quyetDinh === "chap-nhan";
+  return true;
+}
+
+/** Máy đi trước giờ máy chủ quá mức này thì mốc chắc chắn sai (không chỉ lệch vài phút) — nhãn "vô lý". */
+const GIO_MAY_VO_LY_TUONG_LAI_MS = 86_400_000;
+
+/**
+ * Đánh giá giờ trên máy vân tay so với giờ máy chủ lúc nhận (NS-14):
+ *  - đi trước quá `lechToiDaPhut` → cờ giờ máy lệch;
+ *  - đi trước quá 1 ngày, hoặc năm (giờ Việt Nam) nhỏ hơn `namToiThieu` (máy mất pin đồng hồ hay về 2000) → cờ vô lý.
+ * Cả hai cờ đều đưa lần chấm vào hàng chờ xem xét, chưa tính công.
+ */
+export function danhGiaGioMay(luc: Date, bayGio: Date, nguong: { lechToiDaPhut: number; namToiThieu: number }): string[] {
+  const co: string[] = [];
+  const truoc = luc.getTime() - bayGio.getTime();
+  if (truoc > nguong.lechToiDaPhut * PHUT_MS) co.push(CO.gioMayLech);
+  if (truoc > GIO_MAY_VO_LY_TUONG_LAI_MS || Number(ngayVNCua(luc).slice(0, 4)) < nguong.namToiThieu) co.push(CO.gioMayVoLy);
+  return co;
+}
 
 /**
  * Đánh giá một vị trí GPS so với các địa điểm làm việc (NS-11). `viTri = null` = trình duyệt không

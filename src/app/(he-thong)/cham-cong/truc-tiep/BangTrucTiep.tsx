@@ -10,7 +10,7 @@ type Dong = {
   lanCuoi: { luc: string; nguon: string; huong: string | null; ketQuaGps: string | null; noi: string | null; banDo: string | null; phieuId: string | null } | null;
 };
 type May = { id: string; ten: string; diaDiem: { ten: string }; lanCuoi: string | null; trucTuyen: boolean };
-type XemXet = { id: string; nguoi: { hoTen: string }; luc: string; huong: string | null; ketQuaGps: string | null; co: string[]; khoangCachM: number | null; phieu: { id: string; so: string } | null; banDo: string | null };
+type XemXet = { id: string; nguoi: { hoTen: string }; luc: string; nguon: string; may: string | null; chuaTinh: boolean; huong: string | null; ketQuaGps: string | null; co: string[]; khoangCachM: number | null; phieu: { id: string; so: string } | null; banDo: string | null };
 type DuLieu = { ngay: string; capNhatLuc: string; tomTat: Record<string, number>; dong: Dong[]; may: { nguongPhut: number; dong: May[] } | null; canXemXet: XemXet[] };
 
 const LOP: Record<string, string> = {
@@ -22,7 +22,11 @@ const NHAN_TOM_TAT: Record<string, string> = {
   "chua-toi-gio": "Chưa tới giờ", "khong-co-ca": "Không có ca",
 };
 const NHAN_NGUON: Record<string, string> = { "van-tay": "Vân tay", gps: "GPS", "bo-sung": "Chấm bù", "nhap-csv": "Nhập tệp" };
-const NHAN_CO: Record<string, string> = { "do-chinh-xac-thap": "GPS kém chính xác", "toc-do-bat-thuong": "Tốc độ bất thường", "thieu-quyen-vi-tri": "Không có vị trí" };
+const NHAN_CO: Record<string, string> = {
+  "do-chinh-xac-thap": "GPS kém chính xác", "toc-do-bat-thuong": "Tốc độ bất thường", "thieu-quyen-vi-tri": "Không có vị trí",
+  "gio-may-lech": "Giờ máy vân tay lệch", "gio-may-vo-ly": "Giờ máy vân tay vô lý", "phieu-hien-truong-cu": "Phiếu hỗ trợ không còn hoạt động gần đây",
+  "phieu-da-xong": "Phiếu hỗ trợ đã xử lý xong",
+};
 const gio = (s: string | null) => (s ? new Date(s).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }) : "—");
 const ngayGio = (s: string | null) => (s ? new Date(s).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "chưa từng");
 
@@ -126,10 +130,13 @@ export default function BangTrucTiep({ phongBan, diaDiem }: { phongBan: { id: st
                     <td>{p.nguoi.hoTen}</td>
                     <td>{ngayGio(p.luc)} {p.huong === "ra" ? "(ra)" : p.huong === "vao" ? "(vào)" : ""}</td>
                     <td>
-                      {p.ketQuaGps === "hien-truong" ? "Hiện trường" : p.ketQuaGps === "ngoai-vung" ? "Ngoài vùng" : "Trong vùng"}
+                      {p.nguon === "van-tay" ? `Máy vân tay${p.may ? ` · ${p.may}` : ""}` : p.ketQuaGps === "hien-truong" ? "Hiện trường" : p.ketQuaGps === "ngoai-vung" ? "Ngoài vùng" : "Trong vùng"}
                       {p.phieu && <> · <Link href={`/dich-vu/ho-tro/${p.phieu.id}`}>{p.phieu.so}</Link></>}
                     </td>
-                    <td>{p.co.map((c) => NHAN_CO[c] ?? c).join(", ") || "—"}</td>
+                    <td>
+                      {p.co.map((c) => NHAN_CO[c] ?? c).join(", ") || "—"}
+                      {p.chuaTinh && <div className="phu nho">Chưa tính công cho tới khi chấp nhận</div>}
+                    </td>
                     <td>
                       {p.khoangCachM !== null && `${p.khoangCachM.toLocaleString("vi-VN")} m · `}
                       {p.banDo ? <a href={p.banDo} target="_blank" rel="noopener noreferrer">Xem trên bản đồ</a> : "—"}

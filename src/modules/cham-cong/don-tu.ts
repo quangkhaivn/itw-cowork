@@ -243,7 +243,7 @@ export async function tangCaThucTe(nc: NguCanh, id: string) {
   });
   const lan = await nc.tx.attendancePunch.findMany({
     where: { userId: r.userId, punchedAt: { gte: mocVN(truoc, 0), lt: mocVN(congNgay(sau, 1), 0) } },
-    select: { id: true, punchedAt: true, gpsResult: true },
+    select: { id: true, punchedAt: true, gpsResult: true, flags: true },
   });
   const qd = await quyetDinhMoiNhat(nc.tx, lan.map((p) => p.id));
   const nhom = ganNgayCong(lan.filter((p) => duocTinhCong(p, qd.get(p.id))).map((p) => p.punchedAt), cacNgay, so(ch.cuaSoTruocPhut, 240), so(ch.cuaSoSauPhut, 480)).get(ngay) ?? [];

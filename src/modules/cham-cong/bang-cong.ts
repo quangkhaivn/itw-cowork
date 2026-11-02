@@ -57,7 +57,7 @@ async function tinhCong(tx: ClientTenant, ch: CauHinhChamCong, userIds: string[]
   const nghi = await nghiDaDuyet(tx, userIds, tu, den);
   const lan = await tx.attendancePunch.findMany({
     where: { userId: { in: userIds }, punchedAt: { gte: mocVN(truoc, 0), lt: mocVN(congNgay(sau, 1), 0) } },
-    select: { id: true, userId: true, punchedAt: true, source: true, gpsResult: true, needsReview: true },
+    select: { id: true, userId: true, punchedAt: true, source: true, gpsResult: true, flags: true, needsReview: true },
   });
   const qd = await quyetDinhMoiNhat(tx, lan.filter((p) => p.needsReview).map((p) => p.id));
   const tangCa = await tx.overtimeRequest.findMany({

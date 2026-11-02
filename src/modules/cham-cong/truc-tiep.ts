@@ -54,7 +54,7 @@ export async function bangTrucTiep(nc: NguCanh, loc: { phongBanId: string | null
     where: { userId: { in: ids }, punchedAt: { gte: mocVN(homQua, 0), lte: bayGio } },
     orderBy: { punchedAt: "asc" },
     select: {
-      id: true, userId: true, punchedAt: true, source: true, direction: true, gpsResult: true, needsReview: true, latitude: true, longitude: true,
+      id: true, userId: true, punchedAt: true, source: true, direction: true, gpsResult: true, flags: true, needsReview: true, latitude: true, longitude: true,
       ticketId: true, device: { select: { name: true } }, location: { select: { name: true } },
     },
   });

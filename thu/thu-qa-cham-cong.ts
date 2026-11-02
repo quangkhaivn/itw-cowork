@@ -6,7 +6,7 @@ import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "../src/lib/loi";
 import { layIpKhach } from "../src/lib/yeu-cau";
 import { seedNenMong } from "../prisma/seed/index";
 import { POST as postIclock, GET as getIclock } from "../src/app/iclock/[...duong]/route";
-import { chamCongGps, xacNhanThongBaoViTri, xemXetLanCham } from "../src/modules/cham-cong/service";
+import { chamCongGps, duocTinhCong, quyetDinhMoiNhat, xacNhanThongBaoViTri, xemXetLanCham } from "../src/modules/cham-cong/service";
 import { bangTrucTiep } from "../src/modules/cham-cong/truc-tiep";
 import { anhXaPin, taoMay, suaMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
 import { quetChamCong } from "../src/modules/cham-cong/nhac-viec";
@@ -193,6 +193,28 @@ async function main() {
   const lech = await chu.attendancePunch.findMany({ where: { deviceId: may.id, pin: "2001", punchedAt: { gte: vn("2026-10-10T00:00:00") } } });
   const coCo = (iso: string) => (lech.find((p) => p.punchedAt.toISOString() === iso)?.flags as string[] | undefined)?.includes("gio-may-lech");
   dat("Giờ máy đi trước giờ máy chủ 90 phút → cờ giờ máy lệch; 30 phút → không cờ", coCo(vn("2026-10-10T10:30:00").toISOString()) === true && coCo(vn("2026-10-10T09:30:00").toISOString()) === false);
+
+  // QĐ-113: lần chấm giờ máy lệch / vô lý → hàng chờ xem xét, chưa tính công tới khi được chấp nhận.
+  const pLech = lech.find((p) => p.punchedAt.toISOString() === vn("2026-10-10T10:30:00").toISOString())!;
+  const pThuong = lech.find((p) => p.punchedAt.toISOString() === vn("2026-10-10T09:30:00").toISOString())!;
+  const p2000 = await chu.attendancePunch.findFirstOrThrow({ where: { deviceId: may.id, pin: "2001", punchedAt: vn("2000-01-01T00:00:00") } });
+  dat("QĐ-113: giờ máy lệch → cần xem xét, CHƯA tính công; lần chấm bình thường không bị ảnh hưởng",
+    pLech.needsReview && !duocTinhCong(pLech, undefined) && !pThuong.needsReview && duocTinhCong(pThuong, undefined));
+  dat("QĐ-113: năm 2000 (mất pin đồng hồ) → cờ giờ máy vô lý, cần xem xét, chưa tính công",
+    (p2000.flags as string[]).includes("gio-may-vo-ly") && p2000.needsReview && !duocTinhCong(p2000, undefined));
+  const vl = "2001\t2026-10-12 09:00:00\t0\t1";
+  await adms("POST", "cdata", `SN=${SN}&table=ATTLOG`, vl, undefined, bayGioMay);
+  const pVl = await chu.attendancePunch.findFirstOrThrow({ where: { deviceId: may.id, pin: "2001", punchedAt: vn("2026-10-12T09:00:00") } });
+  dat("QĐ-113: đi trước > 1 ngày → cả cờ lệch lẫn vô lý", ["gio-may-lech", "gio-may-vo-ly"].every((c) => (pVl.flags as string[]).includes(c)) && pVl.needsReview);
+  const hangCho = await voi(T, tp, (nc) => bangTrucTiep(nc, { phongBanId: null, diaDiemId: null }, bayGioMay));
+  const trongHang = hangCho.canXemXet.find((x) => x.id === pLech.id);
+  dat("QĐ-113: quản lý trực tiếp thấy lần chấm vân tay lệch giờ trong hàng chờ (kèm 'chưa tính công'), cả lần năm 2000",
+    Boolean(trongHang && trongHang.nguon === "van-tay" && trongHang.chuaTinh) && hangCho.canXemXet.some((x) => x.id === p2000.id));
+  await nemLoi("QĐ-113: nhân viên không tự xem xét lần chấm vân tay của mình", () => voi(T, nvA, (nc) => xemXetLanCham(nc, pLech.id, { quyetDinh: "chap-nhan", ghiChu: null })), "khong-tu-duyet");
+  await voi(T, tp, (nc) => xemXetLanCham(nc, pLech.id, { quyetDinh: "chap-nhan", ghiChu: "Máy đặt sai giờ, đã kiểm camera" }));
+  await voi(T, tp, (nc) => xemXetLanCham(nc, p2000.id, { quyetDinh: "tu-choi", ghiChu: "Giờ máy sai — nhân viên làm giải trình" }));
+  const qdLech = await voiTenant(T, (tx) => quyetDinhMoiNhat(tx, [pLech.id, p2000.id]));
+  dat("QĐ-113: quản lý chấp nhận → tính công; bác → không tính", duocTinhCong(pLech, qdLech.get(pLech.id)) && !duocTinhCong(p2000, qdLech.get(p2000.id)));
 
   // Thiết bị ngừng hoạt động → như SN lạ.
   await voi(T, hr, (nc) => suaMay(nc, may.id, { trangThai: "ngung-hoat-dong" }));
