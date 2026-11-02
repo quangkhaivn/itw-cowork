@@ -21,9 +21,10 @@ import { canChapNhanMoiTinh, danhGiaGioMay } from "./tinh-toan";
  * Nhân sự đăng ký trước cho đúng doanh nghiệp + địa điểm. SN lạ → từ chối và ghi nhật ký máy chủ.
  */
 
-// Trần KỸ THUẬT (không phải ngưỡng nghiệp vụ): chặn một máy hỏng / kẻ dò gửi dồn dập hoặc gửi thân khổng lồ.
+// Trần KỸ THUẬT (không phải ngưỡng nghiệp vụ): chặn kẻ dò gửi dồn dập hoặc gửi thân khổng lồ. Áp TRƯỚC khi
+// tra SN (chưa biết doanh nghiệp nên chưa đọc được Cấu hình). Trần theo máy (SN + IP, tổng theo SN) nằm ở
+// Cấu hình của doanh nghiệp, áp sau khi nhận ra máy (QĐ-114).
 export const ADMS_THAN_TOI_DA_BYTE = 2 * 1024 * 1024;
-const ADMS_TOI_DA_MOI_PHUT_THEO_SN = 120;
 const ADMS_TOI_DA_MOI_PHUT_THEO_IP = 600;
 /** Không ghi "lần cuối thấy máy" quá dày: một lần mỗi 30 giây là đủ cho cảnh báo mất kết nối tính bằng phút. */
 const ADMS_GHI_NHIP_MOI_MS = 30_000;
@@ -74,11 +75,8 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
   if (yc.diemCuoi === "khac") return { status: 404, than: "Not Found" };
   if (!laSoSeriHopLe(yc.sn)) return { status: 400, than: "ERROR: SN" };
 
-  const [theoSn, theoIp] = await Promise.all([
-    demVaKiem(`adms:sn:${yc.sn}`, ADMS_TOI_DA_MOI_PHUT_THEO_SN, 60),
-    demVaKiem(`adms:ip:${y.ip ?? "?"}`, ADMS_TOI_DA_MOI_PHUT_THEO_IP, 60),
-  ]);
-  if (!theoSn.choPhep || !theoIp.choPhep) return { status: 429, than: "ERROR: TOO MANY REQUESTS" };
+  const theoIp = await demVaKiem(`adms:ip:${y.ip ?? "?"}`, ADMS_TOI_DA_MOI_PHUT_THEO_IP, 60);
+  if (!theoIp.choPhep) return { status: 429, than: "ERROR: TOO MANY REQUESTS" };
 
   const may = await traMayTheoSn(yc.sn);
   if (!may) {
@@ -99,6 +97,7 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
       console.warn(`[cham-cong/adms] Máy SN=${tb.serialNumber} gọi từ IP ${y.ip ?? "?"} không nằm trong danh sách cho phép — từ chối.`);
       return { status: 403, than: "ERROR: IP" };
     }
+    if (!(await trongTranMay(tx, tb.serialNumber, y.ip))) return { status: 429, than: "ERROR: TOO MANY REQUESTS" };
 
     // Nhịp sống: mọi yêu cầu của máy đã đăng ký đều cập nhật "lần cuối thấy máy" (NS-17).
     const luc = bayGio();
@@ -131,6 +130,21 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
     if (yc.bang === "OPERLOG" && yc.stamp) await tx.attendanceDevice.update({ where: { id: tb.id }, data: { operlogStamp: yc.stamp } });
     return { status: 200, than: boDoc.phanHoiOk(than.split(/\r?\n/).filter((d) => d.trim() !== "").length) };
   }, { timeoutMs: HAN_GIAO_DICH_THEO_LO_MS });
+}
+
+/**
+ * Trần tốc độ theo máy (NS-14, QĐ-114): đếm theo (SN, IP nguồn) — người lạ biết SN gửi dồn từ IP của họ chỉ
+ * làm CẶP (SN, IP lạ) bị 429, máy thật ở IP văn phòng vẫn gửi được. Thêm trần TỔNG theo SN (mọi IP, mặc định
+ * gấp 5) chống lạm dụng bằng nhiều IP; yêu cầu đã bị chặn ở trần (SN, IP) không cộng vào trần tổng, nên
+ * một IP lạ đóng góp tối đa đúng trần (SN, IP) của nó. Cả hai ngưỡng ở Cấu hình.
+ */
+async function trongTranMay(tx: ClientTenant, sn: string, ip: string | null): Promise<boolean> {
+  const ch = await docCauHinhChamCong(tx);
+  const ma = sn.toUpperCase();
+  const theoCap = await demVaKiem(`adms:sn-ip:${ma}:${ip ?? "?"}`, so(ch.admsToiDaPhutSnIp, 120), 60);
+  if (!theoCap.choPhep) return false;
+  const theoSn = await demVaKiem(`adms:sn:${ma}`, so(ch.admsToiDaPhutSn, 600), 60);
+  return theoSn.choPhep;
 }
 
 function phanTichInfoAnToan(info: string): Prisma.InputJsonValue | null {

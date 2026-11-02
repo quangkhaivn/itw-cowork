@@ -221,6 +221,31 @@ async function main() {
   dat("Máy đã ngừng hoạt động → 401", (await adms("GET", "getrequest", `SN=${SN}`)).status === 401);
   await voi(T, hr, (nc) => suaMay(nc, may.id, { trangThai: "hoat-dong" }));
 
+  // QĐ-114: trần tốc độ theo (SN, IP) + trần tổng theo SN, cả hai ở Cấu hình (thử ở doanh nghiệp 2 để không
+  // ảnh hưởng máy chính của bài thử).
+  const SN_R = `QR${DAU.toUpperCase()}Y`.slice(0, 20);
+  await voi(T2, ngoai, (nc) => taoMay(nc, LuocDoMayChamCong.parse({ soSeri: SN_R, ten: "Máy thử trần", diaDiemId: vpT2.id })));
+  await chu.tenantSetting.createMany({ data: [
+    { tenantId: T2, key: "cham_cong.adms_toi_da_phut_sn_ip", value: 5 },
+    { tenantId: T2, key: "cham_cong.adms_toi_da_phut_sn", value: 10 },
+  ] });
+  const goiR = async (ip: string) => (await adms("GET", "getrequest", `SN=${SN_R}`, null, ip)).status;
+  const mayThat = "198.51.100.30";
+  const kqThat1 = [await goiR(mayThat), await goiR(mayThat), await goiR(mayThat)];
+  const kqLa: number[] = [];
+  for (let i = 0; i < 7; i++) kqLa.push(await goiR("203.0.113.66"));
+  dat("QĐ-114: người lạ biết SN gửi dồn từ IP khác → chính cặp (SN, IP lạ) bị 429 sau 5 lần (Cấu hình)",
+    kqLa.slice(0, 5).every((x) => x === 200) && kqLa.slice(5).every((x) => x === 429), kqLa.join(","));
+  const kqThat2 = await goiR(mayThat);
+  dat("QĐ-114: …máy thật (IP văn phòng) vẫn gửi được, không bị 429", kqThat1.every((x) => x === 200) && kqThat2 === 200, `${kqThat1.join(",")},${kqThat2}`);
+  // Tổng theo SN: 3 + 5 + 1 = 9 lần được nhận (lần bị chặn ở trần (SN, IP) không cộng); thêm hai IP lạ → lần thứ 11 bị chặn.
+  const kqIp2 = await goiR("203.0.113.67");
+  const kqIp3 = await goiR("203.0.113.68");
+  const kqThat3 = await goiR(mayThat);
+  dat("QĐ-114: trần TỔNG theo SN (mọi IP) chống lạm dụng nhiều IP: vượt 10 → 429 cho mọi IP",
+    kqIp2 === 200 && kqIp3 === 429 && kqThat3 === 429, `${kqIp2},${kqIp3},${kqThat3}`);
+  dat("QĐ-114: SN chữ thường đếm chung với SN chữ hoa (không lách trần bằng đổi hoa thường)", (await adms("GET", "getrequest", `SN=${SN_R.toLowerCase()}`, null, "203.0.113.69")).status === 429);
+
   // Lô rất lớn (lần đồng bộ đầu): ~2 MB, phải xong trong một yêu cầu, không 500 (giao dịch mặc định 5 giây).
   const dongLon: string[] = [];
   for (let i = 0; dongLon.join("\n").length < 1_900_000; i++) {
