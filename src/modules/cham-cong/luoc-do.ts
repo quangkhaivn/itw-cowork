@@ -31,6 +31,14 @@ export const LuocDoLocTrucTiep = z.object({
 
 const ngay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày không hợp lệ.");
 
+/** QĐ-116: quản lý xét một ngày công "thiếu giờ" của một người. */
+export const LuocDoXetNgayCong = z.object({
+  nguoiId: z.uuid(),
+  ngay,
+  quyetDinh: z.enum(["du", "nua", "khong"]),
+  ghiChu: z.string().trim().max(1000).optional().transform((s) => (s ? s : null)),
+});
+
 export const LuocDoGiaiTrinh = z.object({
   ngay,
   /** Giờ "HH:MM" theo giờ Việt Nam của ngày công (ca qua đêm: giờ ra có thể là sáng hôm sau — chọn `sangHomSau`). */

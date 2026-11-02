@@ -165,4 +165,6 @@ export const LuocDoSuaMayChamCong = z.object({
 export const LuocDoAnhXaPin = z.object({
   pin: z.string().trim().regex(/^[0-9A-Za-z]{1,20}$/),
   nguoiId: z.uuid(),
+  /** QĐ-118: áp cả lần chấm thuộc kỳ bảng công ĐÃ KHÓA (sinh dòng điều chỉnh ở kỳ sau) — cần quyền duyệt. */
+  apCaKyDaKhoa: z.boolean().default(false),
 });

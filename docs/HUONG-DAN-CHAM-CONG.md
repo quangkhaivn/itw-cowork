@@ -55,6 +55,8 @@ Quỹ phép năm đặt ở *Quản trị → Cấu hình → Nghỉ phép*: s�
 
 Bán kính GPS mặc định, độ chính xác GPS tối đa (100 m), tốc độ di chuyển bất thường (120 km/h), bỏ qua bấm trùng (60 giây), nhắc chưa chấm sau 15 phút, báo máy mất kết nối sau 10 phút, hạn phản hồi bảng công (3 ngày), giờ đêm (22 → 6), **trần tăng ca tháng / năm** (để trống = không cảnh báo — Giám đốc đặt theo quy định pháp luật hiện hành).
 
+Thêm sau QA 0.19.0: giờ máy vân tay được đi trước tối đa (60 phút) và năm sớm nhất chấp nhận (2020); trần yêu cầu của máy theo SN + IP (120 / phút) và trần tổng theo SN (600 / phút); số ngày phiếu hỗ trợ còn hiệu lực cho chấm hiện trường (14); thời gian có mặt tối thiểu so với giờ ca (50%, 0 = không kiểm).
+
 ---
 
 ## 2. Hồ sơ nhân sự
@@ -96,13 +98,18 @@ Trên máy (đăng nhập quyền quản trị máy):
 
 Trong vòng một phút, trang *Máy chấm công* hiện **Trực tuyến**, cột "Lần cuối" cập nhật, kèm phiên bản firmware và số người trên máy.
 
-Máy cần nhận biết đúng **giờ Việt Nam**: máy gửi giờ theo đồng hồ của máy. Kiểm tra *Menu → Ngày giờ* đúng giờ; giờ lệch quá 1 tiếng so với máy chủ thì lần chấm bị gắn cờ "giờ máy lệch".
+Máy cần nhận biết đúng **giờ Việt Nam**: máy gửi giờ theo đồng hồ của máy. Kiểm tra *Menu → Ngày giờ* đúng giờ. Giờ máy đi trước giờ máy chủ quá 60 phút (Cấu hình) → lần chấm bị gắn cờ **giờ máy lệch**; đi trước quá 1 ngày hoặc năm trước 2020 (máy mất pin đồng hồ hay về 01/01/2000) → cờ **giờ máy vô lý**. Cả hai loại **chưa được tính công**: chúng vào hàng chờ xem xét ở *Bảng chấm công trực tiếp*, quản lý chấp nhận (đã kiểm — ví dụ máy đặt sai giờ nhưng người đó có làm thật) thì mới tính; giờ sai hẳn thì không chấp nhận và nhân viên làm **giải trình / chấm bù** với giờ đúng. Sửa giờ trên máy ngay khi thấy cờ.
+
+Máy gửi quá nhiều yêu cầu bị từ chối tạm (429) theo **cặp SN + IP gửi**: người lạ biết SN gửi dồn từ IP khác chỉ tự bị chặn, máy thật ở văn phòng vẫn gửi được. Ngoài ra có trần tổng theo SN (mọi IP) để chống lạm dụng.
 
 > IT / quản trị máy chủ: nhiều máy chỉ gửi HTTP — xem `DEPLOYMENT.md` mục "Máy chấm công vân tay — HTTP cho riêng /iclock/".
 
 ### 3.3. Mã chấm công (PIN) chưa khớp
 
-Người mới được thêm vân tay trên máy nhưng chưa khai mã chấm công trên Cowork: lần chấm vẫn được lưu, hiện ở mục **PIN chưa khớp người**. Bấm **Gán cho…** chọn đúng người → mọi lần chấm cũ của mã đó được tính cho người này. (Hoặc nhập mã chấm công ở hồ sơ nhân sự — kết quả như nhau.)
+Người mới được thêm vân tay trên máy nhưng chưa khai mã chấm công trên Cowork: lần chấm vẫn được lưu, hiện ở mục **PIN chưa khớp người**. Bấm **Gán cho…** chọn đúng người (hoặc nhập mã chấm công ở hồ sơ nhân sự — kết quả như nhau). Các lần chấm cũ của mã đó được tính cho người này, nhưng:
+
+- **chỉ từ ngày vào làm** trong hồ sơ (nhớ nhập ngày vào làm — PIN trên máy hay được dùng lại cho người mới; lần chấm trước ngày vào làm là của người cũ, không bao giờ được áp);
+- **chỉ trong tháng chưa khóa bảng công**. Lần chấm thuộc tháng đã khóa còn nằm lại ở danh sách, cột *Đã gán cho* ghi tên người. Nếu đúng là của người này, người có **quyền duyệt chấm công** (không phải chính người đó) bấm **Áp cả kỳ đã khóa…**, tích xác nhận → bảng công tháng sau tự thêm dòng điều chỉnh (chỉ dò 3 tháng đã khóa gần nhất). Mọi lần áp đều ghi nhật ký kiểm toán.
 
 ### 3.4. Máy mất kết nối / nhập từ tệp
 
@@ -120,7 +127,7 @@ Hướng dẫn gửi nhân viên:
 3. Bấm **Vào ca** khi bắt đầu làm, **Ra ca** khi về. Điện thoại hỏi quyền vị trí → *Cho phép*.
 4. Kết quả hiện ngay:
    - **Trong vùng**: hợp lệ.
-   - **Hiện trường**: ngoài văn phòng nhưng đang có phiếu hỗ trợ được giao (kỹ thuật viên đi khách) — hợp lệ, quản lý xem lại.
+   - **Hiện trường**: ngoài văn phòng nhưng đang có phiếu hỗ trợ **giao cho chính mình, còn mở và có hoạt động trong 14 ngày** (tạo, cập nhật, ghi diễn biến — số ngày ở Cấu hình) — hợp lệ, quản lý xem lại. Phiếu im lặng quá 14 ngày, hoặc đã xử lý xong trong ngày → vẫn là hiện trường nhưng **chờ quản lý chấp nhận** mới tính công. Kỹ thuật viên nên cập nhật phiếu khi đi khách.
    - **Ngoài vùng**: được ghi nhưng **chỉ tính công khi quản lý chấp nhận**.
    - Cờ "GPS kém chính xác" (ra chỗ thoáng, bật Wi-Fi để định vị tốt hơn), "Tốc độ bất thường", "Không lấy được vị trí" — quản lý xem lại.
 5. Bấm hai lần liên tiếp không sao — trong 60 giây chỉ ghi một lần.
@@ -137,7 +144,8 @@ Quên chấm: vào **Đơn từ → Giải trình / chấm bù**, chọn ngày, 
 - Ô tóm tắt: *Chưa đến*, *Đi muộn*, *Đã vào ca*, *Hiện trường*, *Nghỉ phép*, *Đã ra ca*… — bấm một ô để lọc.
 - Mỗi dòng: giờ vào ca theo lịch, giờ vào thực tế, lần chấm cuối, nguồn (vân tay / GPS / chấm bù), **Xem trên bản đồ** cho lần chấm GPS.
 - Lọc theo phòng ban, địa điểm.
-- **Lần chấm chờ bạn xem xét**: chấp nhận / không chấp nhận (ghi lý do — nhân viên nhận thông báo).
+- **Lần chấm chờ bạn xem xét**: chấp nhận / không chấp nhận (ghi lý do — nhân viên nhận thông báo). Gồm cả lần chấm vân tay *giờ máy lệch / vô lý* và chấm hiện trường theo phiếu cũ / đã xong; dòng ghi *Chưa tính công cho tới khi chấp nhận* thì phải có quyết định mới được tính.
+- **Ngày công thiếu giờ chờ bạn quyết** (đầu trang, 35 ngày gần nhất tới hôm qua): có giờ vào và giờ ra nhưng thời gian có mặt (trừ nghỉ trưa) dưới 50% giờ phải làm — ví dụ chấm vào rồi chấm ra ngay. Hệ thống **không tự trừ**: chọn **Tính đủ**, **Tính nửa** (chỉ ngày phải làm cả ca) hoặc **Không tính** (ghi lý do). Không ai tự quyết ngày của mình.
 - Cuối trang: trạng thái từng máy vân tay.
 
 Ai thấy gì: nhân viên thấy chính mình; trưởng phòng thấy nhóm / phòng mình (và cấp dưới trực tiếp); Nhân sự và Giám đốc thấy cả công ty.
@@ -166,7 +174,9 @@ Ai thấy gì: nhân viên thấy chính mình; trưởng phòng thấy nhóm / 
 4. Hết hạn phản hồi và không còn phản hồi mở → **Khóa bảng công**. Bảng đã khóa **không sửa được**.
 5. **CSV tổng hợp** (mỗi người một dòng) gửi kế toán tính lương; **CSV chi tiết** từng ngày để đối chiếu.
 
-Sai sót phát hiện sau khi khóa (ví dụ chấm bù được duyệt muộn): khi sinh bảng tháng sau, hệ thống tự thêm **dòng điều chỉnh** cho ngày của tháng đã khóa (chênh lệch), cộng vào tổng tháng sau.
+Cờ trên bảng công: *Thiếu giờ — chờ quản lý quyết* (công vẫn tính đủ cho tới khi có quyết định), *Thiếu giờ — quản lý tính đủ / nửa / không công*; *Có lần chấm chờ quản lý xem xét*. Trước khi khóa, xử lý hết hàng chờ ở *Bảng chấm công trực tiếp* rồi **Sinh lại**.
+
+Sai sót phát hiện sau khi khóa (ví dụ chấm bù được duyệt muộn, ngày thiếu giờ được quyết muộn, áp PIN cả kỳ đã khóa): khi sinh bảng tháng sau, hệ thống tự thêm **dòng điều chỉnh** cho ngày của tháng đã khóa (chênh lệch), cộng vào tổng tháng sau.
 
 ---
 
@@ -174,5 +184,6 @@ Sai sót phát hiện sau khi khóa (ví dụ chấm bù được duyệt muộn
 
 - **Nhân viên báo không bấm được Vào ca**: kiểm tra mở bằng https://, đã cho quyền vị trí cho trình duyệt (Cài đặt điện thoại → Quyền riêng tư → Vị trí), đã xác nhận thông báo vị trí.
 - **Máy vân tay không lên Trực tuyến**: SN đăng ký đúng chưa (chữ hoa / thường đúng như trên máy), IP văn phòng có trùng "Chỉ nhận từ IP" không, máy có ra Internet được không, địa chỉ / cổng máy chủ trên máy. Nhờ IT xem nhật ký máy chủ: dòng `Máy chưa đăng ký gọi vào: SN=…` nghĩa là SN chưa khớp.
-- **Nhân viên có vân tay trên máy nhưng bảng không có công**: chưa khai mã chấm công → xem mục *PIN chưa khớp người*.
+- **Nhân viên có vân tay trên máy nhưng bảng không có công**: chưa khai mã chấm công → xem mục *PIN chưa khớp người*; hoặc lần chấm mang cờ giờ máy lệch / vô lý đang chờ xem xét.
+- **Doanh nghiệp khác trên cùng máy chủ** (không phải doanh nghiệp chính): sau nâng cấp đã có sẵn vai trò Nhân sự (HR), Thực tập sinh, 4 loại nghỉ và quyền chấm công cho Giám đốc / Quản trị — không cần làm gì thêm.
 - **Đổi giờ làm của một nhóm từ tuần sau**: tạo lịch mới, gán từ ngày thứ Hai tuần sau.

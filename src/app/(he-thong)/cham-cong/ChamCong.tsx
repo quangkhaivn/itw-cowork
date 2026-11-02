@@ -25,6 +25,7 @@ const NHAN_KQ: Record<string, { nhan: string; lop: string }> = {
 };
 const NHAN_CO: Record<string, string> = {
   "do-chinh-xac-thap": "GPS kém chính xác", "toc-do-bat-thuong": "Tốc độ bất thường", "thieu-quyen-vi-tri": "Không lấy được vị trí", "gio-may-lech": "Giờ máy lệch",
+  "gio-may-vo-ly": "Giờ máy vô lý", "phieu-hien-truong-cu": "Phiếu hỗ trợ không còn hoạt động gần đây", "phieu-da-xong": "Phiếu hỗ trợ đã xong",
 };
 const gio = (s: string) => new Date(s).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
 const ngayGio = (s: string) => new Date(s).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
@@ -64,7 +65,7 @@ export default function ChamCong({ duLieu }: { duLieu: DuLieu }) {
     const than = viTri
       ? { huong, viDo: viTri.coords.latitude, kinhDo: viTri.coords.longitude, doChinhXacM: viTri.coords.accuracy, gioMay: new Date().toISOString() }
       : { huong, loiViTri: loiViTri(loiVt), gioMay: new Date().toISOString() };
-    const kq = await goi<{ ketQua: string; trungLap: boolean; co: string[]; diaDiem: { ten: string; khoangCachM: number } | null; phieu: { so: string } | null; luc: string }>(
+    const kq = await goi<{ ketQua: string; trungLap: boolean; choChapNhan: boolean; co: string[]; diaDiem: { ten: string; khoangCachM: number } | null; phieu: { so: string } | null; luc: string }>(
       "/api/v1/cham-cong/gps", "POST", than,
     );
     datDangLayViTri(false);
@@ -80,7 +81,7 @@ export default function ChamCong({ duLieu }: { duLieu: DuLieu }) {
       ].filter(Boolean).join(" · ");
       datKetQua({
         lop: kq.ketQua === "hop-le" && kq.co.length === 0 ? "tot" : "canh-bao",
-        chu: `${huong === "vao" ? "Vào ca" : "Ra ca"} lúc ${gio(kq.luc)} — ${nhan}${them ? ` (${them})` : ""}.${kq.ketQua !== "hop-le" || kq.co.length ? " Quản lý sẽ xem lại lần chấm này." : ""}`,
+        chu: `${huong === "vao" ? "Vào ca" : "Ra ca"} lúc ${gio(kq.luc)} — ${nhan}${them ? ` (${them})` : ""}.${kq.choChapNhan ? " Lần chấm này chưa được tính công cho tới khi quản lý chấp nhận." : kq.ketQua !== "hop-le" || kq.co.length ? " Quản lý sẽ xem lại lần chấm này." : ""}`,
       });
     }
     router.refresh();
@@ -177,7 +178,7 @@ export default function ChamCong({ duLieu }: { duLieu: DuLieu }) {
                   {p.co.map((c) => <span key={c} className="huy-hieu canh-bao">{NHAN_CO[c] ?? c}</span>)}{" "}
                   {p.quyetDinh === "tu-choi" && <span className="huy-hieu loi">Không được chấp nhận</span>}
                   {p.quyetDinh === "chap-nhan" && <span className="huy-hieu tot">Đã chấp nhận</span>}
-                  {!p.quyetDinh && p.canXemXet && <span className="huy-hieu">Chờ xem xét</span>}{" "}
+                  {!p.quyetDinh && p.canXemXet && <span className="huy-hieu">{p.tinhCong ? "Chờ xem xét" : "Chờ xem xét — chưa tính công"}</span>}{" "}
                   {p.banDo && <a href={p.banDo} target="_blank" rel="noopener noreferrer">Xem trên bản đồ</a>}
                 </span>
               </li>

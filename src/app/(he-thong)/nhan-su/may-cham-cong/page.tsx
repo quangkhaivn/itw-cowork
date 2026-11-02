@@ -34,6 +34,7 @@ export default async function TrangMayChamCong() {
   const tao = coQuyen(nd.hoSo, "nhan_su.create");
   const sua = coQuyen(nd.hoSo, "nhan_su.update");
   const nhap = coQuyen(nd.hoSo, "cham_cong.update");
+  const duyet = coQuyen(nd.hoSo, "cham_cong.approve");
   const luaDiaDiem = d.diaDiem.map((x) => ({ giaTri: x.id, nhan: x.ten }));
   const mayChu = process.env.APP_URL ? new URL(process.env.APP_URL).host : "tên-miền-cowork";
   const tMay: TruongForm[] = [
@@ -82,14 +83,33 @@ export default async function TrangMayChamCong() {
 
       <section className="the">
         <div className="dau"><h2>Mã chấm công (PIN) chưa khớp người</h2></div>
-        <p className="phu nho" style={{ marginTop: 0 }}>Máy gửi lên PIN chưa gán cho ai: lần chấm vẫn được lưu, gán người ở đây thì mọi lần chấm cũ của PIN đó được tính cho người được gán.</p>
+        <p className="phu nho" style={{ marginTop: 0 }}>
+          Máy gửi lên PIN chưa gán cho ai: lần chấm vẫn được lưu. Gán người ở đây (hoặc đặt mã chấm công ở hồ sơ) thì các lần chấm cũ của PIN đó
+          được tính cho người được gán — <strong>chỉ từ ngày vào làm</strong> và <strong>chỉ trong kỳ bảng công chưa khóa</strong>. Lần chấm thuộc kỳ đã khóa
+          còn nằm lại đây; người có quyền duyệt chấm công chọn &quot;Áp cả kỳ đã khóa&quot; thì bảng công kỳ sau tự sinh dòng điều chỉnh.
+        </p>
         {d.pin.length === 0 ? <p className="phu">Không có PIN nào chưa khớp.</p> : (
           <div className="cuon-ngang"><table className="bang">
-            <thead><tr><th>PIN</th><th className="so">Số lần chấm</th><th>Đầu tiên</th><th>Gần nhất</th>{sua && <th />}</tr></thead>
+            <thead><tr><th>PIN</th><th className="so">Số lần chấm</th><th>Đầu tiên</th><th>Gần nhất</th><th>Đã gán cho</th>{sua && <th />}</tr></thead>
             <tbody>{d.pin.map((p) => (
               <tr key={p.pin}>
                 <td><code>{p.pin}</code></td><td className="so">{p.soLanCham}</td><td>{dinhDangNgayGio(p.dauTien)}</td><td>{dinhDangNgayGio(p.ganNhat)}</td>
-                {sua && <td><FormNhanh nhanNut="Gán cho…" tieuDe={`Gán PIN ${p.pin}`} url="/api/v1/nhan-su/pin-chua-khop" lopNut="nut nho"
+                <td>
+                  {p.nguoiDaGan ? (
+                    <>
+                      {p.nguoiDaGan.hoTen}
+                      <div className="phu nho">Còn lại thuộc kỳ đã khóa{p.nguoiDaGan.ngayVaoLam ? ` hoặc trước ngày vào làm ${p.nguoiDaGan.ngayVaoLam.split("-").reverse().join("/")}` : ""} — không tự áp.</div>
+                    </>
+                  ) : "—"}
+                </td>
+                {sua && p.nguoiDaGan && <td>{duyet && <FormNhanh nhanNut="Áp cả kỳ đã khóa…" tieuDe={`Áp PIN ${p.pin} cho ${p.nguoiDaGan.hoTen} cả kỳ đã khóa`} url="/api/v1/nhan-su/pin-chua-khop" lopNut="nut nho"
+                  truong={[
+                    { ten: "pin", nhan: "PIN", kieu: "text" },
+                    { ten: "apCaKyDaKhoa", nhan: "Tôi xác nhận áp cả lần chấm thuộc kỳ bảng công đã khóa (bảng công kỳ sau sinh dòng điều chỉnh; lần chấm trước ngày vào làm vẫn không áp)", kieu: "checkbox" },
+                  ]}
+                  themVaoThan={{ nguoiId: p.nguoiDaGan.id }}
+                  giaTriDau={{ pin: p.pin, apCaKyDaKhoa: false }} />}</td>}
+                {sua && !p.nguoiDaGan && <td><FormNhanh nhanNut="Gán cho…" tieuDe={`Gán PIN ${p.pin}`} url="/api/v1/nhan-su/pin-chua-khop" lopNut="nut nho"
                   truong={[
                     { ten: "pin", nhan: "PIN", kieu: "text" },
                     { ten: "nguoiId", nhan: "Nhân viên (chưa có mã chấm công)", kieu: "select", caDong: true, luaChon: d.nguoi.filter((n) => !n.staffProfile?.attendancePin).map((n) => ({ giaTri: n.id, nhan: n.fullName })) },

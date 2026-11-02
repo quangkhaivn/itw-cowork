@@ -120,6 +120,7 @@ Tài liệu gồm hai phần: **(A) những gì đang chạy** sau Phase 1, và 
 | `attendance_devices` | Máy chấm công vân tay | 0.19.0. **`serial_number` duy nhất toàn hệ thống**; `ip_allowlist text[]`, `last_seen_at`, `attlog_stamp`, `offline_alerted_at`. Hàm `tra_may_cham_cong(sn)` SECURITY DEFINER |
 | `attendance_punches` | Lần chấm (vân tay / GPS / bổ sung / CSV) | 0.19.0. **Chỉ ghi thêm** (trigger `chan_sua_lan_cham`: chỉ cho gán `user_id` NULL → người; ứng dụng không có DELETE). Duy nhất `(tenant_id, device_id, pin, punched_at)`; riêng phần: `(tenant_id, pin, punched_at) WHERE source='nhap-csv'`, `(correction_id)`; CHECK nguồn / kết quả GPS / hiện trường cần phiếu |
 | `attendance_punch_reviews` | Quản lý chấp nhận / không chấp nhận lần chấm bị gắn cờ | 0.19.0. **Chỉ ghi thêm**; quyết định mới nhất có hiệu lực |
+| `attendance_day_reviews` | Quản lý xét ngày công "thiếu giờ": tính đủ / nửa / không công (QĐ-116) | 0.19.0 QA. **Chỉ ghi thêm**; CHECK không tự xét; quyết định mới nhất có hiệu lực |
 | `attendance_consents` | Xác nhận thông báo dữ liệu vị trí (Luật 91/2025) | 0.19.0. **Chỉ ghi thêm**; `notice_version`, IP, trình duyệt |
 | `attendance_corrections` | Giải trình / xin chấm bù | 0.19.0. CHECK trạng thái, lý do ≥ 5, duyệt phải có `punch_id` |
 | `leave_types` | Loại nghỉ (có lương, trừ phép năm) | 0.19.0. Seed 4 loại, duy nhất `(tenant_id, code)` |

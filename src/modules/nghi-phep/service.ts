@@ -105,7 +105,7 @@ export async function soDuPhepCua(nc: NguCanh, userId: string | null, nam?: numb
 /** Số ngày công của khoảng nghỉ theo lịch làm của người xin (bỏ ngày nghỉ tuần, ngày lễ). */
 async function soNgayDon(tx: ClientTenant, userId: string, tu: string, den: string, phan: "ca-ngay" | "sang" | "chieu") {
   const ds = await congDuKienCuaNguoi(tx, userId, tu, den);
-  return soNgayCuaDon(ds.map((x) => ({ ngay: x.ngay, giaTriDuKien: x.giaTri })), phan);
+  return soNgayCuaDon(ds.map((x) => ({ ngay: x.ngay, giaTriDuKien: x.giaTri, phanDuKien: x.phan })), phan);
 }
 
 async function kiemChongNhau(tx: ClientTenant, userId: string, d: { tuNgay: string; denNgay: string; phan: "ca-ngay" | "sang" | "chieu" }, boQua?: string) {
@@ -129,12 +129,19 @@ export async function taoDonNghi(nc: NguCanh, d: z.infer<typeof LuocDoDonNghi>) 
   batBuocQuyen(nc.hoSo, "cham_cong.create", { objectType: "leave_request" });
   const loai = await nc.tx.leaveType.findFirst({ where: { id: d.loaiNghiId, status: "hoat-dong" } });
   if (!loai) throw new LoiDinhDang("loaiNghiId", "Loại nghỉ không tồn tại hoặc đã ngừng.");
+  // Hai lần gửi cùng lúc (bấm đúp, hai thiết bị): xếp hàng theo người để lần sau thấy đơn của lần trước khi
+  // kiểm chồng đơn và quỹ phép đang chờ — không có chỉ mục duy nhất nào diễn tả được "khoảng ngày chồng nhau".
+  await nc.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`nghi-phep:${nc.hoSo.userId}`}, 0))`;
   const soNgay = await soNgayDon(nc.tx, nc.hoSo.userId, d.tuNgay, d.denNgay, d.phan);
   if (soNgay <= 0) throw new LoiNghiepVu("Khoảng đã chọn không có ngày làm việc nào theo lịch của bạn (ngày nghỉ tuần, ngày lễ hoặc chưa được gán lịch).", 422, "khong-co-ngay-lam");
   await kiemChongNhau(nc.tx, nc.hoSo.userId, d);
   if (loai.usesBalance) {
     const ch = cauHinhPhep(await docCauHinhChamCong(nc.tx));
-    const sd = await tinhSoDuPhep(nc.tx, nc.hoSo.userId, Number(d.tuNgay.slice(0, 4)), d.tuNgay, ch);
+    // Cùng mốc tích lũy với lúc duyệt (quyetDinhNghi): nghỉ ở tương lai → tới ngày nghỉ; nghỉ đã qua
+    // (xin bù) → tới hôm nay. Trước đây lấy luôn ngày nghỉ: xin bù phép tháng 1 vào tháng 11 bị chặn vì chỉ
+    // tính 1/12 quỹ, trong khi duyệt lại cho qua (QA 0.19.0).
+    const homNay = ngayVNCua(new Date());
+    const sd = await tinhSoDuPhep(nc.tx, nc.hoSo.userId, Number(d.tuNgay.slice(0, 4)), d.tuNgay > homNay ? d.tuNgay : homNay, ch);
     const conDuoc = Math.round((sd.duocDung - sd.dangCho) * 10) / 10;
     if (soNgay > conDuoc) {
       throw new LoiNghiepVu(`Quỹ phép không đủ: xin ${soNgay} ngày, còn được dùng ${Math.max(0, conDuoc)} ngày (đã trừ đơn đang chờ).`, 422, "vuot-quy-phep", { soDu: sd });

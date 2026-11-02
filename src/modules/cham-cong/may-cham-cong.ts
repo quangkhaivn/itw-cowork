@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import type { NguCanh } from "@/lib/api";
-import { prisma, voiTenant, type ClientTenant } from "@/lib/db";
+import { HAN_GIAO_DICH_THEO_LO_MS, prisma, voiTenant, type ClientTenant } from "@/lib/db";
 import { demVaKiem } from "@/lib/gioi-han-toc-do";
 import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
@@ -9,9 +9,9 @@ import { batBuocQuyen } from "@/lib/phan-quyen";
 import { ghiSuKien, SU_KIEN } from "@/lib/su-kien";
 import { LuocDoAnhXaPin, LuocDoMayChamCong, LuocDoSuaMayChamCong } from "@/modules/nhan-su/luoc-do";
 import { BO_DOC_ZKTECO, laSoSeriHopLe, type BoDocAdms } from "./adms";
-import { docCauHinhChamCong, so } from "./chung";
+import { docCauHinhChamCong, kiemDuocDuyet, so } from "./chung";
 import { phanTichCsvChamCong } from "./nhap-csv";
-import { CO } from "./tinh-toan";
+import { canChapNhanMoiTinh, danhGiaGioMay, mocVN, ngayVNCua } from "./tinh-toan";
 
 /**
  * Máy chấm công vân tay (ZKTeco ADMS/PUSH) — đăng ký máy, nhận dữ liệu máy đẩy lên, PIN chưa khớp,
@@ -21,12 +21,11 @@ import { CO } from "./tinh-toan";
  * Nhân sự đăng ký trước cho đúng doanh nghiệp + địa điểm. SN lạ → từ chối và ghi nhật ký máy chủ.
  */
 
-// Trần KỸ THUẬT (không phải ngưỡng nghiệp vụ): chặn một máy hỏng / kẻ dò gửi dồn dập hoặc gửi thân khổng lồ.
+// Trần KỸ THUẬT (không phải ngưỡng nghiệp vụ): chặn kẻ dò gửi dồn dập hoặc gửi thân khổng lồ. Áp TRƯỚC khi
+// tra SN (chưa biết doanh nghiệp nên chưa đọc được Cấu hình). Trần theo máy (SN + IP, tổng theo SN) nằm ở
+// Cấu hình của doanh nghiệp, áp sau khi nhận ra máy (QĐ-114).
 export const ADMS_THAN_TOI_DA_BYTE = 2 * 1024 * 1024;
-const ADMS_TOI_DA_MOI_PHUT_THEO_SN = 120;
 const ADMS_TOI_DA_MOI_PHUT_THEO_IP = 600;
-/** Giờ trên máy đi trước giờ máy chủ quá mức này thì gắn cờ "giờ máy lệch" (máy mất pin đồng hồ, đặt sai). */
-const ADMS_GIO_MAY_DI_TRUOC_TOI_DA_MS = 60 * 60_000;
 /** Không ghi "lần cuối thấy máy" quá dày: một lần mỗi 30 giây là đủ cho cảnh báo mất kết nối tính bằng phút. */
 const ADMS_GHI_NHIP_MOI_MS = 30_000;
 
@@ -57,7 +56,7 @@ function ghiNhatKySnLa(sn: string, ip: string | null) {
   console.warn(`[cham-cong/adms] Máy chưa đăng ký gọi vào: SN=${sn} IP=${ip ?? "?"} — từ chối. Đăng ký ở Nhân sự → Máy chấm công nếu đây là máy của công ty.`);
 }
 
-/** Tra (doanh nghiệp, máy) theo SN qua hàm SECURITY DEFINER `tra_may_cham_cong` (QĐ-104). */
+/** Tra (doanh nghiệp, máy) theo SN qua hàm SECURITY DEFINER `tra_may_cham_cong` (QĐ-104) — không phân biệt hoa thường. */
 export async function traMayTheoSn(sn: string): Promise<{ tenantId: string; deviceId: string } | null> {
   const dong = await prisma.$queryRaw<{ tenant_id: string; device_id: string }[]>`
     SELECT tenant_id::text AS tenant_id, device_id::text AS device_id FROM public.tra_may_cham_cong(${sn})
@@ -76,11 +75,8 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
   if (yc.diemCuoi === "khac") return { status: 404, than: "Not Found" };
   if (!laSoSeriHopLe(yc.sn)) return { status: 400, than: "ERROR: SN" };
 
-  const [theoSn, theoIp] = await Promise.all([
-    demVaKiem(`adms:sn:${yc.sn}`, ADMS_TOI_DA_MOI_PHUT_THEO_SN, 60),
-    demVaKiem(`adms:ip:${y.ip ?? "?"}`, ADMS_TOI_DA_MOI_PHUT_THEO_IP, 60),
-  ]);
-  if (!theoSn.choPhep || !theoIp.choPhep) return { status: 429, than: "ERROR: TOO MANY REQUESTS" };
+  const theoIp = await demVaKiem(`adms:ip:${y.ip ?? "?"}`, ADMS_TOI_DA_MOI_PHUT_THEO_IP, 60);
+  if (!theoIp.choPhep) return { status: 429, than: "ERROR: TOO MANY REQUESTS" };
 
   const may = await traMayTheoSn(yc.sn);
   if (!may) {
@@ -88,6 +84,9 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
     return { status: 401, than: "ERROR: UNKNOWN DEVICE" };
   }
 
+  // Lần đồng bộ đầu của máy gửi cả chục nghìn dòng (thân ≤ 2 MB ≈ 50.000 dòng): ghi theo lô có trần rõ ràng
+  // nên nới hạn giao dịch như các route theo lô (QĐ-56). Hạn mặc định 5 giây làm lô lớn hỏng 500 → máy gửi
+  // lại đúng lô đó mãi mãi và không bao giờ đồng bộ được (QA 0.19.0).
   return voiTenant(may.tenantId, async (tx) => {
     const tb = await tx.attendanceDevice.findFirst({
       where: { id: may.deviceId },
@@ -98,6 +97,7 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
       console.warn(`[cham-cong/adms] Máy SN=${tb.serialNumber} gọi từ IP ${y.ip ?? "?"} không nằm trong danh sách cho phép — từ chối.`);
       return { status: 403, than: "ERROR: IP" };
     }
+    if (!(await trongTranMay(tx, tb.serialNumber, y.ip))) return { status: 429, than: "ERROR: TOO MANY REQUESTS" };
 
     // Nhịp sống: mọi yêu cầu của máy đã đăng ký đều cập nhật "lần cuối thấy máy" (NS-17).
     const luc = bayGio();
@@ -129,7 +129,22 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
     // OPERLOG, ATTPHOTO, BIODATA… — chưa dùng; nhận và báo OK để máy không gửi lại mãi.
     if (yc.bang === "OPERLOG" && yc.stamp) await tx.attendanceDevice.update({ where: { id: tb.id }, data: { operlogStamp: yc.stamp } });
     return { status: 200, than: boDoc.phanHoiOk(than.split(/\r?\n/).filter((d) => d.trim() !== "").length) };
-  });
+  }, { timeoutMs: HAN_GIAO_DICH_THEO_LO_MS });
+}
+
+/**
+ * Trần tốc độ theo máy (NS-14, QĐ-114): đếm theo (SN, IP nguồn) — người lạ biết SN gửi dồn từ IP của họ chỉ
+ * làm CẶP (SN, IP lạ) bị 429, máy thật ở IP văn phòng vẫn gửi được. Thêm trần TỔNG theo SN (mọi IP, mặc định
+ * gấp 5) chống lạm dụng bằng nhiều IP; yêu cầu đã bị chặn ở trần (SN, IP) không cộng vào trần tổng, nên
+ * một IP lạ đóng góp tối đa đúng trần (SN, IP) của nó. Cả hai ngưỡng ở Cấu hình.
+ */
+async function trongTranMay(tx: ClientTenant, sn: string, ip: string | null): Promise<boolean> {
+  const ch = await docCauHinhChamCong(tx);
+  const ma = sn.toUpperCase();
+  const theoCap = await demVaKiem(`adms:sn-ip:${ma}:${ip ?? "?"}`, so(ch.admsToiDaPhutSnIp, 120), 60);
+  if (!theoCap.choPhep) return false;
+  const theoSn = await demVaKiem(`adms:sn:${ma}`, so(ch.admsToiDaPhutSn, 600), 60);
+  return theoSn.choPhep;
 }
 
 function phanTichInfoAnToan(info: string): Prisma.InputJsonValue | null {
@@ -155,6 +170,10 @@ async function ghiAttlog(
   bayGio: Date,
 ): Promise<number> {
   if (dong.length === 0) return 0;
+  // Giờ máy lệch / vô lý (NS-14, QĐ-113): ngưỡng ở Cấu hình; lần chấm mang cờ vào hàng chờ xem xét và
+  // CHƯA tính công cho tới khi quản lý chấp nhận (như GPS ngoài vùng).
+  const ch = await docCauHinhChamCong(tx);
+  const nguongGio = { lechToiDaPhut: so(ch.gioMayLechToiDaPhut, 60), namToiThieu: so(ch.gioMayNamToiThieu, 2020) };
   const pins = [...new Set(dong.map((d) => d.pin))];
   const hs = await tx.staffProfile.findMany({ where: { attendancePin: { in: pins } }, select: { userId: true, attendancePin: true } });
   const theoPin = new Map(hs.map((h) => [h.attendancePin!, h.userId]));
@@ -164,21 +183,25 @@ async function ghiAttlog(
     const lo = dong.slice(i, i + 1000);
     const kq = await tx.attendancePunch.createMany({
       skipDuplicates: true,
-      data: lo.map((d) => ({
-        tenantId,
-        userId: theoPin.get(d.pin) ?? null,
-        matchedAt: theoPin.has(d.pin) ? bayGio : null,
-        pin: d.pin,
-        punchedAt: d.luc,
-        source: "van-tay",
-        deviceId: may.id,
-        locationId: may.locationId,
-        deviceStatus: d.trangThai,
-        verifyCode: d.xacThuc,
-        workCode: d.maCongViec,
-        rawLine: d.dongGoc,
-        flags: d.luc.getTime() - bayGio.getTime() > ADMS_GIO_MAY_DI_TRUOC_TOI_DA_MS ? [CO.gioMayLech] : [],
-      })),
+      data: lo.map((d) => {
+        const co = danhGiaGioMay(d.luc, bayGio, nguongGio);
+        return {
+          tenantId,
+          userId: theoPin.get(d.pin) ?? null,
+          matchedAt: theoPin.has(d.pin) ? bayGio : null,
+          pin: d.pin,
+          punchedAt: d.luc,
+          source: "van-tay",
+          deviceId: may.id,
+          locationId: may.locationId,
+          deviceStatus: d.trangThai,
+          verifyCode: d.xacThuc,
+          workCode: d.maCongViec,
+          rawLine: d.dongGoc,
+          flags: co,
+          needsReview: canChapNhanMoiTinh({ gpsResult: null, flags: co }),
+        };
+      }),
     });
     soMoi += kq.count;
   }
@@ -268,16 +291,56 @@ export async function suaMay(nc: NguCanh, id: string, d: z.infer<typeof LuocDoSu
 // PIN chưa khớp
 // ---------------------------------------------------------------------------
 
+export interface KetQuaApPin {
+  /** Số lần chấm vừa được gán cho người này. */
+  soLanCham: number;
+  /** Số lần chấm chưa khớp thuộc kỳ bảng công ĐÃ KHÓA — chỉ áp khi chọn tường minh (đã áp nếu `apCaKyDaKhoa`). */
+  soKyDaKhoa: number;
+  /** Số lần chấm trước ngày vào làm — không bao giờ áp (có thể là người cũ dùng lại PIN). */
+  soTruocNgayVaoLam: number;
+}
+
 /**
- * Gán người cho mọi lần chấm vân tay / CSV chưa khớp mang đúng PIN (NS-15). Cập nhật duy nhất mà
+ * Gán người cho các lần chấm vân tay / CSV chưa khớp mang đúng PIN (NS-15, QĐ-118). Cập nhật duy nhất mà
  * trigger `chan_sua_lan_cham` cho phép trên bảng chỉ-ghi-thêm: `user_id` NULL → có giá trị.
+ *  - chỉ lần chấm TỪ NGÀY VÀO LÀM trở đi (chưa khai ngày vào làm → không giới hạn);
+ *  - chỉ lần chấm thuộc kỳ CHƯA KHÓA; kỳ đã khóa → trả số lượng để người dùng biết, áp khi chọn tường minh
+ *    `apCaKyDaKhoa` (cần quyền duyệt chấm công với người này, không tự áp cho mình) — bảng công kỳ sau tự sinh
+ *    dòng điều chỉnh (NS-53);
+ *  - ghi nhật ký kiểm toán.
  */
-export async function apDungPinChuaKhop(nc: NguCanh, pin: string, userId: string): Promise<number> {
-  const kq = await nc.tx.attendancePunch.updateMany({ where: { pin, userId: null }, data: { userId, matchedAt: new Date() } });
-  if (kq.count > 0) {
-    await nc.suKien({ eventType: SU_KIEN.ATTENDANCE_PIN_MAPPED, objectType: "user", objectId: userId, payload: { pin, soLanCham: kq.count } });
+export async function apDungPinChuaKhop(nc: NguCanh, pin: string, userId: string, tuyChon: { apCaKyDaKhoa?: boolean } = {}): Promise<KetQuaApPin> {
+  const apKhoa = tuyChon.apCaKyDaKhoa === true;
+  if (apKhoa) {
+    if (userId === nc.hoSo.userId) throw new LoiNghiepVu("Không tự áp lần chấm ở kỳ đã khóa cho chính mình — người khác có quyền duyệt làm.", 403, "khong-tu-duyet");
+    batBuocQuyen(nc.hoSo, "cham_cong.approve", { objectType: "attendance_punch", objectId: pin });
+    await kiemDuocDuyet(nc, userId, { objectType: "attendance_punch", objectId: pin });
   }
-  return kq.count;
+  const hs = await nc.tx.staffProfile.findFirst({ where: { userId }, select: { hiredAt: true } });
+  const tu = hs?.hiredAt ? mocVN(hs.hiredAt.toISOString().slice(0, 10), 0) : null;
+  const kyKhoa = await nc.tx.timesheet.findMany({ where: { status: "da-khoa" }, select: { year: true, month: true } });
+  const trongKyKhoa = kyKhoa.map((k) => {
+    const dau = `${k.year}-${String(k.month).padStart(2, "0")}-01`;
+    const sau = k.month === 12 ? `${k.year + 1}-01-01` : `${k.year}-${String(k.month + 1).padStart(2, "0")}-01`;
+    return { punchedAt: { gte: mocVN(dau, 0), lt: mocVN(sau, 0) } };
+  });
+  const coSo = { pin, userId: null, ...(tu && { punchedAt: { gte: tu } }) };
+  const soTruocNgayVaoLam = tu ? await nc.tx.attendancePunch.count({ where: { pin, userId: null, punchedAt: { lt: tu } } }) : 0;
+  const soKyDaKhoa = trongKyKhoa.length ? await nc.tx.attendancePunch.count({ where: { AND: [coSo, { OR: trongKyKhoa }] } }) : 0;
+  const kq = await nc.tx.attendancePunch.updateMany({
+    where: apKhoa || trongKyKhoa.length === 0 ? coSo : { AND: [coSo, { NOT: { OR: trongKyKhoa } }] },
+    data: { userId, matchedAt: new Date() },
+  });
+  if (kq.count > 0 || soKyDaKhoa > 0 || soTruocNgayVaoLam > 0) {
+    await nc.kiemToan({
+      action: "ap-pin-chua-khop", objectType: "staff_profile", objectId: userId,
+      after: { pin, soLanChamGanLai: kq.count, soKyDaKhoa, apCaKyDaKhoa: apKhoa, soTruocNgayVaoLam, ngayVaoLam: tu ? ngayVNCua(tu) : null },
+    });
+  }
+  if (kq.count > 0) {
+    await nc.suKien({ eventType: SU_KIEN.ATTENDANCE_PIN_MAPPED, objectType: "user", objectId: userId, payload: { pin, soLanCham: kq.count, apCaKyDaKhoa: apKhoa } });
+  }
+  return { soLanCham: kq.count, soKyDaKhoa, soTruocNgayVaoLam };
 }
 
 export async function danhSachPinChuaKhop(nc: NguCanh) {
@@ -290,11 +353,23 @@ export async function danhSachPinChuaKhop(nc: NguCanh) {
     _max: { punchedAt: true },
     orderBy: { pin: "asc" },
   });
-  return nhom.map((n) => ({ pin: n.pin!, soLanCham: n._count._all, dauTien: n._min.punchedAt, ganNhat: n._max.punchedAt }));
+  // QĐ-118: PIN đã gán cho người mà vẫn còn lần chấm chưa khớp = phần thuộc kỳ đã khóa / trước ngày vào làm.
+  const chu = await nc.tx.staffProfile.findMany({
+    where: { attendancePin: { in: nhom.map((n) => n.pin!) } },
+    select: { attendancePin: true, hiredAt: true, user: { select: { id: true, fullName: true } } },
+  });
+  const theoPin = new Map(chu.map((c) => [c.attendancePin!, c]));
+  return nhom.map((n) => {
+    const c = theoPin.get(n.pin!);
+    return {
+      pin: n.pin!, soLanCham: n._count._all, dauTien: n._min.punchedAt, ganNhat: n._max.punchedAt,
+      nguoiDaGan: c ? { id: c.user.id, hoTen: c.user.fullName, ngayVaoLam: c.hiredAt ? c.hiredAt.toISOString().slice(0, 10) : null } : null,
+    };
+  });
 }
 
 /** Gán một PIN chưa khớp cho một người: đặt mã chấm công của người đó rồi áp lại các lần chấm cũ. */
-export async function anhXaPin(nc: NguCanh, d: z.infer<typeof LuocDoAnhXaPin>) {
+export async function anhXaPin(nc: NguCanh, d: z.input<typeof LuocDoAnhXaPin>) {
   batBuocQuyen(nc.hoSo, "nhan_su.update", { objectType: "staff_profile", objectId: d.nguoiId });
   const u = await nc.tx.user.findFirst({ where: { id: d.nguoiId, isSystem: false }, select: { id: true, fullName: true, staffProfile: { select: { attendancePin: true } } } });
   if (!u) throw new LoiKhongTimThay("Nhân viên");
@@ -308,9 +383,9 @@ export async function anhXaPin(nc: NguCanh, d: z.infer<typeof LuocDoAnhXaPin>) {
     update: { attendancePin: d.pin, updatedBy: nc.hoSo.userId },
     create: { tenantId: nc.tenantId, userId: d.nguoiId, attendancePin: d.pin, createdBy: nc.hoSo.userId, updatedBy: nc.hoSo.userId },
   });
-  const soLan = await apDungPinChuaKhop(nc, d.pin, d.nguoiId);
-  await nc.kiemToan({ action: "gan-ma-cham-cong", objectType: "staff_profile", objectId: d.nguoiId, after: { maChamCong: d.pin, soLanChamGanLai: soLan } });
-  return { soLanCham: soLan };
+  const kq = await apDungPinChuaKhop(nc, d.pin, d.nguoiId, { apCaKyDaKhoa: d.apCaKyDaKhoa });
+  await nc.kiemToan({ action: "gan-ma-cham-cong", objectType: "staff_profile", objectId: d.nguoiId, after: { maChamCong: d.pin, soLanChamGanLai: kq.soLanCham } });
+  return kq;
 }
 
 // ---------------------------------------------------------------------------

@@ -81,23 +81,24 @@ const LOAI_NGHI_KHOI_TAO = [
   { ma: "khong-luong", ten: "Nghỉ không lương", coLuong: false, truPhep: false },
 ];
 
-export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant: string) {
+function kiemGioiHanAI() {
   // Chốt chặn: không cho phép vai trò AI cầm quyền duyệt hoặc xóa.
   const kiemTra = kiemTraGioiHanAI();
   if (!kiemTra.dat) {
     throw new Error(`Vai trò AI vi phạm giới hạn: ${kiemTra.viPham.join(", ")}`);
   }
   console.log("✓ Kiểm tra giới hạn vai trò AI trong định nghĩa: đạt");
+}
 
-  // ---- 1. Tenant ----
-  const tenant = await db.tenant.upsert({
-    where: { code: maTenant },
-    update: {},
-    create: { code: maTenant, name: tenTenant, status: "hoat-dong" },
-  });
-  console.log(`✓ Tenant: ${tenant.name} (${tenant.code})`);
+export interface DanhMucQuyenDaSeed {
+  dsQuyen: ReturnType<typeof toanBoQuyen>;
+  /** Mã quyền MỚI xuất hiện ở lần seed này (trước khi seed chưa có trong bảng permissions). */
+  maMoi: Set<string>;
+  banDoQuyen: Map<string, string>;
+}
 
-  // ---- 2. Danh mục quyền (toàn cục) — ghi nhận mã nào là MỚI ----
+/** Danh mục quyền (toàn cục) — ghi nhận mã nào là MỚI. Gọi MỘT lần trước khi seed các doanh nghiệp. */
+export async function seedDanhMucQuyen(db: PrismaClient): Promise<DanhMucQuyenDaSeed> {
   const maDaCo = new Set((await db.permission.findMany({ select: { code: true } })).map((p) => p.code));
   const dsQuyen = toanBoQuyen();
   for (const q of dsQuyen) {
@@ -112,6 +113,32 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
     (await db.permission.findMany({ select: { id: true, code: true } })).map((p) => [p.code, p.id]),
   );
   console.log(`✓ Danh mục quyền: ${dsQuyen.length} quyền (${maMoi.size} mã mới)`);
+  return { dsQuyen, maMoi, banDoQuyen };
+}
+
+/**
+ * Seed nền móng cho MỘT doanh nghiệp (giữ chữ ký cũ cho bài thử / seed:mau): kiểm vai trò AI, tạo doanh
+ * nghiệp nếu chưa có, danh mục quyền, rồi dữ liệu nền của doanh nghiệp đó.
+ */
+export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant: string) {
+  kiemGioiHanAI();
+  const tenant = await db.tenant.upsert({
+    where: { code: maTenant },
+    update: {},
+    create: { code: maTenant, name: tenTenant, status: "hoat-dong" },
+  });
+  console.log(`✓ Tenant: ${tenant.name} (${tenant.code})`);
+  await seedDuLieuDoanhNghiep(db, tenant, await seedDanhMucQuyen(db));
+  return tenant;
+}
+
+/**
+ * Dữ liệu nền của MỘT doanh nghiệp đã có: phòng ban, nhóm sản phẩm, vai trò + quyền, dữ liệu gốc, trạng thái
+ * hành trình, loại nghỉ, tài khoản máy ITA. Chỉ thêm phần còn thiếu, không đè chỉnh sửa (luật đầu tệp).
+ * QĐ-117: `npm run db:seed` gọi hàm này cho MỌI doanh nghiệp, không chỉ SEED_MA_TENANT.
+ */
+export async function seedDuLieuDoanhNghiep(db: PrismaClient, tenant: { id: string; name: string; code: string }, quyen: DanhMucQuyenDaSeed) {
+  const { dsQuyen, maMoi, banDoQuyen } = quyen;
 
   // ---- 3. Phòng ban (chỉ tạo phòng còn thiếu, không đổi tên phòng đã sửa) ----
   for (const pb of PHONG_BAN) {
@@ -275,6 +302,27 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
   return tenant;
 }
 
+/**
+ * Seed cho MỌI doanh nghiệp đang có (QĐ-117): danh mục quyền một lần (để "mã mới" đúng cho mọi doanh nghiệp),
+ * rồi dữ liệu nền từng doanh nghiệp. Doanh nghiệp tạo thêm sau nâng cấp vẫn nhận đủ vai trò / loại nghỉ /
+ * quyền Giám đốc của phân hệ mới.
+ */
+export async function seedMoiDoanhNghiep(db: PrismaClient, maChinh: string, tenChinh: string) {
+  kiemGioiHanAI();
+  const chinh = await db.tenant.upsert({
+    where: { code: maChinh },
+    update: {},
+    create: { code: maChinh, name: tenChinh, status: "hoat-dong" },
+  });
+  const quyen = await seedDanhMucQuyen(db);
+  const ds = await db.tenant.findMany({ orderBy: { code: "asc" }, select: { id: true, name: true, code: true } });
+  for (const t of ds) {
+    console.log(`\n— Doanh nghiệp: ${t.name} (${t.code}) —`);
+    await seedDuLieuDoanhNghiep(db, t, quyen);
+  }
+  return chinh;
+}
+
 async function taoQuanTriDauTien(db: PrismaClient, tenantId: string) {
   const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const matKhau = process.env.SEED_ADMIN_PASSWORD;
@@ -317,7 +365,7 @@ async function taoQuanTriDauTien(db: PrismaClient, tenantId: string) {
 
 async function main() {
   console.log("=== Seed nền móng — TGTH Business Cowork ===\n");
-  const tenant = await seedNenMong(prisma, MA_TENANT, TEN_TENANT);
+  const tenant = await seedMoiDoanhNghiep(prisma, MA_TENANT, TEN_TENANT);
   await taoQuanTriDauTien(prisma, tenant.id);
 
   const daGhiKhoiTao = await prisma.businessEvent.count({

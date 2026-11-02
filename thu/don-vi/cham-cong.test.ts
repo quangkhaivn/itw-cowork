@@ -3,6 +3,7 @@
  * Luật: BUSINESS_RULES.md mục 30 (NS). Chạy: npm run thu:don-vi
  */
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 import {
@@ -31,6 +32,10 @@ import {
   tocDoToiThieuKmh,
   tongHopThang,
   trangThaiHomNay,
+  apXetThieuGio,
+  canChapNhanMoiTinh,
+  chonPhieuHienTruong,
+  danhGiaGioMay,
   type CaLam,
   type DongCongThang,
   type PhanNgay,
@@ -310,6 +315,11 @@ describe("NS-31 → NS-33: quỹ phép", () => {
     assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 1 }, { ngay: "b", giaTriDuKien: 0.5 }, { ngay: "c", giaTriDuKien: 0 }], "ca-ngay"), 1.5);
     assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 1 }], "sang"), 0.5);
     assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 0 }], "chieu"), 0);
+    // QA 0.19.0: lịch chỉ làm sáng (thứ Bảy) → xin nghỉ chiều không trừ phép; xin nghỉ sáng = 0,5.
+    assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 0.5, phanDuKien: "sang" }], "chieu"), 0);
+    assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 0.5, phanDuKien: "sang" }], "sang"), 0.5);
+    assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 0.5, phanDuKien: "chieu" }], "sang"), 0);
+    assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 1, phanDuKien: "ca" }], "chieu"), 0.5);
   });
   it("đơn chồng nhau: nửa sáng + nửa chiều cùng ngày thì không", () => {
     assert.equal(donChongNhau({ tu: "2026-11-02", den: "2026-11-02", phan: "sang" }, { tu: "2026-11-02", den: "2026-11-02", phan: "chieu" }), false);
@@ -499,5 +509,90 @@ describe("NS-70: quyền và vai trò chấm công", () => {
     assert.equal(md("cham_cong.han_phan_hoi_ngay"), 3);
     assert.equal(md("cham_cong.tang_ca_toi_da_thang"), null);
     assert.equal(md("nghi_phep.so_ngay_nam"), 12);
+  });
+});
+
+describe("QA 0.19.0 — quyết định chính sách (QĐ-113 → QĐ-118)", () => {
+  const NG = { lechToiDaPhut: 60, namToiThieu: 2020 };
+  const bay = new Date("2026-10-10T02:00:00Z"); // 09:00 giờ VN
+  it("QĐ-113: giờ máy đi trước > ngưỡng → lệch; > 1 ngày hoặc năm < 2020 → vô lý; trong ngưỡng / quá khứ gần → không cờ", () => {
+    assert.deepEqual(danhGiaGioMay(new Date(bay.getTime() + 30 * 60_000), bay, NG), []);
+    assert.deepEqual(danhGiaGioMay(new Date(bay.getTime() + 61 * 60_000), bay, NG), ["gio-may-lech"]);
+    assert.deepEqual(danhGiaGioMay(new Date(bay.getTime() + 25 * 3_600_000), bay, NG), ["gio-may-lech", "gio-may-vo-ly"]);
+    assert.deepEqual(danhGiaGioMay(new Date("2000-01-01T00:00:00+07:00"), bay, NG), ["gio-may-vo-ly"]);
+    assert.deepEqual(danhGiaGioMay(new Date("2019-12-31T23:59:00+07:00"), bay, NG), ["gio-may-vo-ly"]);
+    assert.deepEqual(danhGiaGioMay(new Date("2020-01-01T00:00:00+07:00"), bay, NG), []);
+    assert.deepEqual(danhGiaGioMay(new Date("2026-01-05T08:00:00+07:00"), bay, NG), [], "lần đồng bộ đầu gửi lại dữ liệu cũ hợp lệ — không cờ");
+    // Ngưỡng lấy từ Cấu hình, không cố định.
+    assert.deepEqual(danhGiaGioMay(new Date(bay.getTime() + 30 * 60_000), bay, { lechToiDaPhut: 10, namToiThieu: 2020 }), ["gio-may-lech"]);
+  });
+  it("QĐ-113 / QĐ-115: lần chấm mang cờ chờ chấp nhận không tính công tới khi được chấp nhận", () => {
+    for (const co of ["gio-may-lech", "gio-may-vo-ly", "phieu-hien-truong-cu", "phieu-da-xong"]) {
+      assert.equal(canChapNhanMoiTinh({ gpsResult: null, flags: [co] }), true, co);
+      assert.equal(duocTinhCong({ gpsResult: null, flags: [co] }, undefined), false, co);
+      assert.equal(duocTinhCong({ gpsResult: "hien-truong", flags: [co] }, "chap-nhan"), true, co);
+      assert.equal(duocTinhCong({ gpsResult: null, flags: [co] }, "tu-choi"), false, co);
+    }
+    // Cờ chỉ để xem lại (độ chính xác, tốc độ) vẫn tính ngay như trước.
+    assert.equal(duocTinhCong({ gpsResult: "hop-le", flags: ["do-chinh-xac-thap", "toc-do-bat-thuong"] }, undefined), true);
+    assert.equal(canChapNhanMoiTinh({ gpsResult: "hop-le", flags: "rac" }), false);
+  });
+  it("QĐ-115: chọn phiếu hiện trường — còn mở + hoạt động trong N ngày tính ngay; phiếu cũ / đã xong chờ chấp nhận", () => {
+    const luc = new Date("2026-10-20T01:00:00Z");
+    const ngayTruoc = (n: number) => new Date(luc.getTime() - n * 86_400_000);
+    const p = (id: string, conMo: boolean, xongHomNay: boolean, n: number) => ({ id, conMo, xongHomNay, hoatDongCuoi: ngayTruoc(n) });
+    assert.equal(chonPhieuHienTruong([], luc, 14), null);
+    assert.deepEqual(chonPhieuHienTruong([p("cu", true, false, 20), p("moi", true, false, 3)], luc, 14), { phieu: p("moi", true, false, 3), co: null });
+    assert.equal(chonPhieuHienTruong([p("bien", true, false, 14)], luc, 14)?.co, null, "đúng N ngày vẫn còn hiệu lực");
+    assert.equal(chonPhieuHienTruong([p("cu", true, false, 15)], luc, 14)?.co, "phieu-hien-truong-cu");
+    assert.equal(chonPhieuHienTruong([p("cu", true, false, 15)], luc, 30)?.co, null, "N lấy từ Cấu hình");
+    assert.deepEqual(chonPhieuHienTruong([p("cu", true, false, 40), p("xong", false, true, 0)], luc, 14), { phieu: p("xong", false, true, 0), co: "phieu-da-xong" });
+    assert.equal(chonPhieuHienTruong([p("xong", false, true, 0), p("moi", true, false, 1)], luc, 14)?.phieu.id, "moi", "phiếu mở gần đây được ưu tiên");
+    assert.equal(chonPhieuHienTruong([p("dong", false, false, 0)], luc, 14), null, "phiếu đã đóng từ trước → không phải hiện trường");
+  });
+  it("QĐ-116: vào / ra sát nhau → cờ thiếu giờ (trừ giờ nghỉ giữa ca), không tự trừ; quản lý quyết đủ / nửa / không", () => {
+    const dk = congDuKien("2026-11-02", HC, T2_T6_SANG_T7, false); // thứ Hai, cả ca 08:00 → 17:00, nghỉ 12:00 → 13:00
+    const nguong = { ...MAC_DINH, coMatToiThieuPhanTram: 50 };
+    const c1 = tinhCongNgay(dk, [vn("2026-11-02T08:00:00"), vn("2026-11-02T11:00:00")], null, nguong);
+    assert.equal(c1.phutCoMat, 180);
+    assert.equal(c1.phutPhaiCoMat, 480);
+    assert.ok(c1.co.includes("thieu-gio") && c1.co.includes("thieu-gio-cho-xem-xet"));
+    assert.equal(c1.giaTriCong, 1, "không tự trừ khi chưa có quyết định");
+    // 08:00 → 13:30: 330 phút trừ 60 phút nghỉ trưa = 270 ≥ 240 → không cờ.
+    const c2 = tinhCongNgay(dk, [vn("2026-11-02T08:00:00"), vn("2026-11-02T13:30:00")], null, nguong);
+    assert.equal(c2.phutCoMat, 270);
+    assert.ok(!c2.co.includes("thieu-gio"));
+    // Ngưỡng 0 = không kiểm; không truyền ngưỡng (mã cũ) = không kiểm.
+    assert.ok(!tinhCongNgay(dk, [vn("2026-11-02T08:00:00"), vn("2026-11-02T08:30:00")], null, { ...MAC_DINH, coMatToiThieuPhanTram: 0 }).co.includes("thieu-gio"));
+    assert.ok(!tinhCongNgay(dk, [vn("2026-11-02T08:00:00"), vn("2026-11-02T08:30:00")], null, MAC_DINH).co.includes("thieu-gio"));
+    // Nghỉ phép sáng: phải có mặt nửa chiều 13:00 → 17:00 = 240 phút; có mặt 90 < 120 → thiếu giờ.
+    const c3 = tinhCongNgay(dk, [vn("2026-11-02T13:00:00"), vn("2026-11-02T14:30:00")], { giaTri: 0.5, phan: "sang", maLoai: "phep-nam", coLuong: true }, nguong);
+    assert.equal(c3.phutPhaiCoMat, 240);
+    assert.ok(c3.co.includes("thieu-gio") && c3.giaTriCong === 0.5);
+    // Quyết định của quản lý.
+    assert.equal(apXetThieuGio(c1, undefined), c1);
+    assert.equal(apXetThieuGio(c1, "du").giaTriCong, 1);
+    assert.equal(apXetThieuGio(c1, "nua").giaTriCong, 0.5);
+    assert.equal(apXetThieuGio(c1, "khong").giaTriCong, 0);
+    assert.deepEqual(apXetThieuGio(c1, "nua").co.filter((c) => c.startsWith("thieu-gio")), ["thieu-gio", "thieu-gio-tinh-nua"]);
+    assert.equal(apXetThieuGio(c2, "khong"), c2, "ngày không còn thiếu giờ (vd đã chấm bù) → quyết định cũ không áp");
+  });
+  it("QĐ-117: migration cấp dữ liệu nền cho mọi doanh nghiệp khớp định nghĩa vai trò trong vai-tro.ts", () => {
+    const sql = readFileSync("prisma/migrations/20261102090006_qa_cham_cong_moi_doanh_nghiep/migration.sql", "utf8");
+    const dsMa = (sau: string) => {
+      const doan = sql.slice(sql.indexOf(sau));
+      const m = /p\."code" IN \(([^)]*)\)/.exec(doan);
+      return new Set([...(m?.[1] ?? "").matchAll(/'([a-z_]+\.[a-z]+)'/g)].map((x) => x[1]));
+    };
+    for (const code of ["nhan-su-hr", "sinh-vien-thuc-tap"]) {
+      const dn = VAI_TRO.find((x) => x.code === code)!;
+      assert.ok(dn.quyen !== "*");
+      assert.deepEqual([...dsMa(`'${code}'`)].sort(), [...new Set(dn.quyen)].sort(), code);
+    }
+    // Phạm vi: HR "all" trừ công việc "own"; Thực tập sinh "own".
+    const hrDn = VAI_TRO.find((x) => x.code === "nhan-su-hr")!;
+    assert.equal(phamViCuaQuyen(hrDn, "task.view"), "own");
+    assert.equal(phamViCuaQuyen(hrDn, "cham_cong.approve"), "all");
+    assert.equal(VAI_TRO.find((x) => x.code === "sinh-vien-thuc-tap")!.phamVi, "own");
   });
 });

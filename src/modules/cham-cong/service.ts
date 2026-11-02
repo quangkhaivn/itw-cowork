@@ -8,8 +8,11 @@ import { taoThongBao } from "@/modules/thong-bao/service";
 import { banDoTen, congDuKienCuaNguoi, docCauHinhChamCong, kiemDuocDuyet, nghiDaDuyet, so } from "./chung";
 import { PHIEN_BAN_THONG_BAO_VI_TRI, type DuLieuChamGps } from "./luoc-do";
 import {
+  canChapNhanMoiTinh,
+  chonPhieuHienTruong,
   CO,
   danhGiaViTri,
+  duocTinhCong,
   duongDanBanDo,
   ganNgayCong,
   laBamTrung,
@@ -36,6 +39,9 @@ export const NHAN_CO: Record<string, string> = {
   [CO.tocDoBatThuong]: "Tốc độ di chuyển bất thường",
   [CO.thieuQuyenViTri]: "Không lấy được vị trí",
   [CO.gioMayLech]: "Giờ máy chấm công lệch",
+  [CO.gioMayVoLy]: "Giờ máy chấm công vô lý",
+  [CO.phieuHienTruongCu]: "Phiếu hỗ trợ không còn hoạt động gần đây",
+  [CO.phieuDaXong]: "Phiếu hỗ trợ đã xử lý xong",
   "di-muon": "Đi muộn",
   "ve-som": "Về sớm",
   "vang-mat": "Vắng mặt",
@@ -45,6 +51,11 @@ export const NHAN_CO: Record<string, string> = {
   "cham-cong-ngay-nghi-phep": "Có chấm công trong ngày nghỉ phép",
   "chua-co-lich": "Chưa được gán lịch làm",
   "tang-ca-vuot-tran": "Tăng ca vượt trần",
+  "thieu-gio": "Thiếu giờ (có mặt dưới ngưỡng)",
+  "thieu-gio-cho-xem-xet": "Thiếu giờ — chờ quản lý quyết",
+  "thieu-gio-tinh-du": "Thiếu giờ — quản lý tính đủ công",
+  "thieu-gio-tinh-nua": "Thiếu giờ — quản lý tính nửa công",
+  "thieu-gio-khong-tinh": "Thiếu giờ — quản lý không tính công",
 };
 
 // ---------------------------------------------------------------------------
@@ -108,7 +119,7 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
     select: { id: true, punchedAt: true, direction: true, gpsResult: true },
   });
   if (truocGps && laBamTrung(truocGps.punchedAt, bayGio, so(ch.chongBamTrungGiay, 60))) {
-    return { id: truocGps.id, luc: truocGps.punchedAt, huong: truocGps.direction, ketQua: truocGps.gpsResult, trungLap: true, co: [] as string[], diaDiem: null, phieu: null, canXemXet: false };
+    return { id: truocGps.id, luc: truocGps.punchedAt, huong: truocGps.direction, ketQua: truocGps.gpsResult, trungLap: true, co: [] as string[], diaDiem: null, phieu: null, canXemXet: false, choChapNhan: false };
   }
 
   const viTri = d.viDo !== null && d.viDo !== undefined && d.kinhDo !== null && d.kinhDo !== undefined && !d.loiViTri
@@ -125,15 +136,34 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
   let ketQua: "hop-le" | "hien-truong" | "ngoai-vung" = dg.trongVung ? "hop-le" : "ngoai-vung";
   let phieu: { id: string; number: string; title: string } | null = null;
   if (!dg.trongVung && viTri) {
-    phieu = await nc.tx.supportTicket.findFirst({
-      where: {
-        assigneeId: userId,
-        OR: [{ status: { in: TRANG_THAI_PHIEU_MO } }, { resolvedAt: { gte: mocVN(ngayVNCua(bayGio), 0) } }],
-      },
+    // QĐ-115: chỉ phiếu GIAO CHO CHÍNH NGƯỜI CHẤM (phiếu chưa có danh sách kỹ thuật viên — chỉ một người
+    // xử lý `assignee_id`); còn mở + có hoạt động trong N ngày (Cấu hình) thì tính ngay; phiếu im lặng quá
+    // N ngày hoặc vừa xử lý xong → vẫn là hiện trường nhưng chờ quản lý chấp nhận mới tính công.
+    const dauNgay = mocVN(ngayVNCua(bayGio), 0);
+    const ung = await nc.tx.supportTicket.findMany({
+      where: { assigneeId: userId, OR: [{ status: { in: TRANG_THAI_PHIEU_MO } }, { resolvedAt: { gte: dauNgay } }] },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, number: true, title: true },
+      take: 50,
+      select: {
+        id: true, number: true, title: true, status: true, createdAt: true, updatedAt: true, resolvedAt: true,
+        events: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+      },
     });
-    if (phieu) ketQua = "hien-truong";
+    const chon = chonPhieuHienTruong(
+      ung.map((p) => ({
+        ...p,
+        conMo: TRANG_THAI_PHIEU_MO.includes(p.status),
+        xongHomNay: p.resolvedAt !== null && p.resolvedAt >= dauNgay,
+        hoatDongCuoi: new Date(Math.max(p.createdAt.getTime(), p.updatedAt.getTime(), p.events[0]?.createdAt.getTime() ?? 0)),
+      })),
+      bayGio,
+      so(ch.phieuHienTruongNgay, 14),
+    );
+    if (chon) {
+      phieu = { id: chon.phieu.id, number: chon.phieu.number, title: chon.phieu.title };
+      ketQua = "hien-truong";
+      if (chon.co) co.push(chon.co);
+    }
   }
 
   // Tốc độ so với lần chấm trước có toạ độ (GPS, hoặc máy vân tay — lấy toạ độ địa điểm đặt máy).
@@ -187,7 +217,7 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
       await taoThongBao(nc.tx, nc.tenantId, {
         nguoiNhanId: hs.managerId,
         loai: "cham-cong-can-xem-xet",
-        mucDo: ketQua === "ngoai-vung" ? "canh-bao" : "thong-tin",
+        mucDo: canChapNhanMoiTinh({ gpsResult: ketQua, flags: co }) ? "canh-bao" : "thong-tin",
         tieuDe: `${nc.hoSo.hoTen} chấm ${d.huong === "vao" ? "vào" : "ra"} ca ${NHAN_KET_QUA_GPS[ketQua].toLowerCase()}`,
         noiDung: [phieu ? `Phiếu ${phieu.number}: ${phieu.title}` : null, ...co.map((c) => NHAN_CO[c] ?? c)].filter(Boolean).join(" · ") || null,
         duongDan: "/cham-cong/truc-tiep",
@@ -208,6 +238,8 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
     diaDiem: dg.diaDiem,
     phieu: phieu ? { id: phieu.id, so: phieu.number } : null,
     canXemXet,
+    /** Lần chấm chưa tính công cho tới khi quản lý chấp nhận (ngoài vùng, phiếu cũ / đã xong). */
+    choChapNhan: canChapNhanMoiTinh({ gpsResult: ketQua, flags: co }),
   };
 }
 
@@ -218,6 +250,11 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
 export async function xemXetLanCham(nc: NguCanh, punchId: string, d: { quyetDinh: "chap-nhan" | "tu-choi"; ghiChu: string | null }) {
   const lan = await nc.tx.attendancePunch.findFirst({ where: { id: punchId }, select: { id: true, userId: true, needsReview: true, punchedAt: true, gpsResult: true } });
   if (!lan || !lan.userId) throw new LoiKhongTimThay("Lần chấm công");
+  // NS-12: KHÔNG tự xem xét — kể cả người có phạm vi duyệt "all" (Nhân sự, Giám đốc). Khác với đơn từ
+  // (NS-21 cho phạm vi all tự duyệt): lần chấm ngoài vùng của chính mình mà tự chấp nhận là tự cho mình công.
+  if (lan.userId === nc.hoSo.userId) {
+    throw new LoiNghiepVu("Không tự xem xét lần chấm công của chính mình — quản lý trực tiếp hoặc Nhân sự khác xem xét.", 403, "khong-tu-duyet");
+  }
   await kiemDuocDuyet(nc, lan.userId, { objectType: "attendance_punch", objectId: punchId });
   if (!lan.needsReview) throw new LoiNghiepVu("Lần chấm này hợp lệ, không cần xem xét.", 422, "khong-can-xem-xet");
   if (d.quyetDinh === "tu-choi" && (!d.ghiChu || d.ghiChu.length < 2)) throw new LoiNghiepVu("Không chấp nhận thì ghi lý do để nhân viên biết.", 422, "thieu-ly-do");
@@ -251,15 +288,8 @@ export async function quyetDinhMoiNhat(tx: ClientTenant, punchIds: string[]): Pr
   return kq;
 }
 
-/**
- * Lần chấm có được TÍNH CÔNG không (NS-12): bị từ chối → không; GPS "ngoài vùng" → chỉ khi đã được
- * chấp nhận; còn lại (trong vùng, hiện trường, vân tay, bổ sung, CSV) → có, kể cả khi đang chờ xem xét.
- */
-export function duocTinhCong(p: { gpsResult: string | null }, quyetDinh: string | undefined): boolean {
-  if (quyetDinh === "tu-choi") return false;
-  if (p.gpsResult === "ngoai-vung") return quyetDinh === "chap-nhan";
-  return true;
-}
+/** Thuần — ở tinh-toan.ts (có kiểm thử đơn vị); xuất lại cho các tệp dịch vụ cũ. */
+export { duocTinhCong } from "./tinh-toan";
 
 // ---------------------------------------------------------------------------
 // Chấm công của tôi
@@ -331,11 +361,19 @@ export async function chamCongCuaToi(nc: NguCanh, bayGio = new Date()) {
 /** Lần chấm cần xem xét trong phạm vi duyệt của người đang xem (chưa có quyết định). */
 export async function lanChamCanXemXet(nc: NguCanh, nguoiIds: string[] | "tat-ca", tu: Date) {
   const ds = await nc.tx.attendancePunch.findMany({
-    where: { needsReview: true, punchedAt: { gte: tu }, ...(nguoiIds !== "tat-ca" && { userId: { in: nguoiIds } }), reviews: { none: {} } },
+    where: {
+      needsReview: true, ...(nguoiIds !== "tat-ca" && { userId: { in: nguoiIds } }), reviews: { none: {} },
+      // Lần chấm vân tay mang giờ máy vô lý (vd 2000-01-01) nằm ngoài mọi khoảng gần đây theo GIỜ CHẤM —
+      // vẫn phải hiện để quản lý biết, nên lấy cả theo lúc máy chủ NHẬN.
+      OR: [{ punchedAt: { gte: tu } }, { createdAt: { gte: tu } }],
+      // Không bao giờ hiện lần chấm của chính người xem (NS-12: không tự xem xét).
+      NOT: { userId: nc.hoSo.userId },
+    },
     orderBy: { punchedAt: "desc" },
     take: 200,
     select: {
-      id: true, userId: true, punchedAt: true, direction: true, gpsResult: true, flags: true, latitude: true, longitude: true, distanceM: true, ticketId: true,
+      id: true, userId: true, punchedAt: true, source: true, direction: true, gpsResult: true, flags: true, latitude: true, longitude: true, distanceM: true, ticketId: true,
+      device: { select: { name: true } },
     },
   });
   const ten = await banDoTen(nc.tx, ds.map((p) => p.userId));
@@ -345,9 +383,13 @@ export async function lanChamCanXemXet(nc: NguCanh, nguoiIds: string[] | "tat-ca
     id: p.id,
     nguoi: { id: p.userId, hoTen: ten.get(p.userId ?? "") ?? "—" },
     luc: p.punchedAt,
+    nguon: p.source,
+    may: p.device?.name ?? null,
     huong: p.direction,
     ketQuaGps: p.gpsResult,
     co: Array.isArray(p.flags) ? (p.flags as string[]) : [],
+    /** Lần chấm này CHƯA tính công cho tới khi được chấp nhận. */
+    chuaTinh: !duocTinhCong(p, undefined),
     khoangCachM: p.distanceM,
     phieu: p.ticketId ? { id: p.ticketId, so: soPhieu.get(p.ticketId) ?? "" } : null,
     banDo: p.latitude !== null && p.longitude !== null ? duongDanBanDo(p.latitude, p.longitude) : null,
