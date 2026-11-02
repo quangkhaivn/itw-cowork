@@ -215,6 +215,11 @@ export async function quyetDinhGiaHan(nc: NguCanh, giaHanId: string, d: z.infer<
   if (g.status !== "cho-duyet") throw new LoiNghiepVu("Đề nghị này đã được quyết định.", 409, "da-quyet-dinh");
   if (nguoiGiaoCua(v) !== nc.hoSo.userId) throw new LoiNghiepVu("Chỉ người giao việc duyệt gia hạn.", 403, "khong-phai-nguoi-giao");
   if (!d.dongY && d.ghiChu.length < 5) throw new LoiNghiepVu("Từ chối gia hạn phải ghi lý do (tối thiểu 5 ký tự).", 422, "thieu-ly-do");
+  // DG-31 (QA 0.20.0): việc đã xong / đã chấm điểm / đã hủy thì hạn đã khép lại — đổi hạn lúc này làm lệch
+  // tỷ lệ đúng hạn KPI so với hệ số đúng hạn đã chấm. Vẫn cho từ chối để khép đề nghị còn treo.
+  if (d.dongY && (v.approvedAt || !["mo", "dang-lam", "cho-duyet"].includes(v.status))) {
+    throw new LoiNghiepVu("Việc đã xong hoặc đã hủy nên không gia hạn được nữa. Từ chối đề nghị để khép lại.", 409, "viec-da-khoa");
+  }
   const bayGio = new Date();
   await nc.tx.taskExtension.update({
     where: { id: giaHanId },
