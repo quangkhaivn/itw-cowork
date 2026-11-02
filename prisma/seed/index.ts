@@ -5,6 +5,7 @@ import { VAI_TRO, toanBoQuyen, kiemTraGioiHanAI, phamViCuaQuyen } from "../../sr
 import { LOAI_DU_LIEU_GOC } from "../../src/modules/du-lieu-goc/loai";
 import { kiemTraMatKhauManh } from "../../src/lib/mat-khau";
 import { TRANG_THAI_KHOI_TAO } from "../../src/modules/hanh-trinh/moc";
+import { MAU_PHIEU_MAC_DINH } from "../../src/modules/danh-gia/tinh-toan";
 
 /**
  * Seed nền móng.
@@ -237,6 +238,15 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
     loaiNghiMoi++;
   }
   console.log(`✓ Loại nghỉ: ${LOAI_NGHI_KHOI_TAO.length} (${loaiNghiMoi} loại mới)`);
+
+  // ---- 5d. Mẫu phiếu đánh giá thực tập chung (0.20.0, DG-72) — chỉ tạo khi chưa có mã "mau-chung" ----
+  const coMauPhieu = await db.internEvalTemplate.findUnique({ where: { tenantId_code: { tenantId: tenant.id, code: "mau-chung" } }, select: { id: true } });
+  if (!coMauPhieu) {
+    await db.internEvalTemplate.create({
+      data: { tenantId: tenant.id, code: "mau-chung", name: "Mẫu chung (dựng sẵn)", school: null, layout: MAU_PHIEU_MAC_DINH },
+    });
+    console.log("✓ Mẫu phiếu đánh giá thực tập chung");
+  }
 
   // ---- 6. Tài khoản máy cho trợ lý ITA ----
   const ita = await db.user.upsert({
