@@ -129,6 +129,9 @@ export async function taoDonNghi(nc: NguCanh, d: z.infer<typeof LuocDoDonNghi>) 
   batBuocQuyen(nc.hoSo, "cham_cong.create", { objectType: "leave_request" });
   const loai = await nc.tx.leaveType.findFirst({ where: { id: d.loaiNghiId, status: "hoat-dong" } });
   if (!loai) throw new LoiDinhDang("loaiNghiId", "Loại nghỉ không tồn tại hoặc đã ngừng.");
+  // Hai lần gửi cùng lúc (bấm đúp, hai thiết bị): xếp hàng theo người để lần sau thấy đơn của lần trước khi
+  // kiểm chồng đơn và quỹ phép đang chờ — không có chỉ mục duy nhất nào diễn tả được "khoảng ngày chồng nhau".
+  await nc.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`nghi-phep:${nc.hoSo.userId}`}, 0))`;
   const soNgay = await soNgayDon(nc.tx, nc.hoSo.userId, d.tuNgay, d.denNgay, d.phan);
   if (soNgay <= 0) throw new LoiNghiepVu("Khoảng đã chọn không có ngày làm việc nào theo lịch của bạn (ngày nghỉ tuần, ngày lễ hoặc chưa được gán lịch).", 422, "khong-co-ngay-lam");
   await kiemChongNhau(nc.tx, nc.hoSo.userId, d);

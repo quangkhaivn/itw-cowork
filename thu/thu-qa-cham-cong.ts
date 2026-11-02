@@ -252,7 +252,7 @@ async function main() {
   await chu.supportTicket.create({ data: { tenantId: T, number: `HT2-${DAU}`, customerId: kh.id, type: "su-co", title: "Phiếu đã hủy", ownerId: tp, assigneeId: ktv, status: "HUY", closedAt: vn("2026-10-12T07:00:00") } });
   await chu.supportTicket.create({ data: { tenantId: T, number: `HT3-${DAU}`, customerId: kh.id, type: "su-co", title: "Xong hôm qua", ownerId: tp, assigneeId: ktv, status: "HOAN_THANH", resolution: "Đã thay linh kiện", resolvedAt: vn("2026-10-12T23:30:00") } });
   const gK2 = await voi(T, ktv, (nc) => chamCongGps(nc, { huong: "ra", viDo: XA.lat, kinhDo: XA.lng, doChinhXacM: 20 }, vn("2026-10-13T09:00:00")));
-  dat("Phiếu của mình nhưng đã hủy / xong từ hôm qua → ngoài vùng", gK2.ketQua === "ngoai-vung", gK2.ketQua);
+  dat("Phiếu của mình nhưng đã hủy / xong từ hôm qua → ngoài vùng", gK2.ketQua === "ngoai-vung", String(gK2.ketQua));
   const gK3 = await voi(T, ktv2, (nc) => chamCongGps(nc, { huong: "vao", viDo: XA.lat, kinhDo: XA.lng, doChinhXacM: 20 }, vn("2026-10-13T08:00:00")));
   dat("Phiếu đang mở giao cho mình → hiện trường, gắn đúng phiếu", gK3.ketQua === "hien-truong" && gK3.phieu?.id === phieuKhac.id);
 
@@ -326,6 +326,7 @@ async function main() {
     () => voi(T, nvC, (nc) => taoDonNghi(nc, LuocDoDonNghi.parse({ loaiNghiId: loaiPhep.id, tuNgay: "2026-11-07", denNgay: "2026-11-07", phan: "chieu", lyDo: "Thử nửa ngày" }))), "khong-co-ngay-lam");
   const sang7 = await voi(T, nvC, (nc) => taoDonNghi(nc, LuocDoDonNghi.parse({ loaiNghiId: loaiKL.id, tuNgay: "2026-11-07", denNgay: "2026-11-07", phan: "sang", lyDo: "Nghỉ sáng thứ Bảy" })));
   dat("Nghỉ SÁNG thứ Bảy (lịch làm sáng) = 0,5 ngày", sang7.soNgay === 0.5);
+  await voi(T, hr, (nc) => quyetDinhNghi(nc, sang7.id, { hanhDong: "duyet", ghiChu: null }));
   await nemLoi("Cả ngày chỉ gồm Chủ nhật → chặn", () => voi(T, nvC, (nc) => taoDonNghi(nc, LuocDoDonNghi.parse({ loaiNghiId: loaiPhep.id, tuNgay: "2026-11-08", denNgay: "2026-11-08", lyDo: "CN" }))), "khong-co-ngay-lam");
   const quaLe = await voi(T, nvC, (nc) => taoDonNghi(nc, LuocDoDonNghi.parse({ loaiNghiId: loaiKL.id, tuNgay: "2026-08-31", denNgay: "2026-09-06", lyDo: "Nghỉ tuần lễ" })));
   dat("Đơn 31/08 → 06/09 qua lễ 02/09 + thứ Bảy nửa ngày + Chủ nhật = 4,5 ngày", quaLe.soNgay === 4.5, `${quaLe.soNgay}`);
@@ -429,19 +430,26 @@ async function main() {
   // ==================================================================
   console.log("\n— Nhắc việc —");
   await quetChamCong(T, vn("2026-11-07T08:30:00"));
-  dat("Thứ Bảy làm sáng: người nghỉ sáng (C) không bị nhắc", (await chu.notification.count({ where: { userId: nvC, type: "cham-cong-chua-vao" } })) === 0);
-  await quetChamCong(T, vn("2026-11-07T13:00:00"));
-  dat("Thứ Bảy buổi chiều (ngoài giờ ca sáng) không nhắc thêm", (await chu.notification.count({ where: { tenantId: T, type: "cham-cong-chua-vao", createdAt: { gte: vn("2026-11-07T12:00:00") } } })) === 0 || true);
+  dat("Thứ Bảy làm sáng: người nghỉ sáng đã duyệt (C) không bị nhắc", (await chu.notification.count({ where: { userId: nvC, type: "cham-cong-chua-vao" } })) === 0);
+  dat("…người khác chưa chấm (B) được nhắc", (await chu.notification.count({ where: { userId: nvB, type: "cham-cong-chua-vao" } })) === 1);
+  await quetChamCong(T, vn("2026-11-07T11:30:00"));
+  dat("Quét lại cùng ngày không nhắc lần hai", (await chu.notification.count({ where: { userId: nvB, type: "cham-cong-chua-vao" } })) === 1);
+  await quetChamCong(T, vn("2026-11-08T09:00:00"));
+  dat("Chủ nhật (nghỉ tuần): không nhắc", (await chu.notification.count({ where: { userId: nvB, type: "cham-cong-chua-vao" } })) === 1);
   const soNhacTruoc = await chu.notification.count({ where: { tenantId: T, type: "cham-cong-chua-vao" } });
   await quetChamCong(T, vn("2026-09-02T09:00:00"));
   dat("Ngày lễ: không nhắc", (await chu.notification.count({ where: { tenantId: T, type: "cham-cong-chua-vao" } })) === soNhacTruoc);
+  const demMay = () => chu.notification.count({ where: { userId: hr, type: "may-cham-cong-mat-ket-noi", objectId: may.id } });
+  await adms("GET", "getrequest", `SN=${SN}`);
   await chu.attendanceDevice.update({ where: { id: may.id }, data: { lastSeenAt: new Date(Date.now() - 60 * 60_000), offlineAlertedAt: null } });
+  const may0 = await demMay();
   for (let i = 0; i < 3; i++) await quetChamCong(T, new Date());
-  dat("Máy mất kết nối: báo đúng một lần cho mỗi người có nhan_su.update", (await chu.notification.count({ where: { userId: hr, type: "may-cham-cong-mat-ket-noi", objectId: may.id } })) === 1);
+  dat("Máy mất kết nối: quét 3 lần → báo đúng một lần", (await demMay()) === may0 + 1, `${may0} → ${await demMay()}`);
   await adms("GET", "getrequest", `SN=${SN}`);
   await chu.attendanceDevice.update({ where: { id: may.id }, data: { lastSeenAt: new Date(Date.now() - 50 * 60_000) } });
   await quetChamCong(T, new Date());
-  dat("Đợt mất kết nối mới sau khi máy gọi lại → báo thêm một lần", (await chu.notification.count({ where: { userId: hr, type: "may-cham-cong-mat-ket-noi", objectId: may.id } })) === 2);
+  await quetChamCong(T, new Date());
+  dat("Đợt mất kết nối mới sau khi máy gọi lại → báo thêm đúng một lần", (await demMay()) === may0 + 2);
 
   await ngu(10);
   void LoiDinhDang;

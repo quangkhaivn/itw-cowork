@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { NguCanh } from "@/lib/api";
 import { khoaChungTu } from "@/lib/khoa-chung-tu";
-import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
+import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
 import { batBuocQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { dateVeNgay, ngayVeDate } from "@/modules/crm/chung";
@@ -66,9 +66,13 @@ export async function taoGiaiTrinh(nc: NguCanh, d: z.infer<typeof LuocDoGiaiTrin
     select: { id: true },
   });
   if (trung) throw new LoiNghiepVu("Đã có đơn giải trình cùng ngày, cùng chiều đang chờ duyệt.", 409, "trung-don");
-  const gt = await nc.tx.attendanceCorrection.create({
-    data: { tenantId: nc.tenantId, userId: nc.hoSo.userId, workDate: ngayVeDate(d.ngay), punchAt: luc, direction: d.huong, reason: d.lyDo },
-  });
+  // Kiểm trên chỉ là để báo lỗi dễ hiểu; hai lần gửi cùng lúc do chỉ mục duy nhất riêng phần chặn (QA 0.19.0).
+  const gt = await nc.tx.attendanceCorrection
+    .create({ data: { tenantId: nc.tenantId, userId: nc.hoSo.userId, workDate: ngayVeDate(d.ngay), punchAt: luc, direction: d.huong, reason: d.lyDo } })
+    .catch((e: unknown) => {
+      if (laLoiTrung(e)) throw new LoiNghiepVu("Đã có đơn giải trình cùng ngày, cùng chiều đang chờ duyệt.", 409, "trung-don");
+      throw e;
+    });
   await nc.kiemToan({ action: "tao", objectType: "attendance_correction", objectId: gt.id, after: { ...d } });
   await nc.suKien({ eventType: SU_KIEN.ATTENDANCE_CORRECTION_REQUESTED, objectType: "attendance_correction", objectId: gt.id, payload: { ngay: d.ngay, huong: d.huong } });
   await baoQuanLy(nc, "giai-trinh-cho-duyet", `${nc.hoSo.hoTen} xin chấm bù giờ ${d.huong === "vao" ? "vào" : "ra"} ngày ${d.ngay.split("-").reverse().join("/")}`, "/cham-cong/don-tu", "attendance_correction", gt.id);
@@ -175,9 +179,13 @@ export async function taoDonTangCa(nc: NguCanh, d: z.infer<typeof LuocDoTangCa>)
     select: { id: true },
   });
   if (trung) throw new LoiNghiepVu("Ngày này đã có đơn tăng ca đang chờ hoặc đã duyệt.", 409, "trung-don");
-  const r = await nc.tx.overtimeRequest.create({
-    data: { tenantId: nc.tenantId, userId: nc.hoSo.userId, workDate: ngayVeDate(d.ngay), expectedHours: d.soGio, reason: d.lyDo },
-  });
+  // Hai lần gửi cùng lúc: chỉ mục duy nhất riêng phần `overtime_requests_mot_don_moi_ngay_key` chặn (QA 0.19.0).
+  const r = await nc.tx.overtimeRequest
+    .create({ data: { tenantId: nc.tenantId, userId: nc.hoSo.userId, workDate: ngayVeDate(d.ngay), expectedHours: d.soGio, reason: d.lyDo } })
+    .catch((e: unknown) => {
+      if (laLoiTrung(e)) throw new LoiNghiepVu("Ngày này đã có đơn tăng ca đang chờ hoặc đã duyệt.", 409, "trung-don");
+      throw e;
+    });
   const cb = await canhBaoTran(nc, nc.hoSo.userId, d.ngay, d.soGio);
   await nc.kiemToan({ action: "tao", objectType: "overtime_request", objectId: r.id, after: { ...d, canhBao: cb.canhBao } });
   await nc.suKien({ eventType: SU_KIEN.OVERTIME_REQUESTED, objectType: "overtime_request", objectId: r.id, payload: { ngay: d.ngay, soGio: d.soGio } });
