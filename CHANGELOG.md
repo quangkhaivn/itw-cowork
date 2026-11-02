@@ -4,9 +4,9 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 ## 0.20.0 (chưa phát hành) — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
 
-**Chưa triển khai lên máy thật.** Ba migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`, `20261103090003_danh_gia_chinh_sach`), chạy lại `prisma/rls.sql` (7 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
+**Chưa triển khai lên máy thật.** Bốn migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`, `20261103090003_danh_gia_chinh_sach`, `20261103090004_danh_gia_giao_viec_nguoi_nghi`), chạy lại `prisma/rls.sql` (7 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
 
-Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-84). Quyết định QĐ-119 → QĐ-140. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-85). Quyết định QĐ-119 → QĐ-140, QĐ-154, QĐ-155. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
 
 ### Thêm
 - **Giao việc mở rộng**: độ khó 1–5; cờ **cần duyệt** (mặc định bật khi giao cho người khác) + chuỗi người duyệt (mặc định người giao, tối đa 5 cấp, không ai tự duyệt); người được giao **Nhận / Từ chối kèm lý do**; nhắc người giao khi quá hạn nhận; **xin gia hạn** → người giao duyệt (giữ lịch sử, hạn ban đầu); **mẫu việc**; **việc định kỳ** ngày / tuần / tháng do worker sinh (không trùng); **giao nhiều người** (mỗi người một việc, chung nhóm). Thẻ "Chờ tôi duyệt", "Chờ tôi nhận"; trang **Việc của nhóm**.
@@ -58,6 +58,13 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-84). Quyết đ
 - **Thang Có / Không (QĐ-131)** nhận "toString" / "__proto__" / "valueOf" → điểm trống mà không báo thiếu, phiếu chốt được. Nay chỉ nhận `co` / `khong`.
 - **QĐ-137**: người có `task.update` (không phải người giao / quản lý trực tiếp / Giám đốc / Quản trị) sửa tiêu đề việc bị từ chối là tự "giao lại" việc (xóa lý do từ chối, về chờ nhận, báo người làm). Nay chỉ người được đổi thuộc tính chấm điểm mới gửi lại.
 - Diễn tập nâng cấp từ `origin/release/0.19` có dữ liệu mẫu (`itw`, `demo`) + việc cũ có / chưa có người giao: quyền khớp `vai-tro.ts` ở cả hai doanh nghiệp, RLS 20/20 bảng, chuyển người làm việc cũ giữ người giao, việc hệ thống cũ nhận người giao lần đầu, bàn giao + khóa trưởng phòng demo chuyển bước cho Giám đốc, Giám đốc demo mở kỳ / chấm / chốt.
+
+### Chính sách sau QA vòng 2 (QĐ-154, QĐ-155)
+- **Migration mới** `20261103090004_danh_gia_giao_viec_nguoi_nghi`: cột `tasks.handover_to_id`, lý do chuyển `nguoi-lam-nghi`.
+- **Người duyệt khi TẠO việc giao cho người khác** (QĐ-154, DG-26): QĐ-137 mới chặn đường *sửa*; đường *tạo* vẫn cho nhân viên có `task.create` toàn công ty (Marketing, Kho, Kế toán, CSKH) tạo việc / lịch định kỳ giao cho đồng nghiệp, tự đặt mình làm người duyệt rồi chấm điểm. Nay cấp cuối phải là cấp trên của người làm hoặc Giám đốc / Quản trị; đồng nghiệp ngang cấp không tự đứng trong chuỗi (403 `tu-dat-nguoi-duyet` / `nguoi-duyet-cuoi`); chuỗi mặc định khi đồng nghiệp giao = quản lý trực tiếp của người làm (không có → Giám đốc). Áp cho tạo đơn, giao nhiều người, mẫu việc (chuẩn hóa), lịch định kỳ (kiểm lúc lập; lúc sinh lịch cũ vi phạm thì không sinh), sửa chuỗi sau khi tạo.
+- **Việc chờ duyệt của người đã nghỉ** (QĐ-155, DG-85): bàn giao giữ người làm cũ cho việc đang chờ duyệt (điểm thuộc về họ) nhưng ghi người nhận bàn giao (màn hình bàn giao thêm dòng "Việc đang chờ duyệt"); bị trả lại / mở lại mà người làm đã nghỉ → chuyển cho người nhận bàn giao, không có thì quản lý trực tiếp → Giám đốc; người giao giữ nguyên; ghi lịch sử, báo người nhận.
+- **Thay đổi đáng lưu ý**: đồng nghiệp ngang cấp giao việc không còn mặc định là người duyệt; chuỗi duyệt gửi qua API có cấp cuối không phải cấp trên của người làm / Giám đốc / Quản trị bị 403.
+- Kiểm thử: `thu/don-vi/danh-gia-chinh-sach.test.ts` thêm 2 bài (kiểm chuỗi gửi lên, chuẩn hóa chuỗi tự động); `thu:qa-danh-gia` 181 → 210 kiểm tra.
 
 ## 0.19.0 — 02/11/2026 — Nhân sự, giai đoạn 1: chấm công
 
