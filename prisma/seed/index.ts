@@ -117,7 +117,8 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
     await db.department.upsert({
       where: { tenantId_code: { tenantId: tenant.id, code: pb.code } },
       update: {},
-      create: { tenantId: tenant.id, code: pb.code, name: pb.name },
+      // 0.20.0: báo cáo ngày bật sẵn cho Kinh doanh và Kỹ thuật khi tạo phòng (phòng đã có: migration).
+      create: { tenantId: tenant.id, code: pb.code, name: pb.name, dailyReport: ["kinh-doanh", "ky-thuat"].includes(pb.code) },
     });
   }
   console.log(`✓ Phòng ban: ${PHONG_BAN.length}`);
@@ -181,7 +182,12 @@ export async function seedNenMong(db: PrismaClient, maTenant: string, tenTenant:
       const go = await db.rolePermission.deleteMany({
         where: {
           roleId: vaiTro.id,
-          OR: [{ permission: { code: { endsWith: ".approve" } } }, { permission: { code: { endsWith: ".delete" } } }],
+          OR: [
+            { permission: { code: { endsWith: ".approve" } } },
+            { permission: { code: { endsWith: ".delete" } } },
+            // 0.20.0 (DG-80): không bao giờ đọc được đánh giá nhân sự.
+            { permission: { module: "danh_gia" } },
+          ],
         },
       });
       if (go.count) console.log(`  ⚠ Đã gỡ ${go.count} quyền duyệt/xóa khỏi vai trò AI`);

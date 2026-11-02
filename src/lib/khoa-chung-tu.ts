@@ -45,6 +45,12 @@ const BANG_KHOA = [
   "overtime_requests",
   "timesheets",
   "attendance_devices",
+  // 0.20.0 — đánh giá: gia hạn, báo cáo, phiếu đánh giá, phiếu thực tập.
+  "task_extensions",
+  "work_reports",
+  "evaluations",
+  "intern_evaluations",
+  "intern_journals",
 ] as const;
 
 export type BangKhoa = (typeof BANG_KHOA)[number];

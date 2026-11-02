@@ -42,6 +42,9 @@ export const PHAN_HE = [
   // 0.19.0 — Nhân sự giai đoạn 1: chấm công (lần chấm, đơn từ, bảng công) và hồ sơ / thiết lập nhân sự.
   "cham_cong",
   "nhan_su",
+  // 0.20.0 — Nhân sự giai đoạn 2: báo cáo công việc, đánh giá định kỳ, KPI cá nhân, nhật ký + phiếu
+  // thực tập. Tách khỏi `kpi` (trợ lý AI có `kpi.view`) để AI không bao giờ đọc được đánh giá (DG-80).
+  "danh_gia",
 ] as const;
 
 // Thêm phân hệ mới: thêm vào CUỐI mảng trên + MO_TA_PHAN_HE, rồi khai quyền cho
@@ -104,6 +107,7 @@ export const MO_TA_PHAN_HE: Record<PhanHe, string> = {
   product: "Sản phẩm",
   cham_cong: "Chấm công",
   nhan_su: "Nhân sự",
+  danh_gia: "Đánh giá nhân sự",
 };
 
 export const MO_TA_HANH_DONG: Record<HanhDongQuyen, string> = {
@@ -153,6 +157,13 @@ export function phamViCuaQuyen(dn: DinhNghiaVaiTro, ma: string): PhamVi {
  */
 const CHAM_CONG_CA_NHAN = [maQuyen("cham_cong", "view"), maQuyen("cham_cong", "create")];
 const CHAM_CONG_QUAN_LY = [...CHAM_CONG_CA_NHAN, maQuyen("cham_cong", "approve")];
+/**
+ * 0.20.0 — đánh giá (QĐ-115). Mọi nhân viên: xem phiếu / báo cáo / nhật ký CỦA MÌNH và tự viết (`own`).
+ * Trưởng phòng: xem, chấm, nhận xét, chốt trong phạm vi vai trò. Nhân sự: xem toàn công ty (bộ KPI, kỳ,
+ * mẫu phiếu quản lý bằng `nhan_su.update`), không chốt. Giám đốc: toàn quyền. Trợ lý AI: không có.
+ */
+const DANH_GIA_CA_NHAN = [maQuyen("danh_gia", "view"), maQuyen("danh_gia", "create")];
+const DANH_GIA_QUAN_LY = [...DANH_GIA_CA_NHAN, maQuyen("danh_gia", "update"), maQuyen("danh_gia", "approve"), maQuyen("danh_gia", "export")];
 function rieng(ds: string[], pv: PhamVi): Record<string, PhamVi> {
   return Object.fromEntries(ds.map((m) => [m, pv]));
 }
@@ -202,6 +213,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
+      // 0.20.0: đánh giá — QĐ-115.
+      ...DANH_GIA_QUAN_LY,
     ],
   },
   {
@@ -216,6 +229,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
+      ...DANH_GIA_CA_NHAN,
     ],
   },
   {
@@ -231,8 +245,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
+      ...DANH_GIA_QUAN_LY,
     ],
-    phamViRieng: rieng(CHAM_CONG_QUAN_LY, "team"),
+    phamViRieng: { ...rieng(CHAM_CONG_QUAN_LY, "team"), ...rieng(DANH_GIA_QUAN_LY, "team") },
   },
   {
     code: "marketing",
@@ -245,8 +260,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
+      ...DANH_GIA_CA_NHAN,
     ],
-    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
+    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
   },
   {
     code: "technical-manager",
@@ -262,6 +278,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
+      ...DANH_GIA_QUAN_LY,
     ],
   },
   {
@@ -275,6 +292,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
+      ...DANH_GIA_CA_NHAN,
     ],
   },
   {
@@ -290,6 +308,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_QUAN_LY,
+      ...DANH_GIA_QUAN_LY,
     ],
   },
   {
@@ -303,8 +322,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
+      ...DANH_GIA_CA_NHAN,
     ],
-    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
+    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
   },
   {
     code: "warehouse",
@@ -318,8 +338,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
+      ...DANH_GIA_CA_NHAN,
     ],
-    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
+    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
   },
   {
     code: "finance",
@@ -338,8 +359,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
+      ...DANH_GIA_CA_NHAN,
     ],
-    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
+    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
   },
   {
     code: "customer-service",
@@ -352,8 +374,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("ai", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
+      ...DANH_GIA_CA_NHAN,
     ],
-    phamViRieng: rieng(CHAM_CONG_CA_NHAN, "own"),
+    phamViRieng: rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"),
   },
   {
     code: "marketing-intern",
@@ -369,6 +392,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("dashboard", "view"),
       // 0.19.0: chấm công — QĐ-107.
       ...CHAM_CONG_CA_NHAN,
+      ...DANH_GIA_CA_NHAN,
     ],
   },
   {
@@ -386,8 +410,12 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       maQuyen("department", "view"),
       ...tron(["task"], LAM_VIEC),
       ...tron(["dashboard", "alert"], CHI_XEM),
+      // 0.20.0: xem / xuất đánh giá toàn công ty; bộ KPI, kỳ, mẫu phiếu thực tập qua `nhan_su.update`.
+      maQuyen("danh_gia", "view"),
+      maQuyen("danh_gia", "create"),
+      maQuyen("danh_gia", "export"),
     ],
-    phamViRieng: rieng(tron(["task"], LAM_VIEC), "own"),
+    phamViRieng: { ...rieng(tron(["task"], LAM_VIEC), "own"), [maQuyen("danh_gia", "create")]: "own" },
   },
   {
     // 0.19.0 — sinh viên thực tập (owner 01/11/2026). Chỉ công việc của mình + chấm công của mình;
@@ -396,7 +424,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
     name: "Thực tập sinh",
     phamVi: "own",
     description: "Sinh viên thực tập: chỉ xem / cập nhật công việc được giao và chấm công của chính mình.",
-    quyen: [maQuyen("task", "view"), maQuyen("task", "update"), ...CHAM_CONG_CA_NHAN],
+    quyen: [maQuyen("task", "view"), maQuyen("task", "update"), ...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN],
   },
   {
     code: "ai-assistant",
@@ -428,6 +456,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
 export function kiemTraGioiHanAI(): { dat: boolean; viPham: string[] } {
   const ai = VAI_TRO.find((v) => v.code === "ai-assistant");
   if (!ai || ai.quyen === "*") return { dat: false, viPham: ["Vai trò AI đang có toàn quyền"] };
-  const viPham = ai.quyen.filter((q) => q.endsWith(".approve") || q.endsWith(".delete"));
+  // 0.20.0 (DG-80): AI không có bất kỳ quyền đánh giá nhân sự nào.
+  const viPham = ai.quyen.filter((q) => q.endsWith(".approve") || q.endsWith(".delete") || q.startsWith("danh_gia."));
   return { dat: viPham.length === 0, viPham };
 }

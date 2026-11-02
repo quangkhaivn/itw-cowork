@@ -47,7 +47,9 @@ BEGIN
           AND c.column_name = 'tenant_id'
           AND t.table_type = 'BASE TABLE'
           AND c.table_name NOT IN ('business_events', 'audit_logs', 'email_consents', 'email_sns_messages',
-                                   'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments')
+                                   'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
+                                   'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
+                                   'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -65,7 +67,10 @@ END $$;
 -- 3. Bảng chỉ ghi thêm: business_events, audit_logs, và (0.18.0) sổ đồng ý
 --    email_consents + nhật ký thông điệp SNS email_sns_messages, (0.19.0) xác nhận
 --    thông báo vị trí attendance_consents, quyết định xem xét lần chấm
---    attendance_punch_reviews, điều chỉnh quỹ phép leave_adjustments
+--    attendance_punch_reviews, điều chỉnh quỹ phép leave_adjustments, và (0.20.0) lịch
+--    sử duyệt việc task_approval_logs, điều chỉnh điểm việc task_score_adjustments, nhật ký
+--    tiến độ task_progress_logs, nhận xét báo cáo work_report_comments, phiên điều chỉnh
+--    đánh giá evaluation_adjustments, nhận xét nhật ký thực tập intern_journal_comments
 --    Không cấp UPDATE/DELETE cho ứng dụng, và chặn thêm bằng trigger để kể cả
 --    chủ sở hữu cũng không lỡ tay sửa lịch sử.
 -- --------------------------------------------------------------------------
@@ -80,7 +85,9 @@ DO $$
 DECLARE
     ten_bang text;
     ds_bang text[] := ARRAY['business_events', 'audit_logs', 'email_consents', 'email_sns_messages',
-                            'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments'];
+                            'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
+                            'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
+                            'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
