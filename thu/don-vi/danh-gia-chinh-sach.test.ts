@@ -118,7 +118,9 @@ test("QĐ-154: kiểm chuỗi duyệt gửi lên khi giao cho người khác", (
   assert.equal(loiChuoiDuyetKhiGiao(["pgd"], { ...ctx, nguoiGiaoId: "pgd" }), null, "người giao là cấp trên");
   assert.equal(loiChuoiDuyetKhiGiao(["gd"], { ...ctx, nguoiGiaoId: "gd" }), null, "Giám đốc");
   assert.equal(loiChuoiDuyetKhiGiao(["qt"], { ...ctx, nguoiGiaoId: "mk" }), null, "Quản trị cấp cuối");
-  assert.equal(loiChuoiDuyetKhiGiao(["ban"], { ...ctx, nguoiGiaoId: "nv" }), null, "việc tự tạo: ngoài phạm vi luật");
+  assert.equal(loiChuoiDuyetKhiGiao(["ban"], { ...ctx, nguoiGiaoId: "nv" }), "nguoi-duyet-cuoi", "việc tự tạo: đồng nghiệp chấm chéo bị chặn");
+  assert.equal(loiChuoiDuyetKhiGiao(["tp"], { ...ctx, nguoiGiaoId: "nv" }), null, "việc tự tạo: quản lý duyệt");
+  assert.equal(loiChuoiDuyetKhiGiao(["ban", "gd"], { ...ctx, nguoiGiaoId: "nv" }), null, "việc tự tạo: Giám đốc cấp cuối");
 });
 
 test("QĐ-154: chuẩn hóa chuỗi dựng tự động", () => {
@@ -128,4 +130,6 @@ test("QĐ-154: chuẩn hóa chuỗi dựng tự động", () => {
   assert.deepEqual(chuanHoaChuoiDuyetKhiGiao(["ban"], { ...ctx, nguoiGiaoId: "mk" }), ["ban", "tp"], "cấp cuối không hợp lệ → thêm quản lý");
   assert.deepEqual(chuanHoaChuoiDuyetKhiGiao(["tp", "ban"], { ...ctx, nguoiGiaoId: "mk" }), ["ban", "tp"]);
   assert.deepEqual(chuanHoaChuoiDuyetKhiGiao([], { ...ctx, nguoiGiaoId: "mk", quanLyCuaNguoiLam: [], capTrenCuaNguoiLam: ["gd"] }), ["gd"], "không có quản lý → Giám đốc");
+  assert.deepEqual(chuanHoaChuoiDuyetKhiGiao(["ban"], { ...ctx, nguoiGiaoId: "nv" }), ["ban", "tp"], "việc tự tạo: thêm quản lý làm cấp cuối");
+  assert.deepEqual(chuanHoaChuoiDuyetKhiGiao(["gd"], { nguoiLamId: "gd", nguoiGiaoId: "gd", quanLyCuaNguoiLam: [], laGiamDocHoacQuanTri: (id: string) => id === "gd" || id === "qt", capTrenCuaNguoiLam: ["qt"] }), ["qt"], "Giám đốc tự tạo: không tự duyệt, lên Quản trị");
 });

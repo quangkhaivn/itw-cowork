@@ -58,14 +58,13 @@ export async function dungChuoiDuyetChoViec(nc: NguCanh, d: { chuoi: CapDuyet[];
 }
 
 /**
- * QĐ-154: chuỗi duyệt DỰNG TỰ ĐỘNG (không ai gửi danh sách người duyệt — mặc định, theo mẫu việc) cho việc
- * giao cho người khác: đồng nghiệp ngang cấp không tự đứng duyệt; cấp cuối luôn là quản lý / cấp trên của
+ * QĐ-154: chuỗi duyệt DỰNG TỰ ĐỘNG (không ai gửi danh sách người duyệt — mặc định, theo mẫu việc) cho việc (kể cả
+ * việc tự tạo): đồng nghiệp ngang cấp không tự đứng duyệt; cấp cuối luôn là quản lý / cấp trên của
  * người làm, hoặc Giám đốc / Quản trị (mặc định: người giao nếu họ là cấp trên, không thì quản lý trực tiếp
  * của người làm, không có quản lý thì Giám đốc).
  */
 export async function chuoiDuyetTuDong(nc: NguCanh, d: { chuoi: CapDuyet[]; nguoiLamId: string; nguoiGiaoId: string }): Promise<string[]> {
   const dung = await dungChuoiDuyetChoViec(nc, d);
-  if (d.nguoiLamId === d.nguoiGiaoId) return dung;
   const bd = await napBanDoCapTren(nc.tx);
   // Chuỗi khai rỗng → dungChuoiDuyet trả [người giao]; chuẩn hóa bỏ người giao nếu họ là đồng nghiệp ngang cấp.
   return chuanHoaChuoiDuyetKhiGiao(dung, {
@@ -76,10 +75,10 @@ export async function chuoiDuyetTuDong(nc: NguCanh, d: { chuoi: CapDuyet[]; nguo
 
 /**
  * QĐ-154: kiểm chuỗi duyệt NGƯỜI GỌI GỬI LÊN (API, form, lịch định kỳ khai người cụ thể / người giao) cho việc
- * giao cho người khác — vi phạm thì 403 kèm lời giải thích, không tự sửa.
+ * cần duyệt — giao cho người khác hoặc tự tạo; vi phạm thì 403 kèm lời giải thích, không tự sửa.
  */
 export async function kiemChuoiDuyetKhiGiao(nc: NguCanh, ids: string[], nguoiLamId: string, nguoiGiaoId: string): Promise<void> {
-  if (nguoiLamId === nguoiGiaoId || ids.length === 0) return;
+  if (ids.length === 0) return;
   const bd = await napBanDoCapTren(nc.tx);
   const loi = loiChuoiDuyetKhiGiao(ids, { nguoiLamId, nguoiGiaoId, quanLyCuaNguoiLam: bd.chuoiQuanLy(nguoiLamId), laGiamDocHoacQuanTri: bd.laGiamDocHoacQuanTri });
   if (loi === "tu-dat-nguoi-duyet") {
@@ -91,7 +90,7 @@ export async function kiemChuoiDuyetKhiGiao(nc: NguCanh, ids: string[], nguoiLam
   }
   if (loi === "nguoi-duyet-cuoi") {
     throw new LoiNghiepVu(
-      "Người duyệt cấp cuối (người chấm điểm) phải là quản lý trực tiếp hoặc cấp trên của người làm, hoặc Giám đốc / Quản trị. Để trống danh sách người duyệt để dùng mặc định.",
+      "Người duyệt cấp cuối (người chấm điểm) phải là quản lý trực tiếp hoặc cấp trên của người làm, hoặc Giám đốc / Quản trị — kể cả việc tự tạo. Để trống danh sách người duyệt để dùng mặc định.",
       403,
       "nguoi-duyet-cuoi",
     );

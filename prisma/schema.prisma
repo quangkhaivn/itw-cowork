@@ -4363,6 +4363,9 @@ model TaskRecurrence {
   startDate     DateTime  @map("start_date") @db.Date
   endDate       DateTime? @map("end_date") @db.Date
   lastRunDate   DateTime? @map("last_run_date") @db.Date
+  /// QĐ-154 — worker phát hiện chuỗi duyệt của lịch vi phạm luật (không sinh việc); NULL = bình thường.
+  invalidChainAt     DateTime? @map("invalid_chain_at") @db.Timestamptz(6)
+  invalidChainReason String?   @map("invalid_chain_reason") @db.Text
   status        String    @default("hoat-dong") @db.VarChar(30)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)

@@ -57,8 +57,13 @@ export default async function TrangMauLap() {
                 <td>{l.ten}</td><td>{l.tieuDe}{l.canDuyet ? <span className="huy-hieu"> cần duyệt</span> : null}</td>
                 <td>{NHAN_TAN_SUAT[l.tanSuat as TanSuat]}{l.tanSuat === "tuan" ? `: ${l.thu.map((t) => NHAN_THU[t]).join(", ")}` : l.tanSuat === "thang" ? `: ngày ${l.ngayThang}` : ""}</td>
                 <td>{l.gioHan}</td><td>{l.nguoi.map((n) => n.hoTen).join(", ")}</td><td>{l.nguoiLap.hoTen}</td>
-                <td>{l.lanCuoi ? l.lanCuoi.split("-").reverse().join("/") : "—"}</td><td>{l.trangThai === "hoat-dong" ? "Đang chạy" : "Dừng"}</td>
-                {tao && <td>{l.nguoiLap.id === nd.hoSo.userId && <FormLapViec lap={l} nguoiGiao={d.nguoiGiao} nguoiDuyet={d.nguoiDuyet} mau={d.mau} homNay={homNayVN()} nhanNut="Sửa" lopNut="nut nho" />}</td>}
+                <td>{l.lanCuoi ? l.lanCuoi.split("-").reverse().join("/") : "—"}</td><td>
+                  {l.trangThai !== "hoat-dong" ? "Dừng" : l.chuoiSai ? (
+                    // QĐ-154: lịch lập trước luật người duyệt — worker không sinh việc cho tới khi sửa chuỗi duyệt.
+                    <span className="huy-hieu loi" title={l.chuoiSai.lyDo}>Ngừng sinh — chuỗi duyệt không hợp lệ</span>
+                  ) : "Đang chạy"}
+                </td>
+                {tao && <td>{l.nguoiLap.id === nd.hoSo.userId && <FormLapViec lap={l} nguoiGiao={d.nguoiGiao} nguoiDuyet={d.nguoiDuyet} mau={d.mau} homNay={homNayVN()} nhanNut={l.chuoiSai ? "Sửa chuỗi duyệt" : "Sửa"} lopNut={l.chuoiSai ? "nut chinh nho" : "nut nho"} />}</td>}
               </tr>
             ))}</tbody>
           </table></div>

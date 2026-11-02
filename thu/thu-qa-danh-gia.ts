@@ -19,7 +19,7 @@ import {
   viecCuaNhom,
   xinGiaHan,
 } from "../src/modules/cong-viec/giao-viec";
-import { LuocDoLapViec, LuocDoMauViec, sinhViecDinhKy, taoLapViec, taoMauViec } from "../src/modules/cong-viec/mau-lap";
+import { danhSachLapViec, LuocDoLapViec, LuocDoMauViec, sinhViecDinhKy, suaLapViec, taoLapViec, taoMauViec } from "../src/modules/cong-viec/mau-lap";
 import {
   bangBaoCaoNhom,
   chiTietBaoCao,
@@ -833,6 +833,37 @@ async function main() {
   dat("Lúc sinh: lịch đồng nghiệp chuỗi trống → việc có người duyệt = quản lý trực tiếp của người làm",
     !!vLapMk && (await chu.taskApprover.findFirst({ where: { taskId: vLapMk.id } }))?.approverId === tp);
   dat("Lúc sinh: lịch cũ khai đồng nghiệp tự duyệt → không sinh việc (bỏ qua, ghi nhật ký máy chủ)", (await chu.task.count({ where: { recurrenceId: lapCu.id } })) === 0);
+  const lapCuSau = await chu.taskRecurrence.findUniqueOrThrow({ where: { id: lapCu.id } });
+  dat("…lịch được đánh dấu 'Ngừng sinh — chuỗi duyệt không hợp lệ'", !!lapCuSau.invalidChainAt && !!lapCuSau.invalidChainReason);
+  const tbLap = async (u: string) => chu.notification.count({ where: { userId: u, type: "lap-viec-chuoi-sai", objectId: lapCu.id } });
+  dat("…báo người lập lịch và quản lý của họ (Giám đốc) trong ứng dụng", (await tbLap(mk)) === 1 && (await tbLap(gd)) === 1);
+  await sinhViecDinhKy(T, mocVN("2026-10-08", 8 * 60));
+  dat("…worker chạy lại ngày sau: không báo trùng (mỗi lịch một lần)", (await tbLap(mk)) === 1 && (await tbLap(gd)) === 1 && (await chu.task.count({ where: { recurrenceId: lapCu.id } })) === 0);
+  const dsLapMk = await voi(T, mk, (nc) => danhSachLapViec(nc));
+  dat("Màn hình lịch định kỳ: lịch hiện trạng thái chuỗi duyệt không hợp lệ", !!dsLapMk.find((x) => x.id === lapCu.id)?.chuoiSai);
+  await voi(T, mk, (nc) => suaLapViec(nc, lapCu.id, LuocDoLapViec.parse({ ten: `Lặp cũ tự duyệt ${DAU}`, tieuDe: "Lặp cũ tự duyệt", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01", canDuyet: true })));
+  dat("Sửa lịch (chuỗi trống → mặc định hợp lệ): bỏ cờ", (await chu.taskRecurrence.findUniqueOrThrow({ where: { id: lapCu.id } })).invalidChainAt === null);
+  await sinhViecDinhKy(T, mocVN("2026-10-09", 8 * 60));
+  const vLapCuMoi = await chu.task.findFirst({ where: { recurrenceId: lapCu.id } });
+  dat("…worker sinh lại việc, người duyệt = quản lý trực tiếp của người làm",
+    !!vLapCuMoi && (await chu.taskApprover.findFirst({ where: { taskId: vLapCuMoi.id } }))?.approverId === tp);
+
+  // QĐ-154 mở rộng: việc TỰ TẠO cần duyệt cũng phải có cấp cuối là cấp trên / Giám đốc / Quản trị (chấm chéo).
+  await nemLoi("Việc tự tạo cần duyệt: hai đồng nghiệp chấm chéo — NV A đặt NV B làm người duyệt → 403", "nghiep-vu",
+    () => voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo nhờ B chấm", { canDuyet: true, nguoiDuyetIds: [nvB] }))), "nguoi-duyet-cuoi");
+  await nemLoi("…và ngược lại NV B đặt NV A → 403", "nghiep-vu",
+    () => voi(T, nvB, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo nhờ A chấm", { canDuyet: true, nguoiDuyetIds: [nvA] }))), "nguoi-duyet-cuoi");
+  const vTuTao = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo cần duyệt mặc định", { canDuyet: true })));
+  dat("Việc tự tạo bật cần duyệt, để trống người duyệt → quản lý trực tiếp", (await chu.taskApprover.findMany({ where: { taskId: vTuTao.id } })).map((x) => x.approverId).join() === tp);
+  const vTuTaoGiua = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo B ở cấp giữa", { canDuyet: true, nguoiDuyetIds: [nvB, tp] })));
+  dat("Việc tự tạo: đồng nghiệp ở cấp giữa, quản lý cấp cuối → được", (await chu.taskApprover.count({ where: { taskId: vTuTaoGiua.id } })) === 2);
+  const vTuTaoKhong = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo không cần duyệt")));
+  dat("Việc tự tạo không cần duyệt: như cũ (không có người duyệt, không tính điểm)", !vTuTaoKhong.canDuyet && (await chu.taskApprover.count({ where: { taskId: vTuTaoKhong.id } })) === 0);
+  const vTuTaoSua = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo rồi bật duyệt")));
+  await nemLoi("…tự tạo rồi bật cần duyệt, chọn đồng nghiệp chấm → 403", "nghiep-vu",
+    () => voi(T, nvA, (nc) => suaViec(nc, vTuTaoSua.id, { canDuyet: true, nguoiDuyetIds: [nvB] })), "nguoi-duyet-cuoi");
+  await nemLoi("Lịch định kỳ tự giao cho mình, đồng nghiệp duyệt → 403", "nghiep-vu",
+    () => voi(T, nvA, (nc) => taoLapViec(nc, LuocDoLapViec.parse({ ten: `Lặp tự giao nhờ B ${DAU}`, tieuDe: "Gọi khách cũ", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01", canDuyet: true, chuoiDuyet: [{ loai: "nguoi-cu-the", nguoiId: nvB }] }))), "nguoi-duyet-cuoi");
   dat("Không còn việc nào mà người giao ngang cấp (Marketing / Kho / Kế toán / CSKH) đứng cấp cuối",
     (await chu.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM tasks t JOIN task_approvers a ON a.task_id = t.id AND a.approver_id = t.assigned_by
       WHERE t.tenant_id = '${T}' AND t.assigned_by IN ('${mk}', '${kho}', '${keToan}', '${cskh}') AND t.owner_id <> t.assigned_by AND t.created_at > now() - interval '1 hour'`))[0].n === 0n);

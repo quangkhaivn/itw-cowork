@@ -11,6 +11,11 @@ import { UU_TIEN } from "@/modules/crm/hang-so";
 import { laNgayLap, LuocDoChuoiDuyet, TAN_SUAT, TOI_DA_NGUOI_MOT_LAN_GIAO, type CapDuyet } from "@/modules/danh-gia/tinh-toan";
 import { chuoiDuyetTuDong, docChuoiDuyet, dungChuoiDuyetChoViec, kiemChuoiDuyetKhiGiao } from "./duyet";
 import { taoViec } from "./service";
+import { taoThongBao } from "@/modules/thong-bao/service";
+import { napBanDoCapTren } from "@/modules/danh-gia/cap-tren";
+
+/** Mã lỗi QĐ-154 — chuỗi duyệt của lịch vi phạm luật người duyệt. */
+const MA_LOI_CHUOI_DUYET = ["tu-dat-nguoi-duyet", "nguoi-duyet-cuoi"];
 
 /**
  * Mẫu việc (DG-06) và việc định kỳ (DG-07).
@@ -170,6 +175,8 @@ function sangLap(l: BanGhiLap, ten: Map<string, string>) {
     canDuyet: l.needsApproval, tanSuat: l.frequency, thu: l.weekdays, ngayThang: l.monthDay, gioHan: phutVeGio(l.dueMinute),
     nguoi: l.assigneeIds.map((id) => ({ id, hoTen: ten.get(id) ?? "—" })), tuNgay: dateVeNgay(l.startDate), denNgay: dateVeNgay(l.endDate),
     lanCuoi: dateVeNgay(l.lastRunDate), trangThai: l.status, nguoiLap: { id: l.createdBy, hoTen: ten.get(l.createdBy) ?? "—" },
+    /** QĐ-154: worker ngừng sinh vì chuỗi duyệt vi phạm luật (lịch lập trước luật) — sửa lịch để chạy lại. */
+    chuoiSai: l.invalidChainAt ? { luc: l.invalidChainAt, lyDo: l.invalidChainReason ?? "" } : null,
     mucKiemTra: Array.isArray(l.checklist) ? (l.checklist as { nhan: string; batBuoc: boolean }[]) : [],
     chuoiDuyet: docChuoiDuyet(l.approvalChain),
   };
@@ -202,7 +209,8 @@ export async function suaLapViec(nc: NguCanh, id: string, d: DuLieuLapViec) {
   if (!goc) throw new LoiKhongTimThay("Việc định kỳ");
   if (goc.createdBy !== nc.hoSo.userId) throw new LoiNghiepVu("Chỉ người lập lịch sửa được việc định kỳ này.", 403, "khong-phai-nguoi-tao");
   const ds = await kiemLapViec(nc, d);
-  const l = await nc.tx.taskRecurrence.update({ where: { id }, data: { ...duLieuLap(d, ds), updatedBy: nc.hoSo.userId } });
+  // Sửa xong (kiemLapViec đã kiểm chuỗi duyệt) → bỏ cờ "ngừng sinh — chuỗi duyệt không hợp lệ".
+  const l = await nc.tx.taskRecurrence.update({ where: { id }, data: { ...duLieuLap(d, ds), invalidChainAt: null, invalidChainReason: null, updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "sua", objectType: "task_recurrence", objectId: id, after: d });
   return sangLap(l, await banDoTen(nc.tx, [...ds, l.createdBy]));
 }
@@ -236,6 +244,7 @@ export async function sinhViecDinhKy(tenantId: string, bayGio = new Date()): Pro
         continue;
       }
       const nc = taoNguCanh(tx, tenantId, hoSo, null, "worker-viec-dinh-ky");
+      let chuoiSai: string | null = null;
       for (const nguoi of canSinh) {
         const conHoatDong = await tx.user.count({ where: { id: nguoi, status: "hoat-dong", isSystem: false } });
         if (!conHoatDong || !(await trongPhamVi(nc, "task.create", nguoi))) {
@@ -267,11 +276,38 @@ export async function sinhViecDinhKy(tenantId: string, bayGio = new Date()): Pro
           await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT sinh_viec");
           console.warn(`[worker] việc định kỳ ${l.id} cho ${nguoi}: ${e instanceof Error ? e.message : e}`);
           boQua += 1;
+          if (e instanceof LoiNghiepVu && MA_LOI_CHUOI_DUYET.includes(e.ma ?? "")) chuoiSai = chuoiSai ?? e.message;
         }
       }
+      if (chuoiSai) await danhDauLapChuoiSai(tx, tenantId, l, chuoiSai, bayGio);
       if (l.templateId) await tx.task.updateMany({ where: { recurrenceId: l.id, recurrenceDate: ngayDb, templateId: null }, data: { templateId: l.templateId } });
       await tx.taskRecurrence.update({ where: { id: l.id }, data: { lastRunDate: ngayDb } });
     }
     return { soViec, boQua };
   });
+}
+
+/**
+ * QĐ-154 (bổ sung): lịch có chuỗi duyệt vi phạm luật → ghi mốc (màn hình hiện "Ngừng sinh — chuỗi duyệt không
+ * hợp lệ") và báo người lập lịch + quản lý hiệu lực của họ, MỘT lần cho mỗi lần phát hiện (chống trùng theo
+ * lịch + mốc phát hiện; sửa lịch xóa mốc, vi phạm lại thì báo lại).
+ */
+async function danhDauLapChuoiSai(tx: Parameters<Parameters<typeof voiTenant>[1]>[0], tenantId: string, l: { id: string; name: string; createdBy: string; invalidChainAt: Date | null }, lyDo: string, bayGio: Date) {
+  const moc = l.invalidChainAt ?? bayGio;
+  if (!l.invalidChainAt) await tx.taskRecurrence.update({ where: { id: l.id }, data: { invalidChainAt: moc, invalidChainReason: lyDo.slice(0, 1000) } });
+  const quanLy = (await napBanDoCapTren(tx)).quanLyHieuLuc(l.createdBy);
+  for (const nhan of [l.createdBy, quanLy]) {
+    if (!nhan) continue;
+    await taoThongBao(tx, tenantId, {
+      nguoiNhanId: nhan,
+      loai: "lap-viec-chuoi-sai",
+      mucDo: "canh-bao",
+      tieuDe: `Việc định kỳ “${l.name}” ngừng sinh — chuỗi duyệt không hợp lệ`.slice(0, 300),
+      noiDung: `${lyDo.slice(0, 500)} Người lập lịch mở Công việc → Mẫu & định kỳ → Sửa để chọn lại người duyệt.`,
+      duongDan: "/cong-viec/mau",
+      doiTuong: "task_recurrence",
+      doiTuongId: l.id,
+      khoaChongTrung: `lap-chuoi-sai:${l.id}:${moc.getTime()}`,
+    });
+  }
 }

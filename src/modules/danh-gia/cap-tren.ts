@@ -109,7 +109,8 @@ export function laGiamDoc(hoSo: HoSoQuyen): boolean {
 
 /** Người đang thao tác giữ vai trò Giám đốc hoặc Quản trị. */
 /**
- * QĐ-154 — kiểm chuỗi người duyệt của việc GIAO CHO NGƯỜI KHÁC (người làm ≠ người giao). Thuần.
+ * QĐ-154 — kiểm chuỗi người duyệt của việc CẦN DUYỆT, kể cả việc tự tạo (người làm = người giao — chặn hai
+ * đồng nghiệp tự tạo việc rồi chấm điểm chéo cho nhau). Thuần.
  *  - Người duyệt **cấp cuối** (quyết điểm) phải là quản lý trực tiếp / cấp trên trong chuỗi quản lý của người
  *    làm, hoặc Giám đốc / Quản trị. (Người giao chỉ đứng được cấp cuối khi chính họ nằm trong chuỗi đó.)
  *  - Người giao không nằm trong chuỗi quản lý của người làm và không phải Giám đốc / Quản trị (đồng nghiệp
@@ -120,9 +121,10 @@ export function loiChuoiDuyetKhiGiao(
   chuoi: readonly string[],
   d: { nguoiLamId: string; nguoiGiaoId: string; quanLyCuaNguoiLam: readonly string[]; laGiamDocHoacQuanTri: (id: string) => boolean },
 ): "tu-dat-nguoi-duyet" | "nguoi-duyet-cuoi" | null {
-  if (d.nguoiLamId === d.nguoiGiaoId || chuoi.length === 0) return null;
+  if (chuoi.length === 0) return null;
   const hopLe = (id: string) => d.quanLyCuaNguoiLam.includes(id) || d.laGiamDocHoacQuanTri(id);
-  if (chuoi.includes(d.nguoiGiaoId) && !hopLe(d.nguoiGiaoId)) return "tu-dat-nguoi-duyet";
+  // Việc tự tạo: người làm đứng trong chuỗi là lỗi "tự duyệt" (DG-21, kiểm riêng) — ở đây chỉ xét cấp cuối.
+  if (d.nguoiLamId !== d.nguoiGiaoId && chuoi.includes(d.nguoiGiaoId) && !hopLe(d.nguoiGiaoId)) return "tu-dat-nguoi-duyet";
   if (!hopLe(chuoi[chuoi.length - 1])) return "nguoi-duyet-cuoi";
   return null;
 }
@@ -136,11 +138,10 @@ export function chuanHoaChuoiDuyetKhiGiao(
   chuoi: readonly string[],
   d: { nguoiLamId: string; nguoiGiaoId: string; quanLyCuaNguoiLam: readonly string[]; laGiamDocHoacQuanTri: (id: string) => boolean; capTrenCuaNguoiLam: readonly string[] },
 ): string[] {
-  if (d.nguoiLamId === d.nguoiGiaoId) return [...chuoi];
   const hopLe = (id: string) => d.quanLyCuaNguoiLam.includes(id) || d.laGiamDocHoacQuanTri(id);
   let kq = chuoi.filter((x) => x !== d.nguoiLamId && (x !== d.nguoiGiaoId || hopLe(x)));
   if (kq.length && hopLe(kq[kq.length - 1])) return kq;
-  const macDinh = hopLe(d.nguoiGiaoId) ? d.nguoiGiaoId : d.capTrenCuaNguoiLam.find((x) => x !== d.nguoiLamId);
+  const macDinh = hopLe(d.nguoiGiaoId) && d.nguoiGiaoId !== d.nguoiLamId ? d.nguoiGiaoId : d.capTrenCuaNguoiLam.find((x) => x !== d.nguoiLamId);
   if (!macDinh) return kq;
   kq = [...kq.filter((x) => x !== macDinh), macDinh];
   return kq.slice(-5);
