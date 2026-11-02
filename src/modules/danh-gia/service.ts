@@ -503,3 +503,15 @@ export function ketQuaHieuLuc(p: { status: string; totalScore: Prisma.Decimal | 
   const dc = p.adjustments[p.adjustments.length - 1];
   return dc ? { tongDiem: lamTron2(Number(dc.newTotal)), xepLoai: dc.newGrade, heSoThuong: Number(dc.newBonusCoef) } : { tongDiem: so(p.totalScore), xepLoai: p.grade, heSoThuong: so(p.bonusCoef) };
 }
+
+/** Phiếu đánh giá của chính mình (mọi kỳ). */
+export async function phieuCuaToi(nc: NguCanh) {
+  batBuocQuyen(nc.hoSo, "danh_gia.view");
+  const ds = await nc.tx.evaluation.findMany({
+    where: { userId: nc.hoSo.userId },
+    include: { period: true, adjustments: { orderBy: { createdAt: "desc" }, take: 1 } },
+    orderBy: { createdAt: "desc" },
+    take: 24,
+  });
+  return ds.map((p) => ({ id: p.id, ky: kyCuaBanGhi(p.period).nhan, trangThai: p.status, ketQua: ketQuaHieuLuc({ ...p, adjustments: p.adjustments }) }));
+}
