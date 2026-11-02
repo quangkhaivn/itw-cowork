@@ -24,7 +24,8 @@ function hienDiem(x: number | null | undefined) {
 export default function PhieuThucTapIn({ d }: { d: DuLieuPhieuIn }) {
   const { mau } = d;
   const chiTiet = new Map((d.ketQua?.chiTiet ?? []).map((c) => [c.ma, c]));
-  let stt = 0;
+  // Số thứ tự liên tục qua các phần, tính trước khi dựng (không đổi biến trong lúc render).
+  const sttCua = new Map(mau.phan.flatMap((p) => p.tieuChi.map((t) => t.ma)).map((ma, i) => [ma, i + 1]));
   return (
     <article className="to-in phieu-tt">
       {d.banNhap && <div className="dau-nhap">BẢN NHÁP — CHƯA CHỐT</div>}
@@ -69,13 +70,12 @@ export default function PhieuThucTapIn({ d }: { d: DuLieuPhieuIn }) {
               <td colSpan={5}>{p.ten}</td>
             </tr>,
             ...p.tieuChi.map((t) => {
-              stt += 1;
               const c = chiTiet.get(t.ma);
               const nhap = c?.nhap;
               const hien = t.thang === "chu" ? (nhap !== null && nhap !== undefined && nhap !== "" ? String(nhap) : c?.diem10 !== null && c?.diem10 !== undefined ? `${hienDiem(c.diem10)}*` : "") : hienDiem(c?.diem10);
               return (
                 <tr key={t.ma}>
-                  <td className="giua">{stt}</td>
+                  <td className="giua">{sttCua.get(t.ma)}</td>
                   <td>
                     {t.ten}
                     {t.moTa && <div className="mo-ta-in">{t.moTa}</div>}

@@ -97,7 +97,7 @@ export function FormMauViec({ mau, nguoi, nhanNut, lopNut = "nut chinh nho" }: {
             <div className="truong"><label>Trạng thái</label><select value={gt.trangThai} onChange={(e) => datGt({ ...gt, trangThai: e.target.value })}><option value="hoat-dong">Đang dùng</option><option value="ngung-hoat-dong">Ngừng</option></select></div>
           </div>
           <div className="truong"><label>Mô tả</label><textarea rows={2} value={gt.moTa} onChange={(e) => datGt({ ...gt, moTa: e.target.value })} /></div>
-          <div className="truong"><label>Danh sách kiểm tra (mỗi dòng một mục, "?" đầu dòng = không bắt buộc)</label><textarea rows={3} value={gt.kiemTra} onChange={(e) => datGt({ ...gt, kiemTra: e.target.value })} /></div>
+          <div className="truong"><label>Danh sách kiểm tra (mỗi dòng một mục, dấu ? đầu dòng = không bắt buộc)</label><textarea rows={3} value={gt.kiemTra} onChange={(e) => datGt({ ...gt, kiemTra: e.target.value })} /></div>
           <label style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" checked={gt.canDuyet} onChange={(e) => datGt({ ...gt, canDuyet: e.target.checked })} /> Cần duyệt khi xong</label>
           {gt.canDuyet && <ChonChuoi chuoi={chuoi} datChuoi={datChuoi} nguoi={nguoi} />}
         </div>
