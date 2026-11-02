@@ -1,4 +1,7 @@
 import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import PhieuLuongIn from "../src/components/luong/PhieuLuongIn";
 import { voiTenant } from "../src/lib/db";
 import { taoNguCanh, type NguCanh } from "../src/lib/api";
 import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
@@ -297,6 +300,8 @@ async function main() {
   dat("LU-42: sau khóa nhân viên thấy phiếu của mình", cuaToi.length === 1 && cuaToi[0].id === dA3.id);
   const pA = await voi(T, nvA, (nc) => chiTietPhieuLuong(nc, dA3.id));
   dat("…xem chi tiết không cần 2 lớp", pA.ketQua.thucLinh === Number(dA3.netPay));
+  const html = renderToStaticMarkup(createElement(PhieuLuongIn, { p: { congTy: { ten: "Công ty thử", diaChi: null, maSoThue: null }, ky: pA.ky.nhan, banNhap: false, nguoi: pA.nguoi, dauVao: pA.dauVao, ketQua: pA.ketQua, hoaHong: pA.hoaHong, ngayIn: "Ngày 03 tháng 04 năm 2026" } }));
+  dat("LU-43: bản in phiếu lương A4 tiếng Việt có thực lĩnh, hoa hồng, không chữ BẢN NHÁP", html.includes("PHIẾU LƯƠNG") && html.includes(Number(dA3.netPay).toLocaleString("vi-VN")) && html.includes("Hoa hồng") && !html.includes("BẢN NHÁP"));
   const dB3 = await dong(k3.id, nvB);
   await nemLoi("IDOR: nhân viên A không xem được phiếu của B", "quyen", () => voi(T, nvA, (nc) => chiTietPhieuLuong(nc, dB3.id)));
   await nemLoi("IDOR: thực tập sinh không xem được phiếu của A", "quyen", () => voi(T, tt, (nc) => chiTietPhieuLuong(nc, dA3.id)));

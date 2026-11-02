@@ -86,6 +86,7 @@ async function main() {
   await seedKhoDonHangMau(tenant.id, idTheoEmail);
   await seedDichVuMau(tenant.id, idTheoEmail);
   await seedTaiChinhMau(tenant.id, idTheoEmail);
+  await seedLuongMau(tenant.id, idTheoEmail);
 
   console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
   console.log("  Thử phạm vi dữ liệu: đăng nhập tp.kinhdoanh@demo.test (thấy nhóm), kd1@demo.test (chỉ thấy mình).");
@@ -684,6 +685,31 @@ async function seedTaiChinhMau(tenantId: string, id: Map<string, string>) {
   const soHoaDon = await db.invoice.count({ where: { tenantId } });
   const soPhieuThu = await db.payment.count({ where: { tenantId } });
   console.log(`✓ Tài chính mẫu: ${soHoaDon} hóa đơn đã phát hành, ${soPhieuThu} phiếu thu, có nợ quá hạn để bảng điều hành cảnh báo`);
+}
+
+/**
+ * Hồ sơ lương mẫu (0.21.0): một phiên bản cho mỗi nhân viên mẫu trừ Giám đốc (để Giám đốc mẫu duyệt được bảng lương
+ * — LU-41 không tự duyệt bảng có dòng của mình). Mọi hồ sơ ghi chú "DEMO", tài khoản ngân hàng "DEMO-…". Chỉ chạy khi
+ * doanh nghiệp demo chưa có hồ sơ lương nào. Tham số lương nạp sẵn vẫn ở trạng thái "cần kế toán xác nhận".
+ */
+async function seedLuongMau(tenantId: string, id: Map<string, string>) {
+  if ((await db.salaryProfile.count({ where: { tenantId } })) > 0) return;
+  const anTrua = await db.salaryAllowanceType.findUnique({ where: { tenantId_code: { tenantId, code: "an-trua" } } });
+  const muc: Record<string, number> = { admin: 18_000_000, "sales-manager": 22_000_000, sales: 10_000_000, marketing: 11_000_000, "technical-manager": 20_000_000, technical: 12_000_000, "customer-service": 9_000_000, finance: 13_000_000, warehouse: 8_500_000 };
+  let dem = 0;
+  for (const [email, , , , vaiTro] of NHAN_SU) {
+    if (vaiTro === "ceo") continue;
+    const luong = muc[vaiTro] ?? 10_000_000;
+    await db.salaryProfile.create({
+      data: {
+        tenantId, userId: id.get(email)!, effectiveFrom: new Date("2026-01-01T00:00:00.000Z"), contractType: "chinh-thuc", payBasis: "thang",
+        baseSalary: BigInt(luong), insuranceSalary: BigInt(luong), kpiBonus: BigInt(vaiTro.startsWith("sales") ? 1_000_000 : 0),
+        commissionEnabled: vaiTro === "sales", taxMethod: "luy-tien", allowances: anTrua ? [{ loaiId: anTrua.id, soTien: 30_000 }] : [],
+        bankAccount: `DEMO-${String(++dem).padStart(4, "0")}`, bankName: "Ngân hàng DEMO", note: "DEMO — số liệu mẫu, không phải lương thật",
+      },
+    });
+  }
+  console.log(`✓ Hồ sơ lương mẫu (DEMO): ${dem} nhân viên`);
 }
 
 main()
