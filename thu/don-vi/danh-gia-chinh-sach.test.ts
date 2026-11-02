@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chuoiCapTrenThuan, quanLyHieuLucThuan, type DuLieuCapTren } from "../../src/modules/danh-gia/cap-tren";
+import { chuanHoaChuoiDuyetKhiGiao, chuoiCapTrenThuan, loiChuoiDuyetKhiGiao, quanLyHieuLucThuan, type DuLieuCapTren } from "../../src/modules/danh-gia/cap-tren";
 import { diChuyen, dienMaTrong, kiemMauSoan, maTuTen, tongTrongSo } from "../../src/modules/danh-gia/soan-mau";
 import { laNgayPhaiBaoCaoNgay, LuocDoMauPhieu, MAU_PHIEU_MAC_DINH, tinhPhieuThucTap, type MauPhieu } from "../../src/modules/danh-gia/tinh-toan";
 
@@ -106,4 +106,26 @@ test("QĐ-131: thang Có / Không — Đạt 10, Không đạt 0, nguồn tự �
   assert.equal(tinhPhieuThucTap(m, { a: "khong" }, { "chuyen-can": 90 }).tong, 5);
   assert.throws(() => tinhPhieuThucTap(m, { a: "8" }, {}), RangeError);
   assert.ok(LuocDoMauPhieu.safeParse(MAU_PHIEU_MAC_DINH).success);
+});
+
+test("QĐ-154: kiểm chuỗi duyệt gửi lên khi giao cho người khác", () => {
+  const ctx = { nguoiLamId: "nv", quanLyCuaNguoiLam: ["tp", "pgd"], laGiamDocHoacQuanTri: (id: string) => id === "gd" || id === "qt" };
+  assert.equal(loiChuoiDuyetKhiGiao(["mk"], { ...ctx, nguoiGiaoId: "mk" }), "tu-dat-nguoi-duyet");
+  assert.equal(loiChuoiDuyetKhiGiao(["mk", "tp"], { ...ctx, nguoiGiaoId: "mk" }), "tu-dat-nguoi-duyet");
+  assert.equal(loiChuoiDuyetKhiGiao(["ban"], { ...ctx, nguoiGiaoId: "mk" }), "nguoi-duyet-cuoi");
+  assert.equal(loiChuoiDuyetKhiGiao(["ban", "tp"], { ...ctx, nguoiGiaoId: "mk" }), null);
+  assert.equal(loiChuoiDuyetKhiGiao(["tp"], { ...ctx, nguoiGiaoId: "tp" }), null, "người giao là quản lý trực tiếp");
+  assert.equal(loiChuoiDuyetKhiGiao(["pgd"], { ...ctx, nguoiGiaoId: "pgd" }), null, "người giao là cấp trên");
+  assert.equal(loiChuoiDuyetKhiGiao(["gd"], { ...ctx, nguoiGiaoId: "gd" }), null, "Giám đốc");
+  assert.equal(loiChuoiDuyetKhiGiao(["qt"], { ...ctx, nguoiGiaoId: "mk" }), null, "Quản trị cấp cuối");
+  assert.equal(loiChuoiDuyetKhiGiao(["ban"], { ...ctx, nguoiGiaoId: "nv" }), null, "việc tự tạo: ngoài phạm vi luật");
+});
+
+test("QĐ-154: chuẩn hóa chuỗi dựng tự động", () => {
+  const ctx = { nguoiLamId: "nv", quanLyCuaNguoiLam: ["tp"], laGiamDocHoacQuanTri: (id: string) => id === "gd", capTrenCuaNguoiLam: ["tp", "gd"] };
+  assert.deepEqual(chuanHoaChuoiDuyetKhiGiao(["mk"], { ...ctx, nguoiGiaoId: "mk" }), ["tp"], "mặc định 'người giao' → quản lý trực tiếp");
+  assert.deepEqual(chuanHoaChuoiDuyetKhiGiao(["tp"], { ...ctx, nguoiGiaoId: "tp" }), ["tp"]);
+  assert.deepEqual(chuanHoaChuoiDuyetKhiGiao(["ban"], { ...ctx, nguoiGiaoId: "mk" }), ["ban", "tp"], "cấp cuối không hợp lệ → thêm quản lý");
+  assert.deepEqual(chuanHoaChuoiDuyetKhiGiao(["tp", "ban"], { ...ctx, nguoiGiaoId: "mk" }), ["ban", "tp"]);
+  assert.deepEqual(chuanHoaChuoiDuyetKhiGiao([], { ...ctx, nguoiGiaoId: "mk", quanLyCuaNguoiLam: [], capTrenCuaNguoiLam: ["gd"] }), ["gd"], "không có quản lý → Giám đốc");
 });
