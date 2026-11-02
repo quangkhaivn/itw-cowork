@@ -200,9 +200,12 @@ async function main() {
   dat("…IP đúng thì qua", (await adms("GET", "getrequest", `SN=${SN}`, null, "198.51.100.99")).than === "OK");
 
   // NS-17: máy im lặng → báo Nhân sự một lần.
-  await chu.attendanceDevice.update({ where: { id: may.id }, data: { lastSeenAt: new Date(Date.now() - 30 * 60_000) } });
-  await quetChamCong(T, new Date());
-  await quetChamCong(T, new Date());
+  // Mốc quét CỐ ĐỊNH ngoài giờ ca (tối Chủ nhật): quét bằng giờ thật trong giờ làm ngày thường sẽ sinh luôn
+  // nhắc "chưa chấm công" cho cả doanh nghiệp thử và làm hỏng các bài nhắc việc phía dưới (QA 0.19.0).
+  const quetMay = vn("2026-10-25T23:00:00");
+  await chu.attendanceDevice.update({ where: { id: may.id }, data: { lastSeenAt: new Date(quetMay.getTime() - 30 * 60_000) } });
+  await quetChamCong(T, quetMay);
+  await quetChamCong(T, quetMay);
   const tbMay = await chu.notification.count({ where: { userId: hr, type: "may-cham-cong-mat-ket-noi" } });
   dat("Máy im lặng quá ngưỡng → Nhân sự nhận đúng 1 cảnh báo (quét lại không báo lặp)", tbMay === 1, `${tbMay}`);
   await adms("GET", "getrequest", `SN=${SN}`, null, "198.51.100.99");
