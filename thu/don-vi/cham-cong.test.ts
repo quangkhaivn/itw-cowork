@@ -310,6 +310,11 @@ describe("NS-31 → NS-33: quỹ phép", () => {
     assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 1 }, { ngay: "b", giaTriDuKien: 0.5 }, { ngay: "c", giaTriDuKien: 0 }], "ca-ngay"), 1.5);
     assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 1 }], "sang"), 0.5);
     assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 0 }], "chieu"), 0);
+    // QA 0.19.0: lịch chỉ làm sáng (thứ Bảy) → xin nghỉ chiều không trừ phép; xin nghỉ sáng = 0,5.
+    assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 0.5, phanDuKien: "sang" }], "chieu"), 0);
+    assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 0.5, phanDuKien: "sang" }], "sang"), 0.5);
+    assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 0.5, phanDuKien: "chieu" }], "sang"), 0);
+    assert.equal(soNgayCuaDon([{ ngay: "a", giaTriDuKien: 1, phanDuKien: "ca" }], "chieu"), 0.5);
   });
   it("đơn chồng nhau: nửa sáng + nửa chiều cùng ngày thì không", () => {
     assert.equal(donChongNhau({ tu: "2026-11-02", den: "2026-11-02", phan: "sang" }, { tu: "2026-11-02", den: "2026-11-02", phan: "chieu" }), false);

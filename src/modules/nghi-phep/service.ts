@@ -105,7 +105,7 @@ export async function soDuPhepCua(nc: NguCanh, userId: string | null, nam?: numb
 /** Số ngày công của khoảng nghỉ theo lịch làm của người xin (bỏ ngày nghỉ tuần, ngày lễ). */
 async function soNgayDon(tx: ClientTenant, userId: string, tu: string, den: string, phan: "ca-ngay" | "sang" | "chieu") {
   const ds = await congDuKienCuaNguoi(tx, userId, tu, den);
-  return soNgayCuaDon(ds.map((x) => ({ ngay: x.ngay, giaTriDuKien: x.giaTri })), phan);
+  return soNgayCuaDon(ds.map((x) => ({ ngay: x.ngay, giaTriDuKien: x.giaTri, phanDuKien: x.phan })), phan);
 }
 
 async function kiemChongNhau(tx: ClientTenant, userId: string, d: { tuNgay: string; denNgay: string; phan: "ca-ngay" | "sang" | "chieu" }, boQua?: string) {

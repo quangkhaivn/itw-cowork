@@ -101,12 +101,18 @@ export function soDuPhep(d: Omit<SoDuPhep, "duocDung" | "conLaiCaNam">): SoDuPhe
 
 /**
  * Số ngày công của một đơn nghỉ (NS-33): cộng giá trị công dự kiến của từng ngày trong khoảng (ngày
- * nghỉ tuần, ngày lễ = 0 nên không bị trừ phép). Nửa ngày: 0,5 nếu ngày đó có ít nhất nửa công.
+ * nghỉ tuần, ngày lễ = 0 nên không bị trừ phép). Nửa ngày: 0,5 nếu ngày đó PHẢI LÀM đúng nửa xin nghỉ —
+ * ngày làm cả ca, hoặc lịch làm nửa ca trùng nửa xin (thứ Bảy chỉ làm sáng mà xin nghỉ chiều = 0, không trừ
+ * oan 0,5 phép — QA 0.19.0). `phanDuKien` trống = không biết phần của lịch, chỉ xét giá trị.
  */
-export function soNgayCuaDon(cacNgay: { ngay: string; giaTriDuKien: number }[], phan: "ca-ngay" | "sang" | "chieu"): number {
+export function soNgayCuaDon(
+  cacNgay: { ngay: string; giaTriDuKien: number; phanDuKien?: "ca" | "sang" | "chieu" | "nghi" }[],
+  phan: "ca-ngay" | "sang" | "chieu",
+): number {
   if (phan !== "ca-ngay") {
     const d = cacNgay[0];
-    return d && d.giaTriDuKien >= 0.5 ? 0.5 : 0;
+    if (!d || d.giaTriDuKien < 0.5) return 0;
+    return d.phanDuKien === undefined || d.phanDuKien === "ca" || d.phanDuKien === phan ? 0.5 : 0;
   }
   return Math.round(cacNgay.reduce((s, d) => s + d.giaTriDuKien, 0) * 10) / 10;
 }
