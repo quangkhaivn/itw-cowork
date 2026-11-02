@@ -384,6 +384,14 @@ export const NHAN_NGUON_TU_DONG: Record<NguonTuDong, string> = {
 };
 
 const ma = z.string().trim().regex(/^[a-z0-9-]{1,30}$/, "Mã chỉ gồm chữ thường không dấu, số, gạch ngang (≤ 30).");
+/**
+ * Thang chấm một tiêu chí: điểm 10, thang chữ của mẫu, hoặc (QĐ-131, thêm mới — mẫu cũ vẫn hợp lệ) có / không:
+ * "co" = Đạt = 10 điểm, "khong" = Không đạt = 0 điểm.
+ */
+export const THANG_TIEU_CHI = ["10", "chu", "co-khong"] as const;
+export type ThangTieuChi = (typeof THANG_TIEU_CHI)[number];
+export const NHAN_THANG_TIEU_CHI: Record<ThangTieuChi, string> = { "10": "Điểm 10", chu: "Thang chữ", "co-khong": "Có / Không" };
+export const GIA_TRI_CO_KHONG: Record<"co" | "khong", { nhan: string; diem: number }> = { co: { nhan: "Đạt", diem: 10 }, khong: { nhan: "Không đạt", diem: 0 } };
 export const LuocDoMauPhieu = z.object({
   quocHieu: z.boolean().default(true),
   tenDonVi: z.string().trim().max(255).default(""),
@@ -403,7 +411,7 @@ export const LuocDoMauPhieu = z.object({
               ma,
               ten: z.string().trim().min(2).max(500),
               trongSo: z.number().positive().max(100),
-              thang: z.enum(["10", "chu"]),
+              thang: z.enum(THANG_TIEU_CHI),
               nguon: z.enum(NGUON_TU_DONG).nullable().default(null),
               moTa: z.string().trim().max(500).default(""),
             }),
@@ -490,6 +498,10 @@ export function tinhPhieuThucTap(mau: MauPhieu, diemNhap: Record<string, string 
           const so = typeof nhap === "number" ? nhap : Number(String(nhap).replace(",", "."));
           if (!Number.isFinite(so) || so < 0 || so > 10) throw new RangeError(`Điểm tiêu chí “${t.ten}” phải từ 0 đến 10.`);
           diem10 = lamTron2(so);
+        } else if (t.thang === "co-khong") {
+          const g = GIA_TRI_CO_KHONG[String(nhap).trim() as "co" | "khong"];
+          if (!g) throw new RangeError(`Tiêu chí “${t.ten}” chấm Có / Không: chọn Đạt hoặc Không đạt.`);
+          diem10 = g.diem;
         } else {
           const c = mau.thangChu.find((x) => x.chu === String(nhap).trim());
           if (!c) throw new RangeError(`Tiêu chí “${t.ten}” chấm bằng chữ: chọn một trong ${mau.thangChu.map((x) => x.chu).join(", ")}.`);
@@ -498,7 +510,8 @@ export function tinhPhieuThucTap(mau: MauPhieu, diemNhap: Record<string, string 
       } else if (t.nguon) {
         const tdDiem = giaTriTuDongRaDiem(t.nguon, tuDong[t.nguon] ?? null);
         if (tdDiem !== null) {
-          diem10 = t.thang === "chu" ? (mau.thangChu.find((x) => x.chu === diemRaChu(tdDiem, mau.thangChu))?.diem ?? tdDiem) : tdDiem;
+          diem10 = t.thang === "chu" ? (mau.thangChu.find((x) => x.chu === diemRaChu(tdDiem, mau.thangChu))?.diem ?? tdDiem)
+            : t.thang === "co-khong" ? (tdDiem >= 5 ? GIA_TRI_CO_KHONG.co.diem : GIA_TRI_CO_KHONG.khong.diem) : tdDiem;
           laTuDong = true;
         }
       }

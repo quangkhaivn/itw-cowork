@@ -1,4 +1,4 @@
-import type { KetQuaPhieu, MauPhieu } from "@/modules/danh-gia/tinh-toan";
+import { GIA_TRI_CO_KHONG, type KetQuaPhieu, type MauPhieu } from "@/modules/danh-gia/tinh-toan";
 
 /**
  * Tờ phiếu đánh giá thực tập khổ A4 (DG-76) — dựng ĐÚNG theo bố cục mẫu đã chụp vào phiếu: quốc hiệu,
@@ -72,7 +72,10 @@ export default function PhieuThucTapIn({ d }: { d: DuLieuPhieuIn }) {
             ...p.tieuChi.map((t) => {
               const c = chiTiet.get(t.ma);
               const nhap = c?.nhap;
-              const hien = t.thang === "chu" ? (nhap !== null && nhap !== undefined && nhap !== "" ? String(nhap) : c?.diem10 !== null && c?.diem10 !== undefined ? `${hienDiem(c.diem10)}*` : "") : hienDiem(c?.diem10);
+              const coNhap = nhap !== null && nhap !== undefined && nhap !== "";
+              const hien = t.thang === "chu" ? (coNhap ? String(nhap) : c?.diem10 !== null && c?.diem10 !== undefined ? `${hienDiem(c.diem10)}*` : "")
+                : t.thang === "co-khong" ? (c?.diem10 === null || c?.diem10 === undefined ? "" : c.diem10 >= 5 ? GIA_TRI_CO_KHONG.co.nhan : GIA_TRI_CO_KHONG.khong.nhan)
+                : hienDiem(c?.diem10);
               return (
                 <tr key={t.ma}>
                   <td className="giua">{sttCua.get(t.ma)}</td>
@@ -81,7 +84,7 @@ export default function PhieuThucTapIn({ d }: { d: DuLieuPhieuIn }) {
                     {t.moTa && <div className="mo-ta-in">{t.moTa}</div>}
                   </td>
                   <td className="giua">{hienDiem(t.trongSo)}</td>
-                  <td className="giua">{t.thang === "10" ? "/10" : mau.thangChu.map((x) => x.chu).join(" ")}</td>
+                  <td className="giua">{t.thang === "10" ? "/10" : t.thang === "co-khong" ? "Đạt / Không" : mau.thangChu.map((x) => x.chu).join(" ")}</td>
                   <td className="giua diem-tt">
                     {hien}
                     {c?.tuDong && <sup title="Lấy tự động từ dữ liệu Cowork"> (tự động)</sup>}

@@ -44,7 +44,6 @@ import {
   suaKyDanhGia,
   taoBoKpi,
   taoKyDanhGia,
-  tuDanhGia,
 } from "../src/modules/danh-gia/service";
 import { tinhChiSo } from "../src/modules/danh-gia/chi-so";
 import {
@@ -690,7 +689,6 @@ async function main() {
   dat("Kỳ chưa có phiếu chốt: sửa được, ngày tính lại theo giờ VN", suaMo.daDoi && kyMoSau.startDate.toISOString().slice(0, 10) === "2025-08-01" && kyMoSau.endDate.toISOString().slice(0, 10) === "2025-08-31");
   await nemLoi("Sửa trùng một kỳ đã có → 409 trung-ky", "nghiep-vu", () => voi(T, hr, (nc) => suaKyDanhGia(nc, kyMo.id, { loai: "thang", nam: 2025, so: 6 })), "trung-ky");
   await nemLoi("Trưởng phòng không sửa kỳ (cần nhan_su.update)", "quyen", () => voi(T, tp, (nc) => suaKyDanhGia(nc, kyMo.id, { loai: "thang", nam: 2025, so: 9 })));
-  void tuDanhGia;
 
   await chu.$disconnect();
   ketLuan("QA 0.20.0 — Nhân sự giai đoạn 2");
