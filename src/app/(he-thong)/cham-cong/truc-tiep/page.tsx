@@ -1,6 +1,7 @@
 import DauTrang from "@/components/ui/DauTrang";
 import { docDuLieu, yeuCauQuyen } from "@/lib/trang";
 import BangTrucTiep from "./BangTrucTiep";
+import NgayThieuGio from "./NgayThieuGio";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function TrangTrucTiep() {
         duongDan={[{ nhan: "Nhân sự" }]}
         moTa="Ai đã vào ca, ai chưa đến, ai đi muộn, ai nghỉ phép, ai đang ở hiện trường — tự cập nhật mỗi 10 giây. Bạn chỉ thấy những người trong phạm vi quản lý của mình."
       />
+      <NgayThieuGio />
       <BangTrucTiep phongBan={phongBan.map((p) => ({ id: p.id, ten: p.name }))} diaDiem={diaDiem.map((d) => ({ id: d.id, ten: d.name }))} />
     </>
   );

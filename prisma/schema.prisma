@@ -154,6 +154,7 @@ model Tenant {
   attendanceDevices    AttendanceDevice[]
   attendancePunches    AttendancePunch[]
   punchReviews         AttendancePunchReview[]
+  dayReviews           AttendanceDayReview[]
   attendanceConsents   AttendanceConsent[]
   attendanceCorrections AttendanceCorrection[]
   leaveTypes           LeaveType[]
@@ -3845,6 +3846,25 @@ model AttendancePunchReview {
 
   @@index([tenantId, punchId, reviewedAt])
   @@map("attendance_punch_reviews")
+}
+
+/// Quản lý xét một NGÀY CÔNG "thiếu giờ" (có mặt dưới `cham_cong.co_mat_toi_thieu_phan_tram` giờ phải làm,
+/// QĐ-116): tính đủ / nửa / không công. Chỉ ghi thêm, quyết định mới nhất có hiệu lực.
+model AttendanceDayReview {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  workDate   DateTime @map("work_date") @db.Date
+  /// du | nua | khong
+  decision   String   @db.VarChar(20)
+  note       String?  @db.Text
+  reviewedBy String   @map("reviewed_by") @db.Uuid
+  reviewedAt DateTime @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, workDate, reviewedAt])
+  @@map("attendance_day_reviews")
 }
 
 /// Nhân viên xác nhận đã đọc thông báo xử lý dữ liệu vị trí (Luật BVDLCN 91/2025) — chỉ ghi thêm.

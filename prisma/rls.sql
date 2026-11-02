@@ -47,7 +47,7 @@ BEGIN
           AND c.column_name = 'tenant_id'
           AND t.table_type = 'BASE TABLE'
           AND c.table_name NOT IN ('business_events', 'audit_logs', 'email_consents', 'email_sns_messages',
-                                   'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments')
+                                   'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments', 'attendance_day_reviews')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -65,7 +65,8 @@ END $$;
 -- 3. Bảng chỉ ghi thêm: business_events, audit_logs, và (0.18.0) sổ đồng ý
 --    email_consents + nhật ký thông điệp SNS email_sns_messages, (0.19.0) xác nhận
 --    thông báo vị trí attendance_consents, quyết định xem xét lần chấm
---    attendance_punch_reviews, điều chỉnh quỹ phép leave_adjustments
+--    attendance_punch_reviews, điều chỉnh quỹ phép leave_adjustments, xét ngày công
+--    thiếu giờ attendance_day_reviews (QĐ-116)
 --    Không cấp UPDATE/DELETE cho ứng dụng, và chặn thêm bằng trigger để kể cả
 --    chủ sở hữu cũng không lỡ tay sửa lịch sử.
 -- --------------------------------------------------------------------------
@@ -80,7 +81,7 @@ DO $$
 DECLARE
     ten_bang text;
     ds_bang text[] := ARRAY['business_events', 'audit_logs', 'email_consents', 'email_sns_messages',
-                            'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments'];
+                            'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments', 'attendance_day_reviews'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);

@@ -31,6 +31,7 @@ import {
   tocDoToiThieuKmh,
   tongHopThang,
   trangThaiHomNay,
+  apXetThieuGio,
   canChapNhanMoiTinh,
   chonPhieuHienTruong,
   danhGiaGioMay,
@@ -547,5 +548,32 @@ describe("QA 0.19.0 — quyết định chính sách (QĐ-113 → QĐ-118)", () 
     assert.deepEqual(chonPhieuHienTruong([p("cu", true, false, 40), p("xong", false, true, 0)], luc, 14), { phieu: p("xong", false, true, 0), co: "phieu-da-xong" });
     assert.equal(chonPhieuHienTruong([p("xong", false, true, 0), p("moi", true, false, 1)], luc, 14)?.phieu.id, "moi", "phiếu mở gần đây được ưu tiên");
     assert.equal(chonPhieuHienTruong([p("dong", false, false, 0)], luc, 14), null, "phiếu đã đóng từ trước → không phải hiện trường");
+  });
+  it("QĐ-116: vào / ra sát nhau → cờ thiếu giờ (trừ giờ nghỉ giữa ca), không tự trừ; quản lý quyết đủ / nửa / không", () => {
+    const dk = congDuKien("2026-11-02", HC, T2_T6_SANG_T7, false); // thứ Hai, cả ca 08:00 → 17:00, nghỉ 12:00 → 13:00
+    const nguong = { ...MAC_DINH, coMatToiThieuPhanTram: 50 };
+    const c1 = tinhCongNgay(dk, [vn("2026-11-02T08:00:00"), vn("2026-11-02T11:00:00")], null, nguong);
+    assert.equal(c1.phutCoMat, 180);
+    assert.equal(c1.phutPhaiCoMat, 480);
+    assert.ok(c1.co.includes("thieu-gio") && c1.co.includes("thieu-gio-cho-xem-xet"));
+    assert.equal(c1.giaTriCong, 1, "không tự trừ khi chưa có quyết định");
+    // 08:00 → 13:30: 330 phút trừ 60 phút nghỉ trưa = 270 ≥ 240 → không cờ.
+    const c2 = tinhCongNgay(dk, [vn("2026-11-02T08:00:00"), vn("2026-11-02T13:30:00")], null, nguong);
+    assert.equal(c2.phutCoMat, 270);
+    assert.ok(!c2.co.includes("thieu-gio"));
+    // Ngưỡng 0 = không kiểm; không truyền ngưỡng (mã cũ) = không kiểm.
+    assert.ok(!tinhCongNgay(dk, [vn("2026-11-02T08:00:00"), vn("2026-11-02T08:30:00")], null, { ...MAC_DINH, coMatToiThieuPhanTram: 0 }).co.includes("thieu-gio"));
+    assert.ok(!tinhCongNgay(dk, [vn("2026-11-02T08:00:00"), vn("2026-11-02T08:30:00")], null, MAC_DINH).co.includes("thieu-gio"));
+    // Nghỉ phép sáng: phải có mặt nửa chiều 13:00 → 17:00 = 240 phút; có mặt 90 < 120 → thiếu giờ.
+    const c3 = tinhCongNgay(dk, [vn("2026-11-02T13:00:00"), vn("2026-11-02T14:30:00")], { giaTri: 0.5, phan: "sang", maLoai: "phep-nam", coLuong: true }, nguong);
+    assert.equal(c3.phutPhaiCoMat, 240);
+    assert.ok(c3.co.includes("thieu-gio") && c3.giaTriCong === 0.5);
+    // Quyết định của quản lý.
+    assert.equal(apXetThieuGio(c1, undefined), c1);
+    assert.equal(apXetThieuGio(c1, "du").giaTriCong, 1);
+    assert.equal(apXetThieuGio(c1, "nua").giaTriCong, 0.5);
+    assert.equal(apXetThieuGio(c1, "khong").giaTriCong, 0);
+    assert.deepEqual(apXetThieuGio(c1, "nua").co.filter((c) => c.startsWith("thieu-gio")), ["thieu-gio", "thieu-gio-tinh-nua"]);
+    assert.equal(apXetThieuGio(c2, "khong"), c2, "ngày không còn thiếu giờ (vd đã chấm bù) → quyết định cũ không áp");
   });
 });

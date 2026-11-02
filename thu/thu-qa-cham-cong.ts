@@ -10,6 +10,9 @@ import { chamCongGps, duocTinhCong, quyetDinhMoiNhat, xacNhanThongBaoViTri, xemX
 import { bangTrucTiep } from "../src/modules/cham-cong/truc-tiep";
 import { anhXaPin, taoMay, suaMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
 import { quetChamCong } from "../src/modules/cham-cong/nhac-viec";
+import { ngayThieuGioCanXemXet, xetNgayThieuGio } from "../src/modules/cham-cong/ngay-cong";
+import { tinhCong } from "../src/modules/cham-cong/tinh-cong";
+import { docCauHinhChamCong } from "../src/modules/cham-cong/chung";
 import { quyetDinhTangCa, taoDonTangCa, taoGiaiTrinh, tangCaThucTe } from "../src/modules/cham-cong/don-tu";
 import { chiTietBangCong, guiPhanHoiCong, khoaBangCong, sinhBangCong, xuatCsvBangCong } from "../src/modules/cham-cong/bang-cong";
 import { quyetDinhNghi, soDuPhepCua, taoDonNghi } from "../src/modules/nghi-phep/service";
@@ -377,11 +380,12 @@ async function main() {
     "work_locations", "work_shifts", "work_schedules", "schedule_assignments", "holidays", "intern_profiles", "employment_contracts",
     "attendance_devices", "attendance_punches", "attendance_punch_reviews", "attendance_consents", "attendance_corrections", "leave_types",
     "leave_balances", "leave_adjustments", "leave_requests", "overtime_requests", "timesheets", "timesheet_rows", "timesheet_feedback",
+    "attendance_day_reviews",
   ];
   const rlsBat = await chu.$queryRawUnsafe<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }[]>(
     `SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = ANY($1::text[])`, bangMoi,
   );
-  dat("RLS bật trên cả 20 bảng mới", rlsBat.length === bangMoi.length && rlsBat.every((r) => r.relrowsecurity), rlsBat.filter((r) => !r.relrowsecurity).map((r) => r.relname).join(","));
+  dat("RLS bật trên cả 21 bảng mới", rlsBat.length === bangMoi.length && rlsBat.every((r) => r.relrowsecurity), rlsBat.filter((r) => !r.relrowsecurity).map((r) => r.relname).join(","));
   const roRi: string[] = [];
   for (const b of bangMoi) {
     const n = await voiTenant(T2, (tx) => tx.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM ${b} WHERE tenant_id = $1::uuid`, T));
@@ -481,9 +485,48 @@ async function main() {
   dat("Đơn chưa duyệt: tăng ca tính = 0 dù làm thêm 120 phút", ttCho.phut === 0 && ttCho.phutThucTe === 120);
 
   // ==================================================================
+  console.log("\n— QĐ-116: vào / ra sát nhau → ngày thiếu giờ, quản lý quyết —");
+  await chu.attendancePunch.createMany({ data: [
+    { tenantId: T, userId: nvB, punchedAt: vn("2026-10-27T08:00:00"), source: "nhap-csv", pin: "QA2" },
+    { tenantId: T, userId: nvB, punchedAt: vn("2026-10-27T10:00:00"), source: "nhap-csv", pin: "QA2" },
+    { tenantId: T, userId: nvB, punchedAt: vn("2026-10-28T08:00:00"), source: "nhap-csv", pin: "QA2" },
+    { tenantId: T, userId: nvB, punchedAt: vn("2026-10-28T17:00:00"), source: "nhap-csv", pin: "QA2" },
+  ] });
+  const congB = async () => voiTenant(T, async (tx) => tinhCong(tx, await docCauHinhChamCong(tx), [nvB], ["2026-10-27", "2026-10-28"]));
+  const [b27, b28] = await congB();
+  dat("QĐ-116: vào 08:00 ra 10:00 (có mặt 120 / 480 phút < 50%) → cờ thiếu giờ, chờ xét, KHÔNG tự trừ (vẫn 1 công)",
+    b27.co.includes("thieu-gio") && b27.co.includes("thieu-gio-cho-xem-xet") && b27.congThucTe === 1 && b27.phutCoMat === 120 && b27.phutPhaiCoMat === 480, JSON.stringify(b27.co));
+  dat("QĐ-116: ngày làm đủ (08:00 → 17:00) không có cờ thiếu giờ", !b28.co.includes("thieu-gio"));
+  const bayGioXet = vn("2026-10-29T09:00:00");
+  const hangTp = await voi(T, tp, (nc) => ngayThieuGioCanXemXet(nc, bayGioXet));
+  dat("QĐ-116: ngày thiếu giờ vào hàng chờ của quản lý trực tiếp (chỉ ngày đó)", hangTp.some((x) => x.nguoi.id === nvB && x.ngay === "2026-10-27") && !hangTp.some((x) => x.ngay === "2026-10-28"));
+  const hangB = await voi(T, nvB, (nc) => ngayThieuGioCanXemXet(nc, bayGioXet));
+  dat("QĐ-116: nhân viên không thấy hàng chờ (không có quyền duyệt)", hangB.length === 0);
+  const hangHr = await voi(T, hr, (nc) => ngayThieuGioCanXemXet(nc, bayGioXet));
+  dat("QĐ-116: Nhân sự (phạm vi toàn công ty) cũng thấy", hangHr.some((x) => x.nguoi.id === nvB && x.ngay === "2026-10-27"));
+  await nemLoi("QĐ-116: không tự xét ngày công của mình", () => voi(T, nvB, (nc) => xetNgayThieuGio(nc, { nguoiId: nvB, ngay: "2026-10-27", quyetDinh: "du", ghiChu: null }, bayGioXet)), "khong-tu-duyet");
+  await nemLoi("QĐ-116: đồng nghiệp không xét được", () => voi(T, nvA, (nc) => xetNgayThieuGio(nc, { nguoiId: nvB, ngay: "2026-10-27", quyetDinh: "du", ghiChu: null }, bayGioXet)), undefined, "bat-ky");
+  await nemLoi("QĐ-116: không tính công phải có lý do", () => voi(T, tp, (nc) => xetNgayThieuGio(nc, { nguoiId: nvB, ngay: "2026-10-27", quyetDinh: "khong", ghiChu: null }, bayGioXet)), "thieu-ly-do");
+  await nemLoi("QĐ-116: ngày không thiếu giờ thì không xét", () => voi(T, tp, (nc) => xetNgayThieuGio(nc, { nguoiId: nvB, ngay: "2026-10-28", quyetDinh: "khong", ghiChu: "Thử" }, bayGioXet)), "khong-thieu-gio");
+  await nemLoi("QĐ-116: không xét ngày chưa qua", () => voi(T, tp, (nc) => xetNgayThieuGio(nc, { nguoiId: nvB, ngay: "2026-10-27", quyetDinh: "du", ghiChu: null }, vn("2026-10-27T11:00:00"))), "chua-het-ngay");
+  await voi(T, tp, (nc) => xetNgayThieuGio(nc, { nguoiId: nvB, ngay: "2026-10-27", quyetDinh: "nua", ghiChu: "Về sớm có việc gia đình" }, bayGioXet));
+  const [b27n] = await congB();
+  dat("QĐ-116: quản lý tính NỬA công → 0,5; cờ ghi rõ quyết định, hết chờ xét", b27n.congThucTe === 0.5 && b27n.co.includes("thieu-gio-tinh-nua") && !b27n.co.includes("thieu-gio-cho-xem-xet"), JSON.stringify(b27n));
+  const hangTp2 = await voi(T, tp, (nc) => ngayThieuGioCanXemXet(nc, bayGioXet));
+  dat("QĐ-116: đã xét → rời hàng chờ", !hangTp2.some((x) => x.nguoi.id === nvB && x.ngay === "2026-10-27"));
+  await nemLoi("QĐ-116: quyết định xét ngày chỉ ghi thêm (vai chủ sở hữu cũng không sửa được)", () => chu.attendanceDayReview.updateMany({ where: { userId: nvB }, data: { decision: "du" } }), undefined, "csdl");
+  await chu.tenantSetting.create({ data: { tenantId: T, key: "cham_cong.co_mat_toi_thieu_phan_tram", value: 0 } });
+  const [b27tat] = await congB();
+  dat("QĐ-116: Cấu hình = 0 → không kiểm thiếu giờ", !b27tat.co.includes("thieu-gio") && b27tat.congThucTe === 1);
+  await chu.tenantSetting.deleteMany({ where: { tenantId: T, key: "cham_cong.co_mat_toi_thieu_phan_tram" } });
+
+  // ==================================================================
   console.log("\n— Bảng công: chèn công thức CSV, hạn phản hồi, khóa —");
   const sinhLuc = vn("2026-11-01T09:00:00");
   const bc = await voi(T, hr, (nc) => sinhBangCong(nc, { nam: 2026, thang: 10 }, sinhLuc));
+  const ctBc = await voi(T, hr, (nc) => chiTietBangCong(nc, bc.id, nvB));
+  const d27 = ctBc.dong.find((r) => r.ngay === "2026-10-27" && !r.laDieuChinh);
+  dat("QĐ-116: bảng công hiển thị cờ thiếu giờ + quyết định, công 0,5", Boolean(d27 && d27.congThucTe === 0.5 && d27.nhanCo.some((n) => n.startsWith("Thiếu giờ — quản lý tính nửa"))), JSON.stringify(d27?.nhanCo));
   const csv1 = await voi(T, hr, (nc) => xuatCsvBangCong(nc, bc.id, "tong-hop"));
   const csv2 = await voi(T, hr, (nc) => xuatCsvBangCong(nc, bc.id, "chi-tiet"));
   const coCongThuc = (s: string) => s.split("\r\n").some((d) => d.split(",").some((o) => /^"?[=+\-@]/.test(o) && !/^"?-?\d/.test(o)));

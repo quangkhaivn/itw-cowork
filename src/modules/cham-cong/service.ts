@@ -51,6 +51,11 @@ export const NHAN_CO: Record<string, string> = {
   "cham-cong-ngay-nghi-phep": "Có chấm công trong ngày nghỉ phép",
   "chua-co-lich": "Chưa được gán lịch làm",
   "tang-ca-vuot-tran": "Tăng ca vượt trần",
+  "thieu-gio": "Thiếu giờ (có mặt dưới ngưỡng)",
+  "thieu-gio-cho-xem-xet": "Thiếu giờ — chờ quản lý quyết",
+  "thieu-gio-tinh-du": "Thiếu giờ — quản lý tính đủ công",
+  "thieu-gio-tinh-nua": "Thiếu giờ — quản lý tính nửa công",
+  "thieu-gio-khong-tinh": "Thiếu giờ — quản lý không tính công",
 };
 
 // ---------------------------------------------------------------------------

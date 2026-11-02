@@ -8,21 +8,18 @@ import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { dateVeNgay, ngayVeDate } from "@/modules/crm/chung";
 import { baoChoNguoiCoQuyen, taoThongBao } from "@/modules/thong-bao/service";
-import { banDoTen, docCauHinhChamCong, lichCuaNhieuNguoi, locNguoiXem, ngayLeTrongKhoang, nghiDaDuyet, so, type CauHinhChamCong } from "./chung";
+import { banDoTen, docCauHinhChamCong, locNguoiXem, so } from "./chung";
+import { tinhCong } from "./tinh-cong";
 import type { LuocDoGiaiQuyetPhanHoi, LuocDoPhanHoiCong, LuocDoSinhBangCong } from "./luoc-do";
-import { duocTinhCong, NHAN_CO, NHAN_NGUON, quyetDinhMoiNhat } from "./service";
+import { NHAN_CO, NHAN_NGUON } from "./service";
 import {
   cacNgayTrongThang,
   chenhLechCong,
-  congDuKien,
   congNgay,
   congSoLieu,
   conHanPhanHoi,
-  ganNgayCong,
   mocVN,
   NHAN_LOAI_NGAY,
-  tinhCongNgay,
-  tinhTangCa,
   tongHopThang,
   type DongCongThang,
   type LoaiNgay,
@@ -37,72 +34,6 @@ import {
 
 /** Số tháng lùi lại để tìm thay đổi của các kỳ đã khóa (chấm bù duyệt muộn, đơn nghỉ hủy muộn…). */
 const SO_THANG_DIEU_CHINH = 3;
-
-interface DongTinh extends DongCongThang {
-  vaoDau: Date | null;
-  raCuoi: Date | null;
-  nguon: string[];
-  maLoaiNghi: string | null;
-}
-
-/** Tính công của nhiều người cho một danh sách ngày (một tháng) — dùng cho bảng công và điều chỉnh. */
-async function tinhCong(tx: ClientTenant, ch: CauHinhChamCong, userIds: string[], cacNgay: string[]): Promise<DongTinh[]> {
-  if (userIds.length === 0 || cacNgay.length === 0) return [];
-  const tu = cacNgay[0];
-  const den = cacNgay[cacNgay.length - 1];
-  const truoc = congNgay(tu, -1);
-  const sau = congNgay(den, 1);
-  const lich = await lichCuaNhieuNguoi(tx, userIds, sau);
-  const le = await ngayLeTrongKhoang(tx, truoc, sau);
-  const nghi = await nghiDaDuyet(tx, userIds, tu, den);
-  const lan = await tx.attendancePunch.findMany({
-    where: { userId: { in: userIds }, punchedAt: { gte: mocVN(truoc, 0), lt: mocVN(congNgay(sau, 1), 0) } },
-    select: { id: true, userId: true, punchedAt: true, source: true, gpsResult: true, flags: true, needsReview: true },
-  });
-  const qd = await quyetDinhMoiNhat(tx, lan.filter((p) => p.needsReview).map((p) => p.id));
-  const tangCa = await tx.overtimeRequest.findMany({
-    where: { userId: { in: userIds }, status: "da-duyet", workDate: { gte: ngayVeDate(tu), lte: ngayVeDate(den) } },
-    select: { userId: true, workDate: true, approvedHours: true },
-  });
-  const gioTc = new Map(tangCa.map((t) => [`${t.userId}|${dateVeNgay(t.workDate)}`, Number(t.approvedHours ?? 0)]));
-  const macDinh = { choPhepMuonPhut: so(ch.choPhepMuonPhut, 5), choPhepSomPhut: so(ch.choPhepSomPhut, 5) };
-  const dem = { batDauGio: so(ch.gioDemBatDau, 22), ketThucGio: so(ch.gioDemKetThuc, 6) };
-
-  const kq: DongTinh[] = [];
-  for (const userId of userIds) {
-    const lichNguoi = lich.get(userId)!;
-    const tatCaNgay = [truoc, ...cacNgay, sau];
-    const duKien = new Map(
-      tatCaNgay.map((d) => {
-        const l = lichNguoi(d);
-        return [d, congDuKien(d, l?.ca ?? null, l?.ngay ?? null, le.has(d))];
-      }),
-    );
-    const cuaNguoi = lan.filter((p) => p.userId === userId);
-    const tinh = cuaNguoi.filter((p) => duocTinhCong(p, qd.get(p.id)));
-    const theoLuc = new Map(tinh.map((p) => [p.punchedAt.getTime(), p]));
-    const nhom = ganNgayCong(tinh.map((p) => p.punchedAt), [...duKien.values()], so(ch.cuaSoTruocPhut, 240), so(ch.cuaSoSauPhut, 480));
-    const choXemXet = new Set(cuaNguoi.filter((p) => p.needsReview && !qd.has(p.id)).map((p) => p.punchedAt.getTime()));
-    for (const ngay of cacNgay) {
-      const dk = duKien.get(ngay)!;
-      const ds = nhom.get(ngay) ?? [];
-      const ng = nghi.get(userId)?.get(ngay) ?? null;
-      if (dk.giaTri === 0 && ds.length === 0 && !ng) continue;
-      const cong = tinhCongNgay(dk, ds, ng, macDinh);
-      const tc = tinhTangCa(dk, cong.vaoDau, cong.raCuoi, gioTc.get(`${userId}|${ngay}`) ?? null, dem);
-      const co = [...cong.co];
-      if (ds.some((t) => choXemXet.has(t.getTime()))) co.push("cho-xem-xet");
-      kq.push({
-        userId, ngay, laDieuChinh: false, loaiNgay: dk.loaiNgay, congDuKien: dk.giaTri, congThucTe: cong.giaTriCong,
-        phutMuon: cong.phutMuon, phutSom: cong.phutSom, nghiNgay: cong.nghiNgay, nghiCoLuong: ng?.coLuong ?? false,
-        phutTangCa: tc.phut, phutTangCaDem: tc.phutDem, co, vaoDau: cong.vaoDau, raCuoi: cong.raCuoi,
-        nguon: [...new Set(ds.map((t) => theoLuc.get(t.getTime())?.source).filter((x): x is string => Boolean(x)))],
-        maLoaiNghi: ng?.maLoai ?? null,
-      });
-    }
-  }
-  return kq;
-}
 
 function soLieu(r: { expectedValue: unknown; workValue: unknown; lateMinutes: number; earlyMinutes: number; leaveDays: unknown; otMinutes: number; otNightMinutes: number }): SoLieuCong {
   return {

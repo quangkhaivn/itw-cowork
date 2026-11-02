@@ -444,6 +444,9 @@ export interface CongNgay {
   vaoDau: Date | null;
   raCuoi: Date | null;
   giaTriCong: number;
+  /** Phút có mặt thực tế (vào đầu → ra cuối, trừ nghỉ giữa ca) và phút phải có mặt; null khi không đủ vào / ra. */
+  phutCoMat?: number | null;
+  phutPhaiCoMat?: number | null;
   phutMuon: number;
   phutSom: number;
   nghiNgay: number;
@@ -462,7 +465,7 @@ export function tinhCongNgay(
   duKien: CongDuKien,
   lanCham: Date[],
   nghi: NghiTrongNgay | null,
-  macDinh: { choPhepMuonPhut: number; choPhepSomPhut: number },
+  macDinh: { choPhepMuonPhut: number; choPhepSomPhut: number; coMatToiThieuPhanTram?: number },
 ): CongNgay {
   const ds = [...lanCham].sort((a, b) => a.getTime() - b.getTime());
   const vaoDau = ds[0] ?? null;
@@ -507,7 +510,47 @@ export function tinhCongNgay(
   const phutSom = khoang ? phutVeSom(raCuoi, khoang.ketThuc, duKien.choPhepSomPhut ?? macDinh.choPhepSomPhut) : 0;
   if (phutMuon > 0) co.push("di-muon");
   if (phutSom > 0) co.push("ve-som");
-  return { vaoDau, raCuoi, giaTriCong: canLam, phutMuon, phutSom, nghiNgay, co };
+  // Vào / ra sát nhau (QĐ-116): có mặt dưới ngưỡng giờ phải làm → cờ "thiếu giờ", chờ quản lý xét. KHÔNG tự
+  // trừ: giá trị công giữ nguyên tới khi quản lý quyết (đủ / nửa / không) — `apXetThieuGio`.
+  const nghiCa = duKien.nuaSang && duKien.nuaChieu && duKien.nuaChieu.batDau > duKien.nuaSang.ketThuc
+    ? { batDau: duKien.nuaSang.ketThuc, ketThuc: duKien.nuaChieu.batDau }
+    : null;
+  const phutPhaiCoMat = khoang ? phutTruNghi(khoang.batDau, khoang.ketThuc, nghiCa) : null;
+  const phutCoMat = phutTruNghi(vaoDau!, raCuoi, nghiCa);
+  const nguong = macDinh.coMatToiThieuPhanTram ?? 0;
+  if (phutPhaiCoMat && nguong > 0 && phutCoMat * 100 < phutPhaiCoMat * nguong) co.push(CO_NGAY.thieuGio, CO_NGAY.thieuGioChoXet);
+  return { vaoDau, raCuoi, giaTriCong: canLam, phutMuon, phutSom, nghiNgay, co, phutCoMat, phutPhaiCoMat };
+}
+
+/** Số phút trong [a, b] trừ phần giao với giờ nghỉ giữa ca. */
+function phutTruNghi(a: Date, b: Date, nghi: { batDau: Date; ketThuc: Date } | null): number {
+  const tong = Math.max(0, b.getTime() - a.getTime());
+  const giao = nghi ? Math.max(0, Math.min(b.getTime(), nghi.ketThuc.getTime()) - Math.max(a.getTime(), nghi.batDau.getTime())) : 0;
+  return Math.floor((tong - giao) / PHUT_MS);
+}
+
+/** Cờ của NGÀY CÔNG "thiếu giờ" (QĐ-116). */
+export const CO_NGAY = {
+  thieuGio: "thieu-gio",
+  thieuGioChoXet: "thieu-gio-cho-xem-xet",
+  du: "thieu-gio-tinh-du",
+  nua: "thieu-gio-tinh-nua",
+  khong: "thieu-gio-khong-tinh",
+} as const;
+
+export type QuyetDinhThieuGio = "du" | "nua" | "khong";
+
+/**
+ * Áp quyết định của quản lý cho ngày "thiếu giờ" (QĐ-116): chưa quyết → giữ nguyên giá trị công (không tự trừ),
+ * cờ chờ xét; `du` → giữ; `nua` → một nửa phần phải làm; `khong` → 0. Ngày không thiếu giờ → không đổi gì
+ * (quyết định cũ còn lưu không áp nữa khi dữ liệu đã đổi, ví dụ có chấm bù).
+ */
+export function apXetThieuGio(cong: CongNgay, quyetDinh: QuyetDinhThieuGio | undefined): CongNgay {
+  if (!cong.co.includes(CO_NGAY.thieuGio) || !quyetDinh) return cong;
+  const co = cong.co.filter((c) => c !== CO_NGAY.thieuGioChoXet);
+  co.push(CO_NGAY[quyetDinh]);
+  const giaTriCong = quyetDinh === "du" ? cong.giaTriCong : quyetDinh === "nua" ? Math.round((cong.giaTriCong / 2) * 10) / 10 : 0;
+  return { ...cong, giaTriCong, co };
 }
 
 // ---------------------------------------------------------------------------
