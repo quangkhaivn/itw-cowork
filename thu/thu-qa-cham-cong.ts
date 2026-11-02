@@ -4,7 +4,8 @@ import { taoNguCanh, type NguCanh } from "../src/lib/api";
 import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "../src/lib/loi";
 import { layIpKhach } from "../src/lib/yeu-cau";
-import { seedNenMong } from "../prisma/seed/index";
+import { readFileSync } from "node:fs";
+import { seedDanhMucQuyen, seedDuLieuDoanhNghiep, seedNenMong } from "../prisma/seed/index";
 import { POST as postIclock, GET as getIclock } from "../src/app/iclock/[...duong]/route";
 import { chamCongGps, duocTinhCong, quyetDinhMoiNhat, xacNhanThongBaoViTri, xemXetLanCham } from "../src/modules/cham-cong/service";
 import { bangTrucTiep } from "../src/modules/cham-cong/truc-tiep";
@@ -547,6 +548,71 @@ async function main() {
     const khac = await chu.timesheet.create({ data: { tenantId: T, year: 2026, month: 1, generatedAt: new Date(), feedbackDeadline: new Date() } });
     await chu.timesheetRow.update({ where: { id: r.id }, data: { timesheetId: khac.id } });
   }, undefined, "csdl");
+
+  // ==================================================================
+  console.log("\n— QĐ-117: doanh nghiệp khác sau nâng cấp có đủ dữ liệu nền Nhân sự —");
+  // Doanh nghiệp "cũ" (trước 0.19.0): chỉ có Giám đốc / Quản trị, chưa có quyền chấm công, vai trò, loại nghỉ.
+  const taoDnCu = async (ma: string) => {
+    const t3 = await chu.tenant.create({ data: { code: ma, name: `Doanh nghiệp cũ ${ma}`, status: "hoat-dong" } });
+    for (const code of ["ceo", "admin"]) {
+      const r = await chu.role.create({ data: { tenantId: t3.id, code, name: code, isBuiltIn: true } });
+      const p = await chu.permission.findFirstOrThrow({ where: { code: "customer.view" } });
+      await chu.rolePermission.create({ data: { tenantId: t3.id, roleId: r.id, permissionId: p.id, dataScope: "all" } });
+    }
+    return t3.id;
+  };
+  type AnhQuyen = Record<string, string[]>;
+  const anhQuyen = async (t: string): Promise<AnhQuyen> => {
+    const ds = await chu.rolePermission.findMany({
+      where: { tenantId: t, role: { code: { in: ["nhan-su-hr", "sinh-vien-thuc-tap", "ceo", "admin"] } } },
+      select: { dataScope: true, role: { select: { code: true } }, permission: { select: { code: true } } },
+    });
+    const kq: AnhQuyen = {};
+    for (const r of ds) {
+      // Giám đốc / Quản trị: chỉ so phần Nhân sự (phần khác đã có từ trước, không thuộc QĐ này).
+      if (["ceo", "admin"].includes(r.role.code) && !/^(cham_cong|nhan_su)\./.test(r.permission.code)) continue;
+      (kq[r.role.code] ??= []).push(`${r.permission.code}:${r.dataScope}`);
+    }
+    for (const k of Object.keys(kq)) kq[k].sort();
+    return kq;
+  };
+  const MIGRATION = readFileSync("prisma/migrations/20261102090006_qa_cham_cong_moi_doanh_nghiep/migration.sql", "utf8");
+  const T3 = await taoDnCu(`qa-cc3-${DAU}`);
+  await chu.$executeRawUnsafe(MIGRATION);
+  const aT3 = await anhQuyen(T3);
+  const aT = await anhQuyen(T); // doanh nghiệp tạo bằng seed — chuẩn để so
+  dat("QĐ-117 (migration): doanh nghiệp thứ hai có vai trò Nhân sự (HR) đúng quyền + phạm vi như seed", JSON.stringify(aT3["nhan-su-hr"]) === JSON.stringify(aT["nhan-su-hr"]), JSON.stringify(aT3["nhan-su-hr"]));
+  dat("QĐ-117 (migration): …vai trò Thực tập sinh đúng như seed", JSON.stringify(aT3["sinh-vien-thuc-tap"]) === JSON.stringify(aT["sinh-vien-thuc-tap"]));
+  dat("QĐ-117 (migration): …Giám đốc / Quản trị có đủ 12 quyền chấm công + nhân sự (như seed)",
+    aT3.ceo?.length === 12 && JSON.stringify(aT3.ceo) === JSON.stringify(aT.ceo) && JSON.stringify(aT3.admin) === JSON.stringify(aT.admin));
+  const ln3 = (await chu.leaveType.findMany({ where: { tenantId: T3 }, select: { code: true, paid: true, usesBalance: true }, orderBy: { code: "asc" } }));
+  const lnT = (await chu.leaveType.findMany({ where: { tenantId: T }, select: { code: true, paid: true, usesBalance: true }, orderBy: { code: "asc" } }));
+  dat("QĐ-117 (migration): …4 loại nghỉ như seed", ln3.length === 4 && JSON.stringify(ln3) === JSON.stringify(lnT));
+  // Chạy lại = không đổi gì; quyền đã gỡ trên màn hình Vai trò không bị cấp lại; loại nghỉ đã tắt không bật lại.
+  const hr3 = await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: T3, code: "nhan-su-hr" } } });
+  await chu.rolePermission.deleteMany({ where: { roleId: hr3.id, permission: { code: "cham_cong.export" } } });
+  await chu.leaveType.updateMany({ where: { tenantId: T3, code: "om-dau" }, data: { status: "ngung-hoat-dong" } });
+  const demTruoc = await chu.rolePermission.count({ where: { tenantId: T3 } });
+  await chu.$executeRawUnsafe(MIGRATION);
+  dat("QĐ-117 (migration): chạy lại không đổi gì — quyền đã gỡ trên màn hình không bị cấp lại, loại nghỉ đã tắt giữ nguyên",
+    (await chu.rolePermission.count({ where: { tenantId: T3 } })) === demTruoc && (await chu.leaveType.count({ where: { tenantId: T3 } })) === 4
+      && (await chu.leaveType.findFirstOrThrow({ where: { tenantId: T3, code: "om-dau" } })).status === "ngung-hoat-dong");
+  const chT3 = await voiTenant(T3, (tx) => docCauHinhChamCong(tx));
+  dat("QĐ-117: khóa Cấu hình chấm công / nghỉ phép dùng được ngay ở doanh nghiệp mới (mặc định của danh mục)",
+    chT3.banKinhMacDinhM === 150 && chT3.phepSoNgayNam === 12 && chT3.phieuHienTruongNgay === 14 && chT3.coMatToiThieuPhanTram === 50 && chT3.admsToiDaPhutSn === 600);
+  // Đường seed: `npm run db:seed` nay gọi seedDuLieuDoanhNghiep cho MỌI doanh nghiệp.
+  const T4 = await taoDnCu(`qa-cc4-${DAU}`);
+  const t4 = await chu.tenant.findUniqueOrThrow({ where: { id: T4 } });
+  await seedDuLieuDoanhNghiep(chu, t4, await seedDanhMucQuyen(chu));
+  const aT4 = await anhQuyen(T4);
+  dat("QĐ-117 (seed): seed cho doanh nghiệp không phải mã chính cũng cấp đủ vai trò + quyền Giám đốc / Quản trị + loại nghỉ",
+    JSON.stringify(aT4) === JSON.stringify(aT) && (await chu.leaveType.count({ where: { tenantId: T4 } })) === 4, JSON.stringify(Object.keys(aT4)));
+  const hoSoCeo4 = await chu.user.create({ data: {
+    tenantId: T4, email: `ceo4.${DAU}@qa.test`, passwordHash: "x", fullName: "Giám đốc DN4",
+    userRoles: { create: { tenantId: T4, roleId: (await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: T4, code: "ceo" } } })).id } },
+  } });
+  const ttCeo4 = await voi(T4, hoSoCeo4.id, (nc) => bangTrucTiep(nc, { phongBanId: null, diaDiemId: null }, vn("2026-10-15T09:00:00")));
+  dat("QĐ-117: Giám đốc doanh nghiệp đó mở được bảng chấm công trực tiếp", Array.isArray(ttCeo4.dong));
 
   // ==================================================================
   console.log("\n— Nhắc việc —");

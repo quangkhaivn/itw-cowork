@@ -3,6 +3,7 @@
  * Luật: BUSINESS_RULES.md mục 30 (NS). Chạy: npm run thu:don-vi
  */
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 import {
@@ -575,5 +576,23 @@ describe("QA 0.19.0 — quyết định chính sách (QĐ-113 → QĐ-118)", () 
     assert.equal(apXetThieuGio(c1, "khong").giaTriCong, 0);
     assert.deepEqual(apXetThieuGio(c1, "nua").co.filter((c) => c.startsWith("thieu-gio")), ["thieu-gio", "thieu-gio-tinh-nua"]);
     assert.equal(apXetThieuGio(c2, "khong"), c2, "ngày không còn thiếu giờ (vd đã chấm bù) → quyết định cũ không áp");
+  });
+  it("QĐ-117: migration cấp dữ liệu nền cho mọi doanh nghiệp khớp định nghĩa vai trò trong vai-tro.ts", () => {
+    const sql = readFileSync("prisma/migrations/20261102090006_qa_cham_cong_moi_doanh_nghiep/migration.sql", "utf8");
+    const dsMa = (sau: string) => {
+      const doan = sql.slice(sql.indexOf(sau));
+      const m = /p\."code" IN \(([^)]*)\)/.exec(doan);
+      return new Set([...(m?.[1] ?? "").matchAll(/'([a-z_]+\.[a-z]+)'/g)].map((x) => x[1]));
+    };
+    for (const code of ["nhan-su-hr", "sinh-vien-thuc-tap"]) {
+      const dn = VAI_TRO.find((x) => x.code === code)!;
+      assert.ok(dn.quyen !== "*");
+      assert.deepEqual([...dsMa(`'${code}'`)].sort(), [...new Set(dn.quyen)].sort(), code);
+    }
+    // Phạm vi: HR "all" trừ công việc "own"; Thực tập sinh "own".
+    const hrDn = VAI_TRO.find((x) => x.code === "nhan-su-hr")!;
+    assert.equal(phamViCuaQuyen(hrDn, "task.view"), "own");
+    assert.equal(phamViCuaQuyen(hrDn, "cham_cong.approve"), "all");
+    assert.equal(VAI_TRO.find((x) => x.code === "sinh-vien-thuc-tap")!.phamVi, "own");
   });
 });
