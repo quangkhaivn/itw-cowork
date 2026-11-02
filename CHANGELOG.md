@@ -4,7 +4,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 ## 0.20.0 (chưa phát hành) — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
 
-**Chưa triển khai lên máy thật.** Một migration mới (`20261103090001_nhan_su_danh_gia`), chạy lại `prisma/rls.sql` (6 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
+**Chưa triển khai lên máy thật.** Hai migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`), chạy lại `prisma/rls.sql` (6 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
 
 Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết định QĐ-113 → QĐ-124. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
 
@@ -26,6 +26,16 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết đ
 
 ### Kiểm thử
 - `thu/don-vi/danh-gia.test.ts` (32 bài: điểm, hệ số đúng hạn + gia hạn, chuỗi duyệt, lịch lặp, hạn báo cáo, kỳ giờ VN, % đạt, điểm tổng, xếp loại, chọn bộ KPI, phiếu thực tập thang 10 / chữ); `npm run thu:danh-gia` (179 kiểm tra, nối vào `thu:tich-hop`): mọi luồng trên, hai lần duyệt / chốt cùng lúc, phạm vi quản lý khác nhóm, cách ly thực tập sinh, bất biến sau chốt, việc định kỳ không trùng (kể cả hai worker), dựng bản in phiếu thực tập, RLS.
+
+### Sửa sau kiểm thử độc lập (QA 0.20.0)
+- **Việc đã chấm điểm vẫn đổi được người làm, độ khó, cờ duyệt, chuỗi người duyệt, hạn** (máy chủ chỉ chặn mở lại / sửa kết quả): chuyển việc đã duyệt sang người khác làm **điểm chạy sang KPI người đó**; người có `task.update` rộng (vd nhân viên Marketing) tự đặt mình làm người duyệt cấp cuối rồi **điều chỉnh điểm đồng nghiệp**. Nay 409 `viec-da-duyet` (DG-31).
+- **Đồng ý gia hạn cho việc đã xong / đã chấm điểm** làm hạn đổi sau khi khép (tỷ lệ đúng hạn KPI lệch với hệ số đã chấm). Nay 409 `viec-da-khoa`, vẫn từ chối được để khép đề nghị (DG-05).
+- **Nâng cấp**: doanh nghiệp không được `db:seed` đồng bộ (vd `demo`) — Giám đốc / Quản trị **không có `danh_gia.*`** (không xem / chốt được phiếu nào); Nhân sự nhận `danh_gia.create` phạm vi `all` thay vì `own` như `vai-tro.ts`. Migration `20261103090002_qa_danh_gia_quyen` cấp đúng.
+- Người mới vào làm bị tính / báo **"thiếu báo cáo"** cho các kỳ trước ngày vào làm (DG-43).
+- Chỉ số **tỷ lệ việc bị trả lại** đếm cả việc gửi duyệt kỳ trước → có thể ra 100% / > 100% sai (DG-52).
+- Nhận / từ chối được việc người giao **đã hủy** (DG-03).
+- Lỗi máy 500 thay vì lỗi dữ liệu nhập: mở **kỳ quý số 5–12**, **trọng số KPI < 0,01**, **mục tiêu ≥ 10^15**; **ngày không có thật** ở nhật ký / phiếu thực tập / việc định kỳ (13/45 → 500; 30/02 lặng lẽ thành 02/03); giờ hạn việc định kỳ 25:99 lặng lẽ thành 17:00.
+- Bộ thử mới `npm run thu:qa-danh-gia` (nối cuối `thu:tich-hop`): các lỗi trên + không ai tự duyệt / chấm / chốt / điều chỉnh (kể cả Giám đốc, Quản trị), Nhân sự không chốt, IDOR giữa phòng / doanh nghiệp, RLS 19 bảng qua vai ứng dụng, bất biến qua `cowork_app`, đồng thời (nhận / từ chối, duyệt / trả lại, hai điều chỉnh), biên điểm và xếp loại, nửa đêm giờ VN, 11 chỉ số với dữ liệu rỗng, mẫu phiếu độc hại / cực lớn / sửa sau khi tạo phiếu.
 
 ## 0.19.0 (chưa phát hành) — Nhân sự, giai đoạn 1: chấm công
 

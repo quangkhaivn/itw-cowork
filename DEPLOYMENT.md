@@ -228,6 +228,12 @@ Rồi `nginx -t && systemctl reload nginx`. Kiểm từ ngoài: `curl -i "http:/
 - Trước khi triển khai migration có sửa dữ liệu: **diễn tập nâng cấp** — dựng CSDL giống hệt bản đang chạy (migration cũ + seed cũ), áp migration mới + seed mới, kiểm kết quả. Bản 19/09 đã diễn tập đúng như vậy.
 - Không bao giờ chạy `prisma db push` hay `migrate dev` trên máy thật.
 
+### Nâng cấp lên 0.20.0 (Nhân sự giai đoạn 2: giao việc, báo cáo, đánh giá, KPI, thực tập)
+
+- Hai migration: `20261103090001_nhan_su_danh_gia` (19 bảng mới, cột mới trên `tasks`, bật báo cáo ngày cho Kinh doanh / Kỹ thuật, cấp `danh_gia.*` cho vai trò dựng sẵn) → `20261103090002_qa_danh_gia_quyen` (cấp `danh_gia.*` cho Giám đốc / Quản trị của **mọi** doanh nghiệp, sửa phạm vi `danh_gia.create` của Nhân sự). Chạy lại `rls.sql` (6 bảng chỉ ghi thêm mới), `db:seed`, khởi động lại worker.
+- `db:seed` chỉ đồng bộ doanh nghiệp `SEED_MA_TENANT`. Doanh nghiệp khác (vd `demo`) **không có mẫu phiếu thực tập chung** cho tới khi chạy `npm run db:seed:mau` (chạy lại an toàn) hoặc Nhân sự tự tạo mẫu.
+- Đã diễn tập 03/11/2026: CSDL 0.19.0 (bản QA) + dữ liệu mẫu (`itw`, `demo`) → hai migration → `rls.sql` → seed: quyền `danh_gia.*` / `cham_cong.*` / `nhan_su.*` của 17 vai trò khớp `vai-tro.ts` ở cả hai doanh nghiệp, RLS bật 19/19 bảng, quyền cũ không đổi.
+
 ### Nâng cấp lên 0.16.1 (vận hành bền vững)
 
 - Migration `20261014090001_van_hanh_ben_vung`: thêm bảng toàn hệ thống `system_heartbeats` (nhịp worker, trạng thái sao lưu / thử phục hồi) và thay chỉ mục riêng phần `job_runs_lich_moi_ngay` (lần quét theo lịch **hỏng** không còn chiếm chỗ "một lần mỗi ngày"). Không sửa dữ liệu cũ. Chạy lại `rls.sql` như mọi lần (mục 5b cấp quyền bảng mới: ứng dụng đọc mọi dòng, chỉ ghi dòng `worker…`).
