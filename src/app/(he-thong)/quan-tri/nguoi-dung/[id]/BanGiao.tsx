@@ -5,9 +5,17 @@ import { useState } from "react";
 import { useGoiApi } from "@/components/ui/goi-api";
 import { dinhDangSo } from "@/lib/dinh-dang";
 
+interface BuocCho {
+  viec: number;
+  giaHan: number;
+  baoCao: number;
+  phieu: number;
+}
 interface XemTruoc {
   loai: { ma: string; nhan: string; so: number }[];
   tong: number;
+  /** QĐ-135: bước đang chờ người này duyệt / chấm — chuyển cho quản lý trực tiếp của họ, không có thì Giám đốc. */
+  buocCho: BuocCho;
 }
 
 /**
@@ -65,6 +73,13 @@ export default function BanGiao({ nguoiId, hoTen, nguoiNhan }: { nguoiId: string
                 </tr>
               </tbody>
             </table>
+            {xt.buocCho.viec + xt.buocCho.giaHan + xt.buocCho.baoCao + xt.buocCho.phieu > 0 && (
+              <div className="hop-thong-bao thong-tin" style={{ marginTop: 12 }}>
+                Bước đang chờ {hoTen}: {dinhDangSo(xt.buocCho.viec)} bước duyệt việc · {dinhDangSo(xt.buocCho.giaHan)} đề nghị gia hạn · {dinhDangSo(xt.buocCho.baoCao)} báo cáo chưa nhận xét ·{" "}
+                {dinhDangSo(xt.buocCho.phieu)} phiếu đánh giá chờ chấm. Các bước này <strong>không</strong> chuyển cho người nhận bàn giao mà tự chuyển cho quản lý trực tiếp
+                của {hoTen} (không có thì Giám đốc), ghi lịch sử và báo người nhận. Người nhận bàn giao đang đứng trong chuỗi duyệt của việc vừa nhận thì bước đó lên cấp trên của họ.
+              </div>
+            )}
             <div className="luoi-form" style={{ marginTop: 12 }}>
               <div className="truong">
                 <label htmlFor="bg-nhan">
@@ -92,10 +107,12 @@ export default function BanGiao({ nguoiId, hoTen, nguoiNhan }: { nguoiId: string
               className="nut chinh"
               disabled={dangGui || !nhanId}
               onClick={async () => {
-                const r = await goi<{ tong: number; daKhoa: boolean; thieuQuyenXem: string[] }>(`/api/v1/nguoi-dung/${nguoiId}/ban-giao`, "POST", { nguoiNhanId: nhanId, khoaTaiKhoan: khoa, ghiChu });
+                const r = await goi<{ tong: number; daKhoa: boolean; thieuQuyenXem: string[]; buocDaChuyen: BuocCho }>(`/api/v1/nguoi-dung/${nguoiId}/ban-giao`, "POST", { nguoiNhanId: nhanId, khoaTaiKhoan: khoa, ghiChu });
                 if (r) {
+                  const soBuoc = r.buocDaChuyen.viec + r.buocDaChuyen.giaHan + r.buocDaChuyen.baoCao + r.buocDaChuyen.phieu;
                   datXong(
                     `Đã chuyển ${dinhDangSo(r.tong)} việc${r.daKhoa ? " và khóa tài khoản" : ""}.` +
+                      (soBuoc ? ` ${dinhDangSo(soBuoc)} bước duyệt / chấm đang chờ đã chuyển cho cấp trên.` : "") +
                       (r.thieuQuyenXem.length ? ` Lưu ý: người nhận chưa có quyền xem ${r.thieuQuyenXem.join("; ")} — cấp vai trò phù hợp hoặc phân lại.` : ""),
                   );
                   datXt(null);
