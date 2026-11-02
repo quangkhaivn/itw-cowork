@@ -24,6 +24,12 @@ export const ngayHopLe = z
     return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
   }, "Ngày không có thật.");
 
+/**
+ * Trần một khoản tiền nhập tay (1.000 tỷ đ). QA 0.21.0: trước đây nhận tới 9×10^15 — gõ thừa vài số 0 vào lương / phụ
+ * cấp / khoản làm tổng thu nhập vượt số nguyên an toàn, lần tính lương của CẢ KỲ hỏng lỗi máy 500 thay vì báo ô nhập sai.
+ */
+export const TIEN_TOI_DA = 1_000_000_000_000;
+
 /** Số tiền nguyên VND: nhận số hoặc chuỗi "12.500.000" / "12500000". */
 export const soTien = z
   .union([z.number(), z.string()])
@@ -31,6 +37,10 @@ export const soTien = z
     const n = typeof v === "number" ? v : Number(String(v).replace(/[.\s₫đ,]/g, ""));
     if (!Number.isSafeInteger(n) || n < 0) {
       ctx.addIssue({ code: "custom", message: "Số tiền là số nguyên VND không âm." });
+      return z.NEVER;
+    }
+    if (n > TIEN_TOI_DA) {
+      ctx.addIssue({ code: "custom", message: "Số tiền quá lớn (tối đa 1.000 tỷ đ) — kiểm lại số chữ số 0." });
       return z.NEVER;
     }
     return n;

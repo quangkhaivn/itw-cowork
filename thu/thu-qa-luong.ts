@@ -184,6 +184,11 @@ async function main() {
   const rC = (await dong(k3.id, nvC)).result as unknown as KetQuaLuong;
   dat("Phụ cấp xăng xe (chịu thuế) cố định tháng vào thu nhập chịu thuế", rC.thuNhapChiuThue === 11_111_111 + 777_777);
 
+  // LỖI 3 (đã sửa): số tiền nhập tay tới 9×10^15 lọt lược đồ → tổng thu nhập vượt số nguyên an toàn → tính CẢ KỲ lỗi 500.
+  const qua = hs({ nguoiId: nvA, luongCoBan: 1 });
+  dat("LỖI 3: lương / phụ cấp / thưởng KPI quá 1.000 tỷ bị từ chối ngay ở ô nhập", !LuocDoHoSoLuong.safeParse({ ...qua, luongCoBan: "9.000.000.000.000.000" }).success && !LuocDoHoSoLuong.safeParse({ ...qua, thuongKpi: 9e15 }).success && !LuocDoHoSoLuong.safeParse({ ...qua, phuCap: [{ loaiId: xang.id, soTien: 9e15 }] }).success && LuocDoHoSoLuong.safeParse({ ...qua, luongCoBan: 1_000_000_000_000 }).success);
+  dat("LỖI 3: khoản cộng / trừ quá 1.000 tỷ bị từ chối", !LuocDoKhoan.safeParse({ nguoiId: nvA, chieu: "cong", loai: "thuong", soTien: 9_000_000_000_000_000, lyDo: "Gõ thừa số 0" }).success);
+
   // ==================================================================
   console.log("\n— C. Lộ dữ liệu lương: IDOR qua mọi API, nhân viên / thực tập sinh / trưởng phòng —");
   let lA = await dong(k3.id, nvA);
