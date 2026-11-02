@@ -4,9 +4,17 @@ import type { KetQuaLuong } from "./tinh-toan";
  * Thư phiếu lương (LU-44) — hàm thuần, tách khỏi xuat.ts để worker gửi thư nạp được mà không kéo theo Next.
  */
 
-/** Thoát ký tự đặc biệt XML / HTML và bỏ ký tự điều khiển. */
+/**
+ * Thoát ký tự đặc biệt XML / HTML và bỏ ký tự XML 1.0 không cho phép: ký tự điều khiển, U+FFFE / U+FFFF và nửa cặp
+ * thay thế lẻ (QA 0.21.0: một tên có U+FFFF làm Excel từ chối mở cả bảng lương .xls).
+ */
 export function xml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "");
 }
 
 function dongTien(n: number) {

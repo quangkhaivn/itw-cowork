@@ -263,13 +263,17 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
     const h = hoSo.get(u.id)!;
     const l = lich.get(u.id)!;
     const ngayVao = u.staffProfile?.hiredAt ? dateVeNgay(u.staffProfile.hiredAt) : null;
+    // Công chuẩn tính CẢ THÁNG (LU-21). QA 0.21.0: người vào làm giữa tháng thường được gán lịch từ ngày vào — ngày
+    // trước lần gán lịch đầu tiên trong tháng dùng lịch đầu tiên đó; nếu bỏ qua những ngày này, công chuẩn chỉ còn
+    // phần cuối tháng và người làm đủ nửa tháng nhận đủ lương tháng. Ngày lễ chỉ trả khi ngày đó thật sự có lịch.
+    const lichDau = cacNgay.map((d) => l(d)).find((x) => x !== null) ?? null;
     let chuan = 0;
     let ngayLe = 0;
     for (const d of cacNgay) {
-      const ap = l(d);
-      const v = congDuKien(d, ap?.ca ?? null, ap?.ngay ?? null, false).giaTri;
-      chuan += v;
-      if (le.has(d) && (!ngayVao || d >= ngayVao)) ngayLe += v;
+      const that = l(d);
+      const ap = that ?? lichDau;
+      chuan += congDuKien(d, ap?.ca ?? null, ap?.ngay ?? null, false).giaTri;
+      if (that && le.has(d) && (!ngayVao || d >= ngayVao)) ngayLe += congDuKien(d, that.ca, that.ngay, false).giaTri;
     }
     const cua = dong.filter((r) => r.userId === u.id);
     const tc: PhutTangCa = { thuong: 0, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 };
