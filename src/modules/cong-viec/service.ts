@@ -15,9 +15,10 @@ import { taoThongBao } from "@/modules/thong-bao/service";
 import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { nguoiXemDuocDanhGia } from "@/modules/danh-gia/chung";
 import { laGiamDocHoacQuanTri } from "@/modules/danh-gia/cap-tren";
+import { chuyenViecCuaNguoiLamDaNghi } from "@/modules/danh-gia/chuyen-buoc";
 import { TOI_DA_CAP_DUYET, TOI_DA_NGUOI_MOT_LAN_GIAO } from "@/modules/danh-gia/tinh-toan";
 import { DO_DAI_KET_QUA_TOI_THIEU, kiemTraTruocKhiXong, type KetQuaKiemTra } from "./kiem-tra";
-import { baoChoDuyet, chuoiDuyetCuaViec, dungChuoiDuyetChoViec, ghiNhatKyDuyet, ghiChuoiDuyet, kiemNguoiDuyet, mauViecDung } from "./duyet";
+import { baoChoDuyet, chuoiDuyetCuaViec, chuoiDuyetTuDong, ghiNhatKyDuyet, ghiChuoiDuyet, kiemChuoiDuyetKhiGiao, kiemNguoiDuyet, mauViecDung } from "./duyet";
 
 /**
  * Công việc — việc SẮP làm, có hạn ("Activity" trong prompt). Luật CV-01 → CV-11.
@@ -436,9 +437,13 @@ export async function taoViec(nc: NguCanh, dauVao: DuLieuTaoViec, them: ThemKhiT
   const canDuyet = d.canDuyet ?? mau?.canDuyet ?? giaoNguoiKhac;
   let chuoi: string[] = [];
   if (canDuyet) {
-    chuoi = d.nguoiDuyetIds?.length
-      ? d.nguoiDuyetIds
-      : await dungChuoiDuyetChoViec(nc, { chuoi: mau?.chuoiDuyet ?? [], nguoiLamId: ownerId, nguoiGiaoId: nc.hoSo.userId });
+    // QĐ-154: chuỗi gửi lên kiểm nghiêm (vi phạm → 403); chuỗi dựng tự động (mặc định / theo mẫu) chuẩn hóa.
+    if (d.nguoiDuyetIds?.length) {
+      chuoi = d.nguoiDuyetIds;
+      await kiemChuoiDuyetKhiGiao(nc, chuoi, ownerId, nc.hoSo.userId);
+    } else {
+      chuoi = await chuoiDuyetTuDong(nc, { chuoi: mau?.chuoiDuyet ?? [], nguoiLamId: ownerId, nguoiGiaoId: nc.hoSo.userId });
+    }
     await kiemNguoiDuyet(nc, chuoi, ownerId);
   }
 
@@ -665,8 +670,12 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
   const chuoiCu = chuoiHienTai;
   let chuoiMoi: string[] | null = null;
   if (canDuyetMoi) {
-    if (d.nguoiDuyetIds?.length) chuoiMoi = d.nguoiDuyetIds;
-    else if (chuoiCu.length === 0) chuoiMoi = await dungChuoiDuyetChoViec(nc, { chuoi: [], nguoiLamId: nguoiLamMoi, nguoiGiaoId: goc.assignedBy ?? toi });
+    // QĐ-154: chuỗi gửi lên kiểm theo người giao GỐC (ghi một lần) — đồng nghiệp giao việc không tự sửa chuỗi
+    // để đứng duyệt sau khi tạo.
+    if (d.nguoiDuyetIds?.length) {
+      chuoiMoi = d.nguoiDuyetIds;
+      if (doiChuoiYeuCau) await kiemChuoiDuyetKhiGiao(nc, chuoiMoi, nguoiLamMoi, goc.assignedBy ?? toi);
+    } else if (chuoiCu.length === 0) chuoiMoi = await chuoiDuyetTuDong(nc, { chuoi: [], nguoiLamId: nguoiLamMoi, nguoiGiaoId: goc.assignedBy ?? toi });
     if (chuoiMoi || doiNguoi || (d.canDuyet && !goc.needsApproval)) await kiemNguoiDuyet(nc, chuoiMoi ?? chuoiCu, nguoiLamMoi);
   } else if (goc.needsApproval && chuoiCu.length) {
     chuoiMoi = [];
@@ -740,6 +749,11 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
     await baoChuyenDi(nc, sau, goc.ownerId);
   } else if (guiLaiTuChoi) {
     await baoDuocGiao(nc, sau, false);
+  }
+  // QĐ-155: mở lại việc của người đã nghỉ → chuyển cho người nhận bàn giao / cấp trên của họ.
+  const moLai = !doiNguoi && ["xong", "huy"].includes(goc.status) && ["mo", "dang-lam"].includes(v.status);
+  if (moLai && (await chuyenViecCuaNguoiLamDaNghi(nc, id))) {
+    return { ...chuyenDoi(await nc.tx.task.findUniqueOrThrow({ where: { id }, select: CHON_VIEC })), viecTiepTheo: null };
   }
 
   let viecTiepTheo: CongViec | null = null;

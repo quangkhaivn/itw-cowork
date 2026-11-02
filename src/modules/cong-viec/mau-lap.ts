@@ -9,7 +9,7 @@ import { gioVePhut, laNgayHopLe, mocVN, ngayVNCua, phutVeGio } from "@/modules/c
 import { chuoiTuyChon, dateVeNgay, kiemTraNguoiPhuTrach, ngayVeDate, trongPhamVi } from "@/modules/crm/chung";
 import { UU_TIEN } from "@/modules/crm/hang-so";
 import { laNgayLap, LuocDoChuoiDuyet, TAN_SUAT, TOI_DA_NGUOI_MOT_LAN_GIAO, type CapDuyet } from "@/modules/danh-gia/tinh-toan";
-import { docChuoiDuyet, dungChuoiDuyetChoViec } from "./duyet";
+import { chuoiDuyetTuDong, docChuoiDuyet, dungChuoiDuyetChoViec, kiemChuoiDuyetKhiGiao } from "./duyet";
 import { taoViec } from "./service";
 
 /**
@@ -140,7 +140,12 @@ async function kiemLapViec(nc: NguCanh, d: DuLieuLapViec) {
   await kiemChuoiKhai(nc, d.chuoiDuyet);
   if (d.canDuyet) {
     for (const n of ds) {
-      const c = await dungChuoiDuyetChoViec(nc, { chuoi: d.chuoiDuyet, nguoiLamId: n, nguoiGiaoId: nc.hoSo.userId });
+      // QĐ-154: chuỗi khai (người cụ thể / người giao / quản lý) kiểm nghiêm cho từng người được giao; để trống thì
+      // mặc định (người lập lịch nếu là cấp trên của người làm, không thì quản lý trực tiếp → Giám đốc).
+      const c = d.chuoiDuyet.length
+        ? await dungChuoiDuyetChoViec(nc, { chuoi: d.chuoiDuyet, nguoiLamId: n, nguoiGiaoId: nc.hoSo.userId })
+        : await chuoiDuyetTuDong(nc, { chuoi: [], nguoiLamId: n, nguoiGiaoId: nc.hoSo.userId });
+      if (d.chuoiDuyet.length) await kiemChuoiDuyetKhiGiao(nc, c, n, nc.hoSo.userId);
       if (!c.length) throw new LoiNghiepVu("Có người được giao không có ai duyệt (tự giao cho mình). Thêm cấp duyệt hoặc tắt \"cần duyệt\".", 422, "thieu-nguoi-duyet");
     }
   }
@@ -247,7 +252,11 @@ export async function sinhViecDinhKy(tenantId: string, bayGio = new Date()): Pro
               han: mocVN(homNay, l.dueMinute), khachHangId: null, leadId: null, coHoiId: null,
               mucKiemTra: Array.isArray(l.checklist) ? (l.checklist as { nhan: string; batBuoc: boolean }[]) : [],
               doKho: l.difficulty, canDuyet: l.needsApproval,
-              nguoiDuyetIds: l.needsApproval ? await dungChuoiDuyetChoViec(nc, { chuoi: docChuoiDuyet(l.approvalChain), nguoiLamId: nguoi, nguoiGiaoId: l.createdBy }) : undefined,
+              // QĐ-154: chuỗi khai của lịch đi qua kiểm nghiêm lúc sinh (taoViec) — lịch lập trước luật này mà để
+              // đồng nghiệp ngang cấp tự đứng duyệt thì không sinh (bỏ qua, ghi nhật ký); chuỗi trống → mặc định.
+              nguoiDuyetIds: l.needsApproval && docChuoiDuyet(l.approvalChain).length
+                ? await dungChuoiDuyetChoViec(nc, { chuoi: docChuoiDuyet(l.approvalChain), nguoiLamId: nguoi, nguoiGiaoId: l.createdBy })
+                : undefined,
               mauViecId: null,
             },
             { lap: { id: l.id, ngay: ngayDb, nguoiId: nguoi } },

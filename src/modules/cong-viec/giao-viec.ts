@@ -11,6 +11,7 @@ import { taoThongBao } from "@/modules/thong-bao/service";
 import { banDoTen } from "@/modules/cham-cong/chung";
 import { capDuoi, dieuChinhDiemViecDuoc, docCauHinhDanhGia, dungHanTu, nguoiXemDuocDanhGia, nguoiXemDuocDanhGiaCua, xemDuocDanhGiaCua } from "@/modules/danh-gia/chung";
 import { napBanDoCapTren } from "@/modules/danh-gia/cap-tren";
+import { chuyenViecCuaNguoiLamDaNghi } from "@/modules/danh-gia/chuyen-buoc";
 import { mocVN, ngayVNCua } from "@/modules/cham-cong/tinh-toan";
 import { dauTuan, diemViec, heSoDungHan, NHAN_CHAT_LUONG, NHAN_LOAI_DUNG_HAN } from "@/modules/danh-gia/tinh-toan";
 import { baoChoDuyet, ghiNhatKyDuyet } from "./duyet";
@@ -348,6 +349,8 @@ export async function traLaiViec(nc: NguCanh, id: string, d: z.infer<typeof Luoc
   await ghiNhatKyDuyet(nc, { taskId: id, vong: v.approvalRound, cap, hanhDong: "tra-lai", lyDo: d.lyDo, han: v.dueAt });
   await nc.tx.task.update({ where: { id }, data: { status: "dang-lam", approvalLevel: null, updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "tra-lai-viec", objectType: "task", objectId: id, after: { cap, lyDo: d.lyDo } });
+  // QĐ-155: người làm đã nghỉ → việc chuyển cho người nhận bàn giao / cấp trên của họ (người giao giữ nguyên).
+  await chuyenViecCuaNguoiLamDaNghi(nc, id);
   await nc.suKien({ eventType: SU_KIEN.TASK_RETURNED, objectType: "task", objectId: id, payload: { cap } });
   await bao(nc, v.ownerId, {
     loai: "viec-bi-tra-lai",

@@ -3,6 +3,7 @@ import type { ClientTenant } from "@/lib/db";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { taoThongBao } from "@/modules/thong-bao/service";
 import { dungChuoiDuyet, LuocDoChuoiDuyet, TOI_DA_CAP_DUYET, type CapDuyet } from "@/modules/danh-gia/tinh-toan";
+import { chuanHoaChuoiDuyetKhiGiao, loiChuoiDuyetKhiGiao, napBanDoCapTren } from "@/modules/danh-gia/cap-tren";
 
 /**
  * Phần lõi của chuỗi duyệt công việc (0.20.0, DG-20 → DG-24), tách khỏi `service.ts` để `giao-viec.ts`
@@ -47,10 +48,54 @@ export async function mauViecDung(nc: NguCanh, id: string): Promise<MauViecDung>
   };
 }
 
-/** Dựng chuỗi người duyệt thật từ chuỗi khai (đọc quản lý trực tiếp của người làm). */
+/**
+ * Dựng chuỗi người duyệt thật từ chuỗi khai. "Quản lý trực tiếp" = quản lý còn hoạt động gần nhất trong chuỗi
+ * quản lý của người làm (quản lý đã nghỉ → cấp trên — QĐ-135).
+ */
 export async function dungChuoiDuyetChoViec(nc: NguCanh, d: { chuoi: CapDuyet[]; nguoiLamId: string; nguoiGiaoId: string }): Promise<string[]> {
-  const hs = await nc.tx.staffProfile.findFirst({ where: { userId: d.nguoiLamId }, select: { managerId: true } });
-  return dungChuoiDuyet(d.chuoi, { nguoiLamId: d.nguoiLamId, nguoiGiaoId: d.nguoiGiaoId, quanLyTrucTiepId: hs?.managerId ?? null });
+  const bd = await napBanDoCapTren(nc.tx);
+  return dungChuoiDuyet(d.chuoi, { nguoiLamId: d.nguoiLamId, nguoiGiaoId: d.nguoiGiaoId, quanLyTrucTiepId: bd.chuoiQuanLy(d.nguoiLamId)[0] ?? null });
+}
+
+/**
+ * QĐ-154: chuỗi duyệt DỰNG TỰ ĐỘNG (không ai gửi danh sách người duyệt — mặc định, theo mẫu việc) cho việc
+ * giao cho người khác: đồng nghiệp ngang cấp không tự đứng duyệt; cấp cuối luôn là quản lý / cấp trên của
+ * người làm, hoặc Giám đốc / Quản trị (mặc định: người giao nếu họ là cấp trên, không thì quản lý trực tiếp
+ * của người làm, không có quản lý thì Giám đốc).
+ */
+export async function chuoiDuyetTuDong(nc: NguCanh, d: { chuoi: CapDuyet[]; nguoiLamId: string; nguoiGiaoId: string }): Promise<string[]> {
+  const dung = await dungChuoiDuyetChoViec(nc, d);
+  if (d.nguoiLamId === d.nguoiGiaoId) return dung;
+  const bd = await napBanDoCapTren(nc.tx);
+  // Chuỗi khai rỗng → dungChuoiDuyet trả [người giao]; chuẩn hóa bỏ người giao nếu họ là đồng nghiệp ngang cấp.
+  return chuanHoaChuoiDuyetKhiGiao(dung, {
+    nguoiLamId: d.nguoiLamId, nguoiGiaoId: d.nguoiGiaoId, quanLyCuaNguoiLam: bd.chuoiQuanLy(d.nguoiLamId),
+    laGiamDocHoacQuanTri: bd.laGiamDocHoacQuanTri, capTrenCuaNguoiLam: bd.chuoiCapTren(d.nguoiLamId),
+  });
+}
+
+/**
+ * QĐ-154: kiểm chuỗi duyệt NGƯỜI GỌI GỬI LÊN (API, form, lịch định kỳ khai người cụ thể / người giao) cho việc
+ * giao cho người khác — vi phạm thì 403 kèm lời giải thích, không tự sửa.
+ */
+export async function kiemChuoiDuyetKhiGiao(nc: NguCanh, ids: string[], nguoiLamId: string, nguoiGiaoId: string): Promise<void> {
+  if (nguoiLamId === nguoiGiaoId || ids.length === 0) return;
+  const bd = await napBanDoCapTren(nc.tx);
+  const loi = loiChuoiDuyetKhiGiao(ids, { nguoiLamId, nguoiGiaoId, quanLyCuaNguoiLam: bd.chuoiQuanLy(nguoiLamId), laGiamDocHoacQuanTri: bd.laGiamDocHoacQuanTri });
+  if (loi === "tu-dat-nguoi-duyet") {
+    throw new LoiNghiepVu(
+      "Bạn giao việc cho người không thuộc nhóm mình quản lý nên không được tự đứng trong chuỗi duyệt. Bỏ bạn khỏi danh sách người duyệt — để trống thì người duyệt là quản lý trực tiếp của người làm (không có thì Giám đốc).",
+      403,
+      "tu-dat-nguoi-duyet",
+    );
+  }
+  if (loi === "nguoi-duyet-cuoi") {
+    throw new LoiNghiepVu(
+      "Người duyệt cấp cuối (người chấm điểm) phải là quản lý trực tiếp hoặc cấp trên của người làm, hoặc Giám đốc / Quản trị. Để trống danh sách người duyệt để dùng mặc định.",
+      403,
+      "nguoi-duyet-cuoi",
+    );
+  }
 }
 
 /**

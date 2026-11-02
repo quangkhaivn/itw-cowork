@@ -84,6 +84,15 @@ export const LOAI_BAN_GIAO: LoaiBanGiao[] = [
     chuyen: async (tx, tu, sang, n) => (await tx.task.updateMany({ where: { ownerId: tu, status: { in: VIEC_MO } }, data: { ownerId: sang, updatedBy: n } })).count,
   },
   {
+    // QĐ-155: việc đang chờ duyệt GIỮ người làm cũ (công đã làm, điểm thuộc về họ); chỉ ghi người nhận bàn giao
+    // để khi việc bị trả lại / mở lại thì chuyển cho người này.
+    ma: "viec-cho-duyet",
+    nhan: "Việc đang chờ duyệt (giữ người làm, ghi người nhận để làm tiếp nếu bị trả lại)",
+    quyenXem: ["task.view"],
+    dem: (tx, tu) => tx.task.count({ where: { ownerId: tu, status: "cho-duyet" } }),
+    chuyen: async (tx, tu, sang, n) => (await tx.task.updateMany({ where: { ownerId: tu, status: "cho-duyet" }, data: { handoverToId: sang, updatedBy: n } })).count,
+  },
+  {
     ma: "bao-gia",
     nhan: "Báo giá nháp / chờ duyệt / đã gửi chưa chốt",
     quyenXem: ["quotation.view"],

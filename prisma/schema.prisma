@@ -885,6 +885,9 @@ model Task {
   taskScore      Decimal?  @map("task_score") @db.Decimal(6, 2)
   /// Việc sinh từ vướng mắc của một báo cáo (DG-44).
   sourceReportId String?   @map("source_report_id") @db.Uuid
+  /// QĐ-155 — người nhận bàn giao của việc đang chờ duyệt (người làm cũ giữ việc + điểm); dùng khi việc bị
+  /// trả lại / mở lại mà người làm đã ngừng hoạt động.
+  handoverToId   String?   @map("handover_to_id") @db.Uuid
 
   tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner       User                @relation("ViecPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
@@ -4276,7 +4279,7 @@ model ApprovalTransfer {
   level      Int?     @db.SmallInt
   fromUserId String   @map("from_user_id") @db.Uuid
   toUserId   String   @map("to_user_id") @db.Uuid
-  /// ngung-hoat-dong | ban-giao | tu-duyet
+  /// ngung-hoat-dong | ban-giao | tu-duyet | nguoi-lam-nghi (QĐ-155: chuyển người làm)
   reason     String   @db.VarChar(30)
   note       String?  @db.Text
   createdBy  String?  @map("created_by") @db.Uuid

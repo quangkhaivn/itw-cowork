@@ -383,8 +383,8 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
               <ul>
                 {ls.chuyenBuoc.map((c) => (
                   <li key={c.id}>
-                    {dinhDangNgayGio(c.luc)} — {c.loai === "task_extension" ? "Quyết định gia hạn" : `Duyệt${c.cap ? ` cấp ${c.cap}` : ""}`}: {c.tu} → <strong>{c.sang}</strong>
-                    {" "}({c.lyDo === "ngung-hoat-dong" ? `${c.tu} nghỉ việc / bị khóa` : c.lyDo === "ban-giao" ? `${c.tu} bàn giao` : `${c.tu} là người làm việc này`})
+                    {dinhDangNgayGio(c.luc)} — {c.lyDo === "nguoi-lam-nghi" ? "Người làm" : c.loai === "task_extension" ? "Quyết định gia hạn" : `Duyệt${c.cap ? ` cấp ${c.cap}` : ""}`}: {c.tu} → <strong>{c.sang}</strong>
+                    {" "}({c.lyDo === "ngung-hoat-dong" ? `${c.tu} nghỉ việc / bị khóa` : c.lyDo === "ban-giao" ? `${c.tu} bàn giao` : c.lyDo === "nguoi-lam-nghi" ? `${c.tu} đã nghỉ, việc bị trả lại / mở lại${c.ghiChu ? ` — ${c.ghiChu.toLowerCase()}` : ""}` : `${c.tu} là người làm việc này`})
                   </li>
                 ))}
               </ul>

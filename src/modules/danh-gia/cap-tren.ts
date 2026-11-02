@@ -33,6 +33,9 @@ export interface DuLieuCapTren {
 }
 
 /** Các quản lý đang hoạt động khi đi dần lên từ `userId` (bỏ qua người đã nghỉ, dừng khi gặp vòng). */
+export function chuoiQuanLyThuan(userId: string, d: DuLieuCapTren): string[] {
+  return diLen(userId, d);
+}
 function diLen(userId: string, d: DuLieuCapTren): string[] {
   const kq: string[] = [];
   const daQua = new Set<string>([userId]);
@@ -63,7 +66,10 @@ export function chuoiCapTrenThuan(userId: string, d: DuLieuCapTren): string[] {
 export interface BanDoCapTren extends DuLieuCapTren {
   quanLyHieuLuc(userId: string): string | null;
   chuoiCapTren(userId: string): string[];
+  /** Quản lý trực tiếp và mọi cấp trên (đang hoạt động) trong chuỗi quản lý của `userId` (QĐ-154). */
+  chuoiQuanLy(userId: string): string[];
   laGiamDoc(userId: string): boolean;
+  laGiamDocHoacQuanTri(userId: string): boolean;
 }
 
 /** Đọc hồ sơ nhân sự + người đang hoạt động + Giám đốc / Quản trị của doanh nghiệp (theo RLS của giao dịch). */
@@ -85,7 +91,9 @@ export async function napBanDoCapTren(tx: ClientTenant): Promise<BanDoCapTren> {
     ...d,
     quanLyHieuLuc: (id) => quanLyHieuLucThuan(id, d),
     chuoiCapTren: (id) => chuoiCapTrenThuan(id, d),
+    chuoiQuanLy: (id) => diLen(id, d),
     laGiamDoc: (id) => d.giamDoc.includes(id),
+    laGiamDocHoacQuanTri: (id) => d.giamDoc.includes(id) || d.quanTri.includes(id),
   };
 }
 
@@ -100,6 +108,44 @@ export function laGiamDoc(hoSo: HoSoQuyen): boolean {
 }
 
 /** Người đang thao tác giữ vai trò Giám đốc hoặc Quản trị. */
+/**
+ * QĐ-154 — kiểm chuỗi người duyệt của việc GIAO CHO NGƯỜI KHÁC (người làm ≠ người giao). Thuần.
+ *  - Người duyệt **cấp cuối** (quyết điểm) phải là quản lý trực tiếp / cấp trên trong chuỗi quản lý của người
+ *    làm, hoặc Giám đốc / Quản trị. (Người giao chỉ đứng được cấp cuối khi chính họ nằm trong chuỗi đó.)
+ *  - Người giao không nằm trong chuỗi quản lý của người làm và không phải Giám đốc / Quản trị (đồng nghiệp
+ *    ngang cấp) thì không được đứng ở bất kỳ cấp nào.
+ * Trả mã lỗi, hoặc null khi hợp lệ.
+ */
+export function loiChuoiDuyetKhiGiao(
+  chuoi: readonly string[],
+  d: { nguoiLamId: string; nguoiGiaoId: string; quanLyCuaNguoiLam: readonly string[]; laGiamDocHoacQuanTri: (id: string) => boolean },
+): "tu-dat-nguoi-duyet" | "nguoi-duyet-cuoi" | null {
+  if (d.nguoiLamId === d.nguoiGiaoId || chuoi.length === 0) return null;
+  const hopLe = (id: string) => d.quanLyCuaNguoiLam.includes(id) || d.laGiamDocHoacQuanTri(id);
+  if (chuoi.includes(d.nguoiGiaoId) && !hopLe(d.nguoiGiaoId)) return "tu-dat-nguoi-duyet";
+  if (!hopLe(chuoi[chuoi.length - 1])) return "nguoi-duyet-cuoi";
+  return null;
+}
+
+/**
+ * QĐ-154 — sửa chuỗi duyệt DỰNG TỰ ĐỘNG (mặc định / theo mẫu / theo lịch) cho việc giao cho người khác: bỏ người
+ * giao nếu họ không được đứng duyệt; cấp cuối không hợp lệ thì thêm người duyệt mặc định ở cuối — người giao nếu
+ * họ hợp lệ, không thì quản lý hiệu lực của người làm (không có quản lý → Giám đốc → Quản trị). Thuần.
+ */
+export function chuanHoaChuoiDuyetKhiGiao(
+  chuoi: readonly string[],
+  d: { nguoiLamId: string; nguoiGiaoId: string; quanLyCuaNguoiLam: readonly string[]; laGiamDocHoacQuanTri: (id: string) => boolean; capTrenCuaNguoiLam: readonly string[] },
+): string[] {
+  if (d.nguoiLamId === d.nguoiGiaoId) return [...chuoi];
+  const hopLe = (id: string) => d.quanLyCuaNguoiLam.includes(id) || d.laGiamDocHoacQuanTri(id);
+  let kq = chuoi.filter((x) => x !== d.nguoiLamId && (x !== d.nguoiGiaoId || hopLe(x)));
+  if (kq.length && hopLe(kq[kq.length - 1])) return kq;
+  const macDinh = hopLe(d.nguoiGiaoId) ? d.nguoiGiaoId : d.capTrenCuaNguoiLam.find((x) => x !== d.nguoiLamId);
+  if (!macDinh) return kq;
+  kq = [...kq.filter((x) => x !== macDinh), macDinh];
+  return kq.slice(-5);
+}
+
 export function laGiamDocHoacQuanTri(hoSo: HoSoQuyen): boolean {
   return hoSo.vaiTro.some((v) => v.code === MA_VAI_TRO_GIAM_DOC || v.code === MA_VAI_TRO_QUAN_TRI);
 }

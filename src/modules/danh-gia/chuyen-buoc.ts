@@ -22,7 +22,7 @@ import { napBanDoCapTren, type BanDoCapTren } from "./cap-tren";
  */
 
 export const NGAY_BAO_CAO_CHO = 14;
-export type LyDoChuyen = "ngung-hoat-dong" | "ban-giao" | "tu-duyet";
+export type LyDoChuyen = "ngung-hoat-dong" | "ban-giao" | "tu-duyet" | "nguoi-lam-nghi";
 
 export interface KetQuaChuyenBuoc {
   viec: number;
@@ -55,6 +55,7 @@ const NHAN_LY_DO: Record<LyDoChuyen, string> = {
   "ngung-hoat-dong": "đã nghỉ việc / bị khóa tài khoản",
   "ban-giao": "đã bàn giao công việc",
   "tu-duyet": "là người làm việc này",
+  "nguoi-lam-nghi": "đã nghỉ việc / bị khóa tài khoản",
 };
 
 /** Đếm các bước đang chờ một người (xem trước ở màn hình bàn giao). */
@@ -218,4 +219,48 @@ export async function goTuDuyet(nc: NguCanh, nguoiLamId: string, bayGio = new Da
     n += 1;
   }
   return n;
+}
+
+/**
+ * QĐ-155 — việc vừa bị TRẢ LẠI (hoặc mở lại) mà người làm đã ngừng hoạt động: chuyển việc cho người nhận bàn
+ * giao đã ghi trên việc (`tasks.handover_to_id`, ghi lúc bàn giao việc đang chờ duyệt) nếu người đó còn hoạt
+ * động; không có thì quản lý trực tiếp của người làm cũ → cấp trên → Giám đốc. Người giao giữ nguyên (QĐ-137).
+ * Người nhận đang đứng trong chuỗi duyệt của việc → cấp đó lên cấp trên của họ (không tự duyệt). Ghi
+ * `approval_transfers` (lý do `nguoi-lam-nghi`) + kiểm toán, báo người nhận. Gọi trong giao dịch đã khóa dòng việc.
+ * Trả người nhận, hoặc null khi người làm còn hoạt động / không tìm được ai.
+ */
+export async function chuyenViecCuaNguoiLamDaNghi(nc: NguCanh, taskId: string, bayGio = new Date()): Promise<string | null> {
+  const v = await nc.tx.task.findUniqueOrThrow({ where: { id: taskId }, select: { id: true, title: true, ownerId: true, assignedBy: true, handoverToId: true, status: true } });
+  if (!["mo", "dang-lam"].includes(v.status)) return null;
+  const bd = await napBanDoCapTren(nc.tx);
+  if (bd.hoatDong.has(v.ownerId)) return null;
+  const sang = v.handoverToId && bd.hoatDong.has(v.handoverToId) && v.handoverToId !== v.ownerId ? v.handoverToId : chon(bd, v.ownerId, []);
+  if (!sang) return null;
+  await nc.tx.task.update({
+    where: { id: v.id },
+    data: {
+      ownerId: sang, handoverToId: null, assignedAt: bayGio,
+      acceptStatus: sang === v.assignedBy ? null : "cho-nhan", acceptedAt: null, declinedAt: null, declineReason: null, updatedBy: nc.hoSo.userId,
+    },
+  });
+  await ghiChuyen(nc, { loai: "task", id: v.id, taskId: v.id, tu: v.ownerId, sang, lyDo: "nguoi-lam-nghi", ghiChu: v.handoverToId === sang ? "Người nhận bàn giao" : "Cấp trên của người làm cũ" });
+  await nc.kiemToan({ action: "chuyen-buoc-duyet", objectType: "task", objectId: v.id, before: { nguoiLam: v.ownerId }, after: { nguoiLam: sang, lyDo: "nguoi-lam-nghi" } });
+  const tenCu = (await banDoTen(nc.tx, [v.ownerId])).get(v.ownerId) ?? "Người làm cũ";
+  await taoThongBao(nc.tx, nc.tenantId, {
+    nguoiNhanId: sang, loai: "viec-duoc-giao", mucDo: "canh-bao",
+    tieuDe: `Được chuyển việc: ${v.title}`.slice(0, 300),
+    noiDung: `${tenCu} đã nghỉ việc / bị khóa tài khoản; việc vừa bị trả lại / mở lại nên chuyển cho bạn làm tiếp. Mở việc để bấm Nhận, hoặc Từ chối kèm lý do.`,
+    duongDan: `/cong-viec/${v.id}`, doiTuong: "task", doiTuongId: v.id, khoaChongTrung: `viec-nguoi-lam-nghi:${v.id}:${sang}:${bayGio.getTime()}`,
+  });
+  // Người nhận đang là người duyệt của chính việc này → cấp đó lên cấp trên của họ.
+  const tuDuyet = await nc.tx.taskApprover.findFirst({ where: { taskId: v.id, approverId: sang }, select: { id: true, level: true } });
+  if (tuDuyet) {
+    const chuoi = (await nc.tx.taskApprover.findMany({ where: { taskId: v.id }, select: { approverId: true } })).map((x) => x.approverId);
+    const len = chon(bd, sang, chuoi);
+    if (len) {
+      await nc.tx.taskApprover.update({ where: { id: tuDuyet.id }, data: { approverId: len } });
+      await ghiChuyen(nc, { loai: "task", id: v.id, taskId: v.id, cap: tuDuyet.level, tu: sang, sang: len, lyDo: "tu-duyet" });
+    }
+  }
+  return sang;
 }
