@@ -147,7 +147,7 @@ async function main() {
 
   // ==================================================================
   console.log("\n— C. Tham số có hiệu lực theo ngày —");
-  const ts0 = await voi(T, kt, (nc) => danhSachThamSo(nc));
+  const ts0 = await voi(T, kt, (nc) => danhSachThamSo(nc, "2026-04-30"));
   dat("LU-11: bộ nạp sẵn hiệu lực chưa xác nhận → băng cảnh báo", ts0.canXacNhan.length >= 8);
   await nemLoi("Nhân sự không nhập được tham số (việc của Kế toán)", "quyen", () => voi(T, hr, (nc) => taoThamSo(nc, LuocDoThamSo.parse({ loai: "thu-viec", hieuLucTu: "2026-01-01", giaTri: { tyLeToiThieu: 85 }, ghiChu: "Thử quyền" }))));
   await nemLoi("Tham số sai lược đồ bị chặn (biểu thuế bậc giảm dần)", "nghiep-vu", () => voi(T, kt, (nc) => taoThamSo(nc, LuocDoThamSo.parse({ loai: "bieu-thue", hieuLucTu: "2026-01-01", giaTri: { bac: [{ den: 10, tyLe: 5 }, { den: 5, tyLe: 10 }, { den: null, tyLe: 20 }] }, ghiChu: "Biểu sai" }))));
@@ -216,7 +216,7 @@ async function main() {
   await nemLoi("…và không gửi duyệt được", "nghiep-vu", () => voi(T, kt, (nc) => guiDuyetKyLuong(nc, k3.id)), "ky-co-loi");
   for (const b of ts0.canXacNhan) await voi(T, kt, (nc) => xacNhanThamSo(nc, b.id));
   await nemLoi("Xác nhận lần hai → 409", "nghiep-vu", () => voi(T, kt, (nc) => xacNhanThamSo(nc, ts0.canXacNhan[0].id)), "da-xac-nhan");
-  dat("Hết băng cảnh báo sau khi xác nhận", (await voi(T, kt, (nc) => danhSachThamSo(nc))).canXacNhan.length === 0);
+  dat("Hết băng cảnh báo sau khi xác nhận", (await voi(T, kt, (nc) => danhSachThamSo(nc, "2026-04-30"))).canXacNhan.length === 0);
   const bo = await chu.payrollParamSet.findFirstOrThrow({ where: { tenantId: T, id: ts0.canXacNhan[0].id } });
   dat("Xác nhận ghi người + thời điểm", bo.confirmedBy === kt && Boolean(bo.confirmedAt));
   await csdlChan("LU-10: bộ tham số chỉ ghi thêm (sửa giá trị)", () => chu.payrollParamSet.update({ where: { id: bo.id }, data: { values: { tyLe: 1 } } }));

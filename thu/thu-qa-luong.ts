@@ -118,6 +118,9 @@ async function main() {
   for (const u of [nvA, nvB, nvC, nvD, tt]) await chu.scheduleAssignment.create({ data: { tenantId: T, userId: u, scheduleId: lich.id, effectiveFrom: NGAY("2026-01-01") } });
   // Người vào làm 16/03: Nhân sự gán lịch TỪ NGÀY VÀO (cách làm tự nhiên).
   await chu.scheduleAssignment.create({ data: { tenantId: T, userId: moi, scheduleId: lich.id, effectiveFrom: NGAY("2026-03-16") } });
+  // Hai ngày lễ thử (thứ Ba): 10/03 trước ngày vào làm của người mới, 24/03 sau ngày vào làm.
+  const LE = ["2026-03-10", "2026-03-24"];
+  for (const d of LE) await chu.holiday.create({ data: { tenantId: T, date: NGAY(d), name: `Lễ QA ${d}` } });
 
   // Tham số: xác nhận mọi bộ nạp sẵn (mốc cố định), hoa hồng 2%.
   await chu.payrollParamSet.updateMany({ where: { tenantId: T, confirmedAt: null }, data: { confirmedBy: kt, confirmedAt: MOC } });
@@ -140,7 +143,7 @@ async function main() {
     for (const ngay of cacNgayTrongThang(2026, 3)) {
       if (ngay < tu) continue;
       const thu = thuTrongTuan(ngay);
-      if (thu === 6) continue;
+      if (thu === 6 || LE.includes(ngay)) continue;
       const v = thu === 5 ? 0.5 : 1;
       await chu.timesheetRow.create({ data: { tenantId: T, timesheetId: bc.id, userId: u, workDate: NGAY(ngay), isAdjustment: false, dayType: "thuong", expectedValue: v, workValue: v, flags: [] } });
     }
@@ -161,9 +164,10 @@ async function main() {
   const vMoi = dMoi.inputs as unknown as DauVaoLuong;
   const rMoi = dMoi.result as unknown as KetQuaLuong;
   dat("Công chuẩn của người mới = công chuẩn CẢ THÁNG (24), không phải số ngày từ lúc gán lịch (13)", vMoi.cong.chuan === 24, `chuẩn ${vMoi.cong.chuan}`);
+  dat("…lễ trả: chỉ 24/03 (10/03 trước ngày vào làm, chưa có lịch, không trả); công thực tế 12 + lễ 1 = 13", vMoi.cong.le === 1 && vMoi.cong.thucTe === 12 && rMoi.congTinhLuong === 13, JSON.stringify(vMoi.cong));
   dat("Lương theo công = 12.000.000 × 13 / 24 = 6.500.000 (trước khi sửa: đủ 12.000.000)", rMoi.luongTheoCong === 6_500_000, String(rMoi.luongTheoCong));
   const rA = (await dong(k3.id, nvA)).result as unknown as KetQuaLuong;
-  dat("Người đủ công cả tháng vẫn đủ lương (không ảnh hưởng)", rA.luongTheoCong === 17_345_678);
+  dat("Người đủ công cả tháng (22 công + 2 lễ) vẫn đủ lương (không ảnh hưởng)", rA.luongTheoCong === 17_345_678 && rA.congTinhLuong === 24);
   dat("Hoa hồng tiền đã thu ngày cuối tháng (31/03) được tính: 30tr × 2%", rA.hoaHong.tien === 600_000);
 
   // ==================================================================
