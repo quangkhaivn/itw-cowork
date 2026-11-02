@@ -76,12 +76,15 @@ export async function tinhChiSo(tx: ClientTenant, userId: string, ma: MaChiSo, k
         SELECT COALESCE(SUM(task_score), 0) AS v FROM tasks
         WHERE owner_id = ${userId}::uuid AND approved_at >= ${k.batDau} AND approved_at < ${k.ketThuc}`);
     case "ty-le-tra-lai": {
-      // Việc của mình có gửi duyệt trong kỳ: bao nhiêu việc bị trả lại ít nhất một lần trong kỳ.
+      // Việc của mình có gửi duyệt trong kỳ: bao nhiêu việc trong số ĐÓ bị trả lại ít nhất một lần trong kỳ.
+      // QA 0.20.0: trước đây tử số đếm cả việc gửi duyệt từ kỳ trước mà bị trả lại kỳ này → tỷ lệ có thể > 100%.
       const r = await tx.$queryRaw<{ tong: unknown; tra: unknown }[]>`
-        SELECT COUNT(DISTINCT l.task_id) FILTER (WHERE l.action = 'gui-duyet') AS tong,
-               COUNT(DISTINCT l.task_id) FILTER (WHERE l.action = 'tra-lai') AS tra
-        FROM task_approval_logs l JOIN tasks t ON t.id = l.task_id
-        WHERE t.owner_id = ${userId}::uuid AND l.created_at >= ${k.batDau} AND l.created_at < ${k.ketThuc}`;
+        WITH l AS (
+          SELECT l.task_id, l.action FROM task_approval_logs l JOIN tasks t ON t.id = l.task_id
+          WHERE t.owner_id = ${userId}::uuid AND l.created_at >= ${k.batDau} AND l.created_at < ${k.ketThuc}
+        ), gui AS (SELECT DISTINCT task_id FROM l WHERE action = 'gui-duyet')
+        SELECT (SELECT COUNT(*) FROM gui) AS tong,
+               (SELECT COUNT(DISTINCT l.task_id) FROM l JOIN gui ON gui.task_id = l.task_id WHERE l.action = 'tra-lai') AS tra`;
       return tyLe(Number(r[0]?.tra ?? 0), Number(r[0]?.tong ?? 0));
     }
     case "ty-le-dung-han": {

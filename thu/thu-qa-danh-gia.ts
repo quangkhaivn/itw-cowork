@@ -346,6 +346,19 @@ async function main() {
   const diem3 = await voiTenant(T, (tx) => tinhChiSo(tx, nvA, "tong-diem-viec", kThang3));
   const diem4 = await voiTenant(T, (tx) => tinhChiSo(tx, nvA, "tong-diem-viec", kThang4));
   dat("Ranh giới nửa đêm giờ VN: duyệt 23:59:59 ngày 31/3 VN tính vào tháng 3, không vào tháng 4", diem3 === 10 && diem4 === 0, `${diem3} / ${diem4}`);
+  // Tỷ lệ trả lại: việc gửi duyệt tháng trước, bị trả lại tháng này + một việc gửi tháng này không bị trả lại → 0%, không phải 100%.
+  const nTl = await nguoi("Người tỷ lệ trả lại QA", "sales", { quanLy: tp });
+  const vX = await chu.task.create({ data: { tenantId: T, title: "QA X", ownerId: nTl, needsApproval: true } });
+  const vY = await chu.task.create({ data: { tenantId: T, title: "QA Y", ownerId: nTl, needsApproval: true } });
+  await chu.taskApprovalLog.createMany({ data: [
+    { tenantId: T, taskId: vX.id, round: 1, action: "gui-duyet", actorId: nTl, createdAt: new Date("2025-05-31T03:00:00Z") },
+    { tenantId: T, taskId: vX.id, round: 1, level: 1, action: "tra-lai", actorId: tp, reason: "Thiếu biên bản", createdAt: new Date("2025-06-02T03:00:00Z") },
+    { tenantId: T, taskId: vY.id, round: 1, action: "gui-duyet", actorId: nTl, createdAt: new Date("2025-06-10T03:00:00Z") },
+  ] });
+  const tlThang6 = await voiTenant(T, (tx) => tinhChiSo(tx, nTl, "ty-le-tra-lai", kyDanhGia("thang", 2025, 6)));
+  dat("DG-52: tỷ lệ việc bị trả lại chỉ xét việc gửi duyệt trong kỳ (0%, không phải 100%)", tlThang6 === 0, String(tlThang6));
+  const tlThang5 = await voiTenant(T, (tx) => tinhChiSo(tx, nTl, "ty-le-tra-lai", kyDanhGia("thang", 2025, 5)));
+  dat("…tháng gửi duyệt mà chưa bị trả lại trong tháng đó: 0%", tlThang5 === 0, String(tlThang5));
   const rong = await nguoi("Người mới QA", "sales", { quanLy: tp });
   const kRong = kyDanhGia("thang", 2026, 1);
   const soRong: Record<string, number | null> = {};
