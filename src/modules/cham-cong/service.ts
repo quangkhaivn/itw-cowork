@@ -218,6 +218,11 @@ export async function chamCongGps(nc: NguCanh, d: DuLieuChamGps, bayGio = new Da
 export async function xemXetLanCham(nc: NguCanh, punchId: string, d: { quyetDinh: "chap-nhan" | "tu-choi"; ghiChu: string | null }) {
   const lan = await nc.tx.attendancePunch.findFirst({ where: { id: punchId }, select: { id: true, userId: true, needsReview: true, punchedAt: true, gpsResult: true } });
   if (!lan || !lan.userId) throw new LoiKhongTimThay("Lần chấm công");
+  // NS-12: KHÔNG tự xem xét — kể cả người có phạm vi duyệt "all" (Nhân sự, Giám đốc). Khác với đơn từ
+  // (NS-21 cho phạm vi all tự duyệt): lần chấm ngoài vùng của chính mình mà tự chấp nhận là tự cho mình công.
+  if (lan.userId === nc.hoSo.userId) {
+    throw new LoiNghiepVu("Không tự xem xét lần chấm công của chính mình — quản lý trực tiếp hoặc Nhân sự khác xem xét.", 403, "khong-tu-duyet");
+  }
   await kiemDuocDuyet(nc, lan.userId, { objectType: "attendance_punch", objectId: punchId });
   if (!lan.needsReview) throw new LoiNghiepVu("Lần chấm này hợp lệ, không cần xem xét.", 422, "khong-can-xem-xet");
   if (d.quyetDinh === "tu-choi" && (!d.ghiChu || d.ghiChu.length < 2)) throw new LoiNghiepVu("Không chấp nhận thì ghi lý do để nhân viên biết.", 422, "thieu-ly-do");
@@ -331,7 +336,11 @@ export async function chamCongCuaToi(nc: NguCanh, bayGio = new Date()) {
 /** Lần chấm cần xem xét trong phạm vi duyệt của người đang xem (chưa có quyết định). */
 export async function lanChamCanXemXet(nc: NguCanh, nguoiIds: string[] | "tat-ca", tu: Date) {
   const ds = await nc.tx.attendancePunch.findMany({
-    where: { needsReview: true, punchedAt: { gte: tu }, ...(nguoiIds !== "tat-ca" && { userId: { in: nguoiIds } }), reviews: { none: {} } },
+    where: {
+      needsReview: true, punchedAt: { gte: tu }, ...(nguoiIds !== "tat-ca" && { userId: { in: nguoiIds } }), reviews: { none: {} },
+      // Không bao giờ hiện lần chấm của chính người xem (NS-12: không tự xem xét).
+      NOT: { userId: nc.hoSo.userId },
+    },
     orderBy: { punchedAt: "desc" },
     take: 200,
     select: {
