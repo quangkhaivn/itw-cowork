@@ -210,7 +210,13 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
   },
   {
     nhan: "Công việc",
-    muc: [{ nhan: "Công việc", href: "/cong-viec", quyen: "task.view", bieuTuong: "cong-viec", tuKhoa: "task viec can lam qua han activity" }],
+    muc: [
+      { nhan: "Công việc", href: "/cong-viec", quyen: "task.view", bieuTuong: "cong-viec", tuKhoa: "task viec can lam qua han activity cho duyet cho nhan" },
+      // 0.20.0 — giao việc mở rộng, báo cáo (BUSINESS_RULES mục 31).
+      { nhan: "Việc của nhóm", href: "/cong-viec/nhom", quyen: "task.view", bieuTuong: "nhom", tuKhoa: "team khoi luong viec qua han cho duyet quan ly" },
+      { nhan: "Mẫu việc & việc định kỳ", href: "/cong-viec/mau", quyen: "task.create", bieuTuong: "thiet-lap", tuKhoa: "template lap lai hang ngay hang tuan hang thang dinh ky" },
+      { nhan: "Báo cáo công việc", href: "/bao-cao-cong-viec", quyen: "danh_gia.view", bieuTuong: "nhat-ky", tuKhoa: "bao cao ngay tuan da lam se lam vuong mac" },
+    ],
   },
   {
     // 0.19.0 — Nhân sự giai đoạn 1 (BUSINESS_RULES mục 30).
@@ -223,6 +229,10 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Hồ sơ nhân sự", href: "/nhan-su/ho-so", quyen: "nhan_su.view", bieuTuong: "nhan-su", tuKhoa: "ho so nhan vien thuc tap hop dong lao dong ma cham cong pin" },
       { nhan: "Máy chấm công", href: "/nhan-su/may-cham-cong", quyen: "nhan_su.view", bieuTuong: "may-cham-cong", tuKhoa: "zkteco van tay adms iclock sn pin chua khop nhap csv" },
       { nhan: "Thiết lập chấm công", href: "/nhan-su/thiet-lap", quyen: "nhan_su.view", bieuTuong: "thiet-lap", tuKhoa: "dia diem ban kinh ca lam lich tuan ngay le loai nghi" },
+      // 0.20.0 — đánh giá, KPI, thực tập.
+      { nhan: "Đánh giá nhân viên", href: "/danh-gia", quyen: "danh_gia.view", bieuTuong: "cham-diem", tuKhoa: "danh gia thang quy kpi xep loai he so thuong chot" },
+      { nhan: "Bộ KPI", href: "/danh-gia/kpi", quyen: ["danh_gia.view", "nhan_su.view"], bieuTuong: "bang-dieu-khien", tuKhoa: "kpi chi tieu trong so muc tieu vi tri" },
+      { nhan: "Thực tập", href: "/thuc-tap", quyen: "danh_gia.view", bieuTuong: "nhan-su", tuKhoa: "sinh vien thuc tap nhat ky tuan phieu danh gia mau truong in" },
     ],
   },
   {
