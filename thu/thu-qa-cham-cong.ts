@@ -569,6 +569,8 @@ async function main() {
     });
     const kq: AnhQuyen = {};
     for (const r of ds) {
+      // `danh_gia.*` (0.20.0) do migration 20261103090001/…0002 cấp, không thuộc migration QĐ-117 — bỏ khỏi phép so.
+      if (r.permission.code.startsWith("danh_gia.")) continue;
       // Giám đốc / Quản trị: chỉ so phần Nhân sự (phần khác đã có từ trước, không thuộc QĐ này).
       if (["ceo", "admin"].includes(r.role.code) && !/^(cham_cong|nhan_su)\./.test(r.permission.code)) continue;
       (kq[r.role.code] ??= []).push(`${r.permission.code}:${r.dataScope}`);

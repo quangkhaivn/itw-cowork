@@ -587,7 +587,9 @@ describe("QA 0.19.0 — quyết định chính sách (QĐ-113 → QĐ-118)", () 
     for (const code of ["nhan-su-hr", "sinh-vien-thuc-tap"]) {
       const dn = VAI_TRO.find((x) => x.code === code)!;
       assert.ok(dn.quyen !== "*");
-      assert.deepEqual([...dsMa(`'${code}'`)].sort(), [...new Set(dn.quyen)].sort(), code);
+      // `danh_gia.*` (0.20.0) do migration 20261103090001 cấp riêng — không thuộc migration QĐ-117.
+      const quyenHr1 = [...new Set(dn.quyen)].filter((q) => !q.startsWith("danh_gia."));
+      assert.deepEqual([...dsMa(`'${code}'`)].sort(), quyenHr1.sort(), code);
     }
     // Phạm vi: HR "all" trừ công việc "own"; Thực tập sinh "own".
     const hrDn = VAI_TRO.find((x) => x.code === "nhan-su-hr")!;
