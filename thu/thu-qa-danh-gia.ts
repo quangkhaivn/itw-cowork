@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { voiTenant } from "../src/lib/db";
@@ -409,6 +411,18 @@ async function main() {
     for (const d of dong) if (d.dataScope !== phamViCuaQuyen(dn, d.permission.code)) lech.push(`${dn.code} ${d.permission.code} ${d.dataScope}≠${phamViCuaQuyen(dn, d.permission.code)}`);
   }
   dat("Seed: quyền danh_gia.* của mọi vai trò dựng sẵn khớp vai-tro.ts (mã + phạm vi)", lech.length === 0, lech.join("; "));
+  // Nâng cấp: doanh nghiệp không được seed lại (demo…) — Giám đốc / Quản trị chưa có danh_gia.*, HR create = all
+  // như migration 20261103090001 để lại. Migration QA 20261103090002 phải đưa về đúng vai-tro.ts.
+  const dgQuyen = await chu.permission.findMany({ where: { module: "danh_gia" }, select: { id: true } });
+  await chu.rolePermission.deleteMany({ where: { role: { tenantId: t2.id, code: { in: ["ceo", "admin"] } }, permissionId: { in: dgQuyen.map((q) => q.id) } } });
+  await chu.rolePermission.updateMany({ where: { role: { tenantId: t2.id, code: "nhan-su-hr" }, permission: { code: "danh_gia.create" } }, data: { dataScope: "all" } });
+  const sqlQa = readFileSync(path.join(__dirname, "../prisma/migrations/20261103090002_qa_danh_gia_quyen/migration.sql"), "utf8")
+    .split("\n").filter((d) => !d.startsWith("--")).join("\n").split(/;\s*\n/).map((x) => x.trim()).filter(Boolean);
+  for (const cau of sqlQa) await chu.$executeRawUnsafe(cau);
+  const gd2Quyen = await chu.rolePermission.count({ where: { role: { tenantId: t2.id, code: { in: ["ceo", "admin"] } }, permission: { module: "danh_gia" } } });
+  const hr2 = await chu.rolePermission.findFirst({ where: { role: { tenantId: t2.id, code: "nhan-su-hr" }, permission: { code: "danh_gia.create" } }, select: { dataScope: true } });
+  dat("Nâng cấp (migration QA): Giám đốc / Quản trị doanh nghiệp không seed lại có đủ 6 quyền danh_gia.*", gd2Quyen === 12, `${gd2Quyen}/12`);
+  dat("Nâng cấp (migration QA): Nhân sự danh_gia.create về phạm vi của mình như vai-tro.ts", hr2?.dataScope === "own", hr2?.dataScope ?? "");
 
   await chu.$disconnect();
   ketLuan("QA 0.20.0 — Nhân sự giai đoạn 2");
