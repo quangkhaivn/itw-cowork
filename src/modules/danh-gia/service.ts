@@ -60,6 +60,11 @@ const soTuyChon = z
       ctx.addIssue({ code: "custom", message: "Mục tiêu là số không âm." });
       return z.NEVER;
     }
+    // Cột numeric(18, 2): vượt thì PostgreSQL báo tràn số (lỗi máy 500) — chặn ở lược đồ (QA 0.20.0).
+    if (n >= 1e15) {
+      ctx.addIssue({ code: "custom", message: "Mục tiêu quá lớn." });
+      return z.NEVER;
+    }
     return n;
   })
   .nullable()
@@ -70,7 +75,8 @@ export const LuocDoChiTieu = z
   .object({
     id: z.uuid().optional(),
     ten: z.string().trim().min(2).max(255),
-    trongSo: z.coerce.number().positive("Trọng số > 0.").max(100),
+    // Cột numeric(5, 2): trọng số < 0,01 làm tròn về 0 và vấp CHECK > 0 (lỗi máy) — chặn ở lược đồ (QA 0.20.0).
+    trongSo: z.coerce.number().min(0.01, "Trọng số tối thiểu 0,01.").max(100),
     nguon: z.enum(["tu-dong", "thu-cong"]),
     chiSo: z.enum(MA_CHI_SO as [MaChiSo, ...MaChiSo[]]).nullable().optional().default(null),
     chieu: z.enum(CHIEU_KPI).optional(),
@@ -161,7 +167,7 @@ export const LuocDoKy = z.object({
   so: z.coerce.number().int().min(1).max(12),
   /** Trống = mọi người có quản lý trực tiếp (không gồm thực tập sinh). */
   nguoiIds: z.array(z.uuid()).max(1000).optional(),
-});
+}).refine((k) => k.loai === "thang" || k.so <= 4, { message: "Quý chỉ từ 1 đến 4.", path: ["so"] });
 
 function kyCuaBanGhi(k: { kind: string; year: number; number: number }) {
   return kyDanhGia(k.kind as LoaiKy, k.year, k.number);
@@ -200,7 +206,13 @@ async function baoQuaThongBao(tx: ClientTenant, tenantId: string, nguoiNhanId: s
 
 export async function taoKyDanhGia(nc: NguCanh, d: z.infer<typeof LuocDoKy>) {
   batBuocQuanLyNhanSu(nc, "evaluation_period");
-  const ky = kyDanhGia(d.loai, d.nam, d.so);
+  let ky: ReturnType<typeof kyDanhGia>;
+  try {
+    ky = kyDanhGia(d.loai, d.nam, d.so);
+  } catch (e) {
+    if (e instanceof RangeError) throw new LoiNghiepVu(e.message, 422, "ky-sai");
+    throw e;
+  }
   const ch = await docCauHinhDanhGia(nc.tx);
   let kyMoi;
   try {
