@@ -165,6 +165,7 @@ model Tenant {
   evaluations          Evaluation[]
   evaluationItems      EvaluationItem[]
   evaluationAdjustments EvaluationAdjustment[]
+  approvalTransfers    ApprovalTransfer[]
   internJournals       InternJournal[]
   internJournalComments InternJournalComment[]
   internEvalTemplates  InternEvalTemplate[]
@@ -4249,13 +4250,44 @@ model TaskExtension {
   decidedBy    String?   @map("decided_by") @db.Uuid
   decidedAt    DateTime? @map("decided_at") @db.Timestamptz(6)
   decisionNote String?   @map("decision_note") @db.Text
+  /// QĐ-135 — người quyết định đề nghị (ghi lúc xin = người giao; chuyển khi người đó nghỉ / bị khóa).
+  /// NULL = đề nghị cũ, người quyết định là người giao (không có thì người tạo).
+  approverId   String?   @map("approver_id") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, taskId])
+  @@index([tenantId, approverId])
   @@map("task_extensions")
+}
+
+/// QĐ-135 — lịch sử chuyển một bước đang chờ (duyệt việc, gia hạn, báo cáo, phiếu đánh giá) sang người
+/// khác khi người giữ bước nghỉ việc / bị khóa / bàn giao. Chỉ ghi thêm.
+model ApprovalTransfer {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  /// task | task_extension | work_report | evaluation
+  objectType String   @map("object_type") @db.VarChar(30)
+  objectId   String   @map("object_id") @db.Uuid
+  /// Việc liên quan (để hiện trong lịch sử việc); NULL với báo cáo / phiếu.
+  taskId     String?  @map("task_id") @db.Uuid
+  level      Int?     @db.SmallInt
+  fromUserId String   @map("from_user_id") @db.Uuid
+  toUserId   String   @map("to_user_id") @db.Uuid
+  /// ngung-hoat-dong | ban-giao | tu-duyet
+  reason     String   @db.VarChar(30)
+  note       String?  @db.Text
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, objectType, objectId])
+  @@index([tenantId, taskId])
+  @@index([tenantId, toUserId])
+  @@map("approval_transfers")
 }
 
 /// Nhật ký tiến độ — chỉ ghi thêm (DG-13). Tệp đính kèm: attachments loại `task_progress`.

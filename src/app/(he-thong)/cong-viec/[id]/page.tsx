@@ -74,7 +74,8 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
           </>
         }
         hanhDong={
-          du.quyen.sua && !khoaThaoTac && (
+          // QĐ-137: người không phải người làm / người giao / quản lý trực tiếp / Giám đốc / Quản trị không đổi trạng thái.
+          du.quyen.sua && !khoaThaoTac && (v.nguoiPhuTrach.id === nd.hoSo.userId || du.quyen.suaChamDiem) && (
             <TacVuChiTietViec
               id={v.id}
               tieuDe={v.tieuDe}
