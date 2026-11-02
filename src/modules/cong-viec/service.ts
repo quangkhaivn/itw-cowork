@@ -572,6 +572,14 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
   if (doiHan && viecDuocGiao) {
     throw new LoiNghiepVu("Việc do người khác giao: muốn đổi hạn thì gửi đề nghị gia hạn để người giao duyệt.", 403, "phai-xin-gia-han");
   }
+  // DG-31 (QA 0.20.0): việc đã chấm điểm thì mọi thứ quyết định điểm / KPI cũng khóa — người làm (điểm chạy
+  // sang người khác), độ khó, cờ duyệt, chuỗi duyệt (ai được điều chỉnh điểm), hạn (tỷ lệ đúng hạn).
+  if (goc.approvedAt) {
+    const doiChuoi = d.nguoiDuyetIds !== undefined && d.nguoiDuyetIds.join() !== (await chuoiDuyetCuaViec(nc.tx, id)).join();
+    if (doiNguoi || doiHan || doiChuoi || (d.doKho !== undefined && d.doKho !== goc.difficulty) || (d.canDuyet !== undefined && d.canDuyet !== goc.needsApproval)) {
+      throw new LoiNghiepVu("Việc đã được duyệt và chấm điểm nên không đổi người làm, độ khó, người duyệt hay hạn được. Sai điểm thì điều chỉnh điểm kèm lý do.", 409, "viec-da-duyet");
+    }
+  }
 
   // Việc cũ (trước 0.17) đã xong mà chưa có kết quả: chỉ được mở lại hoặc ghi kết quả,
   // không lặng lẽ sửa thứ khác cho tới khi có kết quả (CV-05).
