@@ -68,6 +68,8 @@ export interface NguoiPhaiBaoCao {
   quanLyId: string | null;
   phaiTuan: boolean;
   phaiNgay: boolean;
+  /** Ngày vào làm (yyyy-mm-dd, "" = không rõ). Kỳ kết thúc trước ngày này không bắt buộc (QA 0.20.0). */
+  vaoLam: string;
 }
 
 export async function nguoiPhaiBaoCao(tx: ClientTenant, chiNguoi?: string[]): Promise<NguoiPhaiBaoCao[]> {
@@ -78,9 +80,14 @@ export async function nguoiPhaiBaoCao(tx: ClientTenant, chiNguoi?: string[]): Pr
       user: { status: "hoat-dong", isSystem: false },
       ...(chiNguoi && { userId: { in: chiNguoi } }),
     },
-    select: { userId: true, managerId: true, user: { select: { fullName: true } }, department: { select: { dailyReport: true } } },
+    select: { userId: true, managerId: true, hiredAt: true, user: { select: { fullName: true } }, department: { select: { dailyReport: true } } },
   });
-  return ds.map((d) => ({ id: d.userId, hoTen: d.user.fullName, quanLyId: d.managerId, phaiTuan: true, phaiNgay: !!d.department?.dailyReport }));
+  return ds.map((d) => ({ id: d.userId, hoTen: d.user.fullName, quanLyId: d.managerId, phaiTuan: true, phaiNgay: !!d.department?.dailyReport, vaoLam: dateVeNgay(d.hiredAt) }));
+}
+
+/** Kỳ [.., den] có bắt buộc với người này không: kỳ kết thúc trước ngày vào làm thì không (không tính "thiếu"). */
+export function batBuocTrongKy(p: Pick<NguoiPhaiBaoCao, "vaoLam">, den: string): boolean {
+  return !p.vaoLam || den >= p.vaoLam;
 }
 
 // ---------------------------------------------------------------------------
@@ -294,7 +301,7 @@ export async function bangBaoCaoNhom(nc: NguCanh, loai: LoaiBaoCao, ngay?: strin
   const theoNguoi = new Map(ds.map((r) => [r.userId, r]));
   const dong: { nguoiId: string; hoTen: string; batBuoc: boolean; baoCao: ReturnType<typeof sangBaoCao> | null; tinhTrang: string; soNhanXet: number }[] = [];
   for (const p of phai) {
-    const batBuoc = loai === "tuan" ? p.phaiTuan : p.phaiNgay;
+    const batBuoc = (loai === "tuan" ? p.phaiTuan : p.phaiNgay) && batBuocTrongKy(p, ky.den);
     const r = theoNguoi.get(p.id);
     if (!batBuoc && !r) continue;
     dong.push({ nguoiId: p.id, hoTen: p.hoTen, batBuoc, baoCao: r ? sangBaoCao(r, bayGio) : null, tinhTrang: tinhTrangBaoCao(r?.deadlineAt ?? han, r?.submittedAt ?? null, bayGio), soNhanXet: soNx.find((x) => x.reportId === r?.id)?._count._all ?? 0 });
@@ -327,7 +334,7 @@ export async function thongKeBaoCaoTuan(tx: ClientTenant, userId: string, tu: st
   for (let dau = kyBaoCao("tuan", tu).tu; dau <= den; dau = congNgay(dau, 7)) {
     const han = hanBaoCao("tuan", dau, ch);
     const ngayHan = new Date(han.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
-    if (ngayHan < tu || ngayHan > den || han > bayGio) continue;
+    if (ngayHan < tu || ngayHan > den || han > bayGio || !batBuocTrongKy(phai, congNgay(dau, 6))) continue;
     kq.soTuan += 1;
     const r = ds.find((x) => dateVeNgay(x.periodStart) === dau);
     const tt = tinhTrangBaoCao(han, r?.submittedAt ?? null, bayGio);
@@ -362,7 +369,7 @@ export async function quetBaoCao(tenantId: string, bayGio = new Date()): Promise
         const nhac = denLucNhac(han, bayGio, ch.nhacTruocGio);
         const quaHan = bayGio > han;
         if (!nhac && !quaHan) continue;
-        const phai = nguoi.filter((n) => (loai === "tuan" ? n.phaiTuan : n.phaiNgay));
+        const phai = nguoi.filter((n) => (loai === "tuan" ? n.phaiTuan : n.phaiNgay) && batBuocTrongKy(n, ky.den));
         if (phai.length === 0) continue;
         const daNop = new Set(
           (await tx.workReport.findMany({ where: { kind: loai, periodStart: ngayVeDate(ky.tu), status: "da-nop", userId: { in: phai.map((p) => p.id) } }, select: { userId: true } })).map((r) => r.userId),

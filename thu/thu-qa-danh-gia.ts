@@ -19,7 +19,7 @@ import {
   xinGiaHan,
 } from "../src/modules/cong-viec/giao-viec";
 import { LuocDoLapViec } from "../src/modules/cong-viec/mau-lap";
-import { chiTietBaoCao, LuocDoBaoCao, luuBaoCao, nhanXetBaoCao } from "../src/modules/bao-cao-cong-viec/service";
+import { bangBaoCaoNhom, chiTietBaoCao, LuocDoBaoCao, luuBaoCao, nhanXetBaoCao, quetBaoCao, thongKeBaoCaoTuan } from "../src/modules/bao-cao-cong-viec/service";
 import {
   chiTietPhieu,
   chotPhieu,
@@ -43,7 +43,7 @@ import {
   taoMauPhieu,
   taoPhieuThucTap,
 } from "../src/modules/thuc-tap/service";
-import { kyDanhGia, MA_CHI_SO, MAU_PHIEU_MAC_DINH, tongDiemKpi, xepLoai, heSoDungHan, diemViec } from "../src/modules/danh-gia/tinh-toan";
+import { hanBaoCao, kyDanhGia, MA_CHI_SO, MAU_PHIEU_MAC_DINH, tongDiemKpi, xepLoai, heSoDungHan, diemViec } from "../src/modules/danh-gia/tinh-toan";
 import { congNgay } from "../src/modules/cham-cong/tinh-toan";
 import { homNayVN } from "../src/modules/crm/chung";
 import PhieuThucTapIn from "../src/components/danh-gia/PhieuThucTapIn";
@@ -391,6 +391,20 @@ async function main() {
   dat("Phiếu mới chụp mẫu đã sửa (phiên bản 2)", (await voi(T, nvA, (nc) => chiTietPhieuThucTap(nc, ptMoi.id))).phieu.phienBanMau === 2);
   await voi(T, nvA, (nc) => chotPhieuThucTap(nc, ptGiu.id));
   dat("DG-75: vai ứng dụng không sửa phiếu thực tập đã chốt", (await appSua(`UPDATE intern_evaluations SET total_score = 10 WHERE id = '${ptGiu.id}'`)) === "chan");
+
+  // ==================================================================
+  console.log("\n— Báo cáo: người mới vào làm không bị tính thiếu các tuần trước ngày vào làm —");
+  const homNay = homNayVN();
+  const moiVao = await nguoi("Người mới vào QA", "sales", { quanLy: tp, phong: pbKD });
+  await chu.staffProfile.update({ where: { userId: moiVao }, data: { hiredAt: new Date(`${homNay}T00:00:00Z`) } });
+  const tkMoi = await voiTenant(T, (tx) => thongKeBaoCaoTuan(tx, moiVao, congNgay(homNay, -30), homNay));
+  dat("DG-43: thống kê báo cáo tuần không đếm 'thiếu' các tuần trước ngày vào làm", tkMoi.thieu === 0 && tkMoi.soTuan === 0, JSON.stringify(tkMoi));
+  const bangTuanTruoc = await voi(T, tp, (nc) => bangBaoCaoNhom(nc, "tuan", congNgay(homNay, -7)));
+  dat("DG-45: trang nhóm tuần trước không ghi người mới vào là thiếu", !bangTuanTruoc.dong.some((d) => d.nguoiId === moiVao), bangTuanTruoc.dong.find((d) => d.nguoiId === moiVao)?.tinhTrang ?? "");
+  await quetBaoCao(T, new Date(hanBaoCao("tuan", congNgay(homNay, -7)).getTime() + GIO));
+  dat("DG-42: không báo thiếu báo cáo tuần trước ngày vào làm", (await chu.notification.count({ where: { tenantId: T, userId: moiVao, type: "bao-cao-thieu" } })) === 0);
+  const tkCu = await voiTenant(T, (tx) => thongKeBaoCaoTuan(tx, nvB, congNgay(homNay, -30), homNay));
+  dat("…người vào làm trước vẫn bị tính thiếu như cũ", tkCu.soTuan >= 3 && tkCu.thieu === tkCu.soTuan, JSON.stringify(tkCu));
 
   // ==================================================================
   console.log("\n— Đầu vào: ngày sai —");
