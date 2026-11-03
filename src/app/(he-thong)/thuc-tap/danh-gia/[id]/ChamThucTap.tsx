@@ -42,6 +42,12 @@ export default function ChamThucTap({ id, mau, thongTin, diem, nhanXet, tuDong }
                 <td>
                   {t.thang === "10" ? (
                     <input type="number" min={0} max={10} step="0.25" value={dm[t.ma]} onChange={(e) => datDm({ ...dm, [t.ma]: e.target.value })} placeholder="0–10" />
+                  ) : t.thang === "co-khong" ? (
+                    <select value={dm[t.ma]} onChange={(e) => datDm({ ...dm, [t.ma]: e.target.value })}>
+                      <option value="">—</option>
+                      <option value="co">Đạt</option>
+                      <option value="khong">Không đạt</option>
+                    </select>
                   ) : (
                     <select value={dm[t.ma]} onChange={(e) => datDm({ ...dm, [t.ma]: e.target.value })}>
                       <option value="">—</option>

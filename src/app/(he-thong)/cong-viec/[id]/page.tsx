@@ -74,7 +74,8 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
           </>
         }
         hanhDong={
-          du.quyen.sua && !khoaThaoTac && (
+          // QĐ-137: người không phải người làm / người giao / quản lý trực tiếp / Giám đốc / Quản trị không đổi trạng thái.
+          du.quyen.sua && !khoaThaoTac && (v.nguoiPhuTrach.id === nd.hoSo.userId || du.quyen.suaChamDiem) && (
             <TacVuChiTietViec
               id={v.id}
               tieuDe={v.tieuDe}
@@ -326,7 +327,7 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
         </section>
       ) : null}
 
-      {(ls.tienDo.length > 0 || ls.giaHan.length > 0 || ls.nhatKyDuyet.length > 0) && (
+      {(ls.tienDo.length > 0 || ls.giaHan.length > 0 || ls.nhatKyDuyet.length > 0 || ls.chuyenBuoc.length > 0) && (
         <section className="the">
           <div className="dau"><h2>Nhật ký việc</h2></div>
           {ls.tienDo.length > 0 && (
@@ -371,6 +372,19 @@ export default async function TrangChiTietViec({ params, searchParams }: { param
                   <li key={n.id}>
                     {dinhDangNgayGio(n.luc)} — lần {n.vong}{n.cap ? `, cấp ${n.cap}` : ""}: <strong>{NHAN_HANH_DONG[n.hanhDong]}</strong> bởi {n.nguoi}
                     {n.chatLuong ? ` · chất lượng ${n.chatLuong}/5` : ""}{n.diem !== null ? ` · điểm ${n.diem}` : ""}{n.lyDo ? ` · “${n.lyDo}”` : ""}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {ls.chuyenBuoc.length > 0 && (
+            <>
+              <h3>Chuyển bước duyệt</h3>
+              <ul>
+                {ls.chuyenBuoc.map((c) => (
+                  <li key={c.id}>
+                    {dinhDangNgayGio(c.luc)} — {c.lyDo === "nguoi-lam-nghi" ? "Người làm" : c.loai === "task_extension" ? "Quyết định gia hạn" : `Duyệt${c.cap ? ` cấp ${c.cap}` : ""}`}: {c.tu} → <strong>{c.sang}</strong>
+                    {" "}({c.lyDo === "ngung-hoat-dong" ? `${c.tu} nghỉ việc / bị khóa` : c.lyDo === "ban-giao" ? `${c.tu} bàn giao` : c.lyDo === "nguoi-lam-nghi" ? `${c.tu} đã nghỉ, việc bị trả lại / mở lại${c.ghiChu ? ` — ${c.ghiChu.toLowerCase()}` : ""}` : `${c.tu} là người làm việc này`})
                   </li>
                 ))}
               </ul>

@@ -6,6 +6,7 @@ import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { suaNguoiDung } from "@/modules/nguoi-dung/service";
 import { layHoSoQuyen } from "@/lib/phan-quyen";
+import { chuyenBuocChoCuaNguoi, demBuocChoCuaNguoi, goTuDuyet } from "@/modules/danh-gia/chuyen-buoc";
 
 /**
  * Bàn giao khi nhân viên nghỉ việc — BUSINESS_RULES.md mục 21 (KHN-17). QĐ-53. Gồm cả việc marketing của gói M (mục 22).
@@ -81,6 +82,15 @@ export const LOAI_BAN_GIAO: LoaiBanGiao[] = [
     quyenXem: ["task.view"],
     dem: (tx, tu) => tx.task.count({ where: { ownerId: tu, status: { in: VIEC_MO } } }),
     chuyen: async (tx, tu, sang, n) => (await tx.task.updateMany({ where: { ownerId: tu, status: { in: VIEC_MO } }, data: { ownerId: sang, updatedBy: n } })).count,
+  },
+  {
+    // QĐ-155: việc đang chờ duyệt GIỮ người làm cũ (công đã làm, điểm thuộc về họ); chỉ ghi người nhận bàn giao
+    // để khi việc bị trả lại / mở lại thì chuyển cho người này.
+    ma: "viec-cho-duyet",
+    nhan: "Việc đang chờ duyệt (giữ người làm, ghi người nhận để làm tiếp nếu bị trả lại)",
+    quyenXem: ["task.view"],
+    dem: (tx, tu) => tx.task.count({ where: { ownerId: tu, status: "cho-duyet" } }),
+    chuyen: async (tx, tu, sang, n) => (await tx.task.updateMany({ where: { ownerId: tu, status: "cho-duyet" }, data: { handoverToId: sang, updatedBy: n } })).count,
   },
   {
     ma: "bao-gia",
@@ -200,7 +210,10 @@ export async function xemTruocBanGiao(nc: NguCanh, tuId: string) {
   const tu = await docNguoi(nc.tx, tuId);
   const loai = [];
   for (const l of LOAI_BAN_GIAO) loai.push({ ma: l.ma, nhan: l.nhan, so: await l.dem(nc.tx, tuId) });
-  return { nguoi: { id: tu.id, hoTen: tu.fullName, email: tu.email, trangThai: tu.status }, loai, tong: loai.reduce((s, l) => s + l.so, 0) };
+  // QĐ-135: bước đang chờ người này duyệt / chấm — không chuyển cho người nhận bàn giao mà cho quản lý trực
+  // tiếp của người này (không có thì Giám đốc), để người nhận bàn giao không thành người duyệt việc của mình.
+  const buocCho = await demBuocChoCuaNguoi(nc.tx, tuId);
+  return { nguoi: { id: tu.id, hoTen: tu.fullName, email: tu.email, trangThai: tu.status }, loai, tong: loai.reduce((s, l) => s + l.so, 0), buocCho };
 }
 
 export async function banGiao(nc: NguCanh, tuId: string, d: z.infer<typeof LuocDoBanGiao>) {
@@ -223,12 +236,17 @@ export async function banGiao(nc: NguCanh, tuId: string, d: z.infer<typeof LuocD
   const daChuyen: Record<string, number> = {};
   for (const l of LOAI_BAN_GIAO) daChuyen[l.ma] = await l.chuyen(nc.tx, tuId, d.nguoiNhanId, nc.hoSo.userId);
 
+  // QĐ-135: bước duyệt / gia hạn / báo cáo / phiếu đang chờ người bàn giao → quản lý trực tiếp của họ (không
+  // có thì Giám đốc); việc vừa nhận mà người nhận lại đứng trong chuỗi duyệt của chính việc đó → lên cấp trên.
+  const buocDaChuyen = await chuyenBuocChoCuaNguoi(nc, tuId, "ban-giao");
+  const goTuDuyetSo = await goTuDuyet(nc, d.nguoiNhanId);
+
   await nc.kiemToan({
     action: "ban-giao",
     objectType: "user",
     objectId: tuId,
     before: { nguoiPhuTrach: tu.email },
-    after: { nguoiNhan: nhan.email, nguoiNhanId: nhan.id, daChuyen, khoaTaiKhoan: d.khoaTaiKhoan, ghiChu: d.ghiChu ?? null, thieuQuyenXem },
+    after: { nguoiNhan: nhan.email, nguoiNhanId: nhan.id, daChuyen, buocDaChuyen, goTuDuyet: goTuDuyetSo, khoaTaiKhoan: d.khoaTaiKhoan, ghiChu: d.ghiChu ?? null, thieuQuyenXem },
   });
   await nc.suKien({ eventType: SU_KIEN.USER_HANDOVER, objectType: "user", objectId: tuId, payload: { sang: nhan.id, daChuyen } });
 
@@ -237,5 +255,5 @@ export async function banGiao(nc: NguCanh, tuId: string, d: z.infer<typeof LuocD
     await suaNguoiDung(nc, tuId, { trangThai: "ngung-hoat-dong" });
     daKhoa = true;
   }
-  return { tu: tu.id, sang: nhan.id, daChuyen, tong: Object.values(daChuyen).reduce((s, n) => s + n, 0), daKhoa, thieuQuyenXem };
+  return { tu: tu.id, sang: nhan.id, daChuyen, tong: Object.values(daChuyen).reduce((s, n) => s + n, 0), daKhoa, thieuQuyenXem, buocDaChuyen, goTuDuyet: goTuDuyetSo };
 }

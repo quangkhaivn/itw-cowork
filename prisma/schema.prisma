@@ -165,6 +165,7 @@ model Tenant {
   evaluations            Evaluation[]
   evaluationItems        EvaluationItem[]
   evaluationAdjustments  EvaluationAdjustment[]
+  approvalTransfers      ApprovalTransfer[]
   internJournals         InternJournal[]
   internJournalComments  InternJournalComment[]
   internEvalTemplates    InternEvalTemplate[]
@@ -184,7 +185,6 @@ model Tenant {
   timesheets             Timesheet[]
   timesheetRows          TimesheetRow[]
   timesheetFeedback      TimesheetFeedback[]
-  // 0.21.0 — Nhân sự giai đoạn 3: tính lương (BUSINESS_RULES mục 32).
   salaryAllowanceTypes   SalaryAllowanceType[]
   salaryProfiles         SalaryProfile[]
   salaryDependents       SalaryDependent[]
@@ -893,6 +893,9 @@ model Task {
   taskScore            Decimal?  @map("task_score") @db.Decimal(6, 2)
   /// Việc sinh từ vướng mắc của một báo cáo (DG-44).
   sourceReportId       String?   @map("source_report_id") @db.Uuid
+  /// QĐ-155 — người nhận bàn giao của việc đang chờ duyệt (người làm cũ giữ việc + điểm); dùng khi việc bị
+  /// trả lại / mở lại mà người làm đã ngừng hoạt động.
+  handoverToId         String?   @map("handover_to_id") @db.Uuid
 
   tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner            User                  @relation("ViecPhuTrach", fields: [ownerId], references: [id], onDelete: Restrict)
@@ -4258,13 +4261,44 @@ model TaskExtension {
   decidedBy    String?   @map("decided_by") @db.Uuid
   decidedAt    DateTime? @map("decided_at") @db.Timestamptz(6)
   decisionNote String?   @map("decision_note") @db.Text
+  /// QĐ-135 — người quyết định đề nghị (ghi lúc xin = người giao; chuyển khi người đó nghỉ / bị khóa).
+  /// NULL = đề nghị cũ, người quyết định là người giao (không có thì người tạo).
+  approverId   String?   @map("approver_id") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, taskId])
+  @@index([tenantId, approverId])
   @@map("task_extensions")
+}
+
+/// QĐ-135 — lịch sử chuyển một bước đang chờ (duyệt việc, gia hạn, báo cáo, phiếu đánh giá) sang người
+/// khác khi người giữ bước nghỉ việc / bị khóa / bàn giao. Chỉ ghi thêm.
+model ApprovalTransfer {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  /// task | task_extension | work_report | evaluation
+  objectType String   @map("object_type") @db.VarChar(30)
+  objectId   String   @map("object_id") @db.Uuid
+  /// Việc liên quan (để hiện trong lịch sử việc); NULL với báo cáo / phiếu.
+  taskId     String?  @map("task_id") @db.Uuid
+  level      Int?     @db.SmallInt
+  fromUserId String   @map("from_user_id") @db.Uuid
+  toUserId   String   @map("to_user_id") @db.Uuid
+  /// ngung-hoat-dong | ban-giao | tu-duyet | nguoi-lam-nghi (QĐ-155: chuyển người làm)
+  reason     String   @db.VarChar(30)
+  note       String?  @db.Text
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, objectType, objectId])
+  @@index([tenantId, taskId])
+  @@index([tenantId, toUserId])
+  @@map("approval_transfers")
 }
 
 /// Nhật ký tiến độ — chỉ ghi thêm (DG-13). Tệp đính kèm: attachments loại `task_progress`.
@@ -4314,34 +4348,37 @@ model TaskTemplate {
 
 /// Việc định kỳ (DG-07): worker sinh mỗi ngày, chống trùng (lịch, ngày, người).
 model TaskRecurrence {
-  id            String    @id @default(uuid()) @db.Uuid
-  tenantId      String    @map("tenant_id") @db.Uuid
-  name          String    @db.VarChar(255)
-  templateId    String?   @map("template_id") @db.Uuid
-  title         String    @db.VarChar(255)
-  description   String?   @db.Text
-  difficulty    Int       @default(3) @db.SmallInt
-  priority      String    @default("trung-binh") @db.VarChar(20)
-  needsApproval Boolean   @default(false) @map("needs_approval")
-  checklist     Json      @default("[]")
-  approvalChain Json      @default("[]") @map("approval_chain")
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  name               String    @db.VarChar(255)
+  templateId         String?   @map("template_id") @db.Uuid
+  title              String    @db.VarChar(255)
+  description        String?   @db.Text
+  difficulty         Int       @default(3) @db.SmallInt
+  priority           String    @default("trung-binh") @db.VarChar(20)
+  needsApproval      Boolean   @default(false) @map("needs_approval")
+  checklist          Json      @default("[]")
+  approvalChain      Json      @default("[]") @map("approval_chain")
   /// ngay | tuan | thang
-  frequency     String    @db.VarChar(10)
+  frequency          String    @db.VarChar(10)
   /// Tuần: các thứ (1 = thứ Hai … 7 = Chủ nhật).
-  weekdays      Int[]     @default([])
+  weekdays           Int[]     @default([])
   /// Tháng: ngày trong tháng (1–31; tháng ngắn hơn → ngày cuối tháng).
-  monthDay      Int?      @map("month_day") @db.SmallInt
+  monthDay           Int?      @map("month_day") @db.SmallInt
   /// Hạn trong ngày sinh việc, phút theo giờ VN (mặc định 17:00).
-  dueMinute     Int       @default(1020) @map("due_minute") @db.SmallInt
-  assigneeIds   String[]  @map("assignee_ids") @db.Uuid
-  startDate     DateTime  @map("start_date") @db.Date
-  endDate       DateTime? @map("end_date") @db.Date
-  lastRunDate   DateTime? @map("last_run_date") @db.Date
-  status        String    @default("hoat-dong") @db.VarChar(30)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy     String    @map("created_by") @db.Uuid
-  updatedBy     String?   @map("updated_by") @db.Uuid
+  dueMinute          Int       @default(1020) @map("due_minute") @db.SmallInt
+  assigneeIds        String[]  @map("assignee_ids") @db.Uuid
+  startDate          DateTime  @map("start_date") @db.Date
+  endDate            DateTime? @map("end_date") @db.Date
+  lastRunDate        DateTime? @map("last_run_date") @db.Date
+  /// QĐ-154 — worker phát hiện chuỗi duyệt của lịch vi phạm luật (không sinh việc); NULL = bình thường.
+  invalidChainAt     DateTime? @map("invalid_chain_at") @db.Timestamptz(6)
+  invalidChainReason String?   @map("invalid_chain_reason") @db.Text
+  status             String    @default("hoat-dong") @db.VarChar(30)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy          String    @map("created_by") @db.Uuid
+  updatedBy          String?   @map("updated_by") @db.Uuid
 
   tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   template TaskTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)

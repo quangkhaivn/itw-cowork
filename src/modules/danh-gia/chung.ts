@@ -1,6 +1,7 @@
 import type { NguCanh } from "@/lib/api";
 import type { ClientTenant } from "@/lib/db";
-import { coQuyen, idNguoiTrongPhamVi } from "@/lib/phan-quyen";
+import { coQuyen, idNguoiTrongPhamVi, type HoSoQuyen } from "@/lib/phan-quyen";
+import { laGiamDoc, napBanDoCapTren } from "./cap-tren";
 import { luocDoGiaTri, timMuc } from "@/modules/cau-hinh/danh-muc";
 import type { BangXepLoai, CauHinhBaoCao, CauHinhDungHan } from "./tinh-toan";
 
@@ -30,6 +31,8 @@ const KHOA = {
   heSoB: "danh_gia.he_so_thuong_b",
   heSoC: "danh_gia.he_so_thuong_c",
   heSoD: "danh_gia.he_so_thuong_d",
+  truongPhongDuocChot: "danh_gia.truong_phong_duoc_chot",
+  giamDocPhaiBaoCao: "bao_cao.giam_doc_phai_bao_cao",
 } as const;
 
 export type CauHinhDanhGia = { -readonly [K in keyof typeof KHOA]: number };
@@ -87,15 +90,23 @@ export async function thucTapSinhCuaToi(tx: ClientTenant, userId: string): Promi
 }
 
 /**
- * Người mà người đang thao tác được XEM đánh giá / báo cáo / nhật ký: phạm vi `danh_gia.view` + cấp dưới
- * trực tiếp + thực tập sinh mình hướng dẫn + chính mình. Không có `danh_gia.view` → không thấy gì (kể cả
- * của mình) — trợ lý AI rơi vào đây.
+ * Người mà `hoSo` được XEM đánh giá / báo cáo / nhật ký: phạm vi `danh_gia.view` + cấp dưới trực tiếp +
+ * người mình là quản lý hiệu lực (quản lý của họ đã nghỉ, hoặc họ không có quản lý mà mình là Giám đốc —
+ * QĐ-132 / QĐ-135) + thực tập sinh mình hướng dẫn + chính mình. Không có `danh_gia.view` → không thấy gì
+ * (kể cả của mình) — trợ lý AI rơi vào đây.
  */
-export async function nguoiXemDuocDanhGia(nc: NguCanh): Promise<string[] | "tat-ca"> {
-  if (!coQuyen(nc.hoSo, "danh_gia.view")) return [];
-  const pv = await idNguoiTrongPhamVi(nc.tx, nc.hoSo, "danh_gia.view");
+export async function nguoiXemDuocDanhGiaCua(tx: ClientTenant, hoSo: HoSoQuyen): Promise<string[] | "tat-ca"> {
+  if (!coQuyen(hoSo, "danh_gia.view")) return [];
+  const pv = await idNguoiTrongPhamVi(tx, hoSo, "danh_gia.view");
   if (pv === "tat-ca") return "tat-ca";
-  return [...new Set([...pv, nc.hoSo.userId, ...(await capDuoi(nc.tx, nc.hoSo.userId)), ...(await thucTapSinhCuaToi(nc.tx, nc.hoSo.userId))])];
+  const bd = await napBanDoCapTren(tx);
+  const hieuLuc = [...bd.quanLy.keys()].filter((id) => bd.quanLyHieuLuc(id) === hoSo.userId);
+  const phieuGan = (await tx.evaluation.findMany({ where: { managerId: hoSo.userId, status: { not: "da-chot" } }, select: { userId: true } })).map((x) => x.userId);
+  return [...new Set([...pv, hoSo.userId, ...(await capDuoi(tx, hoSo.userId)), ...hieuLuc, ...phieuGan, ...(await thucTapSinhCuaToi(tx, hoSo.userId))])];
+}
+
+export async function nguoiXemDuocDanhGia(nc: NguCanh): Promise<string[] | "tat-ca"> {
+  return nguoiXemDuocDanhGiaCua(nc.tx, nc.hoSo);
 }
 
 export async function xemDuocDanhGiaCua(nc: NguCanh, userId: string): Promise<boolean> {
@@ -111,20 +122,44 @@ export async function locNguoiDanhGia(nc: NguCanh): Promise<{ userId?: { in: str
 
 /**
  * Được CHẤM (quản lý chấm chỉ tiêu tay, nhận xét báo cáo, chuyển vướng mắc thành việc) người `userId`:
- * quản lý trực tiếp, hoặc `danh_gia.update` mà người đó trong phạm vi. Không ai tự chấm mình.
+ * quản lý trực tiếp, **quản lý hiệu lực** (QĐ-132: người không có quản lý → Giám đốc; quản lý đã nghỉ →
+ * cấp trên tiếp theo), người được giao bước chấm (`nguoiGanId`, ví dụ `evaluations.manager_id` sau khi
+ * chuyển — QĐ-135), hoặc `danh_gia.update` mà người đó trong phạm vi. Không ai tự chấm mình.
  */
-export async function chamDuoc(nc: NguCanh, userId: string): Promise<boolean> {
+export async function chamDuoc(nc: NguCanh, userId: string, nguoiGanId?: string | null): Promise<boolean> {
   if (userId === nc.hoSo.userId) return false;
+  if (nguoiGanId && nguoiGanId === nc.hoSo.userId) return true;
   const hs = await nc.tx.staffProfile.findFirst({ where: { userId }, select: { managerId: true } });
   if (hs?.managerId === nc.hoSo.userId) return true;
+  if ((await napBanDoCapTren(nc.tx)).quanLyHieuLuc(userId) === nc.hoSo.userId) return true;
   if (!coQuyen(nc.hoSo, "danh_gia.update")) return false;
   const pv = await idNguoiTrongPhamVi(nc.tx, nc.hoSo, "danh_gia.update");
   return pv === "tat-ca" || pv.includes(userId);
 }
 
-/** Được CHỐT phiếu của `userId`: `danh_gia.approve` trong phạm vi; không ai tự chốt phiếu của mình. */
-export async function chotDuoc(nc: NguCanh, userId: string): Promise<boolean> {
+/** `danh_gia.approve` mà `userId` nằm trong phạm vi (không gồm chính mình). */
+async function coQuyenDuyetDanhGiaTrongPhamVi(nc: NguCanh, userId: string): Promise<boolean> {
   if (userId === nc.hoSo.userId || !coQuyen(nc.hoSo, "danh_gia.approve")) return false;
   const pv = await idNguoiTrongPhamVi(nc.tx, nc.hoSo, "danh_gia.approve");
   return pv === "tat-ca" || pv.includes(userId);
+}
+
+/**
+ * Được CHỐT / điều chỉnh phiếu đánh giá của `userId` (QĐ-133): mặc định **chỉ Giám đốc** (vai trò `ceo`
+ * có `danh_gia.approve`). Cấu hình `danh_gia.truong_phong_duoc_chot` = 1 thì người có `danh_gia.approve`
+ * mà `userId` trong phạm vi cũng chốt được. Không ai tự chốt phiếu của mình.
+ */
+export async function chotDuoc(nc: NguCanh, userId: string, cauHinh?: Pick<CauHinhDanhGia, "truongPhongDuocChot">): Promise<boolean> {
+  if (!(await coQuyenDuyetDanhGiaTrongPhamVi(nc, userId))) return false;
+  if (laGiamDoc(nc.hoSo)) return true;
+  const ch = cauHinh ?? (await docCauHinhDanhGia(nc.tx));
+  return ch.truongPhongDuocChot === 1;
+}
+
+/**
+ * Được điều chỉnh ĐIỂM VIỆC (DG-32) của người làm `userId` ngoài người duyệt cấp cuối: `danh_gia.approve`
+ * trong phạm vi (trưởng phòng, Giám đốc) — luật 0.20.0 giữ nguyên, không theo cấu hình chốt phiếu.
+ */
+export async function dieuChinhDiemViecDuoc(nc: NguCanh, userId: string): Promise<boolean> {
+  return coQuyenDuyetDanhGiaTrongPhamVi(nc, userId);
 }

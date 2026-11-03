@@ -33,11 +33,11 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 32 (LU-01 → LU-63). Quyết đ
 - Bài thử `thu:luong` không còn phụ thuộc ngày thật (danh sách tham số cần xác nhận lấy theo ngày cố định — trước đây sẽ hỏng khi có bộ tham số nạp sẵn mới hiệu lực sau ngày chạy).
 - Bộ thử mới `npm run thu:qa-luong` (nối cuối `thu:tich-hop`): hai lỗi trên + IDOR qua mọi API lương với nhân viên / thực tập sinh / trưởng phòng / trợ lý AI; 2 lớp bắt buộc trên từng đường (cả tắt 2 lớp giữa phiên); trường lương không lọt sang danh sách người dùng / hồ sơ nhân sự; người tính không duyệt / khóa (máy chủ + CSDL); đổi hồ sơ, tham số, người phụ thuộc lúc chờ duyệt không đổi ảnh chụp; duyệt đôi, khóa – trả lại đồng thời; bất biến sau khóa qua SQL `cowork_app` (chuyển dòng sang kỳ nháp, thêm dòng / khoản, lùi trạng thái, đã chi kèm sửa, TRUNCATE); nhật ký xem cho xuất bảng lương / ngân hàng / bản in / kiểm lại / hồ sơ; chèn công thức (tab, CR, @, +) ở CSV và Excel, chèn XML vào tên, tổng file ngân hàng = tổng thực lĩnh, xmllint; không số lương nào trong nhật ký / sự kiện / thông báo / hàng chờ thư; RLS 8 bảng giữa hai doanh nghiệp; quyền `luong.*` trong CSDL khớp `vai-tro.ts`.
 
-## 0.20.0 (chưa phát hành) — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
+## 0.20.0 — 03/11/2026 — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
 
-**Chưa triển khai lên máy thật.** Hai migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`), chạy lại `prisma/rls.sql` (6 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
+**Chưa triển khai lên máy thật.** Năm migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`, `20261103090003_danh_gia_chinh_sach`, `20261103090004_danh_gia_giao_viec_nguoi_nghi`, `20261103090005_danh_gia_lap_chuoi_sai`), chạy lại `prisma/rls.sql` (7 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
 
-Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết định QĐ-119 → QĐ-130. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
+Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-85). Quyết định QĐ-119 → QĐ-140, QĐ-154, QĐ-155. Hướng dẫn: `docs/HUONG-DAN-DANH-GIA.md`.
 
 ### Thêm
 - **Giao việc mở rộng**: độ khó 1–5; cờ **cần duyệt** (mặc định bật khi giao cho người khác) + chuỗi người duyệt (mặc định người giao, tối đa 5 cấp, không ai tự duyệt); người được giao **Nhận / Từ chối kèm lý do**; nhắc người giao khi quá hạn nhận; **xin gia hạn** → người giao duyệt (giữ lịch sử, hạn ban đầu); **mẫu việc**; **việc định kỳ** ngày / tuần / tháng do worker sinh (không trùng); **giao nhiều người** (mỗi người một việc, chung nhóm). Thẻ "Chờ tôi duyệt", "Chờ tôi nhận"; trang **Việc của nhóm**.
@@ -67,6 +67,36 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 31 (DG-01 → DG-82). Quyết đ
 - Nhận / từ chối được việc người giao **đã hủy** (DG-03).
 - Lỗi máy 500 thay vì lỗi dữ liệu nhập: mở **kỳ quý số 5–12**, **trọng số KPI < 0,01**, **mục tiêu ≥ 10^15**; **ngày không có thật** ở nhật ký / phiếu thực tập / việc định kỳ (13/45 → 500; 30/02 lặng lẽ thành 02/03); giờ hạn việc định kỳ 25:99 lặng lẽ thành 17:00.
 - Bộ thử mới `npm run thu:qa-danh-gia` (nối cuối `thu:tich-hop`): các lỗi trên + không ai tự duyệt / chấm / chốt / điều chỉnh (kể cả Giám đốc, Quản trị), Nhân sự không chốt, IDOR giữa phòng / doanh nghiệp, RLS 19 bảng qua vai ứng dụng, bất biến qua `cowork_app`, đồng thời (nhận / từ chối, duyệt / trả lại, hai điều chỉnh), biên điểm và xếp loại, nửa đêm giờ VN, 11 chỉ số với dữ liệu rỗng, mẫu phiếu độc hại / cực lớn / sửa sau khi tạo phiếu.
+
+### Chính sách sau QA (QĐ-131 → QĐ-140, điều phối quyết thay Giám đốc theo hướng an toàn)
+- **Migration mới** `20261103090003_danh_gia_chinh_sach` (chạy lại `prisma/rls.sql` — bảng chỉ ghi thêm mới `approval_transfers`): cột `task_extensions.approver_id`, trigger người giao ghi một lần, trigger khóa kỳ đã có phiếu chốt.
+- **Trình soạn mẫu phiếu thực tập dạng biểu mẫu** (QĐ-131): thêm / xóa / sắp xếp ô thông tin, phần, tiêu chí; thang điểm 10 / chữ / **có–không**; trọng số; nguồn tự động; ô nhận xét, ô ký; **xem trước bản in**; mã tự sinh; giữ chế độ JSON nâng cao.
+- **Người không có quản lý trực tiếp vẫn báo cáo và được đánh giá** — Giám đốc nhận, xét, chấm (QĐ-132). Giám đốc không phải báo cáo trừ khi bật Cấu hình.
+- **Chốt phiếu đánh giá mặc định chỉ Giám đốc** (QĐ-133); thông báo "chờ chốt" gửi Giám đốc. Cấu hình cho phép trưởng phòng chốt trong phạm vi.
+- **Người duyệt nghỉ việc / bị khóa / bàn giao** (QĐ-135): bước duyệt việc, gia hạn, báo cáo, phiếu đang chờ tự chuyển cho quản lý trực tiếp của họ (không có thì Giám đốc), không ai tự duyệt; lịch sử chuyển trên việc; màn hình bàn giao hiện trước số bước.
+- **Giới hạn đổi thuộc tính chấm điểm** (QĐ-137): chỉ người giao / quản lý trực tiếp / Giám đốc / Quản trị đổi người làm, độ khó, cờ duyệt, người duyệt, hạn; **người giao ghi một lần**.
+- **Báo cáo ngày không bắt buộc vào ngày không phải làm** (QĐ-138): theo lịch làm việc, ngày lễ, nghỉ phép cả ngày; phiếu đánh giá thêm thống kê báo cáo ngày.
+- **Thông báo "đã duyệt" chỉ kèm điểm khi người nhận được xem đánh giá** (QĐ-139).
+- **Kỳ đánh giá**: sửa loại kỳ / tháng / quý ở trang kỳ (Nhân sự); kỳ đã có phiếu chốt → 409 + trigger CSDL (QĐ-140).
+- Việc định kỳ mặc định không cần duyệt (QĐ-136, đã có — thêm bài thử); mọi ngưỡng đánh giá / báo cáo là khóa Cấu hình (QĐ-134).
+- Cấu hình mới: `danh_gia.truong_phong_duoc_chot` (0), `bao_cao.giam_doc_phai_bao_cao` (0).
+- **Thay đổi đáng lưu ý**: Quản trị không còn chốt phiếu đánh giá; trưởng phòng không chốt khi chưa bật Cấu hình; người có `task.update` toàn công ty (Marketing, Kho, Kế toán…) không còn đổi trạng thái / người làm / hạn việc của người khác; chuyển việc không đổi người giao.
+- Kiểm thử: `thu/don-vi/danh-gia-chinh-sach.test.ts` (10 bài: quản lý hiệu lực, chuỗi cấp trên, ngày phải báo cáo, mã tự sinh, sắp xếp, kiểm mẫu soạn, thang có–không); `thu:qa-danh-gia` 92 → 166 kiểm tra (hai đường tấn công QĐ-137, trigger người giao, chuyển bước khi khóa / bàn giao, Giám đốc nhận báo cáo, chốt chỉ Giám đốc, ngày lễ / nghỉ phép / Chủ nhật, thông báo không lộ điểm, khóa kỳ qua `cowork_app` và chủ sở hữu).
+
+### Sửa sau kiểm thử độc lập vòng 2 (QA 0.20.0 v2, sau QĐ-131 → QĐ-140)
+- **Sửa kỳ (QĐ-140) không tính lại số liệu phiếu chưa chốt**: phiếu chốt bằng số liệu / mục tiêu của khoảng ngày cũ (tháng 10 → quý 3 vẫn giữ thực tế 0 và mục tiêu tháng). Nay sửa kỳ tính lại ngay; chốt khóa dòng kỳ trước nên không chạy chéo với sửa kỳ.
+- **Chuyển bước (QĐ-135) dùng danh sách đọc trước khi khóa**: khóa tài khoản đúng lúc người đó đang duyệt → việc vừa duyệt xong bị thay người duyệt cấp cuối (người mới được điều chỉnh điểm), ghi chuyển bước và báo "bạn thành người duyệt" rác; đề nghị gia hạn vừa quyết thì cả lần khóa tài khoản hỏng (trigger bất biến). Nay đọc lại sau khi khóa.
+- **Thang Có / Không (QĐ-131)** nhận "toString" / "__proto__" / "valueOf" → điểm trống mà không báo thiếu, phiếu chốt được. Nay chỉ nhận `co` / `khong`.
+- **QĐ-137**: người có `task.update` (không phải người giao / quản lý trực tiếp / Giám đốc / Quản trị) sửa tiêu đề việc bị từ chối là tự "giao lại" việc (xóa lý do từ chối, về chờ nhận, báo người làm). Nay chỉ người được đổi thuộc tính chấm điểm mới gửi lại.
+- Diễn tập nâng cấp từ `origin/release/0.19` có dữ liệu mẫu (`itw`, `demo`) + việc cũ có / chưa có người giao: quyền khớp `vai-tro.ts` ở cả hai doanh nghiệp, RLS 20/20 bảng, chuyển người làm việc cũ giữ người giao, việc hệ thống cũ nhận người giao lần đầu, bàn giao + khóa trưởng phòng demo chuyển bước cho Giám đốc, Giám đốc demo mở kỳ / chấm / chốt.
+
+### Chính sách sau QA vòng 2 (QĐ-154, QĐ-155)
+- **Migration mới** `20261103090004_danh_gia_giao_viec_nguoi_nghi`: cột `tasks.handover_to_id`, lý do chuyển `nguoi-lam-nghi`.
+- **Người duyệt khi TẠO việc giao cho người khác** (QĐ-154, DG-26): QĐ-137 mới chặn đường *sửa*; đường *tạo* vẫn cho nhân viên có `task.create` toàn công ty (Marketing, Kho, Kế toán, CSKH) tạo việc / lịch định kỳ giao cho đồng nghiệp, tự đặt mình làm người duyệt rồi chấm điểm. Nay cấp cuối phải là cấp trên của người làm hoặc Giám đốc / Quản trị; đồng nghiệp ngang cấp không tự đứng trong chuỗi (403 `tu-dat-nguoi-duyet` / `nguoi-duyet-cuoi`); chuỗi mặc định khi đồng nghiệp giao = quản lý trực tiếp của người làm (không có → Giám đốc). Áp cho tạo đơn, giao nhiều người, mẫu việc (chuẩn hóa), lịch định kỳ (kiểm lúc lập; lúc sinh lịch cũ vi phạm thì không sinh), sửa chuỗi sau khi tạo.
+- **Việc chờ duyệt của người đã nghỉ** (QĐ-155, DG-85): bàn giao giữ người làm cũ cho việc đang chờ duyệt (điểm thuộc về họ) nhưng ghi người nhận bàn giao (màn hình bàn giao thêm dòng "Việc đang chờ duyệt"); bị trả lại / mở lại mà người làm đã nghỉ → chuyển cho người nhận bàn giao, không có thì quản lý trực tiếp → Giám đốc; người giao giữ nguyên; ghi lịch sử, báo người nhận.
+- **QĐ-154 bổ sung**: việc **tự tạo** cần duyệt cũng phải có người duyệt cấp cuối là cấp trên của mình / Giám đốc / Quản trị (hai đồng nghiệp không tự tạo việc rồi chấm chéo cho nhau); bật cần duyệt mà để trống người duyệt → quản lý trực tiếp. Lịch định kỳ cũ vi phạm: màn hình hiện **"Ngừng sinh — chuỗi duyệt không hợp lệ"** + nút *Sửa chuỗi duyệt*; người lập lịch và quản lý của họ nhận thông báo một lần (migration `20261103090005_danh_gia_lap_chuoi_sai`).
+- **Thay đổi đáng lưu ý**: đồng nghiệp ngang cấp giao việc không còn mặc định là người duyệt; chuỗi duyệt gửi qua API có cấp cuối không phải cấp trên của người làm / Giám đốc / Quản trị bị 403.
+- Kiểm thử: `thu/don-vi/danh-gia-chinh-sach.test.ts` thêm 2 bài (kiểm chuỗi gửi lên, chuẩn hóa chuỗi tự động); `thu:qa-danh-gia` 181 → 223 kiểm tra.
 
 ## 0.19.0 — 02/11/2026 — Nhân sự, giai đoạn 1: chấm công
 

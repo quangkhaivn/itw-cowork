@@ -14,9 +14,11 @@ import { batBuocThayLead } from "@/modules/lead/service";
 import { taoThongBao } from "@/modules/thong-bao/service";
 import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { nguoiXemDuocDanhGia } from "@/modules/danh-gia/chung";
+import { laGiamDocHoacQuanTri } from "@/modules/danh-gia/cap-tren";
+import { chuyenViecCuaNguoiLamDaNghi } from "@/modules/danh-gia/chuyen-buoc";
 import { TOI_DA_CAP_DUYET, TOI_DA_NGUOI_MOT_LAN_GIAO } from "@/modules/danh-gia/tinh-toan";
 import { DO_DAI_KET_QUA_TOI_THIEU, kiemTraTruocKhiXong, type KetQuaKiemTra } from "./kiem-tra";
-import { baoChoDuyet, chuoiDuyetCuaViec, dungChuoiDuyetChoViec, ghiNhatKyDuyet, ghiChuoiDuyet, kiemNguoiDuyet, mauViecDung } from "./duyet";
+import { baoChoDuyet, chuoiDuyetCuaViec, chuoiDuyetTuDong, ghiNhatKyDuyet, ghiChuoiDuyet, kiemChuoiDuyetKhiGiao, kiemNguoiDuyet, mauViecDung } from "./duyet";
 
 /**
  * Công việc — việc SẮP làm, có hạn ("Activity" trong prompt). Luật CV-01 → CV-11.
@@ -303,7 +305,8 @@ export async function danhSachViec(nc: NguCanh, boLoc: BoLocViec) {
 export async function dieuKienXemViec(nc: NguCanh): Promise<Prisma.TaskWhereInput> {
   const pv = await locTheoPhamVi(nc, "task.view");
   if (!pv.ownerId) return {};
-  return { OR: [pv, { assignedBy: nc.hoSo.userId }, { approvers: { some: { approverId: nc.hoSo.userId } } }] };
+  // QĐ-135: người nhận bàn giao bước quyết định gia hạn cũng thấy việc.
+  return { OR: [pv, { assignedBy: nc.hoSo.userId }, { approvers: { some: { approverId: nc.hoSo.userId } } }, { extensions: { some: { approverId: nc.hoSo.userId, status: "cho-duyet" } } }] };
 }
 
 /** Id các việc đang chờ CHÍNH tôi duyệt ở cấp hiện tại. */
@@ -327,6 +330,24 @@ export async function batBuocSuaDuoc(nc: NguCanh, v: { ownerId: string }) {
   if (!(await trongPhamVi(nc, "task.update", v.ownerId))) {
     throw new LoiNghiepVu("Bạn chỉ xem được công việc này, không sửa được.", 403, "ngoai-pham-vi");
   }
+}
+
+/** Người giao của việc (ghi một lần — QĐ-137); việc máy tạo không ghi người giao thì người tạo, rồi người làm. */
+export function nguoiGiaoGoc(v: { assignedBy: string | null; createdBy: string | null; ownerId: string }): string {
+  return v.assignedBy ?? v.createdBy ?? v.ownerId;
+}
+
+/**
+ * QĐ-137: người được đổi thuộc tính "chấm điểm" của việc (độ khó, cờ cần duyệt, chuỗi người duyệt, hạn,
+ * người làm): người giao, quản lý trực tiếp của người làm, hoặc Giám đốc / Quản trị. Người có `task.update`
+ * phạm vi rộng mà không thuộc ba nhóm này chỉ sửa tiêu đề, mô tả, ưu tiên, danh sách kiểm tra. Phạm vi
+ * `task.update` vẫn kiểm riêng (`batBuocSuaDuoc`).
+ */
+export async function duocDoiThuocTinhChamDiem(nc: NguCanh, v: { assignedBy: string | null; createdBy: string | null; ownerId: string }): Promise<boolean> {
+  const toi = nc.hoSo.userId;
+  if (nguoiGiaoGoc(v) === toi || laGiamDocHoacQuanTri(nc.hoSo)) return true;
+  const hs = await nc.tx.staffProfile.findFirst({ where: { userId: v.ownerId }, select: { managerId: true } });
+  return !!hs?.managerId && hs.managerId === toi;
 }
 
 /** CV-03: bản ghi gắn kèm phải nằm trong tầm nhìn của người tạo. */
@@ -416,10 +437,15 @@ export async function taoViec(nc: NguCanh, dauVao: DuLieuTaoViec, them: ThemKhiT
   const canDuyet = d.canDuyet ?? mau?.canDuyet ?? giaoNguoiKhac;
   let chuoi: string[] = [];
   if (canDuyet) {
-    chuoi = d.nguoiDuyetIds?.length
-      ? d.nguoiDuyetIds
-      : await dungChuoiDuyetChoViec(nc, { chuoi: mau?.chuoiDuyet ?? [], nguoiLamId: ownerId, nguoiGiaoId: nc.hoSo.userId });
-    await kiemNguoiDuyet(nc, chuoi, ownerId);
+    // QĐ-154: chuỗi gửi lên kiểm nghiêm (vi phạm → 403); chuỗi dựng tự động (mặc định / theo mẫu) chuẩn hóa.
+    if (d.nguoiDuyetIds?.length) {
+      chuoi = d.nguoiDuyetIds;
+      await kiemNguoiDuyet(nc, chuoi, ownerId);
+      await kiemChuoiDuyetKhiGiao(nc, chuoi, ownerId, nc.hoSo.userId);
+    } else {
+      chuoi = await chuoiDuyetTuDong(nc, { chuoi: mau?.chuoiDuyet ?? [], nguoiLamId: ownerId, nguoiGiaoId: nc.hoSo.userId });
+      await kiemNguoiDuyet(nc, chuoi, ownerId);
+    }
   }
 
   const v = await nc.tx.task.create({
@@ -572,13 +598,30 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
   if (doiHan && viecDuocGiao) {
     throw new LoiNghiepVu("Việc do người khác giao: muốn đổi hạn thì gửi đề nghị gia hạn để người giao duyệt.", 403, "phai-xin-gia-han");
   }
+  // QĐ-137: thuộc tính quyết định điểm chỉ người giao / quản lý trực tiếp của người làm / Giám đốc / Quản trị
+  // đổi. Người khác có `task.update` (kể cả phạm vi toàn công ty) chỉ sửa tiêu đề, mô tả, ưu tiên, danh sách
+  // kiểm tra; người làm vẫn làm việc của mình (trạng thái, kết quả) nhưng không tự chuyển việc đi.
+  const chuoiHienTai = await chuoiDuyetCuaViec(nc.tx, id);
+  const doiChuoiYeuCau = d.nguoiDuyetIds !== undefined && d.nguoiDuyetIds.join() !== chuoiHienTai.join();
+  const doiChamDiem = doiNguoi || doiHan || doiChuoiYeuCau
+    || (d.doKho !== undefined && d.doKho !== goc.difficulty) || (d.canDuyet !== undefined && d.canDuyet !== goc.needsApproval);
+  const doiLamViec = (d.trangThai !== undefined && d.trangThai !== goc.status)
+    || (d.ketQua !== undefined && d.ketQua !== goc.result) || (d.danhGia !== undefined && d.danhGia !== goc.outcome) || !!d.viecTiepTheo;
   // DG-31 (QA 0.20.0): việc đã chấm điểm thì mọi thứ quyết định điểm / KPI cũng khóa — người làm (điểm chạy
   // sang người khác), độ khó, cờ duyệt, chuỗi duyệt (ai được điều chỉnh điểm), hạn (tỷ lệ đúng hạn).
-  if (goc.approvedAt) {
-    const doiChuoi = d.nguoiDuyetIds !== undefined && d.nguoiDuyetIds.join() !== (await chuoiDuyetCuaViec(nc.tx, id)).join();
-    if (doiNguoi || doiHan || doiChuoi || (d.doKho !== undefined && d.doKho !== goc.difficulty) || (d.canDuyet !== undefined && d.canDuyet !== goc.needsApproval)) {
-      throw new LoiNghiepVu("Việc đã được duyệt và chấm điểm nên không đổi người làm, độ khó, người duyệt hay hạn được. Sai điểm thì điều chỉnh điểm kèm lý do.", 409, "viec-da-duyet");
-    }
+  if (goc.approvedAt && doiChamDiem) {
+    throw new LoiNghiepVu("Việc đã được duyệt và chấm điểm nên không đổi người làm, độ khó, người duyệt hay hạn được. Sai điểm thì điều chỉnh điểm kèm lý do.", 409, "viec-da-duyet");
+  }
+
+  // QĐ-137 (sau DG-31 để việc đã chấm điểm vẫn báo 409 viec-da-duyet như cũ).
+  if ((doiChamDiem || (doiLamViec && !laNguoiLam)) && !(await duocDoiThuocTinhChamDiem(nc, goc))) {
+    throw new LoiNghiepVu(
+      laNguoiLam
+        ? "Chỉ người giao, quản lý trực tiếp của bạn hoặc Giám đốc / Quản trị đổi được người làm, độ khó, cờ cần duyệt, người duyệt, hạn của việc này."
+        : "Bạn chỉ sửa được tiêu đề, mô tả, ưu tiên và danh sách kiểm tra của việc này. Người làm, độ khó, cờ cần duyệt, người duyệt, hạn và trạng thái do người giao, quản lý trực tiếp của người làm hoặc Giám đốc / Quản trị đổi.",
+      403,
+      "chi-nguoi-giao",
+    );
   }
 
   // Việc cũ (trước 0.17) đã xong mà chưa có kết quả: chỉ được mở lại hoặc ghi kết quả,
@@ -625,11 +668,18 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
   // Chuỗi duyệt sau thay đổi (DG-21): người làm mới không được đứng trong chuỗi.
   const nguoiLamMoi = doiNguoi ? d.nguoiPhuTrachId! : goc.ownerId;
   const canDuyetMoi = d.canDuyet ?? goc.needsApproval;
-  const chuoiCu = await chuoiDuyetCuaViec(nc.tx, id);
+  const chuoiCu = chuoiHienTai;
   let chuoiMoi: string[] | null = null;
   if (canDuyetMoi) {
-    if (d.nguoiDuyetIds?.length) chuoiMoi = d.nguoiDuyetIds;
-    else if (chuoiCu.length === 0) chuoiMoi = await dungChuoiDuyetChoViec(nc, { chuoi: [], nguoiLamId: nguoiLamMoi, nguoiGiaoId: doiNguoi ? toi : (goc.assignedBy ?? toi) });
+    // QĐ-154: chuỗi gửi lên kiểm theo người giao GỐC (ghi một lần) — đồng nghiệp giao việc không tự sửa chuỗi
+    // để đứng duyệt sau khi tạo.
+    if (d.nguoiDuyetIds?.length) {
+      chuoiMoi = d.nguoiDuyetIds;
+      if (doiChuoiYeuCau) {
+        await kiemNguoiDuyet(nc, chuoiMoi, nguoiLamMoi);
+        await kiemChuoiDuyetKhiGiao(nc, chuoiMoi, nguoiLamMoi, goc.assignedBy ?? toi);
+      }
+    } else if (chuoiCu.length === 0) chuoiMoi = await chuoiDuyetTuDong(nc, { chuoi: [], nguoiLamId: nguoiLamMoi, nguoiGiaoId: goc.assignedBy ?? toi });
     if (chuoiMoi || doiNguoi || (d.canDuyet && !goc.needsApproval)) await kiemNguoiDuyet(nc, chuoiMoi ?? chuoiCu, nguoiLamMoi);
   } else if (goc.needsApproval && chuoiCu.length) {
     chuoiMoi = [];
@@ -638,15 +688,20 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
   const guiDuyet = xongMoi && canDuyetMoi;
 
   const bayGio = new Date();
+  // QA 0.20.0 v2 (QĐ-137): "gửi lại" việc bị từ chối là việc của người giao / quản lý trực tiếp / Giám đốc / Quản
+  // trị — người có task.update khác sửa tiêu đề không được tự đưa việc về "chờ nhận" và báo người làm.
+  const guiLaiTuChoi = !doiNguoi && goc.acceptStatus === "tu-choi" && !laNguoiLam && (await duocDoiThuocTinhChamDiem(nc, goc));
   const ngamNhan = laNguoiLam && goc.acceptStatus === "cho-nhan" && (d.trangThai !== undefined || doiKetQuaYeuCau);
   const v = await nc.tx.task.update({
     where: { id },
     data: {
       ...(d.tieuDe !== undefined && { title: d.tieuDe }),
       ...(d.moTa !== undefined && { description: d.moTa }),
+      // QĐ-137: chuyển người làm KHÔNG đổi người giao (ghi một lần, trigger `tasks_nguoi_giao_ghi_mot_lan`).
+      // Việc máy tạo chưa có người giao thì người chuyển đầu tiên thành người giao.
       ...(doiNguoi && {
         ownerId: d.nguoiPhuTrachId!,
-        assignedBy: toi,
+        ...(goc.assignedBy === null && { assignedBy: toi }),
         assignedAt: bayGio,
         acceptStatus: d.nguoiPhuTrachId === toi ? null : "cho-nhan",
         acceptedAt: null,
@@ -654,7 +709,7 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
         declineReason: null,
       }),
       // Người giao "gửi lại" việc đã bị từ chối cho cùng người: sửa gì đó thì việc về chờ nhận.
-      ...(!doiNguoi && goc.acceptStatus === "tu-choi" && !laNguoiLam && { acceptStatus: "cho-nhan", declinedAt: null, declineReason: null, assignedAt: bayGio }),
+      ...(guiLaiTuChoi && { acceptStatus: "cho-nhan", declinedAt: null, declineReason: null, assignedAt: bayGio }),
       // Người làm bắt tay vào việc / hoàn thành mà chưa bấm Nhận: coi như đã nhận (DG-03).
       ...(ngamNhan && { acceptStatus: "da-nhan", acceptedAt: bayGio }),
       ...(d.uuTien !== undefined && { priority: d.uuTien }),
@@ -696,8 +751,13 @@ export async function suaViec(nc: NguCanh, id: string, d: DuLieuSuaViec) {
     await nc.suKien({ eventType: SU_KIEN.TASK_ASSIGNED, objectType: "task", objectId: id, payload: { tu: goc.ownerId, sang: sau.nguoiPhuTrach.id } });
     await baoDuocGiao(nc, sau, true);
     await baoChuyenDi(nc, sau, goc.ownerId);
-  } else if (goc.acceptStatus === "tu-choi" && !laNguoiLam) {
+  } else if (guiLaiTuChoi) {
     await baoDuocGiao(nc, sau, false);
+  }
+  // QĐ-155: mở lại việc của người đã nghỉ → chuyển cho người nhận bàn giao / cấp trên của họ.
+  const moLai = !doiNguoi && ["xong", "huy"].includes(goc.status) && ["mo", "dang-lam"].includes(v.status);
+  if (moLai && (await chuyenViecCuaNguoiLamDaNghi(nc, id))) {
+    return { ...chuyenDoi(await nc.tx.task.findUniqueOrThrow({ where: { id }, select: CHON_VIEC })), viecTiepTheo: null };
   }
 
   let viecTiepTheo: CongViec | null = null;
@@ -738,6 +798,7 @@ export async function chiTietViec(nc: NguCanh, id: string) {
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
   });
   const duocSua = coQuyen(nc.hoSo, "task.update") && (await trongPhamVi(nc, "task.update", v.ownerId));
+  const suaChamDiem = duocSua && (await duocDoiThuocTinhChamDiem(nc, v));
   const kiemTra = await chayKiemTra(nc, v, { coViecTiepTheo: false });
   const hoSoKhach = await hoSoKhachCuaViec(nc, v.customer?.id ?? null);
   const xemDiem = (await boLocDiem(nc))(v.ownerId);
@@ -747,7 +808,9 @@ export async function chiTietViec(nc: NguCanh, id: string) {
     mucKiemTra: muc.map((m) => ({ id: m.id, nhan: m.label, batBuoc: m.required, daTich: !!m.doneAt, tichLuc: m.doneAt, nguoiTich: m.doneUser?.fullName ?? null })),
     kiemTra,
     hoSoKhach,
-    quyen: { sua: duocSua, giaoLai: duocSua, taoViec: coQuyen(nc.hoSo, "task.create") },
+    // QĐ-137: `suaChamDiem` = được đổi người làm / độ khó / cờ duyệt / người duyệt / hạn; không có thì giao
+    // diện chỉ mở tiêu đề, mô tả, ưu tiên, danh sách kiểm tra (người làm vẫn đổi trạng thái / kết quả).
+    quyen: { sua: duocSua, giaoLai: duocSua && suaChamDiem, suaChamDiem, taoViec: coQuyen(nc.hoSo, "task.create") },
   };
 }
 

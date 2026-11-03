@@ -10,6 +10,7 @@ import { chiTietViec, danhSachViec, LuocDoLocViec, LuocDoTaoViec, suaViec, taoVi
 import {
   dieuChinhDiem,
   duyetViec,
+  giaoNhieuNguoi,
   lichSuGiaoViec,
   nhanViec,
   quyetDinhGiaHan,
@@ -18,8 +19,22 @@ import {
   viecCuaNhom,
   xinGiaHan,
 } from "../src/modules/cong-viec/giao-viec";
-import { LuocDoLapViec } from "../src/modules/cong-viec/mau-lap";
-import { bangBaoCaoNhom, chiTietBaoCao, LuocDoBaoCao, luuBaoCao, nhanXetBaoCao, quetBaoCao, thongKeBaoCaoTuan } from "../src/modules/bao-cao-cong-viec/service";
+import { danhSachLapViec, LuocDoLapViec, LuocDoMauViec, sinhViecDinhKy, suaLapViec, taoLapViec, taoMauViec } from "../src/modules/cong-viec/mau-lap";
+import {
+  bangBaoCaoNhom,
+  chiTietBaoCao,
+  LuocDoBaoCao,
+  luuBaoCao,
+  moBaoCao,
+  nguoiPhaiBaoCao,
+  nhanXetBaoCao,
+  quetBaoCao,
+  thongKeBaoCaoNgay,
+  thongKeBaoCaoTuan,
+} from "../src/modules/bao-cao-cong-viec/service";
+import { suaNguoiDung } from "../src/modules/nguoi-dung/service";
+import { banGiao } from "../src/modules/ban-giao/service";
+import { baoCaoTu, docCauHinhDanhGia, dungHanTu } from "../src/modules/danh-gia/chung";
 import {
   chiTietPhieu,
   chotPhieu,
@@ -27,6 +42,7 @@ import {
   LuocDoBoKpi,
   LuocDoKy,
   quanLyCham,
+  suaKyDanhGia,
   taoBoKpi,
   taoKyDanhGia,
 } from "../src/modules/danh-gia/service";
@@ -44,7 +60,7 @@ import {
   taoPhieuThucTap,
 } from "../src/modules/thuc-tap/service";
 import { hanBaoCao, kyDanhGia, MA_CHI_SO, MAU_PHIEU_MAC_DINH, tongDiemKpi, xepLoai, heSoDungHan, diemViec } from "../src/modules/danh-gia/tinh-toan";
-import { congNgay } from "../src/modules/cham-cong/tinh-toan";
+import { congNgay, mocVN } from "../src/modules/cham-cong/tinh-toan";
 import { homNayVN } from "../src/modules/crm/chung";
 import PhieuThucTapIn from "../src/components/danh-gia/PhieuThucTapIn";
 import { VAI_TRO, phamViCuaQuyen } from "../src/lib/vai-tro";
@@ -124,6 +140,8 @@ async function main() {
   const hr = await nguoi("Nhân sự QA", "nhan-su-hr", { quanLy: gd });
   const tt = await nguoi("Thực tập QA", "sinh-vien-thuc-tap", { quanLy: tp, phong: pbKD, loai: "thuc-tap" });
   const ai = await nguoi("Trợ lý QA", "ai-assistant");
+  // QĐ-133: chốt phiếu mặc định chỉ Giám đốc — Giám đốc thứ hai (tạo sau) chốt phiếu của Giám đốc thứ nhất.
+  const gdPho = await nguoi("Giám đốc 2 QA", "ceo");
   await chu.internProfile.create({ data: { tenantId: T, userId: tt, school: "ĐH QA", studentCode: "QA01", mentorId: nvA } });
 
   /** Việc tp giao cho nvA, nvA làm xong, tp duyệt → đã chấm điểm. */
@@ -198,7 +216,7 @@ async function main() {
   await voi(T, qt, (nc) => duyetViec(nc, vGd.id, { chatLuong: 3, nhanXet: "" }));
   await nemLoi("Giám đốc không tự điều chỉnh điểm việc của mình", "nghiep-vu", () => voi(T, gd, (nc) => dieuChinhDiem(nc, vGd.id, { chatLuong: 5, lyDo: "Tôi là giám đốc mà" })), "tu-duyet");
   await nemLoi("Quản trị không là người duyệt việc của chính mình (giao từ giám đốc)", "nghiep-vu", () => voi(T, gd, (nc) => taoViec(nc, viecMoi("Việc của quản trị", { nguoiPhuTrachId: qt, nguoiDuyetIds: [qt] }))), "tu-duyet");
-  const vQt = await voi(T, gd, (nc) => taoViec(nc, viecMoi("Việc của quản trị 2", { nguoiPhuTrachId: qt, nguoiDuyetIds: [tp] })));
+  const vQt = await voi(T, gd, (nc) => taoViec(nc, viecMoi("Việc của quản trị 2", { nguoiPhuTrachId: qt, nguoiDuyetIds: [tp, gd] })));
   await nemLoi("Không chuyển việc cho người đang đứng trong chuỗi duyệt của nó", "nghiep-vu", () => voi(T, gd, (nc) => suaViec(nc, vQt.id, { nguoiPhuTrachId: tp })), "tu-duyet");
   const kyGd = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 1, nguoiIds: [gd, qt, tp] }));
   const pGd = await chu.evaluation.findFirstOrThrow({ where: { periodId: kyGd.id, userId: gd }, include: { items: true } });
@@ -206,7 +224,8 @@ async function main() {
   await nemLoi("Giám đốc không tự chấm phiếu của mình", "nghiep-vu", () => voi(T, gd, (nc) => quanLyCham(nc, pGd.id, { nhanXet: "", chiTieu: [{ id: pGd.items[0].id, diem: 100, ghiChu: "" }], nop: true })), "khong-duoc-cham");
   await voi(T, qt, (nc) => quanLyCham(nc, pGd.id, { nhanXet: "", chiTieu: [{ id: pGd.items[0].id, diem: 70, ghiChu: "" }], nop: true }));
   await nemLoi("Giám đốc không tự chốt phiếu của mình", "nghiep-vu", () => voi(T, gd, (nc) => chotPhieu(nc, pGd.id, { ghiChu: "" })), "khong-duoc-chot");
-  await voi(T, qt, (nc) => chotPhieu(nc, pGd.id, { ghiChu: "" }));
+  await nemLoi("QĐ-133: Quản trị không chốt phiếu đánh giá (mặc định chỉ Giám đốc)", "nghiep-vu", () => voi(T, qt, (nc) => chotPhieu(nc, pGd.id, { ghiChu: "" })), "khong-duoc-chot");
+  await voi(T, gdPho, (nc) => chotPhieu(nc, pGd.id, { ghiChu: "" }));
   await nemLoi("Giám đốc không tự điều chỉnh phiếu đã chốt của mình", "nghiep-vu", () => voi(T, gd, (nc) => dieuChinhPhieu(nc, pGd.id, { lyDo: "Tự nâng điểm của tôi lên", chiTieu: [{ id: pGd.items[0].id, diem: 100 }] })), "khong-duoc-chot");
   await nemLoi("Nhân sự không chốt phiếu", "nghiep-vu", () => voi(T, hr, (nc) => chotPhieu(nc, pTp.id, { ghiChu: "" })), "khong-duoc-chot");
   await nemLoi("Nhân sự không điều chỉnh phiếu đã chốt", "nghiep-vu", () => voi(T, hr, (nc) => dieuChinhPhieu(nc, pGd.id, { lyDo: "Nhân sự sửa kết quả", chiTieu: [{ id: pGd.items[0].id, diem: 90 }] })), "khong-duoc-chot");
@@ -283,8 +302,8 @@ async function main() {
     (d1.status === "fulfilled" ? vtSau.status === "xong" : vtSau.status === "dang-lam"));
   // Điều chỉnh phiếu hai lần cùng lúc: tuần tự, lần sau tính tiếp từ lần trước.
   const [e1, e2] = await Promise.allSettled([
-    voi(T, qt, (nc) => dieuChinhPhieu(nc, pGd.id, { lyDo: "Điều chỉnh lần một theo phản hồi", chiTieu: [{ id: pGd.items[0].id, diem: 80 }] })),
-    voi(T, qt, (nc) => dieuChinhPhieu(nc, pGd.id, { lyDo: "Điều chỉnh lần hai theo phản hồi", chiTieu: [{ id: pGd.items[0].id, diem: 85 }] })),
+    voi(T, gdPho, (nc) => dieuChinhPhieu(nc, pGd.id, { lyDo: "Điều chỉnh lần một theo phản hồi", chiTieu: [{ id: pGd.items[0].id, diem: 80 }] })),
+    voi(T, gdPho, (nc) => dieuChinhPhieu(nc, pGd.id, { lyDo: "Điều chỉnh lần hai theo phản hồi", chiTieu: [{ id: pGd.items[0].id, diem: 85 }] })),
   ]);
   const dcs = await chu.evaluationAdjustment.findMany({ where: { evaluationId: pGd.id }, orderBy: { createdAt: "asc" } });
   dat("Hai phiên điều chỉnh cùng lúc → nối tiếp nhau (tổng cũ của lần sau = tổng mới của lần trước)",
@@ -447,6 +466,448 @@ async function main() {
   const hr2 = await chu.rolePermission.findFirst({ where: { role: { tenantId: t2.id, code: "nhan-su-hr" }, permission: { code: "danh_gia.create" } }, select: { dataScope: true } });
   dat("Nâng cấp (migration QA): Giám đốc / Quản trị doanh nghiệp không seed lại có đủ 6 quyền danh_gia.*", gd2Quyen === 12, `${gd2Quyen}/12`);
   dat("Nâng cấp (migration QA): Nhân sự danh_gia.create về phạm vi của mình như vai-tro.ts", hr2?.dataScope === "own", hr2?.dataScope ?? "");
+
+  // ==================================================================
+  // 0.20.0 — 10 quyết định chính sách (QĐ-131 → QĐ-140)
+  // ==================================================================
+  const datCauHinh = async (khoa: string, giaTri: number | null) => {
+    await chu.tenantSetting.deleteMany({ where: { tenantId: T, key: khoa } });
+    if (giaTri !== null) await chu.tenantSetting.create({ data: { tenantId: T, key: khoa, value: giaTri } });
+  };
+  const kho = await nguoi("NV Kho QA", "warehouse", { quanLy: gd });
+  const keToan = await nguoi("Kế toán QA", "finance");
+
+  console.log("\n— QĐ-137: chỉ người giao / quản lý trực tiếp / Giám đốc / Quản trị đổi thuộc tính chấm điểm —");
+  // Đường tấn công 1: nhân viên Marketing / Kho / Kế toán (task.update toàn công ty) tự đặt mình làm người duyệt việc
+  // của đồng nghiệp rồi chấm điểm.
+  const vTc = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-137 việc bị nhắm", { nguoiPhuTrachId: nvA, han: new Date(Date.now() + 48 * GIO).toISOString() })));
+  for (const [ten, ke] of [["Marketing", mk], ["Kho", kho], ["Kế toán", keToan]] as const) {
+    await nemLoi(`Tấn công 1 — NV ${ten} (task.update toàn công ty) không tự đặt mình làm người duyệt việc đồng nghiệp`, "nghiep-vu",
+      () => voi(T, ke, (nc) => suaViec(nc, vTc.id, { nguoiDuyetIds: [ke] })), "chi-nguoi-giao");
+    await nemLoi(`…NV ${ten} không hạ độ khó / tắt cờ duyệt / dời hạn việc đồng nghiệp`, "nghiep-vu",
+      () => voi(T, ke, (nc) => suaViec(nc, vTc.id, { doKho: 1, canDuyet: false, han: new Date(Date.now() - 96 * GIO) })), "chi-nguoi-giao");
+  }
+  await voi(T, nvA, (nc) => suaViec(nc, vTc.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await nemLoi("…và vì không vào được chuỗi duyệt nên NV Marketing không chấm điểm được việc đó", "nghiep-vu",
+    () => voi(T, mk, (nc) => duyetViec(nc, vTc.id, { chatLuong: 1, nhanXet: "" })), "khong-phai-luot");
+  const chuoiTc = await chu.taskApprover.findMany({ where: { taskId: vTc.id } });
+  dat("…chuỗi duyệt giữ nguyên người giao (TP)", chuoiTc.length === 1 && chuoiTc[0].approverId === tp);
+  await voi(T, tp, (nc) => duyetViec(nc, vTc.id, { chatLuong: 4, nhanXet: "" }));
+  // Đường tấn công 2: chuyển việc đi rồi chuyển lại cho chính mình để thành người giao.
+  const vVong = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-137 việc chuyển vòng", { nguoiPhuTrachId: nvA, canDuyet: false })));
+  await nemLoi("Tấn công 2 — NV Marketing không chuyển việc của đồng nghiệp sang người khác", "nghiep-vu",
+    () => voi(T, mk, (nc) => suaViec(nc, vVong.id, { nguoiPhuTrachId: nvB })), "chi-nguoi-giao");
+  await nemLoi("…không chuyển việc đó về cho chính mình", "nghiep-vu", () => voi(T, mk, (nc) => suaViec(nc, vVong.id, { nguoiPhuTrachId: mk })), "chi-nguoi-giao");
+  // Giám đốc (được phép đổi) chuyển đi rồi chuyển lại: người giao vẫn là TP, Giám đốc không thành người giao.
+  await voi(T, gd, (nc) => suaViec(nc, vVong.id, { nguoiPhuTrachId: nvB }));
+  await voi(T, gd, (nc) => suaViec(nc, vVong.id, { nguoiPhuTrachId: nvA }));
+  const vVongSau = await chu.task.findUniqueOrThrow({ where: { id: vVong.id } });
+  dat("Chuyển đi rồi chuyển lại không đổi người giao (ghi một lần)", vVongSau.assignedBy === tp && vVongSau.ownerId === nvA, vVongSau.assignedBy ?? "");
+  dat("CSDL: vai ứng dụng không đổi được người giao việc (trigger tasks_nguoi_giao_ghi_mot_lan)",
+    (await appSua(`UPDATE tasks SET assigned_by = '${mk}' WHERE id = '${vVong.id}'`)) === "chan");
+  dat("CSDL: vai chủ sở hữu cũng không đổi được người giao",
+    await chu.$executeRawUnsafe(`UPDATE tasks SET assigned_by = '${mk}' WHERE id = '${vVong.id}'`).then(() => false, () => true));
+  const tcSua = await voi(T, mk, (nc) => suaViec(nc, vVong.id, { tieuDe: "QĐ-137 việc chuyển vòng (Marketing sửa tên)", moTa: "Thêm mô tả", uuTien: "cao" }));
+  dat("Người có task.update toàn công ty vẫn sửa được tiêu đề, mô tả, ưu tiên", tcSua.tieuDe.includes("Marketing sửa tên") && tcSua.uuTien === "cao");
+  await nemLoi("…nhưng không hủy / đóng việc của đồng nghiệp", "nghiep-vu", () => voi(T, mk, (nc) => suaViec(nc, vVong.id, { trangThai: "huy" })), "chi-nguoi-giao");
+  const ctMk = await voi(T, mk, (nc) => chiTietViec(nc, vVong.id));
+  dat("Giao diện: NV Marketing không có quyền giao lại / sửa thuộc tính chấm điểm", ctMk.quyen.sua && !ctMk.quyen.suaChamDiem && !ctMk.quyen.giaoLai);
+  const vGdGiao = await voi(T, gd, (nc) => taoViec(nc, viecMoi("QĐ-137 Giám đốc giao", { nguoiPhuTrachId: nvA, canDuyet: false })));
+  const ql = await voi(T, tp, (nc) => suaViec(nc, vGdGiao.id, { doKho: 5 }));
+  dat("Quản lý trực tiếp của người làm (không phải người giao) đổi được độ khó", ql.doKho === 5);
+  await nemLoi("Không ai tự đặt mình làm người duyệt việc của mình (kể cả quản lý trực tiếp tự nhận việc)", "nghiep-vu",
+    () => voi(T, tp, (nc) => suaViec(nc, vGdGiao.id, { nguoiPhuTrachId: tp, canDuyet: true, nguoiDuyetIds: [tp] })), "tu-duyet");
+
+  console.log("\n— QĐ-139: thông báo 'đã duyệt' chỉ kèm điểm khi người nhận xem được đánh giá —");
+  const vMk = await voi(T, mk, (nc) => taoViec(nc, viecMoi("QĐ-139 việc Marketing giao", { nguoiPhuTrachId: nvA, nguoiDuyetIds: [tp] })));
+  await voi(T, nvA, (nc) => suaViec(nc, vMk.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await voi(T, tp, (nc) => duyetViec(nc, vMk.id, { chatLuong: 4, nhanXet: "" }));
+  const tbMk = await chu.notification.findFirst({ where: { userId: mk, type: "viec-da-xong", objectId: vMk.id } });
+  dat("Người giao không có danh_gia.view với người làm: thông báo không có điểm / chất lượng", !!tbMk && !/điểm|Chất lượng/.test(tbMk.body ?? ""), tbMk?.body ?? "không có thông báo");
+  const tbA = await chu.notification.findFirst({ where: { userId: nvA, type: "viec-da-duyet", objectId: vMk.id } });
+  dat("Người làm (xem được đánh giá của mình) vẫn nhận điểm", !!tbA && /điểm 12/.test(tbA.body ?? ""), tbA?.body ?? "");
+  const vTp = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-139 việc TP giao", { nguoiPhuTrachId: nvA, nguoiDuyetIds: [gd] })));
+  await voi(T, nvA, (nc) => suaViec(nc, vTp.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await voi(T, gd, (nc) => duyetViec(nc, vTp.id, { chatLuong: 5, nhanXet: "" }));
+  const tbTp = await chu.notification.findFirst({ where: { userId: tp, type: "viec-da-xong", objectId: vTp.id } });
+  dat("Người giao có danh_gia.view phạm vi nhóm: thông báo kèm điểm", !!tbTp && /điểm 15/.test(tbTp.body ?? ""), tbTp?.body ?? "");
+
+  console.log("\n— QĐ-133: chốt phiếu mặc định chỉ Giám đốc —");
+  const ky133 = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 3, nguoiIds: [nvA, tp] }));
+  const pA133 = await chu.evaluation.findFirstOrThrow({ where: { periodId: ky133.id, userId: nvA }, include: { items: true } });
+  const pTp133 = await chu.evaluation.findFirstOrThrow({ where: { periodId: ky133.id, userId: tp }, include: { items: true } });
+  await voi(T, tp, (nc) => quanLyCham(nc, pA133.id, { nhanXet: "", chiTieu: pA133.items.map((c) => ({ id: c.id, diem: 80, ghiChu: "" })), nop: true }));
+  const ctTp133 = await voi(T, tp, (nc) => chiTietPhieu(nc, pA133.id));
+  dat("Trưởng phòng chấm được nhưng giao diện không cho chốt", !ctTp133.quyen.chot);
+  await nemLoi("Trưởng phòng (danh_gia.approve phạm vi nhóm) không chốt phiếu khi Cấu hình tắt (mặc định)", "nghiep-vu",
+    () => voi(T, tp, (nc) => chotPhieu(nc, pA133.id, { ghiChu: "" })), "khong-duoc-chot");
+  dat("Thông báo phiếu chờ chốt gửi Giám đốc (không gửi trưởng phòng)", (await chu.notification.count({ where: { userId: gd, type: "danh-gia-cho-chot", objectId: pA133.id } })) === 1);
+  await datCauHinh("danh_gia.truong_phong_duoc_chot", 1);
+  const chotTp = await voi(T, tp, (nc) => chotPhieu(nc, pA133.id, { ghiChu: "" }));
+  dat("Cấu hình danh_gia.truong_phong_duoc_chot = 1: trưởng phòng chốt được phiếu trong phạm vi", chotTp.phieu.trangThai === "da-chot");
+  await voi(T, gd, (nc) => quanLyCham(nc, pTp133.id, { nhanXet: "", chiTieu: pTp133.items.map((c) => ({ id: c.id, diem: 90, ghiChu: "" })), nop: true }));
+  await nemLoi("…vẫn không tự chốt phiếu của mình", "nghiep-vu", () => voi(T, tp, (nc) => chotPhieu(nc, pTp133.id, { ghiChu: "" })), "khong-duoc-chot");
+  await nemLoi("…và không chốt phiếu người ngoài phạm vi (KTV phòng Kỹ thuật)", "nghiep-vu", async () => {
+    const k = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 4, nguoiIds: [nvC] }));
+    const pc = await chu.evaluation.findFirstOrThrow({ where: { periodId: k.id, userId: nvC } });
+    return voi(T, tp, (nc) => chotPhieu(nc, pc.id, { ghiChu: "" }));
+  });
+  await datCauHinh("danh_gia.truong_phong_duoc_chot", null);
+
+  console.log("\n— QĐ-132: người không có quản lý trực tiếp vẫn báo cáo; Giám đốc nhận, xét, chấm —");
+  const ds132 = await voiTenant(T, (tx) => nguoiPhaiBaoCao(tx));
+  const ktDong = ds132.find((x) => x.id === keToan);
+  dat("Kế toán không có quản lý trực tiếp vẫn phải báo cáo, người nhận = Giám đốc (người đầu theo ngày tạo)", ktDong?.quanLyId === gd, JSON.stringify(ktDong ?? null));
+  dat("Giám đốc không phải báo cáo (mặc định)", !ds132.some((x) => x.id === gd || x.id === gdPho));
+  await datCauHinh("bao_cao.giam_doc_phai_bao_cao", 1);
+  dat("Cấu hình bao_cao.giam_doc_phai_bao_cao = 1: Giám đốc cũng phải báo cáo", (await voiTenant(T, (tx) => nguoiPhaiBaoCao(tx, [gd]))).length === 1);
+  await datCauHinh("bao_cao.giam_doc_phai_bao_cao", null);
+  const bcKt = await voi(T, keToan, (nc) => luuBaoCao(nc, LuocDoBaoCao.parse({ loai: "tuan", ngay: congNgay(homNayVN(), -14), daLam: "Đối soát công nợ", vuongMac: "Thiếu chứng từ", nop: true })));
+  dat("Nộp báo cáo → Giám đốc được báo", (await chu.notification.count({ where: { userId: gd, type: "bao-cao-da-nop", objectId: bcKt.id } })) === 1);
+  const nx132 = await voi(T, gd, (nc) => nhanXetBaoCao(nc, bcKt.id, { noiDung: "Bổ sung chứng từ trong tuần" }));
+  dat("Giám đốc nhận xét được báo cáo người không có quản lý", !!nx132.id);
+  const ky132 = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 5 }));
+  const pKt = await chu.evaluation.findFirst({ where: { periodId: ky132.id, userId: keToan } });
+  dat("Mở kỳ (không chọn người): có phiếu cho người không có quản lý, người chấm = Giám đốc", pKt?.managerId === gd);
+  dat("…không có phiếu cho chính Giám đốc", (await chu.evaluation.count({ where: { periodId: ky132.id, userId: { in: [gd, gdPho] } } })) === 0);
+  const pKtDu = await chu.evaluation.findUniqueOrThrow({ where: { id: pKt!.id }, include: { items: true } });
+  const chamKt = await voi(T, gd, (nc) => quanLyCham(nc, pKtDu.id, { nhanXet: "Ổn", chiTieu: pKtDu.items.map((c) => ({ id: c.id, diem: 85, ghiChu: "" })), nop: true }));
+  dat("Giám đốc chấm phiếu người không có quản lý", chamKt.phieu.trangThai === "cho-chot");
+
+  console.log("\n— QĐ-135: người duyệt nghỉ việc / bị khóa → bước đang chờ lên cấp trên —");
+  const tp3 = await nguoi("TP3 sắp nghỉ QA", "sales-manager", { quanLy: gd, phong: pbKD });
+  const nv3 = await nguoi("NV3 QA", "sales", { quanLy: tp3, phong: pbKD });
+  const vCho = await voi(T, tp3, (nc) => taoViec(nc, viecMoi("QĐ-135 việc chờ TP3 duyệt", { nguoiPhuTrachId: nv3 })));
+  await voi(T, nv3, (nc) => suaViec(nc, vCho.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  const vGh = await voi(T, tp3, (nc) => taoViec(nc, viecMoi("QĐ-135 việc xin gia hạn", { nguoiPhuTrachId: nv3, canDuyet: false, han: new Date(Date.now() + 2 * GIO).toISOString() })));
+  const gh135 = await voi(T, nv3, (nc) => xinGiaHan(nc, vGh.id, { hanMoi: new Date(Date.now() + 72 * GIO), lyDo: "Chờ linh kiện về" }));
+  // Việc của chính Giám đốc mà TP3 là người duyệt: chuyển lên quản lý của TP3 = Giám đốc = người làm → đi tiếp lên.
+  const vCuaGd = await voi(T, qt, (nc) => taoViec(nc, viecMoi("QĐ-135 việc của giám đốc", { nguoiPhuTrachId: gd, nguoiDuyetIds: [tp3, qt] })));
+  const bc135 = await voi(T, nv3, (nc) => luuBaoCao(nc, LuocDoBaoCao.parse({ loai: "tuan", ngay: congNgay(homNayVN(), -7), daLam: "Gặp 5 khách", nop: true })));
+  const ky135 = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 6, nguoiIds: [nv3] }));
+  const p135 = await chu.evaluation.findFirstOrThrow({ where: { periodId: ky135.id, userId: nv3 } });
+  dat("Chuẩn bị: phiếu của NV3 do TP3 chấm", p135.managerId === tp3);
+  await voi(T, qt, (nc) => suaNguoiDung(nc, tp3, { trangThai: "ngung-hoat-dong" }));
+  const capSau = await chu.taskApprover.findFirstOrThrow({ where: { taskId: vCho.id, level: 1 } });
+  dat("Khóa TP3: bước duyệt việc đang chờ chuyển cho quản lý trực tiếp của TP3 (Giám đốc)", capSau.approverId === gd);
+  dat("…Giám đốc được báo 'chờ bạn duyệt'", (await chu.notification.count({ where: { userId: gd, type: "viec-cho-duyet", objectId: vCho.id } })) >= 1);
+  const ghSau135 = await chu.taskExtension.findUniqueOrThrow({ where: { id: gh135.id } });
+  dat("…đề nghị gia hạn đang chờ chuyển cho Giám đốc", ghSau135.approverId === gd);
+  const qd135 = await voi(T, gd, (nc) => quyetDinhGiaHan(nc, gh135.id, { dongY: true, ghiChu: "" }));
+  dat("…Giám đốc quyết định được đề nghị gia hạn", qd135.dongY === true);
+  dat("…người giao việc giữ nguyên (TP3) — chỉ bước duyệt đổi", (await chu.task.findUniqueOrThrow({ where: { id: vGh.id } })).assignedBy === tp3);
+  const capGd = await chu.taskApprover.findFirstOrThrow({ where: { taskId: vCuaGd.id, level: 1 } });
+  dat("Người nhận lại chính là người làm (Giám đốc) → đi tiếp lên cấp trên (Giám đốc khác), không tự duyệt", capGd.approverId !== gd && capGd.approverId === gdPho, capGd.approverId);
+  dat("…phiếu đánh giá chờ chấm chuyển cho Giám đốc", (await chu.evaluation.findUniqueOrThrow({ where: { id: p135.id } })).managerId === gd);
+  const lsChuyen = await chu.approvalTransfer.findMany({ where: { tenantId: T, fromUserId: tp3 } });
+  dat("…mỗi bước chuyển ghi một dòng lịch sử (việc ×2, gia hạn, báo cáo, phiếu)", lsChuyen.length === 5 && lsChuyen.every((x) => x.reason === "ngung-hoat-dong"),
+    lsChuyen.map((x) => x.objectType).join(","));
+  dat("…báo cáo chờ xét của cấp dưới được ghi chuyển cho Giám đốc", lsChuyen.some((x) => x.objectType === "work_report" && x.objectId === bc135.id && x.toUserId === gd));
+  dat("Lịch sử chuyển chỉ ghi thêm (vai ứng dụng không sửa / xóa)",
+    (await appSua(`UPDATE approval_transfers SET note = 'x' WHERE from_user_id = '${tp3}'`)) === "chan" && (await appSua(`DELETE FROM approval_transfers WHERE from_user_id = '${tp3}'`)) === "chan");
+  const lsViec = await voi(T, gd, (nc) => lichSuGiaoViec(nc, vCho.id));
+  dat("Lịch sử việc hiện dòng chuyển bước", lsViec.chuyenBuoc.length === 1 && lsViec.quyen.duyet);
+  await voi(T, gd, (nc) => duyetViec(nc, vCho.id, { chatLuong: 4, nhanXet: "" }));
+  const nxGd = await voi(T, gd, (nc) => nhanXetBaoCao(nc, bc135.id, { noiDung: "Đã xem thay TP3" }));
+  dat("Giám đốc duyệt việc và nhận xét báo cáo thay TP3", !!nxGd.id && (await chu.task.findUniqueOrThrow({ where: { id: vCho.id } })).status === "xong");
+  dat("Báo cáo mới của NV3 (quản lý đã nghỉ) gửi Giám đốc", (await voiTenant(T, (tx) => nguoiPhaiBaoCao(tx, [nv3])))[0]?.quanLyId === gd);
+  // Bàn giao thủ công: việc của A chuyển cho B mà B đang là người duyệt của việc đó → bước duyệt lên cấp trên của B.
+  const nvA4 = await nguoi("NV A4 nghỉ QA", "sales", { quanLy: tp, phong: pbKD });
+  const nvB4 = await nguoi("NV B4 nhận QA", "sales", { quanLy: tp, phong: pbKD });
+  const v4 = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-135 việc bàn giao", { nguoiPhuTrachId: nvA4, nguoiDuyetIds: [nvB4, gd] })));
+  const vDuyetA4 = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-135 việc A4 đang duyệt", { nguoiPhuTrachId: nvB, nguoiDuyetIds: [nvA4, gd] })));
+  const bg = await voi(T, qt, (nc) => banGiao(nc, nvA4, { nguoiNhanId: nvB4, khoaTaiKhoan: true, ghiChu: null }));
+  const cap4 = await chu.taskApprover.findFirstOrThrow({ where: { taskId: v4.id, level: 1 } });
+  dat("Bàn giao: người nhận đang là người duyệt của việc vừa nhận → bước đó lên quản lý của họ", cap4.approverId === tp && bg.goTuDuyet === 1, cap4.approverId);
+  const capA4 = await chu.taskApprover.findFirstOrThrow({ where: { taskId: vDuyetA4.id, level: 1 } });
+  dat("Bàn giao: bước A4 đang duyệt chuyển cho quản lý của A4 (không cho người nhận bàn giao)", capA4.approverId === tp && bg.buocDaChuyen.viec === 1);
+
+  console.log("\n— QĐ-138: báo cáo ngày không bắt buộc vào ngày không phải làm —");
+  const nvD = await nguoi("NV D báo cáo ngày QA", "sales", { quanLy: tp, phong: pbKD });
+  const ca = await chu.workShift.create({ data: { tenantId: T, code: `hc-${DAU}`.slice(0, 30), name: "Hành chính QA", startMinute: 480, endMinute: 1020, breakStartMinute: 720, breakMinutes: 60 } });
+  const lich = await chu.workSchedule.create({ data: { tenantId: T, code: `t2t6-${DAU}`.slice(0, 30), name: "T2–T6 QA", shiftId: ca.id, days: ["ca", "ca", "ca", "ca", "ca", "nghi", "nghi"] } });
+  await chu.scheduleAssignment.create({ data: { tenantId: T, userId: nvD, scheduleId: lich.id, effectiveFrom: new Date("2026-09-01T00:00:00Z") } });
+  await chu.holiday.create({ data: { tenantId: T, date: new Date("2026-10-07T00:00:00Z"), name: "Ngày lễ thử QA" } });
+  const loaiPhep = await chu.leaveType.findUniqueOrThrow({ where: { tenantId_code: { tenantId: T, code: "phep-nam" } } });
+  await chu.leaveRequest.create({ data: { tenantId: T, userId: nvD, leaveTypeId: loaiPhep.id, startDate: new Date("2026-10-08T00:00:00Z"), endDate: new Date("2026-10-08T00:00:00Z"), portion: "ca-ngay", days: 1, reason: "Việc gia đình QA", status: "da-duyet", decidedBy: tp, decidedAt: new Date("2026-10-01T02:00:00Z") } });
+  await chu.leaveRequest.create({ data: { tenantId: T, userId: nvD, leaveTypeId: loaiPhep.id, startDate: new Date("2026-10-09T00:00:00Z"), endDate: new Date("2026-10-09T00:00:00Z"), portion: "sang", days: 0.5, reason: "Khám bệnh QA", status: "da-duyet", decidedBy: tp, decidedAt: new Date("2026-10-01T02:00:00Z") } });
+  const coTrongNhom = async (ngay: string) => (await voi(T, tp, (nc) => bangBaoCaoNhom(nc, "ngay", ngay))).dong.find((x) => x.nguoiId === nvD);
+  dat("Chủ nhật (lịch T2–T6): không có trong bảng báo cáo ngày của nhóm", !(await coTrongNhom("2026-10-04")));
+  dat("Thứ Hai: bắt buộc, chưa nộp → thiếu", (await coTrongNhom("2026-10-05"))?.tinhTrang === "thieu");
+  dat("Ngày lễ: không bắt buộc", !(await coTrongNhom("2026-10-07")));
+  dat("Nghỉ phép đã duyệt cả ngày: không bắt buộc", !(await coTrongNhom("2026-10-08")));
+  dat("Nghỉ nửa ngày: vẫn bắt buộc", (await coTrongNhom("2026-10-09"))?.batBuoc === true);
+  const thieuNgay = async (ngay: string) => {
+    await quetBaoCao(T, mocVN(ngay, 21 * 60));
+    return chu.notification.count({ where: { userId: nvD, type: "bao-cao-thieu", dedupeKey: `bao-cao-thieu:ngay:${ngay}` } });
+  };
+  dat("Worker: không báo thiếu báo cáo ngày Chủ nhật / ngày lễ / ngày nghỉ phép cả ngày",
+    (await thieuNgay("2026-10-04")) === 0 && (await thieuNgay("2026-10-07")) === 0 && (await thieuNgay("2026-10-08")) === 0);
+  dat("Worker: vẫn báo thiếu ngày thường và ngày nghỉ nửa ngày", (await thieuNgay("2026-10-06")) === 1 && (await thieuNgay("2026-10-09")) === 1);
+  await voi(T, nvD, (nc) => luuBaoCao(nc, LuocDoBaoCao.parse({ loai: "ngay", ngay: "2026-10-05", daLam: "Báo cáo trễ thứ Hai", nop: true })));
+  const tkNgay = await voiTenant(T, (tx) => thongKeBaoCaoNgay(tx, nvD, "2026-10-04", "2026-10-10", new Date("2026-10-20T00:00:00Z")));
+  dat("Thống kê trên phiếu đánh giá: tuần 04–10/10 chỉ 3 ngày phải nộp (T2, T3, T6), 1 trễ, 2 thiếu", tkNgay.soNgay === 3 && tkNgay.tre === 1 && tkNgay.thieu === 2, JSON.stringify(tkNgay));
+
+  console.log("\n— QĐ-136: việc định kỳ mặc định không cần duyệt —");
+  dat("Lược đồ việc định kỳ: không gửi cờ → không cần duyệt", LuocDoLapViec.parse({ ten: "Lặp QA", tieuDe: "Lặp QA", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01" }).canDuyet === false);
+  const mauCanDuyet = await voi(T, tp, (nc) => taoMauViec(nc, LuocDoMauViec.parse({ ten: `Mẫu cần duyệt ${DAU}`, tieuDe: "Kiểm kho", canDuyet: true })));
+  const lapKhong = await voi(T, tp, (nc) => taoLapViec(nc, LuocDoLapViec.parse({ ten: `Lặp không duyệt ${DAU}`, mauViecId: mauCanDuyet.id, tieuDe: "Kiểm kho hằng ngày", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01" })));
+  const lapCo = await voi(T, tp, (nc) => taoLapViec(nc, LuocDoLapViec.parse({ ten: `Lặp cần duyệt ${DAU}`, tieuDe: "Báo cáo tồn kho", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01", canDuyet: true })));
+  await sinhViecDinhKy(T, mocVN("2026-10-06", 8 * 60));
+  const vLapKhong = await chu.task.findFirstOrThrow({ where: { recurrenceId: lapKhong.id } });
+  const vLapCo = await chu.task.findFirstOrThrow({ where: { recurrenceId: lapCo.id } });
+  dat("Việc sinh từ lịch không bật cờ: không cần duyệt (dù mẫu gắn kèm bật)", !vLapKhong.needsApproval);
+  dat("Lịch bật cờ 'cần duyệt': việc sinh ra cần duyệt, người duyệt = người lập lịch", vLapCo.needsApproval && (await chu.taskApprover.findFirst({ where: { taskId: vLapCo.id } }))?.approverId === tp);
+
+  console.log("\n— QĐ-134: mọi mặc định đánh giá / báo cáo sửa được trong Cấu hình —");
+  await datCauHinh("danh_gia.he_so_tre_nhe", 0.7);
+  await datCauHinh("danh_gia.tre_nhe_toi_da_gio", 12);
+  await datCauHinh("danh_gia.nguong_a", 95);
+  await datCauHinh("danh_gia.he_so_thuong_a", 1.5);
+  await datCauHinh("bao_cao.han_ngay_gio", 18);
+  const ch134 = await voiTenant(T, (tx) => docCauHinhDanhGia(tx));
+  const h134 = new Date("2026-10-05T10:00:00Z");
+  dat("Trễ nhẹ theo Cấu hình: trễ 12 giờ → 0,7; trễ 13 giờ → trễ nặng", heSoDungHan(h134, new Date(h134.getTime() + 12 * GIO), dungHanTu(ch134)).heSo === 0.7 && heSoDungHan(h134, new Date(h134.getTime() + 13 * GIO), dungHanTu(ch134)).heSo === 0.5);
+  dat("Xếp loại theo Cấu hình: 94 là B khi ngưỡng A = 95; A có hệ số 1,5", xepLoai(94, { ...ch134 }).loai === "B" && xepLoai(95, { ...ch134 }).heSoThuong === 1.5);
+  const moNgay = await voi(T, nvA, (nc) => moBaoCao(nc, "ngay", "2026-10-06"));
+  dat("Hạn báo cáo ngày theo Cấu hình 18:00", moNgay.han.toISOString() === mocVN("2026-10-06", 18 * 60).toISOString() && hanBaoCao("ngay", "2026-10-06", baoCaoTu(ch134)).getTime() === moNgay.han.getTime());
+  for (const k of ["danh_gia.he_so_tre_nhe", "danh_gia.tre_nhe_toi_da_gio", "danh_gia.nguong_a", "danh_gia.he_so_thuong_a", "bao_cao.han_ngay_gio"]) await datCauHinh(k, null);
+  const chMd = await voiTenant(T, (tx) => docCauHinhDanhGia(tx));
+  dat("Mặc định khi chưa đặt: 0,8 / 0,5 / 24 giờ; A 90 / B 75 / C 60; 1,2 / 1 / 0,8 / 0; 20:00; chốt chỉ Giám đốc; Giám đốc không báo cáo",
+    chMd.heSoTreNhe === 0.8 && chMd.heSoTreNang === 0.5 && chMd.treNheToiDaGio === 24 && chMd.nguongA === 90 && chMd.nguongB === 75 && chMd.nguongC === 60
+    && chMd.heSoA === 1.2 && chMd.heSoB === 1 && chMd.heSoC === 0.8 && chMd.heSoD === 0 && chMd.hanNgayGio === 20 && chMd.truongPhongDuocChot === 0 && chMd.giamDocPhaiBaoCao === 0);
+
+  console.log("\n— QĐ-140: kỳ đã có phiếu chốt không đổi được loại kỳ / ngày —");
+  await nemLoi("API: kỳ đã có phiếu chốt → 409 ky-da-chot", "nghiep-vu", () => voi(T, hr, (nc) => suaKyDanhGia(nc, kyGd.id, { loai: "thang", nam: 2025, so: 2 })), "ky-da-chot");
+  dat("SQL vai cowork_app: không đổi ngày kết thúc kỳ đã có phiếu chốt", (await appSua(`UPDATE evaluation_periods SET end_date = end_date + 1 WHERE id = '${kyGd.id}'`)) === "chan");
+  dat("SQL vai cowork_app: không đổi ngày bắt đầu / loại kỳ", (await appSua(`UPDATE evaluation_periods SET start_date = start_date - 1 WHERE id = '${kyGd.id}'`)) === "chan"
+    && (await appSua(`UPDATE evaluation_periods SET kind = 'quy', number = 1 WHERE id = '${kyGd.id}'`)) === "chan");
+  dat("SQL vai chủ sở hữu cũng bị chặn", await chu.$executeRawUnsafe(`UPDATE evaluation_periods SET end_date = end_date + 1 WHERE id = '${kyGd.id}'`).then(() => false, () => true));
+  dat("…đổi trạng thái kỳ (không phải ngày) vẫn được", (await appSua(`UPDATE evaluation_periods SET status = status WHERE id = '${kyGd.id}'`)) === "lot");
+  const kyMo = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 7, nguoiIds: [nvB] }));
+  const suaMo = await voi(T, hr, (nc) => suaKyDanhGia(nc, kyMo.id, { loai: "thang", nam: 2025, so: 8 }));
+  const kyMoSau = await chu.evaluationPeriod.findUniqueOrThrow({ where: { id: kyMo.id } });
+  dat("Kỳ chưa có phiếu chốt: sửa được, ngày tính lại theo giờ VN", suaMo.daDoi && kyMoSau.startDate.toISOString().slice(0, 10) === "2025-08-01" && kyMoSau.endDate.toISOString().slice(0, 10) === "2025-08-31");
+  await nemLoi("Sửa trùng một kỳ đã có → 409 trung-ky", "nghiep-vu", () => voi(T, hr, (nc) => suaKyDanhGia(nc, kyMo.id, { loai: "thang", nam: 2025, so: 6 })), "trung-ky");
+  await nemLoi("Trưởng phòng không sửa kỳ (cần nhan_su.update)", "quyen", () => voi(T, tp, (nc) => suaKyDanhGia(nc, kyMo.id, { loai: "thang", nam: 2025, so: 9 })));
+
+  // ==================================================================
+  console.log("\n— QA v2: QĐ-140 — sửa kỳ phải tính lại số liệu phiếu chưa chốt; chốt và sửa kỳ không chạy chéo —");
+  const nKpi = await nguoi("NV KPI kỳ QA", "sales", { quanLy: tp, phong: pbKD });
+  const cdKpi = `KPI kỳ QA ${DAU}`;
+  await chu.staffProfile.update({ where: { userId: nKpi }, data: { jobTitle: cdKpi } });
+  await voi(T, hr, (nc) => taoBoKpi(nc, LuocDoBoKpi.parse({ ma: `ky-${DAU}`, ten: "Bộ KPI sửa kỳ", chucDanh: cdKpi, chiTieu: [
+    { ten: "Điểm việc", trongSo: 50, nguon: "tu-dong", chiSo: "tong-diem-viec", mucTieuThang: 10, mucTieuQuy: 30 },
+    { ten: "Thái độ", trongSo: 50, nguon: "thu-cong" },
+  ] })));
+  const vKy = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QA v2 việc tháng 9", { nguoiPhuTrachId: nKpi, doKho: 3 })));
+  await voi(T, nKpi, (nc) => suaViec(nc, vKy.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await voi(T, tp, (nc) => duyetViec(nc, vKy.id, { chatLuong: 4, nhanXet: "" }));
+  await chu.task.update({ where: { id: vKy.id }, data: { approvedAt: new Date("2025-09-15T03:00:00Z") } });
+  const kySai = await voi(T, hr, (nc) => taoKyDanhGia(nc, { loai: "thang", nam: 2025, so: 10, nguoiIds: [nKpi] }));
+  const pKy = await chu.evaluation.findFirstOrThrow({ where: { periodId: kySai.id, userId: nKpi }, include: { items: { orderBy: { position: "asc" } } } });
+  dat("Chuẩn bị: kỳ mở nhầm tháng 10 — điểm việc tự tính = 0", Number(pKy.items[0].actual) === 0 && Number(pKy.items[0].target) === 10);
+  await voi(T, hr, (nc) => suaKyDanhGia(nc, kySai.id, { loai: "quy", nam: 2025, so: 3 }));
+  const itKy = await chu.evaluationItem.findMany({ where: { evaluationId: pKy.id }, orderBy: { position: "asc" } });
+  dat("Sửa kỳ (tháng 10 → quý 3): số liệu tự tính tính lại theo khoảng mới (12 điểm)", Number(itKy[0].actual) === 12, String(itKy[0].actual));
+  dat("…đổi loại kỳ: mục tiêu lấy mục tiêu quý (30), % đạt = 40", Number(itKy[0].target) === 30 && Number(itKy[0].achievement) === 40, `${itKy[0].target} / ${itKy[0].achievement}`);
+  await voi(T, tp, (nc) => quanLyCham(nc, pKy.id, { nhanXet: "", chiTieu: [{ id: itKy[1].id, diem: 80, ghiChu: "" }], nop: true }));
+  // Chốt chạy trong lúc một giao dịch sửa kỳ đang giữ dòng kỳ: phải chờ, rồi chốt theo số liệu kỳ mới.
+  const ngu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const suaDangChay = voiTenant(T, async (tx) => {
+    const hs = await layHoSoQuyen(tx, hr);
+    await suaKyDanhGia(taoNguCanh(tx, T, hs!, "127.0.0.1", "thu-qa"), kySai.id, { loai: "thang", nam: 2025, so: 9 });
+    await ngu(1500);
+  }, { timeoutMs: 20_000 });
+  await ngu(400);
+  const chotSong = voi(T, gd, (nc) => chotPhieu(nc, pKy.id, { ghiChu: "" }));
+  const [rSua, rChot] = await Promise.allSettled([suaDangChay, chotSong]);
+  const pChot = await chu.evaluation.findUniqueOrThrow({ where: { id: pKy.id }, include: { period: true, items: { orderBy: { position: "asc" } } } });
+  dat("Chốt cùng lúc với sửa kỳ: cả hai thành công nối tiếp nhau", rSua.status === "fulfilled" && rChot.status === "fulfilled", [rSua, rChot].map((r) => (r.status === "rejected" ? String(r.reason) : "ok")).join(" | "));
+  dat("…phiếu chốt theo đúng kỳ hiện tại (tháng 9: mục tiêu 10, thực tế 12, % đạt 120 → tổng 100)",
+    pChot.status === "da-chot" && pChot.period.number === 9 && Number(pChot.items[0].target) === 10 && Number(pChot.items[0].achievement) === 120 && Number(pChot.totalScore) === 100,
+    `${pChot.period.kind} ${pChot.period.number} / ${pChot.items[0].target} / ${pChot.items[0].achievement} / ${pChot.totalScore}`);
+
+  // ==================================================================
+  console.log("\n— QA v2: QĐ-135 — chuyển bước chạy cùng lúc với duyệt / quyết định gia hạn —");
+  const tp5 = await nguoi("TP5 nghỉ đúng lúc duyệt QA", "sales-manager", { quanLy: gd, phong: pbKD });
+  const nv5 = await nguoi("NV5 QA", "sales", { quanLy: tp5, phong: pbKD });
+  const v5 = await voi(T, tp5, (nc) => taoViec(nc, viecMoi("QA v2 việc TP5 đang duyệt", { nguoiPhuTrachId: nv5 })));
+  await voi(T, nv5, (nc) => suaViec(nc, v5.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  const v5b = await voi(T, tp5, (nc) => taoViec(nc, viecMoi("QA v2 gia hạn TP5 đang quyết", { nguoiPhuTrachId: nv5, canDuyet: false, han: new Date(Date.now() + 2 * GIO).toISOString() })));
+  const gh5 = await voi(T, nv5, (nc) => xinGiaHan(nc, v5b.id, { hanMoi: new Date(Date.now() + 72 * GIO), lyDo: "Chờ khách ký" }));
+  // TP5 đang duyệt (giữ khóa dòng việc / dòng đề nghị) thì Quản trị khóa tài khoản TP5.
+  const duyetDangChay = voiTenant(T, async (tx) => {
+    const hs = await layHoSoQuyen(tx, tp5);
+    const nc = taoNguCanh(tx, T, hs!, "127.0.0.1", "thu-qa");
+    await duyetViec(nc, v5.id, { chatLuong: 5, nhanXet: "" });
+    await quyetDinhGiaHan(nc, gh5.id, { dongY: true, ghiChu: "" });
+    await ngu(1500);
+  }, { timeoutMs: 20_000 });
+  await ngu(400);
+  const khoaDangChay = voi(T, qt, (nc) => suaNguoiDung(nc, tp5, { trangThai: "ngung-hoat-dong" }));
+  const [rDuyet, rKhoa] = await Promise.allSettled([duyetDangChay, khoaDangChay]);
+  dat("Duyệt + quyết định gia hạn cùng lúc với khóa người duyệt: cả hai thành công (không lỗi máy)", rDuyet.status === "fulfilled" && rKhoa.status === "fulfilled",
+    [rDuyet, rKhoa].map((r) => (r.status === "rejected" ? String(r.reason).slice(0, 200) : "ok")).join(" | "));
+  const cap5 = await chu.taskApprover.findFirstOrThrow({ where: { taskId: v5.id, level: 1 } });
+  const ls5 = await chu.approvalTransfer.count({ where: { tenantId: T, fromUserId: tp5 } });
+  dat("…việc đã duyệt xong không bị đổi người duyệt sau khi chấm (người duyệt cấp cuối vẫn là TP5), không ghi chuyển bước", cap5.approverId === tp5 && ls5 === 0, `${cap5.approverId === tp5 ? "TP5" : cap5.approverId} / ${ls5} dòng chuyển`);
+  dat("…đề nghị gia hạn đã quyết giữ nguyên người quyết định", (await chu.taskExtension.findUniqueOrThrow({ where: { id: gh5.id } })).status === "da-duyet");
+  dat("…Giám đốc không nhận thông báo 'bạn thành người duyệt' rác cho việc đã xong", (await chu.notification.count({ where: { userId: gd, objectId: v5.id, type: { in: ["viec-cho-duyet", "viec-chuyen-buoc-duyet"] } } })) === 0);
+
+  // ==================================================================
+  console.log("\n— QA v2: QĐ-137 — người không phải người giao không 'gửi lại' việc bị từ chối —");
+  const vTuChoi = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QA v2 việc bị từ chối", { nguoiPhuTrachId: nvB, canDuyet: false })));
+  await voi(T, nvB, (nc) => tuChoiViec(nc, vTuChoi.id, { lyDo: "Đang bận việc khác" }));
+  await voi(T, mk, (nc) => suaViec(nc, vTuChoi.id, { tieuDe: "QA v2 việc bị từ chối (Marketing sửa tên)" }));
+  const vTcSau = await chu.task.findUniqueOrThrow({ where: { id: vTuChoi.id } });
+  dat("NV Marketing sửa tiêu đề việc bị từ chối: việc vẫn 'bị từ chối', lý do giữ nguyên, người làm không bị báo giao lại",
+    vTcSau.acceptStatus === "tu-choi" && vTcSau.declineReason === "Đang bận việc khác" && (await chu.notification.count({ where: { userId: nvB, type: "viec-duoc-giao", objectId: vTuChoi.id } })) === 1,
+    `${vTcSau.acceptStatus} / ${await chu.notification.count({ where: { userId: nvB, type: "viec-duoc-giao", objectId: vTuChoi.id } })} thông báo`);
+  await voi(T, tp, (nc) => suaViec(nc, vTuChoi.id, { moTa: "Đã sắp xếp lại việc, nhờ em làm" }));
+  dat("Người giao sửa → việc về chờ nhận và người làm được báo", (await chu.task.findUniqueOrThrow({ where: { id: vTuChoi.id } })).acceptStatus === "cho-nhan"
+    && (await chu.notification.count({ where: { userId: nvB, type: "viec-duoc-giao", objectId: vTuChoi.id } })) === 2);
+
+  // ==================================================================
+  console.log("\n— QA v2: QĐ-131 — thang Có / Không chỉ nhận đúng hai giá trị —");
+  const mauCk = await voi(T, hr, (nc) => taoMauPhieu(nc, LuocDoMauPhieuLuu.parse({ ma: `co-khong-${DAU}`.slice(0, 50), ten: "Mẫu có / không QA", boCuc: {
+    tieuDe: "PHIẾU CÓ KHÔNG", phan: [{ ten: "A", tieuChi: [{ ma: "dung-gio", ten: "Đi làm đúng giờ", trongSo: 1, thang: "co-khong" }, { ma: "ket-qua", ten: "Kết quả", trongSo: 1, thang: "10" }] }],
+  } })));
+  const ptCk = await voi(T, nvA, (nc) => taoPhieuThucTap(nc, LuocDoTaoPhieuThucTap.parse({ nguoiId: tt, mauId: mauCk.id })));
+  for (const la of ["toString", "__proto__", "valueOf"]) {
+    await nemLoi(`Thang Có / Không: giá trị "${la}" bị chặn (không lọt thành điểm trống mà vẫn chốt được)`, "nghiep-vu",
+      () => voi(T, nvA, (nc) => chamPhieuThucTap(nc, ptCk.id, { thongTin: {}, diem: { "dung-gio": la, "ket-qua": 8 }, nhanXet: {} })), "diem-sai");
+  }
+  const ckDung = await voi(T, nvA, (nc) => chamPhieuThucTap(nc, ptCk.id, { thongTin: {}, diem: { "dung-gio": "co", "ket-qua": 8 }, nhanXet: {} }));
+  dat("Thang Có / Không: 'co' = 10 → tổng (10 + 8) / 2 = 9", ckDung.ketQua?.tong === 9, String(ckDung.ketQua?.tong));
+
+  // ==================================================================
+  console.log("\n— QĐ-154: người duyệt khi TẠO việc giao cho người khác —");
+  const cskh = await nguoi("CSKH QA", "customer-service", { quanLy: gd });
+  const v154 = (tieuDe: string, them: Record<string, unknown> = {}) => viecMoi(tieuDe, { nguoiPhuTrachId: nvA, ...them });
+  // Đường tấn công QA vòng 2: NV task.create phạm vi `all` tạo việc giao cho đồng nghiệp, tự đặt mình làm người duyệt, rồi chấm điểm.
+  for (const [ten, ke] of [["Marketing", mk], ["Kho", kho], ["Kế toán", keToan], ["CSKH", cskh]] as const) {
+    await nemLoi(`Tấn công — NV ${ten} tạo việc giao cho đồng nghiệp, tự đặt mình làm người duyệt → 403`, "nghiep-vu",
+      () => voi(T, ke, (nc) => taoViec(nc, v154(`QĐ-154 ${ten} tự duyệt`, { nguoiDuyetIds: [ke] }))), "tu-dat-nguoi-duyet");
+  }
+  await nemLoi("…đặt mình ở cấp 1, quản lý của người làm ở cấp cuối cũng không được", "nghiep-vu",
+    () => voi(T, mk, (nc) => taoViec(nc, v154("QĐ-154 MK cấp 1", { nguoiDuyetIds: [mk, tp] }))), "tu-dat-nguoi-duyet");
+  await nemLoi("…đặt một đồng nghiệp ngang cấp làm người duyệt cấp cuối → 403", "nghiep-vu",
+    () => voi(T, mk, (nc) => taoViec(nc, v154("QĐ-154 MK nhờ bạn duyệt", { nguoiDuyetIds: [nvB] }))), "nguoi-duyet-cuoi");
+  await nemLoi("…giao nhiều người, tự đặt mình làm người duyệt → 403, không việc nào được tạo", "nghiep-vu",
+    () => voi(T, mk, (nc) => giaoNhieuNguoi(nc, LuocDoTaoViec.parse({ tieuDe: "QĐ-154 giao nhiều tự duyệt", nguoiPhuTrachIds: [nvA, nvB], nguoiDuyetIds: [mk] }))), "tu-dat-nguoi-duyet");
+  dat("…không có việc nào mang tiêu đề tấn công được tạo", (await chu.task.count({ where: { tenantId: T, title: { startsWith: "QĐ-154 " }, OR: [{ title: { contains: "tự duyệt" } }, { title: { contains: "nhờ bạn" } }, { title: { contains: "cấp 1" } }] } })) === 0);
+  const vMac = await voi(T, mk, (nc) => taoViec(nc, v154("QĐ-154 MK giao, chuỗi mặc định")));
+  const chuoiMac = (await chu.taskApprover.findMany({ where: { taskId: vMac.id }, orderBy: { level: "asc" } })).map((x) => x.approverId);
+  dat("Đồng nghiệp giao việc: chuỗi mặc định = quản lý trực tiếp của người làm (không phải người giao)", chuoiMac.length === 1 && chuoiMac[0] === tp, chuoiMac.join(","));
+  await voi(T, nvA, (nc) => suaViec(nc, vMac.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await nemLoi("…người giao (Marketing) không chấm điểm được việc đó", "nghiep-vu", () => voi(T, mk, (nc) => duyetViec(nc, vMac.id, { chatLuong: 1, nhanXet: "" })), "khong-phai-luot");
+  const vSuaMk = await voi(T, mk, (nc) => taoViec(nc, v154("QĐ-154 MK giao rồi sửa chuỗi")));
+  await nemLoi("…người giao đồng nghiệp sửa chuỗi sau khi tạo để tự đứng duyệt → 403", "nghiep-vu",
+    () => voi(T, mk, (nc) => suaViec(nc, vSuaMk.id, { nguoiDuyetIds: [mk] })), "tu-dat-nguoi-duyet");
+  const vKt = await voi(T, mk, (nc) => taoViec(nc, viecMoi("QĐ-154 giao cho người không có quản lý", { nguoiPhuTrachId: keToan })));
+  dat("Người làm không có quản lý: chuỗi mặc định = Giám đốc", (await chu.taskApprover.findFirst({ where: { taskId: vKt.id } }))?.approverId === gd);
+  const vHop = await voi(T, mk, (nc) => taoViec(nc, v154("QĐ-154 đồng nghiệp ở cấp giữa", { nguoiDuyetIds: [nvB, tp] })));
+  dat("Đồng nghiệp khác đứng cấp giữa, quản lý của người làm ở cấp cuối: được", (await chu.taskApprover.count({ where: { taskId: vHop.id } })) === 2);
+  const vTpTu = await voi(T, tp, (nc) => taoViec(nc, v154("QĐ-154 TP giao, tự duyệt")));
+  dat("Quản lý trực tiếp giao việc: tự đứng duyệt (mặc định người giao) vẫn được", (await chu.taskApprover.findFirst({ where: { taskId: vTpTu.id } }))?.approverId === tp);
+  const vGdTu2 = await voi(T, gd, (nc) => taoViec(nc, viecMoi("QĐ-154 GĐ giao KTV", { nguoiPhuTrachId: nvC, nguoiDuyetIds: [gd] })));
+  dat("Giám đốc giao việc ngoài nhánh, tự đứng duyệt: được", (await chu.taskApprover.findFirst({ where: { taskId: vGdTu2.id } }))?.approverId === gd);
+  const mauGiao = await voi(T, mk, (nc) => taoMauViec(nc, LuocDoMauViec.parse({ ten: `Mẫu người giao duyệt ${DAU}`, tieuDe: "Kiểm tra quầy", canDuyet: true, chuoiDuyet: [{ loai: "nguoi-giao" }] })));
+  const vMau = await voi(T, mk, (nc) => taoViec(nc, v154("QĐ-154 theo mẫu", { mauViecId: mauGiao.id })));
+  dat("Mẫu việc khai 'người giao duyệt', đồng nghiệp dùng mẫu: người giao bị bỏ, cấp cuối = quản lý của người làm",
+    (await chu.taskApprover.findMany({ where: { taskId: vMau.id } })).map((x) => x.approverId).join() === tp);
+  // Lịch định kỳ: kiểm lúc lập lịch và lúc sinh việc.
+  await nemLoi("Lịch định kỳ: đồng nghiệp lập lịch 'người giao duyệt' giao cho đồng nghiệp → 403", "nghiep-vu",
+    () => voi(T, mk, (nc) => taoLapViec(nc, LuocDoLapViec.parse({ ten: `Lặp tự duyệt ${DAU}`, tieuDe: "Đếm hàng", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01", canDuyet: true, chuoiDuyet: [{ loai: "nguoi-giao" }] }))), "tu-dat-nguoi-duyet");
+  await nemLoi("…khai đích danh mình làm người duyệt → 403", "nghiep-vu",
+    () => voi(T, kho, (nc) => taoLapViec(nc, LuocDoLapViec.parse({ ten: `Lặp kho tự duyệt ${DAU}`, tieuDe: "Đếm hàng", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01", canDuyet: true, chuoiDuyet: [{ loai: "nguoi-cu-the", nguoiId: kho }] }))), "tu-dat-nguoi-duyet");
+  const lapMk = await voi(T, mk, (nc) => taoLapViec(nc, LuocDoLapViec.parse({ ten: `Lặp MK mặc định ${DAU}`, tieuDe: "Đăng bài", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01", canDuyet: true })));
+  // Lịch lập TRƯỚC luật này (ghi thẳng CSDL) khai Marketing tự duyệt việc của nhân viên kinh doanh.
+  const lapCu = await chu.taskRecurrence.create({ data: {
+    tenantId: T, name: `Lặp cũ tự duyệt ${DAU}`, title: "Lặp cũ tự duyệt", needsApproval: true, approvalChain: [{ loai: "nguoi-cu-the", nguoiId: mk }],
+    frequency: "ngay", assigneeIds: [nvA], startDate: new Date("2026-10-01T00:00:00Z"), createdBy: mk,
+  } });
+  await sinhViecDinhKy(T, mocVN("2026-10-07", 8 * 60));
+  const vLapMk = await chu.task.findFirst({ where: { recurrenceId: lapMk.id } });
+  dat("Lúc sinh: lịch đồng nghiệp chuỗi trống → việc có người duyệt = quản lý trực tiếp của người làm",
+    !!vLapMk && (await chu.taskApprover.findFirst({ where: { taskId: vLapMk.id } }))?.approverId === tp);
+  dat("Lúc sinh: lịch cũ khai đồng nghiệp tự duyệt → không sinh việc (bỏ qua, ghi nhật ký máy chủ)", (await chu.task.count({ where: { recurrenceId: lapCu.id } })) === 0);
+  const lapCuSau = await chu.taskRecurrence.findUniqueOrThrow({ where: { id: lapCu.id } });
+  dat("…lịch được đánh dấu 'Ngừng sinh — chuỗi duyệt không hợp lệ'", !!lapCuSau.invalidChainAt && !!lapCuSau.invalidChainReason);
+  const tbLap = async (u: string) => chu.notification.count({ where: { userId: u, type: "lap-viec-chuoi-sai", objectId: lapCu.id } });
+  dat("…báo người lập lịch và quản lý của họ (Giám đốc) trong ứng dụng", (await tbLap(mk)) === 1 && (await tbLap(gd)) === 1);
+  await sinhViecDinhKy(T, mocVN("2026-10-08", 8 * 60));
+  dat("…worker chạy lại ngày sau: không báo trùng (mỗi lịch một lần)", (await tbLap(mk)) === 1 && (await tbLap(gd)) === 1 && (await chu.task.count({ where: { recurrenceId: lapCu.id } })) === 0);
+  const dsLapMk = await voi(T, mk, (nc) => danhSachLapViec(nc));
+  dat("Màn hình lịch định kỳ: lịch hiện trạng thái chuỗi duyệt không hợp lệ", !!dsLapMk.find((x) => x.id === lapCu.id)?.chuoiSai);
+  await voi(T, mk, (nc) => suaLapViec(nc, lapCu.id, LuocDoLapViec.parse({ ten: `Lặp cũ tự duyệt ${DAU}`, tieuDe: "Lặp cũ tự duyệt", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01", canDuyet: true })));
+  dat("Sửa lịch (chuỗi trống → mặc định hợp lệ): bỏ cờ", (await chu.taskRecurrence.findUniqueOrThrow({ where: { id: lapCu.id } })).invalidChainAt === null);
+  await sinhViecDinhKy(T, mocVN("2026-10-09", 8 * 60));
+  const vLapCuMoi = await chu.task.findFirst({ where: { recurrenceId: lapCu.id } });
+  dat("…worker sinh lại việc, người duyệt = quản lý trực tiếp của người làm",
+    !!vLapCuMoi && (await chu.taskApprover.findFirst({ where: { taskId: vLapCuMoi.id } }))?.approverId === tp);
+
+  // QĐ-154 mở rộng: việc TỰ TẠO cần duyệt cũng phải có cấp cuối là cấp trên / Giám đốc / Quản trị (chấm chéo).
+  await nemLoi("Việc tự tạo cần duyệt: hai đồng nghiệp chấm chéo — NV A đặt NV B làm người duyệt → 403", "nghiep-vu",
+    () => voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo nhờ B chấm", { canDuyet: true, nguoiDuyetIds: [nvB] }))), "nguoi-duyet-cuoi");
+  await nemLoi("…và ngược lại NV B đặt NV A → 403", "nghiep-vu",
+    () => voi(T, nvB, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo nhờ A chấm", { canDuyet: true, nguoiDuyetIds: [nvA] }))), "nguoi-duyet-cuoi");
+  const vTuTao = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo cần duyệt mặc định", { canDuyet: true })));
+  dat("Việc tự tạo bật cần duyệt, để trống người duyệt → quản lý trực tiếp", (await chu.taskApprover.findMany({ where: { taskId: vTuTao.id } })).map((x) => x.approverId).join() === tp);
+  const vTuTaoGiua = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo B ở cấp giữa", { canDuyet: true, nguoiDuyetIds: [nvB, tp] })));
+  dat("Việc tự tạo: đồng nghiệp ở cấp giữa, quản lý cấp cuối → được", (await chu.taskApprover.count({ where: { taskId: vTuTaoGiua.id } })) === 2);
+  const vTuTaoKhong = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo không cần duyệt")));
+  dat("Việc tự tạo không cần duyệt: như cũ (không có người duyệt, không tính điểm)", !vTuTaoKhong.canDuyet && (await chu.taskApprover.count({ where: { taskId: vTuTaoKhong.id } })) === 0);
+  const vTuTaoSua = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("QĐ-154 tự tạo rồi bật duyệt")));
+  await nemLoi("…tự tạo rồi bật cần duyệt, chọn đồng nghiệp chấm → 403", "nghiep-vu",
+    () => voi(T, nvA, (nc) => suaViec(nc, vTuTaoSua.id, { canDuyet: true, nguoiDuyetIds: [nvB] })), "nguoi-duyet-cuoi");
+  await nemLoi("Lịch định kỳ tự giao cho mình, đồng nghiệp duyệt → 403", "nghiep-vu",
+    () => voi(T, nvA, (nc) => taoLapViec(nc, LuocDoLapViec.parse({ ten: `Lặp tự giao nhờ B ${DAU}`, tieuDe: "Gọi khách cũ", tanSuat: "ngay", nguoiIds: [nvA], tuNgay: "2026-10-01", canDuyet: true, chuoiDuyet: [{ loai: "nguoi-cu-the", nguoiId: nvB }] }))), "nguoi-duyet-cuoi");
+  dat("Không còn việc nào mà người giao ngang cấp (Marketing / Kho / Kế toán / CSKH) đứng cấp cuối",
+    (await chu.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM tasks t JOIN task_approvers a ON a.task_id = t.id AND a.approver_id = t.assigned_by
+      WHERE t.tenant_id = '${T}' AND t.assigned_by IN ('${mk}', '${kho}', '${keToan}', '${cskh}') AND t.owner_id <> t.assigned_by AND t.created_at > now() - interval '1 hour'`))[0].n === 0n);
+
+  // ==================================================================
+  console.log("\n— QĐ-155: việc chờ duyệt của người đã nghỉ —");
+  const nvE = await nguoi("NV E nghỉ QA", "sales", { quanLy: tp, phong: pbKD });
+  const nvF = await nguoi("NV F nhận bàn giao QA", "sales", { quanLy: tp, phong: pbKD });
+  const vE1 = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-155 việc E bị trả lại", { nguoiPhuTrachId: nvE })));
+  const vE2 = await voi(T, tp, (nc) => taoViec(nc, viecMoi("QĐ-155 việc E được duyệt", { nguoiPhuTrachId: nvE, doKho: 2 })));
+  for (const v of [vE1, vE2]) await voi(T, nvE, (nc) => suaViec(nc, v.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await voi(T, qt, (nc) => banGiao(nc, nvE, { nguoiNhanId: nvF, khoaTaiKhoan: true, ghiChu: null }));
+  const e1Sau = await chu.task.findUniqueOrThrow({ where: { id: vE1.id } });
+  dat("Bàn giao: việc đang chờ duyệt giữ người làm cũ, ghi người nhận bàn giao", e1Sau.ownerId === nvE && e1Sau.status === "cho-duyet" && e1Sau.handoverToId === nvF);
+  await voi(T, tp, (nc) => duyetViec(nc, vE2.id, { chatLuong: 5, nhanXet: "" }));
+  const e2Sau = await chu.task.findUniqueOrThrow({ where: { id: vE2.id } });
+  dat("…được duyệt sau bàn giao: điểm thuộc về người làm cũ", e2Sau.ownerId === nvE && Number(e2Sau.taskScore) === 10);
+  await voi(T, tp, (nc) => traLaiViec(nc, vE1.id, { lyDo: "Thiếu biên bản bàn giao" }));
+  const e1Tra = await chu.task.findUniqueOrThrow({ where: { id: vE1.id } });
+  dat("Bị trả lại mà người làm đã nghỉ → chuyển cho người nhận bàn giao, người giao giữ nguyên, chờ nhận",
+    e1Tra.ownerId === nvF && e1Tra.assignedBy === tp && e1Tra.acceptStatus === "cho-nhan" && e1Tra.status === "dang-lam" && e1Tra.handoverToId === null);
+  dat("…ghi lịch sử (lý do nguoi-lam-nghi) và báo người nhận",
+    (await chu.approvalTransfer.count({ where: { taskId: vE1.id, reason: "nguoi-lam-nghi", fromUserId: nvE, toUserId: nvF } })) === 1
+    && (await chu.notification.count({ where: { userId: nvF, type: "viec-duoc-giao", objectId: vE1.id } })) >= 1);
+  const lsE1 = await voi(T, tp, (nc) => lichSuGiaoViec(nc, vE1.id));
+  dat("…lịch sử việc hiện dòng chuyển người làm", lsE1.chuyenBuoc.some((c) => c.lyDo === "nguoi-lam-nghi"));
+  // Không có ghi nhận bàn giao: chỉ khóa tài khoản.
+  const nvG = await nguoi("NV G nghỉ QA", "sales", { quanLy: tp, phong: pbKD });
+  const vG = await voi(T, gd, (nc) => taoViec(nc, viecMoi("QĐ-155 việc G", { nguoiPhuTrachId: nvG, nguoiDuyetIds: [tp] })));
+  await voi(T, nvG, (nc) => suaViec(nc, vG.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await voi(T, qt, (nc) => suaNguoiDung(nc, nvG, { trangThai: "ngung-hoat-dong" }));
+  await voi(T, tp, (nc) => traLaiViec(nc, vG.id, { lyDo: "Làm lại phần báo giá" }));
+  const gSau = await chu.task.findUniqueOrThrow({ where: { id: vG.id } });
+  dat("Không có bàn giao → chuyển cho quản lý trực tiếp của người làm cũ; người giao (Giám đốc) giữ nguyên", gSau.ownerId === tp && gSau.assignedBy === gd);
+  const capG = await chu.taskApprover.findFirstOrThrow({ where: { taskId: vG.id, level: 1 } });
+  dat("…người nhận đang là người duyệt của việc → cấp đó lên cấp trên (không tự duyệt)", capG.approverId !== tp && capG.approverId === gd, capG.approverId);
+  // Mở lại việc đã xong (không cần duyệt) của người đã nghỉ.
+  const nvH = await nguoi("NV H nghỉ QA", "sales", { phong: pbKD });
+  const vH = await voi(T, qt, (nc) => taoViec(nc, viecMoi("QĐ-155 việc H mở lại", { nguoiPhuTrachId: nvH, canDuyet: false })));
+  await voi(T, nvH, (nc) => suaViec(nc, vH.id, { trangThai: "xong", ketQua: KQ, danhGia: "dat" }));
+  await voi(T, qt, (nc) => suaNguoiDung(nc, nvH, { trangThai: "ngung-hoat-dong" }));
+  const moLaiH = await voi(T, gd, (nc) => suaViec(nc, vH.id, { trangThai: "mo" }));
+  dat("Mở lại việc của người đã nghỉ (không có quản lý) → chuyển cho Giám đốc, người giao giữ nguyên",
+    moLaiH.nguoiPhuTrach.id === gd && (await chu.task.findUniqueOrThrow({ where: { id: vH.id } })).assignedBy === qt);
 
   await chu.$disconnect();
   ketLuan("QA 0.20.0 — Nhân sự giai đoạn 2");

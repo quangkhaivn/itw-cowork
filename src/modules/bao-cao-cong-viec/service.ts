@@ -7,17 +7,19 @@ import { khoaChungTu } from "@/lib/khoa-chung-tu";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import { dinhDangNgayGio, dinhDangTien } from "@/lib/dinh-dang";
-import { banDoTen } from "@/modules/cham-cong/chung";
-import { congNgay, laNgayHopLe, mocVN } from "@/modules/cham-cong/tinh-toan";
+import { banDoTen, lichCuaNhieuNguoi, nghiDaDuyet, ngayLeTrongKhoang } from "@/modules/cham-cong/chung";
+import { cacNgayTrongKhoang, congDuKien, congNgay, laNgayHopLe, mocVN } from "@/modules/cham-cong/tinh-toan";
 import { dateVeNgay, homNayVN, ngayVeDate, thoiDiemTuyChon, uuidTuyChon } from "@/modules/crm/chung";
 import { taoThongBao } from "@/modules/thong-bao/service";
 import { taoViec } from "@/modules/cong-viec/service";
 import { baoCaoTu, chamDuoc, docCauHinhDanhGia, locNguoiDanhGia, nguoiXemDuocDanhGia, xemDuocDanhGiaCua } from "@/modules/danh-gia/chung";
+import { napBanDoCapTren } from "@/modules/danh-gia/cap-tren";
 import { tinhChiSo } from "@/modules/danh-gia/chi-so";
 import {
   denLucNhac,
   hanBaoCao,
   kyBaoCao,
+  laNgayPhaiBaoCaoNgay,
   LOAI_BAO_CAO,
   NHAN_LOAI_BAO_CAO,
   tinhTrangBaoCao,
@@ -30,9 +32,11 @@ import {
  * việc đã xong / đang làm / sắp tới hạn và số liệu tự tính; người viết bổ sung nhận định rồi nộp.
  * Đã nộp thì bất biến (trigger `work_reports_da_nop`); nộp trễ / thiếu ghi để đánh giá tháng, không phạt tiền.
  *
- * Ai phải nộp (DG-41): người đang hoạt động, có hồ sơ nhân sự với **quản lý trực tiếp**, không phải
- * thực tập sinh (thực tập sinh viết nhật ký tuần — DG-70). Báo cáo tuần bắt buộc; báo cáo ngày chỉ khi
- * phòng của người đó bật `daily_report`. Ai cũng tự viết thêm được (không bắt buộc).
+ * Ai phải nộp (DG-41, QĐ-132): mọi người đang hoạt động có hồ sơ nhân sự, không phải thực tập sinh (thực
+ * tập sinh viết nhật ký tuần — DG-70), **kể cả người không có quản lý trực tiếp** (người nhận = Giám đốc).
+ * Người giữ vai trò Giám đốc không phải nộp, trừ khi Cấu hình `bao_cao.giam_doc_phai_bao_cao` = 1. Báo cáo
+ * tuần bắt buộc; báo cáo ngày chỉ khi phòng bật `daily_report` và chỉ vào **ngày phải làm** (QĐ-138). Ai cũng
+ * tự viết thêm được (không bắt buộc).
  */
 
 export const LuocDoBaoCao = z.object({
@@ -65,6 +69,7 @@ function kyCua(loai: LoaiBaoCao, ngay?: string) {
 export interface NguoiPhaiBaoCao {
   id: string;
   hoTen: string;
+  /** Người nhận / xét báo cáo: quản lý hiệu lực (quản lý trực tiếp còn hoạt động → cấp trên → Giám đốc). */
   quanLyId: string | null;
   phaiTuan: boolean;
   phaiNgay: boolean;
@@ -75,14 +80,34 @@ export interface NguoiPhaiBaoCao {
 export async function nguoiPhaiBaoCao(tx: ClientTenant, chiNguoi?: string[]): Promise<NguoiPhaiBaoCao[]> {
   const ds = await tx.staffProfile.findMany({
     where: {
-      managerId: { not: null },
       staffType: { not: "thuc-tap" },
       user: { status: "hoat-dong", isSystem: false },
       ...(chiNguoi && { userId: { in: chiNguoi } }),
     },
-    select: { userId: true, managerId: true, hiredAt: true, user: { select: { fullName: true } }, department: { select: { dailyReport: true } } },
+    select: { userId: true, hiredAt: true, user: { select: { fullName: true } }, department: { select: { dailyReport: true } } },
   });
-  return ds.map((d) => ({ id: d.userId, hoTen: d.user.fullName, quanLyId: d.managerId, phaiTuan: true, phaiNgay: !!d.department?.dailyReport, vaoLam: dateVeNgay(d.hiredAt) }));
+  if (ds.length === 0) return [];
+  const bd = await napBanDoCapTren(tx);
+  const giamDocBaoCao = (await docCauHinhDanhGia(tx)).giamDocPhaiBaoCao === 1;
+  return ds
+    .filter((d) => giamDocBaoCao || !bd.laGiamDoc(d.userId))
+    .map((d) => ({ id: d.userId, hoTen: d.user.fullName, quanLyId: bd.quanLyHieuLuc(d.userId), phaiTuan: true, phaiNgay: !!d.department?.dailyReport, vaoLam: dateVeNgay(d.hiredAt) }));
+}
+
+/**
+ * QĐ-138: hàm (người, ngày) → ngày đó người đó có phải nộp báo cáo ngày không — đọc lịch làm việc, ngày lễ,
+ * nghỉ phép đã duyệt (0.19.0) cho cả khoảng [tu, den] một lần.
+ */
+export async function boLocNgayPhaiBaoCao(tx: ClientTenant, userIds: string[], tu: string, den: string): Promise<(userId: string, ngay: string) => boolean> {
+  if (userIds.length === 0) return () => false;
+  const lich = await lichCuaNhieuNguoi(tx, userIds, den);
+  const le = await ngayLeTrongKhoang(tx, tu, den);
+  const nghi = await nghiDaDuyet(tx, userIds, tu, den);
+  return (userId, ngay) => {
+    const l = lich.get(userId)?.(ngay) ?? null;
+    const cd = congDuKien(ngay, l?.ca ?? null, l?.ngay ?? null, le.has(ngay));
+    return laNgayPhaiBaoCaoNgay({ coLich: cd.coLich, congDuKien: cd.giaTri, laNgayLe: le.has(ngay), nghiPhep: nghi.get(userId)?.get(ngay)?.giaTri ?? 0 });
+  };
 }
 
 /** Kỳ [.., den] có bắt buộc với người này không: kỳ kết thúc trước ngày vào làm thì không (không tính "thiếu"). */
@@ -197,10 +222,11 @@ export async function luuBaoCao(nc: NguCanh, d: z.infer<typeof LuocDoBaoCao>) {
   if (d.nop) {
     await nc.kiemToan({ action: "nop-bao-cao", objectType: "work_report", objectId: r.id, after: { loai: d.loai, tu: ky.tu, tre: r.isLate } });
     await nc.suKien({ eventType: SU_KIEN.WORK_REPORT_SUBMITTED, objectType: "work_report", objectId: r.id, payload: { loai: d.loai, tre: r.isLate } });
-    const hs = await nc.tx.staffProfile.findFirst({ where: { userId: nc.hoSo.userId }, select: { managerId: true } });
-    if (hs?.managerId && hs.managerId !== nc.hoSo.userId) {
+    // QĐ-132: người nhận = quản lý hiệu lực (không có quản lý / quản lý đã nghỉ → cấp trên → Giám đốc).
+    const nguoiNhan = (await napBanDoCapTren(nc.tx)).quanLyHieuLuc(nc.hoSo.userId);
+    if (nguoiNhan && nguoiNhan !== nc.hoSo.userId) {
       await taoThongBao(nc.tx, nc.tenantId, {
-        nguoiNhanId: hs.managerId,
+        nguoiNhanId: nguoiNhan,
         loai: "bao-cao-da-nop",
         tieuDe: `${nc.hoSo.hoTen} đã nộp ${NHAN_LOAI_BAO_CAO[d.loai].toLowerCase()} ${ky.tu === ky.den ? ky.tu.split("-").reverse().join("/") : `tuần ${ky.tu.split("-").reverse().join("/")}`}${r.isLate ? " (trễ hạn)" : ""}`,
         noiDung: d.vuongMac ? `Vướng mắc: ${d.vuongMac.slice(0, 400)}` : null,
@@ -299,9 +325,11 @@ export async function bangBaoCaoNhom(nc: NguCanh, loai: LoaiBaoCao, ngay?: strin
   const ten = await banDoTen(nc.tx, ds.map((r) => r.userId));
   const bayGio = new Date();
   const theoNguoi = new Map(ds.map((r) => [r.userId, r]));
+  const ngayLam = loai === "ngay" ? await boLocNgayPhaiBaoCao(nc.tx, phai.filter((p) => p.phaiNgay).map((p) => p.id), ky.tu, ky.den) : null;
   const dong: { nguoiId: string; hoTen: string; batBuoc: boolean; baoCao: ReturnType<typeof sangBaoCao> | null; tinhTrang: string; soNhanXet: number }[] = [];
   for (const p of phai) {
-    const batBuoc = (loai === "tuan" ? p.phaiTuan : p.phaiNgay) && batBuocTrongKy(p, ky.den);
+    // QĐ-138: báo cáo ngày không bắt buộc vào ngày không phải làm (nghỉ tuần theo lịch, lễ, nghỉ phép cả ngày).
+    const batBuoc = (loai === "tuan" ? p.phaiTuan : p.phaiNgay && !!ngayLam?.(p.id, ky.tu)) && batBuocTrongKy(p, ky.den);
     const r = theoNguoi.get(p.id);
     if (!batBuoc && !r) continue;
     dong.push({ nguoiId: p.id, hoTen: p.hoTen, batBuoc, baoCao: r ? sangBaoCao(r, bayGio) : null, tinhTrang: tinhTrangBaoCao(r?.deadlineAt ?? han, r?.submittedAt ?? null, bayGio), soNhanXet: soNx.find((x) => x.reportId === r?.id)?._count._all ?? 0 });
@@ -345,6 +373,30 @@ export async function thongKeBaoCaoTuan(tx: ClientTenant, userId: string, tu: st
   return kq;
 }
 
+/**
+ * Thống kê BÁO CÁO NGÀY bắt buộc trong [tu, den] cho phiếu đánh giá (QĐ-138): chỉ đếm ngày phải làm (có ca
+ * theo lịch, không lễ, không nghỉ phép cả ngày) mà hạn đã qua; người / phòng không bắt buộc báo cáo ngày → 0.
+ */
+export async function thongKeBaoCaoNgay(tx: ClientTenant, userId: string, tu: string, den: string, bayGio = new Date()) {
+  const phai = (await nguoiPhaiBaoCao(tx, [userId]))[0];
+  if (!phai?.phaiNgay) return { batBuoc: false, soNgay: 0, dungHan: 0, tre: 0, thieu: 0 };
+  const ch = baoCaoTu(await docCauHinhDanhGia(tx));
+  const ngayLam = await boLocNgayPhaiBaoCao(tx, [userId], tu, den);
+  const ds = await tx.workReport.findMany({ where: { userId, kind: "ngay", periodStart: { gte: ngayVeDate(tu), lte: ngayVeDate(den) } }, select: { periodStart: true, submittedAt: true } });
+  const nop = new Map(ds.map((r) => [dateVeNgay(r.periodStart), r.submittedAt]));
+  const kq = { batBuoc: true, soNgay: 0, dungHan: 0, tre: 0, thieu: 0 };
+  for (const ngay of cacNgayTrongKhoang(tu, den)) {
+    const han = hanBaoCao("ngay", ngay, ch);
+    if (han > bayGio || !batBuocTrongKy(phai, ngay) || !ngayLam(userId, ngay)) continue;
+    kq.soNgay += 1;
+    const tt = tinhTrangBaoCao(han, nop.get(ngay) ?? null, bayGio);
+    if (tt === "dung-han") kq.dungHan += 1;
+    else if (tt === "tre") kq.tre += 1;
+    else kq.thieu += 1;
+  }
+  return kq;
+}
+
 export async function xemDuocBaoCaoCua(nc: NguCanh, userId: string) {
   return xemDuocDanhGiaCua(nc, userId);
 }
@@ -369,7 +421,12 @@ export async function quetBaoCao(tenantId: string, bayGio = new Date()): Promise
         const nhac = denLucNhac(han, bayGio, ch.nhacTruocGio);
         const quaHan = bayGio > han;
         if (!nhac && !quaHan) continue;
-        const phai = nguoi.filter((n) => (loai === "tuan" ? n.phaiTuan : n.phaiNgay) && batBuocTrongKy(n, ky.den));
+        let phai = nguoi.filter((n) => (loai === "tuan" ? n.phaiTuan : n.phaiNgay) && batBuocTrongKy(n, ky.den));
+        // QĐ-138: báo cáo ngày — bỏ người hôm đó không phải làm (nghỉ tuần theo lịch, lễ, nghỉ phép cả ngày).
+        if (loai === "ngay" && phai.length) {
+          const ngayLam = await boLocNgayPhaiBaoCao(tx, phai.map((p) => p.id), ky.tu, ky.den);
+          phai = phai.filter((p) => ngayLam(p.id, ky.tu));
+        }
         if (phai.length === 0) continue;
         const daNop = new Set(
           (await tx.workReport.findMany({ where: { kind: loai, periodStart: ngayVeDate(ky.tu), status: "da-nop", userId: { in: phai.map((p) => p.id) } }, select: { userId: true } })).map((r) => r.userId),

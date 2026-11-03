@@ -8,6 +8,7 @@ import { xoaDem } from "@/lib/gioi-han-toc-do";
 import { LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
 import type { BoLocNguoiDung, DuLieuSuaNguoiDung, DuLieuTaoNguoiDung } from "./luoc-do";
+import { chuyenBuocChoCuaNguoi } from "@/modules/danh-gia/chuyen-buoc";
 
 /**
  * Phân hệ Người dùng — nghiệp vụ.
@@ -350,6 +351,12 @@ export async function suaNguoiDung(nc: NguCanh, id: string, d: DuLieuSuaNguoiDun
 
   // Bất biến 1 — kiểm sau khi ghi, trong cùng giao dịch.
   if (vaiTroMoi || d.trangThai === "ngung-hoat-dong") await damBaoConQuanTri(nc.tx);
+
+  // QĐ-135: khóa tài khoản → các bước duyệt việc / gia hạn / báo cáo / phiếu đang chờ người này chuyển cho
+  // quản lý trực tiếp của họ (không có thì Giám đốc), cùng giao dịch, ghi lịch sử và báo người nhận.
+  if (d.trangThai === "ngung-hoat-dong" && truoc.trangThai !== "ngung-hoat-dong") {
+    await chuyenBuocChoCuaNguoi(nc, id, "ngung-hoat-dong");
+  }
 
   const sau = await chiTietNguoiDung(nc, id);
   await nc.kiemToan({

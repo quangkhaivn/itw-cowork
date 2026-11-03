@@ -1243,6 +1243,32 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     macDinh: 1121,
     dungTuPhase: 8,
   },
+  {
+    // QĐ-133 (0.20.0): chốt phiếu đánh giá mặc định chỉ Giám đốc.
+    khoa: "danh_gia.truong_phong_duoc_chot",
+    nhom: "Đánh giá nhân sự",
+    nhan: "Trưởng phòng được chốt phiếu",
+    moTa: "0 = chỉ Giám đốc chốt / điều chỉnh phiếu đánh giá; trưởng phòng chấm rồi gửi Giám đốc chốt. 1 = người có quyền chốt đánh giá (trưởng phòng…) chốt được phiếu của người trong phạm vi của mình. Không ai tự chốt phiếu của mình. Mặc định 0.",
+    donVi: "bật / tắt",
+    toiThieu: 0,
+    toiDa: 1,
+    soNguyen: true,
+    macDinh: 0,
+    dungTuPhase: 8,
+  },
+  {
+    // QĐ-132 (0.20.0): Giám đốc là người nhận báo cáo của người không có quản lý trực tiếp.
+    khoa: "bao_cao.giam_doc_phai_bao_cao",
+    nhom: "Báo cáo công việc",
+    nhan: "Giám đốc cũng phải báo cáo",
+    moTa: "0 = người giữ vai trò Giám đốc không phải nộp báo cáo ngày / tuần. 1 = Giám đốc cũng phải nộp (người nhận là quản lý trực tiếp khai trên hồ sơ, nếu có). Mặc định 0.",
+    donVi: "bật / tắt",
+    toiThieu: 0,
+    toiDa: 1,
+    soNguyen: true,
+    macDinh: 0,
+    dungTuPhase: 8,
+  },
 ];
 
 export function timMuc(khoa: string): MucCauHinh | undefined {

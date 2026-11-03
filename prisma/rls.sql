@@ -50,7 +50,7 @@ BEGIN
                                    'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                                    'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
                                    'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
-                                   'salary_profiles')
+                                   'salary_profiles', 'approval_transfers')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -73,7 +73,8 @@ END $$;
 --    tiến độ task_progress_logs, nhận xét báo cáo work_report_comments, phiên điều chỉnh
 --    đánh giá evaluation_adjustments, nhận xét nhật ký thực tập intern_journal_comments,
 --    và (QA 0.19.0) xét ngày công thiếu giờ attendance_day_reviews (QĐ-116), và (0.21.0) phiên bản
---    hồ sơ lương salary_profiles (LU-02 — sửa = phiên bản mới)
+--    hồ sơ lương salary_profiles (LU-02 — sửa = phiên bản mới),
+--    (0.20.0 chính sách) lịch sử chuyển bước duyệt approval_transfers (QĐ-135)
 --    Không cấp UPDATE/DELETE cho ứng dụng, và chặn thêm bằng trigger để kể cả
 --    chủ sở hữu cũng không lỡ tay sửa lịch sử.
 -- --------------------------------------------------------------------------
@@ -91,7 +92,7 @@ DECLARE
                             'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                             'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
                             'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
-                            'salary_profiles'];
+                            'salary_profiles', 'approval_transfers'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
