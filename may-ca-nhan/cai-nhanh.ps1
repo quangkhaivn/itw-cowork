@@ -5,7 +5,7 @@
 #   node\     Node.js 22 bản chạy ngay (không cài vào Windows)
 #   pgsql\    PostgreSQL 16 bản gọn (gói @embedded-postgres trên npm)
 #   pgdata\   dữ liệu thử (DEMO) — giữ nguyên qua các lần cập nhật
-#   app\      mã nguồn TGTH Cowork nhánh release/0.17 + .env
+#   app\      mã nguồn TGTH Cowork nhánh release/0.21 + .env
 # rồi tạo CHAY.bat / DUNG.bat / CAP-NHAT.bat ngay trong thư mục đó.
 #
 # Chạy lại tệp này bất cứ lúc nào để cập nhật mã mới nhất: dữ liệu và .env được giữ.
@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'   # thanh tiến trình của Invoke-WebRequest làm tải chậm gấp nhiều lần trên PowerShell 5.1
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-$NHANH = 'release/0.17'
+$NHANH = 'release/0.21'
 $NODE_PHIEN_BAN = '22.22.0'
 $PG_GOI = '16.14.0-beta.17'
 $CONG_PG = 55432
@@ -222,6 +222,20 @@ start "" "http://127.0.0.1:$CONG_APP"
 echo Da mo http://127.0.0.1:$CONG_APP - thong tin dang nhap trong THONG-TIN-DANG-NHAP.txt
 timeout /t 8 >nul
 "@
+  # Mở cho cả mạng nội bộ: máy chấm công vân tay (ADMS) và máy khác trong văn phòng gọi được vào máy này.
+  $chayMang = $chay.Replace('-H 127.0.0.1', '-H 0.0.0.0').Replace('timeout /t 8 >nul', @"
+echo.
+echo === MO CHO MANG NOI BO (may cham cong van tay, may khac trong van phong) ===
+echo Dia chi IP cua may nay:
+powershell -NoProfile -Command "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { `$_.IPAddress -notlike '127.*' -and `$_.IPAddress -notlike '169.254.*' } | ForEach-Object { '   ' + `$_.IPAddress }"
+echo.
+echo Tren may cham cong ZKTeco: Menu - Comm./Cloud Server Setting (ADMS):
+echo    Server Address = mot IP o tren, Server Port = $CONG_APP, HTTPS = Tat, Proxy = Tat
+echo Trong Cowork: Nhan su - May cham cong - Dang ky may (nhap so serial SN cua may).
+echo Windows hoi cho phep Node.js qua tuong lua: chon "Private networks" roi Allow.
+echo.
+pause
+"@)
   $dung = @"
 @echo off
 rem Tat CSDL cua ban chay thu. Du lieu duoc giu. Dong 2 cua so den "TGTH Cowork" de tat phan mem.
@@ -237,7 +251,7 @@ copy /y "%~dp0app\may-ca-nhan\cai-nhanh.ps1" "%TEMP%\cai-nhanh-cowork.ps1" >nul
 powershell -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\cai-nhanh-cowork.ps1" -ThuMuc "%~dp0."
 pause
 "@
-  foreach ($cap in @(@('CHAY.bat', $chay), @('DUNG.bat', $dung), @('CAP-NHAT.bat', $capNhat))) {
+  foreach ($cap in @(@('CHAY.bat', $chay), @('CHAY-MANG-NOI-BO.bat', $chayMang), @('DUNG.bat', $dung), @('CAP-NHAT.bat', $capNhat))) {
     [System.IO.File]::WriteAllText((Join-Path $ThuMuc $cap[0]), ($cap[1] -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
   }
 }
@@ -249,6 +263,9 @@ Thư mục: $ThuMuc
 Mở phần mềm: bấm đúp CHAY.bat  →  http://127.0.0.1:$CONG_APP
 Tắt: đóng 2 cửa sổ đen "TGTH Cowork", rồi bấm DUNG.bat
 Cập nhật bản mới: bấm đúp CAP-NHAT.bat (giữ dữ liệu)
+Nối máy chấm công vân tay / máy khác trong văn phòng: bấm CHAY-MANG-NOI-BO.bat thay cho CHAY.bat
+   (hiện IP của máy này; trên máy chấm công đặt Server Address = IP đó, Port = $CONG_APP)
+Phần lương bắt buộc xác thực 2 lớp: Tài khoản của tôi → Bật xác thực 2 lớp (Google/Microsoft Authenticator).
 
 1) Doanh nghiệp mẫu – ô "Mã doanh nghiệp": demo – mật khẩu chung: MauThu2026x
    giamdoc@demo.test (Giám đốc)        quantri@demo.test (Quản trị)

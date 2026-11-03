@@ -2,7 +2,7 @@
 
 > **Cách nhanh nhất, không cần cài Git, Node.js hay Docker:** bấm đúp **`CAI-NHANH-TGTH-COWORK.bat`**. Bộ cài tự tải mọi thứ vào `L:\TGTH-Cowork` (không có ổ L: thì vào thư mục người dùng), dựng xong thì mở phần mềm. Đã cài bản cũ thì bấm lại tệp này để cập nhật: dữ liệu thử và `.env` được giữ. Phần dưới đây là cách cài bằng Docker Desktop.
 
-Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.17`) chạy riêng trên **một máy Windows**, với **dữ liệu thử DEMO**. Nó không kết nối và không đụng gì tới bản đang chạy thật ở thegioitinhoc.io.vn.
+Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.21`) chạy riêng trên **một máy Windows**, với **dữ liệu thử DEMO**. Nó không kết nối và không đụng gì tới bản đang chạy thật ở thegioitinhoc.io.vn.
 
 - **Cơ sở dữ liệu**: PostgreSQL 16 và Redis 7 chạy trong Docker Desktop. Chỉ máy này truy cập được, qua cổng 55432 và 56379.
 - **Phần mềm**: ứng dụng Next.js và worker chạy bằng Node.js. Mở trong trình duyệt tại **http://127.0.0.1:3000**.
@@ -54,7 +54,30 @@ Mở thư mục `TGTH-Cowork\may-ca-nhan`:
 | **`CAI-DAT.bat`** | Chạy lại sau mỗi lần cập nhật mã. Dữ liệu và `.env` được giữ nguyên. |
 | **`XOA-DU-LIEU-THU.bat`** | Xoá sạch dữ liệu thử để cài lại từ đầu. Phải gõ `XOA` để xác nhận. |
 
-**Cập nhật bản mới:** bấm đúp lại `TAI-VE-VA-CAI-DAT.bat`. Tệp này lấy mã mới nhất của nhánh `release/0.17` rồi cài lại.
+**Cập nhật bản mới:** bấm đúp lại `TAI-VE-VA-CAI-DAT.bat`. Tệp này lấy mã mới nhất của nhánh `release/0.21` rồi cài lại.
+
+## 4b. Thử phần Nhân sự (0.19 → 0.21): chấm công, giao việc, đánh giá, thực tập, lương
+
+Đăng nhập `giamdoc@demo.test` (doanh nghiệp `demo`), menu **Nhân sự**:
+
+- **Bảng chấm công trực tiếp**: ai đã vào ca, đi muộn, chưa đến, đang ở hiện trường; tự làm mới mỗi 10 giây. **Chấm công** (GPS): bấm Vào ca / Ra ca trên trình duyệt (trình duyệt hỏi quyền vị trí → Cho phép).
+- **Công việc**: giao việc có độ khó, cần duyệt; người nhận bấm Nhận / Từ chối; thẻ *Chờ tôi duyệt*, *Chờ tôi nhận*; **Mẫu & định kỳ**.
+- **Báo cáo công việc** (ngày / tuần), **Đánh giá** (kỳ tháng / quý, xếp loại A/B/C/D), **Bộ KPI**.
+- **Thực tập**: nhật ký tuần, phiếu đánh giá theo mẫu của trường, in A4.
+- **Tính lương**: bắt buộc **xác thực 2 lớp** — vào *Tài khoản của tôi → Bật xác thực 2 lớp* (cài Google Authenticator / Microsoft Authenticator trên điện thoại, quét mã). Sau đó: Hồ sơ lương, Tham số lương, Kỳ lương, Phiếu lương của tôi.
+
+### Những phần chưa có — bổ sung ngay trong phần mềm khi đang chạy
+
+| Phần | Bổ sung ở đâu |
+|---|---|
+| **Máy chấm công vân tay** (ZKTeco) | Mở bằng **`CHAY-MANG-NOI-BO.bat`** (thay cho CHAY.bat) — cửa sổ hiện IP của máy tính. Trên máy chấm công: *Comm. → Cloud Server Setting (ADMS)*: Server Address = IP đó, Port = 3000, tắt HTTPS. Trong Cowork: **Nhân sự → Máy chấm công → Đăng ký máy** (nhập số serial SN). Gán mã chấm công (PIN) cho nhân viên ở **Nhân sự → Hồ sơ nhân sự**. Khoảng 1 phút sau máy hiện *Trực tuyến*. |
+| **Mẫu phiếu đánh giá sinh viên của trường** | **Thực tập → Mẫu phiếu → Thêm mẫu (từ mẫu chung)** → soạn bằng biểu mẫu (ô thông tin, phần, tiêu chí, thang điểm), bấm *Xem trước bản in* để so với mẫu giấy. |
+| **Địa điểm làm việc / bán kính GPS, ca, lịch làm việc, ngày lễ** | **Nhân sự → Thiết lập chấm công**. |
+| **Tham số lương** (bảo hiểm, lương tối thiểu vùng, giảm trừ, biểu thuế) | **Tính lương → Tham số lương**: đúng thì bấm *Xác nhận*, sai thì *Nhập bộ mới* cùng ngày hiệu lực. Bảng lương dùng tham số chưa xác nhận sẽ không gửi duyệt được. |
+| **Hồ sơ lương, phụ cấp, người phụ thuộc, tài khoản ngân hàng** | **Tính lương → Hồ sơ lương** (một người không tự sửa hồ sơ của chính mình). |
+| **Logo công ty** (in phiếu, báo giá) | **Quản trị → Hồ sơ công ty**. |
+
+> Chấm công GPS trên **điện thoại** cần địa chỉ **https** — trên máy chạy thử (http) chỉ thử được ngay trên máy tính này. Máy chấm công vân tay chạy được qua http trong mạng nội bộ.
 
 ## 4a. Thử các tính năng mới của 0.17.0 và 0.16.1
 
