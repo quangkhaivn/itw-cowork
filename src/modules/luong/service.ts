@@ -10,7 +10,7 @@ import { banDoTen, lichCuaNhieuNguoi, ngayLeTrongKhoang } from "@/modules/cham-c
 import { CO_NGAY, cacNgayTrongThang, congDuKien } from "@/modules/cham-cong/tinh-toan";
 import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { ketQuaHieuLuc } from "@/modules/danh-gia/service";
-import { baoChoNguoiCoQuyen, taoThongBao } from "@/modules/thong-bao/service";
+import { baoChoNguoiCoQuyen, nguoiGiuQuyen, taoThongBao } from "@/modules/thong-bao/service";
 import { batBuocQuyenLuong, docCauHinhLuong, ghiXem, locNguoiLuong, thamSoHieuLuc, trongPhamViLuong, xemDuocNguoiKhac, type BoApDung } from "./chung";
 import { hoSoApDung, soNguoiPhuThuoc } from "./ho-so";
 import { LuocDoTaoKy, NHAN_LOAI_KHOAN, type LuocDoKhoan, type LuocDoLyDo } from "./luoc-do";
@@ -696,10 +696,7 @@ async function kiemKhongTuDuyet(nc: NguCanh, ky: KyLuong, viec: string) {
  */
 export async function nguoiDuyetDuoc(tx: ClientTenant, ky: Pick<KyLuong, "id" | "calculatedBy">): Promise<{ id: string; hoTen: string }[]> {
   const coQuyenDuyet = await tx.user.findMany({
-    where: {
-      status: "hoat-dong", isSystem: false,
-      userRoles: { some: { status: "hoat-dong", role: { status: "hoat-dong", rolePermissions: { some: { status: "hoat-dong", permission: { code: "luong.approve", status: "hoat-dong" } } } } } },
-    },
+    where: { status: "hoat-dong", isSystem: false, id: { in: await nguoiGiuQuyen(tx, "luong.approve", true) } },
     select: { id: true, fullName: true },
   });
   const coDong = new Set((await tx.payrollLine.findMany({ where: { runId: ky.id }, select: { userId: true } })).map((d) => d.userId));
@@ -712,10 +709,8 @@ async function batBuocConNguoiDuyet(tx: ClientTenant, ky: KyLuong) {
     where: { runId: ky.id },
     select: { userId: true, fullName: true },
   });
-  const nguoiDuyet = await tx.user.findMany({
-    where: { id: { in: coDong.map((d) => d.userId) }, userRoles: { some: { status: "hoat-dong", role: { rolePermissions: { some: { status: "hoat-dong", permission: { code: "luong.approve" } } } } } } },
-    select: { fullName: true },
-  });
+  const giu = new Set(await nguoiGiuQuyen(tx, "luong.approve", true));
+  const nguoiDuyet = coDong.filter((d) => giu.has(d.userId)).map((d) => ({ fullName: d.fullName }));
   throw new LoiNghiepVu(
     `Không còn ai duyệt được bảng lương này: mọi người có quyền duyệt hoặc là người tính, hoặc có dòng trong bảng${nguoiDuyet.length ? ` (${nguoiDuyet.map((u) => u.fullName).join(", ")})` : ""}. ` +
       "Tách dòng của lãnh đạo sang một kỳ lương riêng: Tính lương → Tạo kỳ lương riêng (chọn người, đặt tên, ví dụ “Lãnh đạo”), tính lại kỳ này rồi gửi duyệt; kỳ riêng do Quản trị hoặc Giám đốc khác duyệt. Hoặc cấp quyền duyệt lương cho một người thứ hai.",

@@ -61,6 +61,25 @@ export async function taoThongBao(tx: ClientTenant, tenantId: string, d: DuLieuT
 }
 
 /**
+ * Id người dùng có vai trò mang quyền `maQuyen` (vai trò / quyền gán đang hoạt động nếu `chiHoatDong`). Đi theo id từng
+ * bước thay cho bộ lọc quan hệ lồng `userRoles.some.role.rolePermissions.some` — QA 0.21.0 v2: lọc lồng qua RLS có lúc
+ * được lập kế hoạch thành vòng lặp quét cả bảng role_permissions (hàng chục nghìn dòng khi nhiều doanh nghiệp, thống kê
+ * cũ) → một lần gửi duyệt bảng lương mất 10–30 giây, quá hạn giao dịch 5 giây.
+ */
+export async function nguoiGiuQuyen(tx: ClientTenant, maQuyen: string, chiHoatDong = false): Promise<string[]> {
+  const q = await tx.permission.findFirst({ where: { code: maQuyen, ...(chiHoatDong ? { status: "hoat-dong" } : {}) }, select: { id: true } });
+  if (!q) return [];
+  const rp = await tx.rolePermission.findMany({ where: { permissionId: q.id, status: "hoat-dong" }, select: { roleId: true } });
+  if (!rp.length) return [];
+  const roleIds = chiHoatDong
+    ? (await tx.role.findMany({ where: { id: { in: rp.map((r) => r.roleId) }, status: "hoat-dong" }, select: { id: true } })).map((r) => r.id)
+    : rp.map((r) => r.roleId);
+  if (!roleIds.length) return [];
+  const ur = await tx.userRole.findMany({ where: { roleId: { in: roleIds }, ...(chiHoatDong ? { status: "hoat-dong" } : {}) }, select: { userId: true } });
+  return [...new Set(ur.map((u) => u.userId))];
+}
+
+/**
  * Báo cho người đang giữ một quyền nào đó (ví dụ: báo giá chờ duyệt → những người
  * có `quotation.approve`). Bỏ qua chính người gây ra việc — không ai cần tự báo mình.
  */
@@ -75,8 +94,7 @@ export async function baoChoNguoiCoQuyen(
     where: {
       status: "hoat-dong",
       isSystem: false,
-      ...(boQuaNguoiId ? { id: { not: boQuaNguoiId } } : {}),
-      userRoles: { some: { role: { rolePermissions: { some: { status: "hoat-dong", permission: { code: maQuyen } } } } } },
+      id: { in: await nguoiGiuQuyen(tx, maQuyen), ...(boQuaNguoiId ? { not: boQuaNguoiId } : {}) },
     },
     select: { id: true },
   });

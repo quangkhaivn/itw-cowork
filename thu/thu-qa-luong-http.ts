@@ -197,6 +197,26 @@ async function main() {
   const sai3 = await goi(`/api/v1/luong/ky/${ky.id}/xuat?loai=khong-co`, { cookie: cKt });
   dat("Loại xuất lạ → 400", sai3.status === 400, String(sai3.status));
 
+  // QĐ-162 qua HTTP: bật / đổi thiết bị bắt buộc mật khẩu (+ mã máy cũ khi đổi); khóa cũ dùng được tới khi xác nhận.
+  const cGd = await dangNhapDu(gd);
+  const xoaBuoc = () => chu.user.update({ where: { id: gd.id }, data: { totpLastStep: null } });
+  const thieu = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { method: "POST", than: {}, cookie: cGd });
+  dat("QĐ-162: bắt đầu bật / đổi thiết bị không gửi mật khẩu → 400", thieu.status === 400, String(thieu.status));
+  const saiMk = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { method: "POST", than: { matKhau: "sai-mat-khau-1" }, cookie: cGd });
+  dat("QĐ-162: sai mật khẩu → 422, cộng bộ đếm sai", saiMk.status === 422 && (await chu.user.findUniqueOrThrow({ where: { id: gd.id } })).failedLoginCount >= 1, String(saiMk.status));
+  const thieuMa = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { method: "POST", than: { matKhau: MAT_KHAU }, cookie: cGd });
+  dat("QĐ-162: đổi thiết bị đúng mật khẩu nhưng thiếu mã máy cũ → 422", thieuMa.status === 422, String(thieuMa.status));
+  await xoaBuoc();
+  const doi = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { method: "POST", than: { matKhau: MAT_KHAU, ma: maTotp(khoaTotp.get(gd.id)!) }, cookie: cGd });
+  dat("QĐ-162: mật khẩu + mã máy cũ → nhận khóa mới (đổi thiết bị)", doi.status === 200 && doi.json.doiThietBi === true && typeof doi.json.khoa === "string", `${doi.status} ${doi.text.slice(0, 120)}`);
+  await xoaBuoc();
+  const b1Gd = await dangNhap(gd.email);
+  const moiChuaXn = await goi("/api/dang-nhap/2-lop", { method: "POST", than: { ma: maTotp(String(doi.json.khoa)) }, cookie: `cowork_2lop=${b1Gd.cookies.cowork_2lop}`, ipKhach: ip() });
+  dat("…khóa MỚI chưa xác nhận không đăng nhập được", !moiChuaXn.cookies.cowork_phien, String(moiChuaXn.status));
+  const b1Gd2 = await dangNhap(gd.email);
+  const cuVanDung = await goi("/api/dang-nhap/2-lop", { method: "POST", than: { ma: maTotp(khoaTotp.get(gd.id)!) }, cookie: `cowork_2lop=${b1Gd2.cookies.cowork_2lop}`, ipKhach: ip() });
+  dat("…khóa CŨ vẫn đăng nhập được tới khi xác nhận khóa mới", Boolean(cuVanDung.cookies.cowork_phien), `${cuVanDung.status} ${cuVanDung.text.slice(0, 120)}`);
+
   // Phiên tạo TRƯỚC khi bật 2 lớp: bật xong phiên cũ bị thu hồi; phiên mới có quyền.
   const cKt2Cu = await dangNhapDu(kt2);
   const truoc = await goi("/api/v1/luong/ky", { cookie: cKt2Cu });
