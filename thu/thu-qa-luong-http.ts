@@ -201,7 +201,7 @@ async function main() {
   const cKt2Cu = await dangNhapDu(kt2);
   const truoc = await goi("/api/v1/luong/ky", { cookie: cKt2Cu });
   dat("Kế toán chưa bật 2 lớp → 403", truoc.status === 403 && truoc.json.ma === "luong-can-2-lop");
-  const bd = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { method: "POST", than: {}, cookie: cKt2Cu });
+  const bd = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { method: "POST", than: { matKhau: MAT_KHAU }, cookie: cKt2Cu });
   const khoaMoi = String(bd.json.khoa ?? "");
   const xn = await goi("/api/v1/tai-khoan/2-lop/xac-nhan", { method: "POST", than: { ma: maTotp(khoaMoi) }, cookie: cKt2Cu });
   const cKt2Moi = xn.cookies.cowork_phien ? `cowork_phien=${xn.cookies.cowork_phien}` : "";

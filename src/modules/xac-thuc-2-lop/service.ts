@@ -27,6 +27,11 @@ const nguCanhKhoa = (userId: string) => `totp:${userId}`;
 const NHA_PHAT_HANH = "TGTH Cowork";
 
 export const LuocDoMa = z.object({ ma: z.string().trim().min(6).max(20) });
+/** QĐ-162: bật 2 lớp / đổi thiết bị phải nhập lại mật khẩu hiện tại; đổi thiết bị (đang bật) cần thêm mã hiện tại. */
+export const LuocDoBatDau2Lop = z.object({
+  matKhau: z.string().min(1, "Nhập mật khẩu hiện tại.").max(200),
+  ma: z.string().trim().max(20).optional().default(""),
+});
 export const LuocDoTat2Lop = z.object({ matKhau: z.string().min(1).max(200), ma: z.string().trim().min(6).max(20) });
 export const LuocDoChinhSach2Lop = z.object({ vaiTro: z.array(z.string().trim().min(1).max(50)).max(50) });
 export const LuocDoDatLai2Lop = z.object({ lyDo: z.string().trim().min(2, "Ghi lý do đặt lại (ví dụ: mất điện thoại).").max(500) });
@@ -70,36 +75,56 @@ export async function trangThai2LopCuaToi(nc: NguCanh) {
   };
 }
 
-/** Bước 1: sinh khóa mới, lưu dạng chờ. Chưa có hiệu lực cho tới khi xác nhận bằng mã đúng. */
-export async function batDau2Lop(nc: NguCanh) {
+/**
+ * Bước 1: sinh khóa mới, lưu dạng chờ. Chưa có hiệu lực cho tới khi xác nhận bằng mã đúng.
+ * QĐ-162: bắt buộc nhập lại MẬT KHẨU HIỆN TẠI (người cầm phiên lấy cắp không tự gắn điện thoại của mình). Đang bật =
+ * **đổi thiết bị**: cần thêm một mã của thiết bị cũ (hoặc mã khôi phục); khóa cũ vẫn hiệu lực tới khi xác nhận khóa mới.
+ * Sai mật khẩu / mã dùng chung bộ đếm khóa tài khoản + giới hạn tốc độ với đăng nhập (XT-05).
+ */
+export async function batDau2Lop(nc: NguCanh, matKhau: string, maHienTai = "") {
   batBuocKhoa();
-  const u = await nc.tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { totpEnabledAt: true, email: true } });
+  const u = await nc.tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { totpEnabledAt: true, email: true, passwordHash: true } });
   if (!u) throw new LoiKhongTimThay("Tài khoản");
-  if (u.totpEnabledAt) throw new LoiNghiepVu("Xác thực 2 lớp đang bật. Muốn đổi điện thoại thì tắt rồi bật lại.", 409, "da-bat-2-lop");
+  // Đang bị khóa tạm (sai mật khẩu / mã quá N lần — chung bộ đếm với đăng nhập) → từ chối, không kiểm gì. Không đếm tốc
+  // độ ở lần ĐÚNG: bộ đếm sai đã khóa tài khoản sau N lần như đăng nhập.
+  await chanNeuDangKhoaTam(nc);
+  if (!(await kiemTraMatKhau(matKhau, u.passwordHash))) {
+    await ghiLanSai(nc);
+    throw new LoiNghiepVu(u.totpEnabledAt ? "Mật khẩu hoặc mã xác thực không đúng." : "Mật khẩu hiện tại không đúng.", 422, u.totpEnabledAt ? "sai-ma" : "sai-mat-khau");
+  }
+  if (u.totpEnabledAt) {
+    if (!maHienTai || (await kiemMaDangNhap(nc.tx, nc.hoSo.userId, maHienTai)) === null) {
+      await ghiLanSai(nc);
+      throw new LoiNghiepVu("Mật khẩu hoặc mã xác thực không đúng.", 422, "sai-ma");
+    }
+  }
   const khoa = sinhKhoaTotp();
   await nc.tx.user.update({ where: { id: nc.hoSo.userId }, data: { totpPendingEnc: maHoa(khoa, nguCanhKhoa(nc.hoSo.userId)) } });
   // Trả khóa đúng MỘT lần cho chính chủ để nhập vào ứng dụng xác thực; không ghi vào nhật ký.
-  return { khoa, khoaNhom: nhomKhoa(khoa), uri: uriOtpauth(khoa, u.email, NHA_PHAT_HANH) };
+  return { khoa, khoaNhom: nhomKhoa(khoa), uri: uriOtpauth(khoa, u.email, NHA_PHAT_HANH), doiThietBi: Boolean(u.totpEnabledAt) };
 }
 
-/** Bước 2: nhập mã đúng → bật. Trả 10 mã khôi phục (hiện một lần). Route ký lại phiên hiện tại. */
+/**
+ * Bước 2: nhập mã đúng của khóa MỚI → bật (hoặc đổi thiết bị: khóa mới thay khóa cũ, mã khôi phục sinh lại). Trả 10
+ * mã khôi phục (hiện một lần). Route ký lại phiên hiện tại.
+ */
 export async function xacNhan2Lop(nc: NguCanh, ma: string) {
   batBuocKhoa();
   const u = await nc.tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { totpPendingEnc: true, totpEnabledAt: true } });
   if (!u?.totpPendingEnc) throw new LoiNghiepVu("Chưa bắt đầu bật 2 lớp hoặc đã bật xong. Bấm Bật lại từ đầu.", 409, "chua-bat-dau");
-  if (u.totpEnabledAt) throw new LoiNghiepVu("Xác thực 2 lớp đang bật.", 409, "da-bat-2-lop");
+  const doiThietBi = Boolean(u.totpEnabledAt);
   const khoa = giaiMaNghiepVu(u.totpPendingEnc, nguCanhKhoa(nc.hoSo.userId), "khóa xác thực 2 lớp", "bấm Bật lại từ đầu");
   const buoc = kiemMaTotp(khoa, ma);
   if (buoc === null) throw new LoiNghiepVu("Mã không đúng. Kiểm giờ trên điện thoại và nhập mã đang hiện.", 422, "sai-ma");
   const luc = new Date();
   await nc.tx.user.update({
     where: { id: nc.hoSo.userId },
-    data: { totpSecretEnc: u.totpPendingEnc, totpPendingEnc: null, totpEnabledAt: luc, totpLastStep: BigInt(buoc), securityChangedAt: luc, updatedBy: nc.hoSo.userId },
+    data: { totpSecretEnc: u.totpPendingEnc, totpPendingEnc: null, totpEnabledAt: luc, totpLastStep: BigInt(buoc), securityChangedAt: luc, failedLoginCount: 0, updatedBy: nc.hoSo.userId },
   });
   const maKhoiPhuc = await sinhVaLuuMaKhoiPhuc(nc.tx, nc.tenantId, nc.hoSo.userId);
-  await nc.kiemToan({ action: "bat-2-lop", objectType: "user", objectId: nc.hoSo.userId, after: { soMaKhoiPhuc: maKhoiPhuc.length } });
-  await nc.suKien({ eventType: SU_KIEN.TWO_FACTOR_ENABLED, objectType: "user", objectId: nc.hoSo.userId });
-  return { maKhoiPhuc };
+  await nc.kiemToan({ action: doiThietBi ? "doi-thiet-bi-2-lop" : "bat-2-lop", objectType: "user", objectId: nc.hoSo.userId, after: { soMaKhoiPhuc: maKhoiPhuc.length } });
+  await nc.suKien({ eventType: SU_KIEN.TWO_FACTOR_ENABLED, objectType: "user", objectId: nc.hoSo.userId, payload: { doiThietBi } });
+  return { maKhoiPhuc, doiThietBi };
 }
 
 /**
@@ -117,6 +142,16 @@ async function kiemMaCuaToi(nc: NguCanh, ma: string): Promise<boolean> {
   if ((await kiemMaDangNhap(nc.tx, nc.hoSo.userId, ma)) !== null) return true;
   await ghiLanSai(nc);
   return false;
+}
+
+/** Đang bị khóa tạm (bộ đếm sai chung với đăng nhập) → từ chối ngay. */
+async function chanNeuDangKhoaTam(nc: NguCanh): Promise<void> {
+  const u = await nc.tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { lockedUntil: true } });
+  const bayGio = new Date();
+  if (u?.lockedUntil && u.lockedUntil > bayGio) {
+    const phut = Math.max(1, Math.ceil((u.lockedUntil.getTime() - bayGio.getTime()) / 60_000));
+    throw new LoiNghiepVu(`Nhập sai mật khẩu / mã quá nhiều lần — tài khoản bị khóa tạm. Thử lại sau khoảng ${phut} phút.`, 429, "sai-ma");
+  }
 }
 
 /** Đang bị khóa tạm hoặc vượt tốc độ thử mã → từ chối ngay, không kiểm gì. */

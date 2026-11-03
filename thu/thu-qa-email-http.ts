@@ -309,7 +309,7 @@ async function main() {
   dat("Tắt 2 lớp: phiên cũ ở máy khác → 401", (await goi("/api/v1/tai-khoan/2-lop", { cookie: C1 })).status === 401);
   dat("Tắt 2 lớp: chính cookie cũ của máy vừa tắt → 401 (đã thay bằng cookie mới)", (await goi("/api/v1/tai-khoan/2-lop", { cookie: C2 })).status === 401);
   const C3 = phien(tat)!;
-  const bd = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { phuongThuc: "POST", cookie: C3 });
+  const bd = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { phuongThuc: "POST", cookie: C3, than: { matKhau: MAT_KHAU } });
   const khoaMoi = String(bd.json.khoa ?? "");
   const xn = await goi("/api/v1/tai-khoan/2-lop/xac-nhan", { phuongThuc: "POST", cookie: C3, than: { ma: maTai(khoaMoi, buocThoiGian(Date.now())) } });
   dat("Bật lại 2 lớp qua API → 10 mã khôi phục + cookie mới", xn.status === 200 && Array.isArray(xn.json.maKhoiPhuc) && (xn.json.maKhoiPhuc as unknown[]).length === 10 && Boolean(xn.cookies.cowork_phien));
@@ -366,7 +366,7 @@ async function main() {
   dat("Bị bắt mà chưa bật: trang hệ thống → chuyển /bat-xac-thuc-2-lop", trangChan.length === 0, trangChan.join(", "));
   dat("Bị bắt mà chưa bật: mở được trang bật 2 lớp", (await goi("/bat-xac-thuc-2-lop", { cookie: CK })).status === 200);
   dat("Bị bắt mà chưa bật: đọc trạng thái 2 lớp của mình được", (await goi("/api/v1/tai-khoan/2-lop", { cookie: CK })).status === 200);
-  const bdK = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { phuongThuc: "POST", cookie: CK });
+  const bdK = await goi("/api/v1/tai-khoan/2-lop/bat-dau", { phuongThuc: "POST", cookie: CK, than: { matKhau: MAT_KHAU } });
   dat("Bị bắt mà chưa bật: bắt đầu bật được", bdK.status === 200 && typeof bdK.json.khoa === "string");
   const xnK = await goi("/api/v1/tai-khoan/2-lop/xac-nhan", { phuongThuc: "POST", cookie: CK, than: { ma: maTai(String(bdK.json.khoa), buocThoiGian(Date.now())) } });
   const CK2 = phien(xnK);

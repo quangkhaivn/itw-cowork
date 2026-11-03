@@ -90,7 +90,10 @@ async function main() {
   // ------------------------------------------------------------------
   console.log("— Tự bật 2 lớp (XT-01 → XT-03) —");
   dat("Ban đầu chưa bật", !(await voi(T, nv, (nc) => trangThai2LopCuaToi(nc))).daBat);
-  const bd = await voi(T, nv, (nc) => batDau2Lop(nc));
+  await nemLoi("QĐ-162: bật 2 lớp phải nhập đúng mật khẩu hiện tại", "nghiep-vu", () => voi(T, nv, (nc) => batDau2Lop(nc, "SaiMatKhau1")), "sai-mat-khau");
+  dat("…sai mật khẩu cộng vào bộ đếm khóa tài khoản như đăng nhập", (await chu.user.findUniqueOrThrow({ where: { id: nv } })).failedLoginCount === 1);
+  dat("…không sinh khóa chờ khi sai mật khẩu", (await chu.user.findUniqueOrThrow({ where: { id: nv } })).totpPendingEnc === null);
+  const bd = await voi(T, nv, (nc) => batDau2Lop(nc, MAT_KHAU));
   dat("Khóa mới 32 ký tự base32 + URI otpauth", /^[A-Z2-7]{32}$/.test(bd.khoa) && bd.uri.startsWith("otpauth://totp/"));
   const u0 = await chu.user.findUniqueOrThrow({ where: { id: nv } });
   dat("XT-02: khóa chờ lưu dạng mã hóa, không chứa khóa thuần", u0.totpPendingEnc?.startsWith("v1:") === true && !u0.totpPendingEnc.includes(bd.khoa));
@@ -107,7 +110,8 @@ async function main() {
   dat("XT-07: bật 2 lớp thu hồi phiên ký trước đó", !phienConHieuLuc(phienCu, hs1!.doiMatKhauLuc) && phienConHieuLuc(Date.now() + 1, hs1!.doiMatKhauLuc));
   const nk = await chu.auditLog.findMany({ where: { tenantId: T, objectId: nv } });
   dat("Nhật ký có 'bat-2-lop' và không chứa khóa hay mã khôi phục", nk.some((n) => n.action === "bat-2-lop") && !JSON.stringify(nk).includes(bd.khoa) && !xn.maKhoiPhuc.some((m) => JSON.stringify(nk).includes(m)));
-  await nemLoi("Đang bật thì không bắt đầu lại", "nghiep-vu", () => voi(T, nv, (nc) => batDau2Lop(nc)), "da-bat-2-lop");
+  dat("Bật thành công xóa bộ đếm sai", (await chu.user.findUniqueOrThrow({ where: { id: nv } })).failedLoginCount === 0);
+  await nemLoi("QĐ-162: đổi thiết bị (đang bật) cần cả mã của thiết bị cũ", "nghiep-vu", () => voi(T, nv, (nc) => batDau2Lop(nc, MAT_KHAU)), "sai-ma");
 
   // ------------------------------------------------------------------
   console.log("\n— Kiểm mã lúc đăng nhập (XT-04, XT-05) —");
@@ -147,7 +151,7 @@ async function main() {
   const u2 = await chu.user.findUniqueOrThrow({ where: { id: nv } });
   dat("Tắt: xóa khóa và mã khôi phục", u2.totpSecretEnc === null && u2.totpEnabledAt === null && (await chu.userRecoveryCode.count({ where: { userId: nv } })) === 0);
 
-  const bd2 = await voi(T, nv, (nc) => batDau2Lop(nc));
+  const bd2 = await voi(T, nv, (nc) => batDau2Lop(nc, MAT_KHAU));
   await voi(T, nv, (nc) => xacNhan2Lop(nc, ma(bd2.khoa)));
   await nemLoi("Nhân viên không đặt lại 2 lớp cho người khác (user.update)", "quyen", () => voi(T, nv2, (nc) => datLai2Lop(nc, nv, "mất máy")));
   await nemLoi("Không tự đặt lại cho chính mình", "nghiep-vu", () => voi(T, gd, (nc) => datLai2Lop(nc, gd, "thử")), "khong-tu-dat-lai");
@@ -158,6 +162,24 @@ async function main() {
   dat("XT-08: đặt lại thu hồi mọi phiên của người đó", !phienConHieuLuc(truocDatLai, (await voiTenant(T, (tx) => layHoSoQuyen(tx, nv)))!.doiMatKhauLuc));
   dat("XT-08: ghi kiểm toán 'dat-lai-2-lop' kèm lý do, người làm", (await chu.auditLog.count({ where: { tenantId: T, action: "dat-lai-2-lop", objectId: nv, actorId: gd } })) === 1);
   await nemLoi("Đặt lại người chưa bật → báo rõ", "nghiep-vu", () => voi(T, gd, (nc) => datLai2Lop(nc, nv, "lần hai")), "chua-bat-2-lop");
+
+  // ------------------------------------------------------------------
+  console.log("\n— QĐ-162: đổi thiết bị, khóa tạm khi sai mật khẩu nhiều lần —");
+  const nv3 = await nguoi(T, "nhan-vien-3", "sales");
+  const bdA = await voi(T, nv3, (nc) => batDau2Lop(nc, MAT_KHAU));
+  await voi(T, nv3, (nc) => xacNhan2Lop(nc, ma(bdA.khoa, Date.now() - 30_000)));
+  await nemLoi("Đổi thiết bị: sai mật khẩu bị chặn", "nghiep-vu", () => voi(T, nv3, (nc) => batDau2Lop(nc, "SaiMatKhau1", ma(bdA.khoa))), "sai-ma");
+  const bdB = await voi(T, nv3, (nc) => batDau2Lop(nc, MAT_KHAU, ma(bdA.khoa)));
+  dat("Đổi thiết bị: đúng mật khẩu + mã thiết bị cũ → khóa mới chờ xác nhận, khóa cũ vẫn dùng được", bdB.doiThietBi && bdB.khoa !== bdA.khoa && (await voiTenant(T, (tx) => kiemMaDangNhap(tx, nv3, ma(bdA.khoa, Date.now() + 30_000)))) === "totp");
+  const xnB = await voi(T, nv3, (nc) => xacNhan2Lop(nc, ma(bdB.khoa)));
+  dat("Xác nhận khóa mới: thay khóa cũ, sinh lại mã khôi phục, ghi kiểm toán 'doi-thiet-bi-2-lop'",
+    xnB.doiThietBi && xnB.maKhoiPhuc.length === 10 && (await voiTenant(T, (tx) => kiemMaDangNhap(tx, nv3, ma(bdA.khoa, Date.now() + 60_000)))) === null
+      && (await chu.auditLog.count({ where: { tenantId: T, action: "doi-thiet-bi-2-lop", objectId: nv3 } })) === 1);
+  const nv4 = await nguoi(T, "nhan-vien-4", "sales");
+  for (let i = 0; i < 5; i++) await voi(T, nv4, (nc) => batDau2Lop(nc, `Sai${i}MatKhau`)).catch(() => undefined);
+  const u4 = await chu.user.findUniqueOrThrow({ where: { id: nv4 } });
+  dat("Sai mật khẩu N lần (Cấu hình, mặc định 5) → khóa tạm tài khoản như đăng nhập", Boolean(u4.lockedUntil && u4.lockedUntil.getTime() > Date.now()));
+  await nemLoi("…đang khóa tạm thì đúng mật khẩu cũng bị từ chối", "nghiep-vu", () => voi(T, nv4, (nc) => batDau2Lop(nc, MAT_KHAU)), "sai-ma");
 
   // ------------------------------------------------------------------
   console.log("\n— Ràng buộc CSDL và cách ly —");
@@ -175,7 +197,7 @@ async function main() {
     chan2 = true;
   }
   dat("[CSDL] CHECK: đã bật thì phải có khóa", chan2);
-  const bd3 = await voi(T, kt, (nc) => batDau2Lop(nc));
+  const bd3 = await voi(T, kt, (nc) => batDau2Lop(nc, MAT_KHAU));
   await voi(T, kt, (nc) => xacNhan2Lop(nc, ma(bd3.khoa)));
   const demB = await voiTenant(tenantB.id, (tx) => tx.userRecoveryCode.count());
   dat("RLS: doanh nghiệp B không đọc được mã khôi phục của A", demB === 0 && (await chu.userRecoveryCode.count({ where: { tenantId: T } })) > 0);

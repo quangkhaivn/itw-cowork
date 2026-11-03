@@ -231,7 +231,7 @@ async function nguoi(tid: string, ten: string, vai: string) {
 
 /** Bật 2 lớp cho một người qua service thật; trả khóa + mã khôi phục. */
 async function bat2Lop(T: string, uid: string) {
-  const bd = await voi(T, uid, (nc) => batDau2Lop(nc));
+  const bd = await voi(T, uid, (nc) => batDau2Lop(nc, MAT_KHAU));
   const s = buocThoiGian(Date.now());
   const xn = await voi(T, uid, (nc) => xacNhan2Lop(nc, maTaiBuoc(bd.khoa, s - 1)));
   return { khoa: bd.khoa, maKhoiPhuc: xn.maKhoiPhuc };
@@ -326,7 +326,7 @@ async function main() {
   // ------------------------------------------------------------------
   console.log("\n— A2. 2 lớp: lộ bí mật qua API / nhật ký / sự kiện —");
   const u5 = await nguoi(T, "nv-2lop-lo", "sales");
-  const bd5 = await voi(T, u5, (nc) => batDau2Lop(nc));
+  const bd5 = await voi(T, u5, (nc) => batDau2Lop(nc, MAT_KHAU));
   const xn5 = await voi(T, u5, (nc) => xacNhan2Lop(nc, maTaiBuoc(bd5.khoa, buocThoiGian(Date.now()))));
   const moi5 = await voi(T, u5, (nc) => taoLaiMaKhoiPhuc(nc, xn5.maKhoiPhuc[0]));
   await voi(T, u5, (nc) => tat2Lop(nc, MAT_KHAU, moi5.maKhoiPhuc[0]));
@@ -427,7 +427,7 @@ async function main() {
   await nemLoi("Thiếu APP_ENC_KEY → lưu mật khẩu SMTP báo 503 'chua-co-khoa-ma-hoa'", "nghiep-vu", () =>
     voi(T, gd, (nc) => luuKetNoi(nc, LuocDoKetNoiEmail.parse({ host: "smtp.vidu.test", port: 465, baoMat: "tls", tenDangNhap: "gui@qa.test", matKhau: "x", tenNguoiGui: "QA", emailNguoiGui: "gui@qa.test" }))),
   "chua-co-khoa-ma-hoa");
-  await nemLoi("Thiếu APP_ENC_KEY → bật 2 lớp báo 503 'chua-co-khoa-ma-hoa'", "nghiep-vu", () => voi(T, sales, (nc) => batDau2Lop(nc)), "chua-co-khoa-ma-hoa");
+  await nemLoi("Thiếu APP_ENC_KEY → bật 2 lớp báo 503 'chua-co-khoa-ma-hoa'", "nghiep-vu", () => voi(T, sales, (nc) => batDau2Lop(nc, MAT_KHAU)), "chua-co-khoa-ma-hoa");
   const loiThieuKhoa = await batLoi(() => voi(T, gd, (nc) => guiThuKiemTraKetNoi(nc)));
   dat(
     "ĐỎ: thiếu APP_ENC_KEY mà đã lưu mật khẩu → thư thử báo LoiNghiepVu rõ (không 500)",

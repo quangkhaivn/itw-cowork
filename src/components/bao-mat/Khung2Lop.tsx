@@ -27,13 +27,17 @@ export default function Khung2Lop({ trangThai, sauKhiBat }: { trangThai: TrangTh
   const [ma, datMa] = useState("");
   const [matKhau, datMatKhau] = useState("");
   const [maKhoiPhuc, datMaKhoiPhuc] = useState<string[] | null>(null);
-  const [che, datChe] = useState<"" | "tat" | "sinh-lai">("");
+  const [che, datChe] = useState<"" | "tat" | "sinh-lai" | "bat" | "doi-may">("");
 
-  async function batDau() {
-    const kq = await goi<{ khoaNhom: string; uri: string }>("/api/v1/tai-khoan/2-lop/bat-dau", "POST");
+  /** QĐ-162: bật / đổi điện thoại phải nhập lại mật khẩu hiện tại (đổi điện thoại: thêm mã của máy cũ). */
+  async function batDau(e: React.FormEvent) {
+    e.preventDefault();
+    const kq = await goi<{ khoaNhom: string; uri: string }>("/api/v1/tai-khoan/2-lop/bat-dau", "POST", { matKhau, ma: che === "doi-may" ? ma : "" });
     if (kq) {
       datKhoa(kq);
+      datChe("");
       datMa("");
+      datMatKhau("");
     }
   }
   async function xacNhan(e: React.FormEvent) {
@@ -105,7 +109,7 @@ export default function Khung2Lop({ trangThai, sauKhiBat }: { trangThai: TrangTh
         </div>
       )}
 
-      {trangThai.daBat ? (
+      {khoa ? null : trangThai.daBat ? (
         <>
           <p>
             <span className="huy-hieu tot">Đang bật</span> từ {dinhDangNgayGio(trangThai.batLuc)} · còn {trangThai.soMaKhoiPhucCon} mã khôi phục chưa dùng
@@ -116,12 +120,31 @@ export default function Khung2Lop({ trangThai, sauKhiBat }: { trangThai: TrangTh
               <button type="button" className="nut" onClick={() => (datLoi(null), datChe("sinh-lai"))}>
                 Sinh lại mã khôi phục
               </button>
+              <button type="button" className="nut" onClick={() => (datLoi(null), datChe("doi-may"))}>
+                Đổi điện thoại
+              </button>
               {!trangThai.batBuoc && (
                 <button type="button" className="nut trong" onClick={() => (datLoi(null), datChe("tat"))}>
                   Tắt xác thực 2 lớp
                 </button>
               )}
             </div>
+          )}
+          {che === "doi-may" && !khoa && (
+            <form onSubmit={batDau} className="luoi-form">
+              <div className="truong">
+                <label htmlFor="hai-lop-mk-doi">Mật khẩu hiện tại</label>
+                <input id="hai-lop-mk-doi" type="password" autoComplete="current-password" value={matKhau} onChange={(e) => datMatKhau(e.target.value)} required />
+              </div>
+              <div className="truong">
+                <label htmlFor="hai-lop-ma-doi">Mã 6 số trên điện thoại CŨ (hoặc mã khôi phục)</label>
+                <input type="text" id="hai-lop-ma-doi" autoComplete="one-time-code" value={ma} onChange={(e) => datMa(e.target.value)} required />
+              </div>
+              <div className="chan-form">
+                <button type="button" className="nut trong" onClick={() => datChe("")}>Thôi</button>
+                <button type="submit" className="nut chinh" disabled={dangGui}>Tiếp tục</button>
+              </div>
+            </form>
           )}
           {che === "sinh-lai" && (
             <form onSubmit={sinhLai} className="luoi-form">
@@ -152,7 +175,28 @@ export default function Khung2Lop({ trangThai, sauKhiBat }: { trangThai: TrangTh
             </form>
           )}
         </>
-      ) : khoa ? (
+      ) : che === "bat" ? (
+        <form onSubmit={batDau} className="luoi-form">
+          <div className="truong">
+            <label htmlFor="hai-lop-mk-bat">Nhập lại mật khẩu hiện tại để bật</label>
+            <input id="hai-lop-mk-bat" type="password" autoComplete="current-password" value={matKhau} onChange={(e) => datMatKhau(e.target.value)} required autoFocus />
+          </div>
+          <div className="chan-form">
+            <button type="button" className="nut trong" onClick={() => datChe("")}>Thôi</button>
+            <button type="submit" className="nut chinh" disabled={dangGui}>Tiếp tục</button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className="phu">
+            Chưa bật. Khi bật, đăng nhập cần thêm mã 6 số từ ứng dụng xác thực trên điện thoại — lộ mật khẩu cũng chưa vào được tài khoản.
+          </p>
+          <button type="button" className="nut chinh" onClick={() => (datLoi(null), datChe("bat"))} disabled={dangGui || !trangThai.coKhoaMaHoa}>
+            Bật xác thực 2 lớp
+          </button>
+        </>
+      )}
+      {khoa && (
         <form onSubmit={xacNhan}>
           <ol className="buoc-2-lop">
             <li>Mở ứng dụng xác thực trên điện thoại (Google Authenticator, Microsoft Authenticator, Authy…) và chọn <strong>Nhập khóa thiết lập</strong>.</li>
@@ -174,15 +218,6 @@ export default function Khung2Lop({ trangThai, sauKhiBat }: { trangThai: TrangTh
             </button>
           </div>
         </form>
-      ) : (
-        <>
-          <p className="phu">
-            Chưa bật. Khi bật, đăng nhập cần thêm mã 6 số từ ứng dụng xác thực trên điện thoại — lộ mật khẩu cũng chưa vào được tài khoản.
-          </p>
-          <button type="button" className="nut chinh" onClick={batDau} disabled={dangGui || !trangThai.coKhoaMaHoa}>
-            Bật xác thực 2 lớp
-          </button>
-        </>
       )}
     </div>
   );
