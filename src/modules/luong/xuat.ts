@@ -99,10 +99,6 @@ export async function xuatBangLuong(nc: NguCanh, id: string, dinhDang: "xls" | "
 }
 
 /**
- * File chi lương ngân hàng (LU-51): chỉ kỳ ĐÃ KHÓA, số tiền = thực lĩnh > 0, cột + nội dung theo mẫu cấu hình.
- * Số tài khoản lấy từ phiên bản hồ sơ lương HIỆN HÀNH (tài khoản không phải đầu vào tính lương). Thiếu tài khoản → chặn.
- */
-/**
  * CSV ghi các cột chỉ định LUÔN trong ngoặc kép (số tài khoản — QĐ-164); ô chữ chống chèn công thức như `taoCsv`.
  * Lưu ý: Excel mở CSV vẫn có thể đổi chuỗi số dài thành số (mất số 0 đầu) — HUONG-DAN khuyên dùng bản Excel.
  */
