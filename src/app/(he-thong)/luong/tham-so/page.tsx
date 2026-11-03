@@ -21,6 +21,7 @@ export default async function TrangThamSoLuong() {
       const nc = taoNguCanh(tx, nd.phien.tenantId, nd.hoSo);
       return { ts: await danhSachThamSo(nc), mau: coQuyen(nd.hoSo, "luong.export") ? await xemMauNganHang(nc) : null };
     }),
+    nd,
   );
   if (kq.can2Lop) return <Can2Lop tieuDe="Tham số lương" />;
   const { ts, mau } = kq.d;

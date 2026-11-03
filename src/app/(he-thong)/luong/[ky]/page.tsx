@@ -32,6 +32,7 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
         throw e;
       }
     }),
+    nd,
   );
   if (kq.can2Lop) return <Can2Lop tieuDe="Bảng lương" />;
   const k = kq.d;

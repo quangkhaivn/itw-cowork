@@ -46,6 +46,7 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
       }
       return { ds, pc, ls };
     }),
+    nd,
   );
   if (kq.can2Lop) return <Can2Lop tieuDe="Hồ sơ lương" />;
   const { ds, pc, ls } = kq.d;

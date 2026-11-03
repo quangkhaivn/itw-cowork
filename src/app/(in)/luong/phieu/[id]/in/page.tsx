@@ -38,6 +38,7 @@ export default async function BanInPhieuLuong({ params }: { params: Promise<{ id
         throw e;
       }
     }),
+    nd,
   );
   if (kq.can2Lop) return <Can2Lop tieuDe="Phiếu lương" />;
   if (!kq.d) notFound();

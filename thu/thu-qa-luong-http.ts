@@ -145,6 +145,14 @@ async function main() {
   dat("Sau khóa: phiếu của mình 200 (không cần 2 lớp)", p1.status === 200 && (p1.json.ketQua as { thucLinh: number }).thucLinh === Number(dNv.netPay));
   const in1 = await goi(`/luong/phieu/${dNv.id}/in`, { cookie: cNv });
   dat("…bản in phiếu của mình 200", in1.status === 200 && in1.text.includes("PHIẾU LƯƠNG"));
+  const tc0 = await chu.auditLog.count({ where: { tenantId: T, action: "tu-choi-quyen", actorId: nv.id } });
+  const inKhac = await goi(`/luong/phieu/${dNv2.id}/in`, { cookie: cNv });
+  dat("LỖI 4: nhân viên mở bản in phiếu người khác → 404 (trước khi sửa: lỗi máy 500), không lộ số tiền", inKhac.status === 404 && !inKhac.text.includes(so2), String(inKhac.status));
+  const kyTrang = await goi(`/luong/${ky.id}`, { cookie: cNv });
+  dat("LỖI 4: nhân viên mở trang bảng lương → 404 (trước khi sửa: trang lỗi)", kyTrang.status === 404 && !kyTrang.text.includes(so2), String(kyTrang.status));
+  const hsTrang = await goi(`/luong/ho-so?nguoi=${nv2.id}`, { cookie: cNv });
+  dat("LỖI 4: nhân viên mở trang hồ sơ lương → 404", hsTrang.status === 404, String(hsTrang.status));
+  dat("…mỗi lần dò ở trang đều ghi vết từ chối quyền", (await chu.auditLog.count({ where: { tenantId: T, action: "tu-choi-quyen", actorId: nv.id } })) - tc0 >= 3);
   for (const [ten, duong] of [
     ["phiếu người khác", `/api/v1/luong/dong/${dNv2.id}`],
     ["bản in phiếu người khác", `/luong/phieu/${dNv2.id}/in`],

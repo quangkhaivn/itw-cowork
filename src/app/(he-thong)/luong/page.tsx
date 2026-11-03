@@ -29,6 +29,7 @@ export default async function TrangLuong() {
       const ts = coMotTrongCacQuyen(nd.hoSo, ["luong.create", "luong.update", "luong.approve", "luong.export"]) ? await danhSachThamSo(nc) : null;
       return { ky, canXacNhan: ts?.canXacNhan ?? [] };
     }),
+    nd,
   );
   if (kq.can2Lop) return <Can2Lop />;
   const d = kq.d;
