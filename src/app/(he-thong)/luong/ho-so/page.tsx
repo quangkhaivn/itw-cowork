@@ -20,6 +20,7 @@ const PC_TRUONG = [
   { ten: "ten", nhan: "Tên", kieu: "text" as const, batBuoc: true },
   { ten: "theo", nhan: "Cách tính", kieu: "select" as const, luaChon: [{ giaTri: "thang", nhan: "Cố định tháng" }, { giaTri: "ngay-cong", nhan: "Theo ngày công thực tế" }] },
   { ten: "chiuThue", nhan: "Chịu thuế TNCN", kieu: "checkbox" as const },
+  { ten: "traDu", nhan: "Trả đủ, không chia theo công (chỉ phụ cấp cố định tháng)", kieu: "checkbox" as const },
   { ten: "tinhBH", nhan: "Tính vào lương đóng bảo hiểm", kieu: "checkbox" as const },
   { ten: "thuTu", nhan: "Thứ tự", kieu: "number" as const },
   { ten: "trangThai", nhan: "Trạng thái", kieu: "select" as const, luaChon: [{ giaTri: "hoat-dong", nhan: "Đang dùng" }, { giaTri: "ngung", nhan: "Ngừng" }] },
@@ -52,7 +53,8 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
   const { ds, pc, ls } = kq.d;
   const sua = coQuyen(nd.hoSo, "luong.update");
   const pcDung = pc.filter((p) => p.trangThai === "hoat-dong");
-  const nv = ds.map((n) => ({ id: n.id, hoTen: n.hoTen }));
+  // QĐ-159: không ai tự lập / sửa hồ sơ lương của chính mình — bỏ chính mình khỏi danh sách chọn (máy chủ vẫn chặn).
+  const nv = ds.filter((n) => n.id !== nd.hoSo.userId).map((n) => ({ id: n.id, hoTen: n.hoTen }));
   return (
     <>
       <DauTrang
@@ -66,8 +68,8 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
           <div className="dau">
             <h2>{ls.nguoi.hoTen}{ls.nguoi.maNv ? ` (${ls.nguoi.maNv})` : ""} — lịch sử hồ sơ</h2>
             <span style={{ display: "flex", gap: 6 }}>
-              {sua && <FormHoSoLuong nhanVien={nv} loaiPhuCap={pcDung} homNay={hn} nguoiId={ls.nguoi.id} dau={ls.phienBan[0] ?? null} nhanNut="Phiên bản mới" />}
-              {sua && (
+              {sua && ls.nguoi.id !== nd.hoSo.userId && <FormHoSoLuong nhanVien={nv} loaiPhuCap={pcDung} homNay={hn} nguoiId={ls.nguoi.id} dau={ls.phienBan[0] ?? null} nhanNut="Phiên bản mới" />}
+              {sua && ls.nguoi.id !== nd.hoSo.userId && (
                 <FormNhanh nhanNut="Thêm người phụ thuộc" tieuDe="Đăng ký người phụ thuộc" url="/api/v1/luong/nguoi-phu-thuoc" themVaoThan={{ nguoiId: ls.nguoi.id }}
                   truong={[
                     { ten: "hoTen", nhan: "Họ tên", kieu: "text", batBuoc: true },
@@ -122,18 +124,18 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
       <section className="the">
         <div className="dau">
           <h2>Danh mục phụ cấp</h2>
-          {sua && <FormNhanh nhanNut="Thêm loại phụ cấp" tieuDe="Loại phụ cấp mới" url="/api/v1/luong/phu-cap" truong={PC_TRUONG} giaTriDau={{ theo: "thang", chiuThue: true, tinhBH: false, thuTu: 100, trangThai: "hoat-dong" }} />}
+          {sua && <FormNhanh nhanNut="Thêm loại phụ cấp" tieuDe="Loại phụ cấp mới" url="/api/v1/luong/phu-cap" truong={PC_TRUONG} giaTriDau={{ theo: "thang", chiuThue: true, tinhBH: false, traDu: false, thuTu: 100, trangThai: "hoat-dong" }} />}
         </div>
         <table className="bang">
           <thead><tr><th>Mã</th><th>Tên</th><th>Cách tính</th><th>Chịu thuế</th><th>Tính BH</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{pc.map((p) => (
             <tr key={p.id}>
-              <td>{p.ma}</td><td>{p.ten}</td><td>{p.theo === "ngay-cong" ? "Theo ngày công" : "Cố định tháng"}</td><td>{p.chiuThue ? "Có" : "Không"}</td><td>{p.tinhBH ? "Có" : "Không"}</td><td>{p.trangThai === "hoat-dong" ? "Đang dùng" : "Ngừng"}</td>
+              <td>{p.ma}</td><td>{p.ten}</td><td>{p.theo === "ngay-cong" ? "Theo ngày công" : p.traDu ? "Cố định tháng — trả đủ" : "Cố định tháng — chia theo công"}</td><td>{p.chiuThue ? "Có" : "Không"}</td><td>{p.tinhBH ? "Có" : "Không"}</td><td>{p.trangThai === "hoat-dong" ? "Đang dùng" : "Ngừng"}</td>
               <td>{sua && <FormNhanh nhanNut="Sửa" tieuDe={`Sửa phụ cấp ${p.ten}`} url={`/api/v1/luong/phu-cap/${p.id}`} phuongThuc="PATCH" truong={PC_TRUONG} giaTriDau={{ ...p }} lopNut="nut nho" />}</td>
             </tr>
           ))}</tbody>
         </table>
-        <p className="goi-y" style={{ padding: "0 16px 12px" }}>Đổi cờ chịu thuế / bảo hiểm chỉ áp cho lần tính lương sau; bảng lương đã tính giữ ảnh chụp cũ.</p>
+        <p className="goi-y" style={{ padding: "0 16px 12px" }}>Phụ cấp cố định tháng chia theo công (số tiền × công tính lương / công chuẩn) khi vào làm / nghỉ việc giữa tháng hoặc nghỉ không lương, trừ loại đánh dấu “trả đủ”. Đổi cờ chỉ áp cho lần tính lương sau; bảng lương đã tính giữ ảnh chụp cũ.</p>
       </section>
     </>
   );

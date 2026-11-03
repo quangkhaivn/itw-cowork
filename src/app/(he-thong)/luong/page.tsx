@@ -26,13 +26,18 @@ export default async function TrangLuong() {
     docDuLieu(nd, async (tx) => {
       const nc = taoNguCanh(tx, nd.phien.tenantId, nd.hoSo);
       const ky = await danhSachKyLuong(nc);
+      // Danh sách tên (không có số lương) để chọn người cho kỳ lương riêng (QĐ-165).
+      const nhanVien = coQuyen(nd.hoSo, "luong.create")
+        ? await tx.user.findMany({ where: { isSystem: false, status: "hoat-dong" }, select: { id: true, fullName: true }, orderBy: { fullName: "asc" } })
+        : [];
       const ts = coMotTrongCacQuyen(nd.hoSo, ["luong.create", "luong.update", "luong.approve", "luong.export"]) ? await danhSachThamSo(nc) : null;
-      return { ky, canXacNhan: ts?.canXacNhan ?? [] };
+      return { ky, canXacNhan: ts?.canXacNhan ?? [], nhanVien };
     }),
     nd,
   );
   if (kq.can2Lop) return <Can2Lop />;
   const d = kq.d;
+  const d0 = d;
   const hn = homNayVN();
   return (
     <>
@@ -52,6 +57,16 @@ export default async function TrangLuong() {
                 ]}
                 giaTriDau={{ nam: Number(hn.slice(0, 4)), thang: Number(hn.slice(5, 7)) }} />
             )}
+            {coQuyen(nd.hoSo, "luong.create") && (
+              <FormNhanh nhanNut="Tạo kỳ lương riêng" tieuDe="Kỳ lương riêng cho một nhóm người" url="/api/v1/luong/ky" rong={600}
+                truong={[
+                  { ten: "nam", nhan: "Năm", kieu: "number", batBuoc: true },
+                  { ten: "thang", nhan: "Tháng (1–12)", kieu: "number", batBuoc: true },
+                  { ten: "ten", nhan: "Tên kỳ riêng", kieu: "text", batBuoc: true, goiY: "Ví dụ: Lãnh đạo. Dùng khi người duyệt lương có dòng trong bảng — kỳ riêng do Quản trị / Giám đốc khác duyệt." },
+                  { ten: "thanhVien", nhan: "Người thuộc kỳ riêng (giữ Ctrl để chọn nhiều)", kieu: "nhieu", luaChon: d0.nhanVien.map((n) => ({ giaTri: n.id, nhan: n.fullName })), goiY: "Những người này được tách khỏi kỳ chung cùng tháng (kỳ chung còn nháp thì phải tính lại)." },
+                ]}
+                giaTriDau={{ nam: Number(hn.slice(0, 4)), thang: Number(hn.slice(5, 7)), ten: "Lãnh đạo", thanhVien: [] }} />
+            )}
           </span>
         }
       />
@@ -68,7 +83,7 @@ export default async function TrangLuong() {
             <thead><tr><th>Kỳ</th><th>Trạng thái</th><th className="so">Số người</th><th className="so">Tổng thu nhập</th><th className="so">Thuế TNCN</th><th className="so">Thực lĩnh</th><th className="so">BH doanh nghiệp</th><th>Ghi chú</th></tr></thead>
             <tbody>{d.ky.map((k) => (
               <tr key={k.id}>
-                <td><Link href={`/luong/${k.id}`}>{k.nhan}</Link></td>
+                <td><Link href={`/luong/${k.id}`}>{k.nhan}</Link>{k.rieng && <span className="huy-hieu chinh"> kỳ riêng</span>}</td>
                 <td><span className={`huy-hieu ${LOP[k.trangThai] ?? ""}`}>{k.nhanTrangThai}</span></td>
                 <td className="so">{k.soNguoi}</td><td className="so">{tien(k.tongThuNhap)}</td><td className="so">{tien(k.tongThue)}</td>
                 <td className="so">{tien(k.tongThucLinh)}</td><td className="so">{tien(k.tongBhDn)}</td>

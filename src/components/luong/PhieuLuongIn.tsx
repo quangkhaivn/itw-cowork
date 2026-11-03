@@ -20,21 +20,27 @@ const d = (n: number) => n.toLocaleString("vi-VN");
 export default function PhieuLuongIn({ p }: { p: DuLieuPhieuLuongIn }) {
   const k = p.ketQua;
   const c = p.dauVao.cong;
+  const ngay = (x: string) => x.split("-").reverse().slice(0, 2).join("/");
+  const doan = k.doan ?? [];
   const thuNhap: [string, number][] = [
-    [`Lương theo công (${k.congTinhLuong} / ${c.chuan} công)`, k.luongTheoCong],
+    ...(doan.length > 1
+      ? doan.map((x) => [`Lương theo công ${ngay(x.tu)}–${ngay(x.den)} (${x.tyLeThuViec ? `thử việc ${x.tyLeThuViec}% · ` : ""}${x.luongCoBan.toLocaleString("vi-VN")} đ · ${x.congTinhLuong} / ${c.chuan} công)`, x.luongTheoCong] as [string, number])
+      : [[`Lương theo công (${k.congTinhLuong} / ${c.chuan} công)`, k.luongTheoCong] as [string, number]]),
     ...k.phuCap.map((x) => [`Phụ cấp ${x.ten}${x.chiuThue ? "" : " (không chịu thuế)"}`, x.soTien] as [string, number]),
     ...k.tangCa.chiTiet.map((x) => [`Tăng ca ${NHAN_TANG_CA[x.loai].toLowerCase()} ${Math.round((x.phut / 60) * 100) / 100} giờ × ${x.heSo}%`, x.tien] as [string, number]),
     ...(k.thuongKpi ? [[`Thưởng KPI (hệ số ${p.dauVao.kpi.heSo ?? 0})`, k.thuongKpi] as [string, number]] : []),
     ...(k.hoaHong.tien ? [[`Hoa hồng (${d(k.hoaHong.doanhSo)} đ đã thu × ${k.hoaHong.tyLeBp / 100}%)`, k.hoaHong.tien] as [string, number]] : []),
     ...(k.hoaHong.truyThu ? [["Truy thu hoa hồng (phiếu thu đã hủy)", k.hoaHong.truyThu] as [string, number]] : []),
-    ...p.dauVao.khoan.filter((x) => x.chieu === "cong").map((x) => [`${x.lyDo}`, x.soTien] as [string, number]),
+    ...p.dauVao.khoan.filter((x) => x.chieu === "cong" && !x.tinhThue).map((x) => [`${x.lyDo}`, x.soTien] as [string, number]),
+    ...p.dauVao.khoan.filter((x) => x.tinhThue === "truoc-thue").map((x) => [`Điều chỉnh kỳ trước: ${x.lyDo}`, x.chieu === "cong" ? x.soTien : -x.soTien] as [string, number]),
   ];
   const khauTru: [string, number][] = [
     ["BHXH (người lao động)", k.baoHiem.nld.bhxh],
     ["BHYT (người lao động)", k.baoHiem.nld.bhyt],
     ["BHTN (người lao động)", k.baoHiem.nld.bhtn],
     ["Thuế thu nhập cá nhân", k.thue.tien],
-    ...p.dauVao.khoan.filter((x) => x.chieu === "tru").map((x) => [x.lyDo, x.soTien] as [string, number]),
+    ...p.dauVao.khoan.filter((x) => x.chieu === "tru" && x.tinhThue !== "truoc-thue").map((x) => [x.lyDo, x.soTien] as [string, number]),
+    ...p.dauVao.khoan.filter((x) => x.chieu === "cong" && x.tinhThue === "sau-thue").map((x) => [`Cộng sau thuế (điều chỉnh kỳ trước): ${x.lyDo}`, -x.soTien] as [string, number]),
   ];
   return (
     <article className="to-in phieu-luong">

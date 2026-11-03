@@ -64,6 +64,16 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
         }
       />
       {lyDoKhongDuyet && <div className="hop-thong-bao thong-tin">{lyDoKhongDuyet}</div>}
+      {!k.conNguoiDuyet && (tt === "nhap" || tt === "cho-duyet" || tt === "da-duyet") && k.dong.length > 0 && (
+        <div className="hop-thong-bao loi" role="alert">
+          Không còn ai duyệt được bảng lương này (mọi người có quyền duyệt hoặc là người tính, hoặc có dòng trong bảng). Tách dòng của lãnh đạo sang một kỳ lương riêng: Tính lương → <strong>Tạo kỳ lương riêng</strong>, rồi tính lại kỳ này. Kỳ riêng do Quản trị hoặc Giám đốc khác duyệt.
+        </div>
+      )}
+      {k.dong.some((d) => d.taiKhoanDoiLuc) && (
+        <div className="hop-thong-bao canh-bao" role="alert">
+          <strong>Tài khoản nhận lương vừa đổi trong 30 ngày:</strong> {k.dong.filter((d) => d.taiKhoanDoiLuc).map((d) => `${d.hoTen} (${dinhDangNgayGio(d.taiKhoanDoiLuc)})`).join("; ")}. Gọi xác nhận trực tiếp với nhân viên trước khi duyệt / chi.
+        </div>
+      )}
       {k.lyDoTraLai && tt === "nhap" && <div className="hop-thong-bao canh-bao">Bị trả lại: {k.lyDoTraLai}</div>}
       {tt === "nhap" && k.canTinhLai && k.buoc.tinh && <div className="hop-thong-bao canh-bao">Có thay đổi sau lần tính gần nhất — bấm “Tính lại” trước khi gửi duyệt.</div>}
       {k.canhBao.map((c, i) => <div key={i} className={`hop-thong-bao ${c.muc === "loi" ? "loi" : "canh-bao"}`}>{c.noiDung}</div>)}
@@ -76,8 +86,8 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
             <a className="nut" href={`${url}/xuat?loai=bang-luong&dinhDang=csv`}>Bảng lương CSV</a>
             {daKhoa ? (
               <>
-                <a className="nut" href={`${url}/xuat?loai=ngan-hang&dinhDang=csv`}>File chi lương ngân hàng (CSV)</a>
-                <a className="nut" href={`${url}/xuat?loai=ngan-hang&dinhDang=xls`}>File chi lương (Excel)</a>
+                <a className="nut chinh" href={`${url}/xuat?loai=ngan-hang&dinhDang=xls`}>File chi lương ngân hàng (Excel)</a>
+                <a className="nut" href={`${url}/xuat?loai=ngan-hang&dinhDang=csv`} title="Mở CSV bằng Excel có thể làm mất số 0 đầu số tài khoản — nên dùng bản Excel">File chi lương (CSV)</a>
                 <a className="nut" href={`${url}/xuat?loai=but-toan`}>Bút toán lương (CSV)</a>
               </>
             ) : <span className="goi-y">File chi lương ngân hàng và bút toán chỉ xuất được khi kỳ đã khóa.</span>}
@@ -103,7 +113,12 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
             <thead><tr><th>Nhân viên</th><th className="so">Công TL</th><th className="so">Lương theo công</th><th className="so">Phụ cấp</th><th className="so">Tăng ca</th><th className="so">KPI</th><th className="so">Hoa hồng</th><th className="so">Khoản cộng</th><th className="so">Tổng thu nhập</th><th className="so">BH</th><th className="so">Thuế</th><th className="so">Khoản trừ</th><th className="so">Thực lĩnh</th><th>Cảnh báo</th></tr></thead>
             <tbody>{k.dong.map((d) => (
               <tr key={d.id}>
-                <td><Link href={`/luong/phieu/${d.id}/in`}>{d.hoTen}</Link></td>
+                <td>
+                  <Link href={`/luong/phieu/${d.id}/in`}>{d.hoTen}</Link>
+                  {d.taiKhoanDoiLuc && <span className="huy-hieu canh-bao" title="Tài khoản nhận lương đổi trong 30 ngày"> TK mới đổi</span>}
+                  {d.taiKhoanChup && <div className="goi-y">TK chụp lúc khóa: …{d.taiKhoanChup.soDuoi ?? "—"}{d.taiKhoanChup.nganHang ? ` · ${d.taiKhoanChup.nganHang}` : ""}</div>}
+                  {daKhoa && k.quyen.xuat && <NutGoi url={`/api/v1/luong/dong/${d.id}/gui-lai`} nhan="Gửi lại phiếu" lopNut="nut nho" xacNhan={`Gửi lại thư phiếu lương cho ${d.hoTen}?`} />}
+                </td>
                 <td className="so">{d.congTinhLuong}</td><td className="so">{tien(d.luongTheoCong)}</td><td className="so">{tien(d.phuCap)}</td><td className="so">{tien(d.tangCa)}</td>
                 <td className="so">{tien(d.thuongKpi)}</td><td className="so">{tien(d.hoaHong)}</td><td className="so">{tien(d.khoanCong)}</td><td className="so">{tien(d.tongThuNhap)}</td>
                 <td className="so">{tien(d.bhNld)}</td><td className="so">{tien(d.thue)}</td><td className="so">{tien(d.khoanTru)}</td><td className="so"><strong>{tien(d.thucLinh)}</strong></td>
@@ -126,9 +141,15 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
                 { ten: "soTien", nhan: "Số tiền (đ)", kieu: "text", batBuoc: true },
                 { ten: "chiuThue", nhan: "Khoản cộng chịu thuế TNCN", kieu: "checkbox" },
                 { ten: "kyGocId", nhan: "Kỳ được điều chỉnh (chỉ với loại Điều chỉnh)", kieu: "select", luaChon: [{ giaTri: "", nhan: "—" }, ...k.kyDaKhoa.map((x) => ({ giaTri: x.id, nhan: x.nhan }))] },
+                { ten: "cachTinh", nhan: "Điều chỉnh tính (bắt buộc với loại Điều chỉnh)", kieu: "select", luaChon: [
+                  { giaTri: "", nhan: "—" },
+                  { giaTri: "truoc-thue", nhan: "Trước thuế — lương / phụ cấp / thưởng trả thừa hoặc thiếu (vào thu nhập chịu thuế)" },
+                  { giaTri: "sau-thue", nhan: "Sau thuế — tạm ứng, khoản đã trừ sau thuế" },
+                ] },
+                { ten: "tinhBH", nhan: "Điều chỉnh trước thuế: tính vào lương đóng bảo hiểm", kieu: "checkbox" },
                 { ten: "lyDo", nhan: "Lý do", kieu: "textarea", batBuoc: true, goiY: "Bắt buộc. Điều chỉnh kỳ trước: ít nhất 10 ký tự, ghi rõ sai sót gì." },
               ]}
-              giaTriDau={{ nguoiId: k.dong[0]?.userId ?? "", chieu: "cong", loai: "thuong", chiuThue: true, kyGocId: "" }} />
+              giaTriDau={{ nguoiId: k.dong[0]?.userId ?? "", chieu: "cong", loai: "thuong", chiuThue: true, kyGocId: "", cachTinh: "", tinhBH: false }} />
           )}
         </div>
         {k.khoan.length === 0 ? <TrongRong tieuDe="Không có khoản nhập tay" /> : (
