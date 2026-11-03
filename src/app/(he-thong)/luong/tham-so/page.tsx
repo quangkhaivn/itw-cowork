@@ -33,7 +33,7 @@ export default async function TrangThamSoLuong() {
       <DauTrang
         tieuDe="Tham số lương"
         duongDan={[{ nhan: "Tính lương", href: "/luong" }]}
-        moTa="Tỷ lệ bảo hiểm, lương cơ sở, lương tối thiểu vùng, giảm trừ gia cảnh, biểu thuế, khấu trừ 10%, thử việc, tăng ca, hoa hồng — mỗi bộ có hiệu lực từ một ngày; kỳ lương dùng bộ hiệu lực vào ngày cuối tháng. Không sửa bộ cũ: thay đổi = nhập bộ mới."
+        moTa="Tỷ lệ bảo hiểm, lương cơ sở, lương tối thiểu vùng, giảm trừ gia cảnh, biểu thuế, khấu trừ 10%, thử việc, tăng ca, hoa hồng — mỗi bộ có hiệu lực từ một ngày; kỳ lương tháng dùng bộ tham số hiệu lực vào ngày cuối tháng đó (riêng hồ sơ lương của từng người đổi giữa tháng thì chia theo ngày công). Không sửa bộ cũ: thay đổi = nhập bộ mới."
       />
       {ts.canXacNhan.length > 0 && (
         <div className="hop-thong-bao canh-bao" role="alert">

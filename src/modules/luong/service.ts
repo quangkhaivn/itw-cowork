@@ -249,7 +249,8 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
     canhBaoKy.push({ ma: "thieu-gio-quyet-sau-khoa", muc: "canh-bao", noiDung: `${tg.quyetSau.length} ngày thiếu giờ được quyết SAU khi khóa bảng công — lương kỳ này theo số đã khóa, chênh lệch vào dòng điều chỉnh bảng công tháng sau.` });
   }
 
-  // Ai vào bảng lương: có hồ sơ hiệu lực ngày cuối tháng, đang hoạt động hoặc có dòng công tháng này.
+  // Ai vào bảng lương: có hồ sơ hiệu lực trong tháng (phiên bản ≤ ngày cuối tháng), đang hoạt động hoặc có dòng công
+  // tháng này. Lương theo công chia đoạn theo từng phiên bản (QĐ-156).
   const dong = await tx.timesheetRow.findMany({ where: { timesheetId: bang.id } });
   const coCong = new Set(dong.map((r) => r.userId));
   const hoSo = await hoSoApDung(tx, null, den);

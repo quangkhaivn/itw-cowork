@@ -48,7 +48,7 @@ Các bộ cần xem kỹ:
 | Hệ số tăng ca | 150 / 200 / 300 %; ban đêm 210 / 270 / 390 %; phần vượt không chịu thuế | Quy chế công ty có trả cao hơn không |
 | Hoa hồng | **0 %** | Nhập chính sách thật: phẳng (một tỷ lệ) hoặc bậc thang theo doanh số đã thu trong tháng (đạt bậc nào áp tỷ lệ bậc đó cho toàn bộ doanh số) |
 
-Khi luật đổi giữa năm (ví dụ lương tối thiểu vùng từ 01/07): **Nhập bộ mới** với ngày hiệu lực mới. Bộ cũ giữ nguyên để tháng cũ vẫn tính đúng. Kỳ lương tháng nào dùng bộ có hiệu lực **vào ngày cuối tháng** đó.
+Khi luật đổi giữa năm (ví dụ lương tối thiểu vùng từ 01/07): **Nhập bộ mới** với ngày hiệu lực mới. Bộ cũ giữ nguyên để tháng cũ vẫn tính đúng. Kỳ lương tháng nào dùng **bộ tham số** có hiệu lực **vào ngày cuối tháng** đó.
 
 ### 0.3. Cấu hình kế toán
 

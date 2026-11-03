@@ -112,7 +112,7 @@ export default function FormHoSoLuong({
       <HopThoai ref={hop} tieuDe="Phiên bản hồ sơ lương mới" rong={720}>
         <div className="than">
           {loi && <div className="hop-thong-bao loi" role="alert">{loi.thongBao}</div>}
-          <p className="goi-y">Hồ sơ lương không sửa đè: mỗi lần lưu là một phiên bản có hiệu lực từ ngày chọn. Kỳ lương dùng phiên bản hiệu lực vào ngày cuối tháng.</p>
+          <p className="goi-y">Hồ sơ lương không sửa đè: mỗi lần lưu là một phiên bản có hiệu lực từ ngày chọn. Đổi lương / hết thử việc giữa tháng: kỳ lương chia theo ngày công — phần trước ngày hiệu lực tính theo mức cũ, phần sau theo mức mới.</p>
           <div className="luoi-form">
             {o("nguoiId", "Nhân viên", (
               <select id="hs-nguoiId" value={g.nguoiId} onChange={(e) => doi("nguoiId", e.target.value)} disabled={Boolean(nguoiId)}>

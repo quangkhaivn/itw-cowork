@@ -60,7 +60,7 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
       <DauTrang
         tieuDe="Hồ sơ lương"
         duongDan={[{ nhan: "Tính lương", href: "/luong" }]}
-        moTa="Mỗi thay đổi lương là một phiên bản có hiệu lực từ ngày — phiên bản cũ giữ nguyên làm lịch sử. Kỳ lương dùng phiên bản hiệu lực vào ngày cuối tháng. Mỗi lần mở trang này được ghi nhật ký."
+        moTa="Mỗi thay đổi lương là một phiên bản có hiệu lực từ ngày — phiên bản cũ giữ nguyên làm lịch sử. Đổi lương / hết thử việc giữa tháng: kỳ lương chia theo ngày công của từng phiên bản (phần trước ngày hiệu lực theo mức cũ, phần sau theo mức mới). Mỗi lần mở trang này được ghi nhật ký."
         hanhDong={sua && nv.length > 0 ? <FormHoSoLuong nhanVien={nv} loaiPhuCap={pcDung} homNay={hn} /> : undefined}
       />
       {ls && (
