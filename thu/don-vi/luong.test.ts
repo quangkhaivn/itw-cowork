@@ -470,3 +470,24 @@ describe("QĐ-166: điều chỉnh giảm tăng ca lớn hơn tăng ca kỳ này
     assert.equal(k.tangCaNoChuyenKySau, null);
   });
 });
+
+describe("QĐ-167: tham số lương hiển thị cho kế toán đọc (không JSON thô)", () => {
+  it("mọi bộ nạp sẵn hiện thành nhãn tiếng Việt + đơn vị, biểu thuế thành bảng bậc", async () => {
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { default: XemThamSo } = await import("../../src/components/luong/XemThamSo");
+    for (const t of THAM_SO_MAC_DINH) {
+      const html = renderToStaticMarkup(createElement(XemThamSo, { loai: t.loai, giaTri: t.giaTri }));
+      assert.ok(!html.includes("{&quot;") && !html.includes('{"'), `${t.loai} còn JSON thô`);
+    }
+    const bh = renderToStaticMarkup(createElement(XemThamSo, { loai: "bao-hiem", giaTri: thamSo()["bao-hiem"] }));
+    assert.match(bh, /BHXH/);
+    assert.match(bh, /17,5%/);
+    assert.match(bh, /2\.340\.000 đ/);
+    const thue = renderToStaticMarkup(createElement(XemThamSo, { loai: "bieu-thue", giaTri: thamSo()["bieu-thue"] }));
+    assert.match(thue, /Bậc/);
+    assert.match(thue, /Đến 10\.000\.000 đ/);
+    assert.match(thue, /Trên 100\.000\.000 đ/);
+    assert.match(thue, /35%/);
+  });
+});

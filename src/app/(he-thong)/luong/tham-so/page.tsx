@@ -1,6 +1,7 @@
 import DauTrang from "@/components/ui/DauTrang";
 import Can2Lop from "@/components/luong/Can2Lop";
 import FormThamSo from "@/components/luong/FormThamSo";
+import XemThamSo from "@/components/luong/XemThamSo";
 import FormMauNganHang from "@/components/luong/FormMauNganHang";
 import NutGoi from "@/components/luong/NutGoi";
 import { docLuong } from "@/components/luong/doc-luong";
@@ -52,7 +53,7 @@ export default async function TrangThamSoLuong() {
               <tbody>{n.bo.map((b) => (
                 <tr key={b.id}>
                   <td>{ngay(b.hieuLucTu)} {b.hienHanh && <span className="huy-hieu tot">Đang áp dụng</span>}{b.tuongLai && <span className="huy-hieu chinh">Sắp áp dụng</span>}</td>
-                  <td><code style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(b.giaTri)}</code></td>
+                  <td><XemThamSo loai={n.loai} giaTri={b.giaTri} /></td>
                   <td>{b.ghiChu}</td>
                   <td>{b.nguon === "mac-dinh" ? "Nạp sẵn" : `Nhập tay — ${b.nguoiTao}`}</td>
                   <td>

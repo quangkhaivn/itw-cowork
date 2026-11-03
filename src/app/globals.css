@@ -995,3 +995,10 @@ table.bang-tt .diem-tt { font-weight: 600; min-width: 60px; }
 .phieu-luong dl.khach-in { display: grid; gap: 4px 24px; }
 .phieu-luong table.bang-in + table.bang-in { margin-top: 12px; }
 .bang-luong td.so, .bang-luong th.so { white-space: nowrap; }
+/* 0.21.0 QĐ-167 — tham số lương dạng bảng / danh sách có nhãn */
+table.bang-tham-so { width: auto; min-width: 280px; margin-bottom: 6px; }
+table.bang-tham-so th, table.bang-tham-so td { padding: 4px 10px; font-size: 13px; }
+dl.ds-tham-so { margin: 4px 0 0; display: grid; gap: 2px; font-size: 13px; }
+dl.ds-tham-so > div { display: flex; gap: 8px; }
+dl.ds-tham-so dt { color: var(--chu-mo); }
+dl.ds-tham-so dd { margin: 0; font-variant-numeric: tabular-nums; }

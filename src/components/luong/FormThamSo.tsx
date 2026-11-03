@@ -14,36 +14,36 @@ import { useGoiApi } from "@/components/ui/goi-api";
 type GiaTri = number | string | boolean | null | GiaTri[] | { [k: string]: GiaTri };
 
 const NHAN: Record<string, string> = {
-  nld: "Người lao động đóng (%)",
-  dn: "Doanh nghiệp đóng (%)",
-  bhxh: "BHXH",
-  bhyt: "BHYT",
-  bhtn: "BHTN",
-  kpcd: "Kinh phí công đoàn",
-  luongCoSo: "Lương cơ sở (đ)",
-  tranLanLuongCoSo: "Trần BHXH / BHYT = số lần lương cơ sở",
-  tranLanToiThieuVung: "Trần BHTN = số lần lương tối thiểu vùng",
-  ngayNghiKhongDong: "Nghỉ không lương từ ngần này ngày làm việc thì không đóng BH",
+  nld: "Người lao động đóng (% lương đóng BH)",
+  dn: "Doanh nghiệp đóng (% lương đóng BH)",
+  bhxh: "BHXH (%)",
+  bhyt: "BHYT (%)",
+  bhtn: "BHTN (%)",
+  kpcd: "Kinh phí công đoàn (%)",
+  luongCoSo: "Lương cơ sở (đồng)",
+  tranLanLuongCoSo: "Trần BHXH / BHYT = số lần lương cơ sở (lần)",
+  tranLanToiThieuVung: "Trần BHTN = số lần lương tối thiểu vùng (lần)",
+  ngayNghiKhongDong: "Nghỉ không lương từ ngần này ngày làm việc thì không đóng BH (ngày)",
   vung: "Vùng của doanh nghiệp (1 – 4)",
-  mucVung: "Mức lương tối thiểu tháng theo vùng (đ)",
-  "1": "Vùng I",
-  "2": "Vùng II",
-  "3": "Vùng III",
-  "4": "Vùng IV",
-  banThan: "Giảm trừ bản thân / tháng (đ)",
-  nguoiPhuThuoc: "Giảm trừ mỗi người phụ thuộc / tháng (đ)",
+  mucVung: "Mức lương tối thiểu tháng theo vùng (đồng)",
+  "1": "Vùng I (đồng / tháng)",
+  "2": "Vùng II (đồng / tháng)",
+  "3": "Vùng III (đồng / tháng)",
+  "4": "Vùng IV (đồng / tháng)",
+  banThan: "Giảm trừ bản thân (đồng / tháng)",
+  nguoiPhuThuoc: "Giảm trừ mỗi người phụ thuộc (đồng / tháng)",
   bac: "Các bậc",
-  den: "Thu nhập tính thuế đến (đ; trống = bậc cuối)",
-  tu: "Doanh số thu từ (đ)",
+  den: "Thu nhập tính thuế / tháng đến (đồng; trống = bậc cuối)",
+  tu: "Doanh số thu trong tháng từ (đồng)",
   tyLe: "Tỷ lệ (%)",
-  nguong: "Ngưỡng khấu trừ (đ)",
-  tyLeToiThieu: "Lương thử việc tối thiểu (% lương công việc)",
-  thuong: "Ngày thường (%)",
-  thuongDem: "Ngày thường ban đêm (%)",
-  nghiTuan: "Nghỉ hằng tuần (%)",
-  nghiTuanDem: "Nghỉ hằng tuần ban đêm (%)",
-  le: "Ngày lễ (%)",
-  leDem: "Ngày lễ ban đêm (%)",
+  nguong: "Khấu trừ khi trả từ (đồng)",
+  tyLeToiThieu: "Lương thử việc tối thiểu (% lương của công việc)",
+  thuong: "Ngày thường, ban ngày (% lương giờ)",
+  thuongDem: "Ngày thường, ban đêm (% lương giờ)",
+  nghiTuan: "Nghỉ hằng tuần, ban ngày (% lương giờ)",
+  nghiTuanDem: "Nghỉ hằng tuần, ban đêm (% lương giờ)",
+  le: "Ngày lễ, ban ngày (% lương giờ)",
+  leDem: "Ngày lễ, ban đêm (% lương giờ)",
   phanVuotMienThue: "Phần tiền tăng ca cao hơn giờ bình thường không chịu thuế",
   kieu: "Kiểu",
 };
@@ -68,12 +68,16 @@ export default function FormThamSo({ loai, nhanLoai, giaTriDau, homNay }: { loai
   const [gt, datGt] = useState<GiaTri>(giaTriDau);
   const [hieuLuc, datHieuLuc] = useState(homNay);
   const [ghiChu, datGhiChu] = useState("");
+  // Chế độ JSON nâng cao (QĐ-167): chỉ khi cần dán nguyên bộ; mặc định là biểu mẫu từng ô.
+  const [cheDoJson, datCheDoJson] = useState(false);
+  const [vanBanJson, datVanBanJson] = useState("");
   const doi = (duong: (string | number)[], v: GiaTri) => datGt((x) => datTheoDuong(x, duong, v));
 
   function mo() {
     datGt(JSON.parse(JSON.stringify(giaTriDau)));
     datHieuLuc(homNay);
     datGhiChu("");
+    datCheDoJson(false);
     datLoi(null);
     hop.current?.showModal();
   }
@@ -141,8 +145,32 @@ export default function FormThamSo({ loai, nhanLoai, giaTriDau, homNay }: { loai
     );
   }
 
+  function doiCheDo() {
+    if (!cheDoJson) {
+      datVanBanJson(JSON.stringify(gt, null, 2));
+      datCheDoJson(true);
+      return;
+    }
+    try {
+      datGt(JSON.parse(vanBanJson) as GiaTri);
+      datCheDoJson(false);
+      datLoi(null);
+    } catch {
+      datLoi({ thongBao: "JSON chưa hợp lệ — sửa lại hoặc bấm “Đóng” để bỏ.", loiTruong: {}, status: 400 });
+    }
+  }
+
   async function luu() {
-    if (await goi("/api/v1/luong/tham-so", "POST", { loai, hieuLucTu: hieuLuc, giaTri: gt, ghiChu })) {
+    let giaTri: GiaTri = gt;
+    if (cheDoJson) {
+      try {
+        giaTri = JSON.parse(vanBanJson) as GiaTri;
+      } catch {
+        datLoi({ thongBao: "JSON chưa hợp lệ.", loiTruong: {}, status: 400 });
+        return;
+      }
+    }
+    if (await goi("/api/v1/luong/tham-so", "POST", { loai, hieuLucTu: hieuLuc, giaTri, ghiChu })) {
       hop.current?.close();
       router.refresh();
     }
@@ -160,7 +188,12 @@ export default function FormThamSo({ loai, nhanLoai, giaTriDau, homNay }: { loai
               <label htmlFor={`ts-${loai}-hl`}>Hiệu lực từ ngày</label>
               <input id={`ts-${loai}-hl`} type="date" value={hieuLuc} onChange={(e) => datHieuLuc(e.target.value)} />
             </div>
-            {gt !== null && typeof gt === "object" && !Array.isArray(gt) ? Object.entries(gt).map(([k, v]) => o(k, v, [k])) : null}
+            {cheDoJson ? (
+              <div className="truong ca-dong">
+                <label htmlFor={`ts-${loai}-json`}>Giá trị dạng JSON (nâng cao)</label>
+                <textarea id={`ts-${loai}-json`} rows={12} style={{ fontFamily: "monospace", fontSize: 12 }} value={vanBanJson} onChange={(e) => datVanBanJson(e.target.value)} />
+              </div>
+            ) : gt !== null && typeof gt === "object" && !Array.isArray(gt) ? Object.entries(gt).map(([k, v]) => o(k, v, [k])) : null}
             <div className="truong ca-dong">
               <label htmlFor={`ts-${loai}-gc`}>Căn cứ (số văn bản, ngày ban hành) <span className="bat-buoc">*</span></label>
               <textarea id={`ts-${loai}-gc`} rows={2} value={ghiChu} onChange={(e) => datGhiChu(e.target.value)} />
@@ -168,6 +201,7 @@ export default function FormThamSo({ loai, nhanLoai, giaTriDau, homNay }: { loai
           </div>
         </div>
         <div className="chan-form">
+          <button type="button" className="nut trong" onClick={doiCheDo} disabled={dangGui}>{cheDoJson ? "Về biểu mẫu" : "Chế độ JSON nâng cao"}</button>
           <button type="button" className="nut" onClick={() => hop.current?.close()} disabled={dangGui}>Đóng</button>
           <button type="button" className="nut chinh" onClick={luu} disabled={dangGui}>{dangGui ? "Đang lưu…" : "Lưu bộ mới"}</button>
         </div>
