@@ -33,6 +33,9 @@ import {
 import { danhSachThamSo, luuMauNganHang, taoThamSo, xacNhanThamSo, xemMauNganHang } from "../src/modules/luong/tham-so";
 import { guiEmailPhieuLuong, taoBangTinhXml, xuatBangLuong, xuatButToan, xuatNganHang } from "../src/modules/luong/xuat";
 import type { DauVaoLuong, KetQuaLuong } from "../src/modules/luong/tinh-toan";
+import { batDau2Lop } from "../src/modules/xac-thuc-2-lop/service";
+import { bamMatKhau } from "../src/lib/xac-thuc";
+import { homNayVN } from "../src/modules/crm/chung";
 import { seedNenMong } from "../prisma/seed/index";
 import { clientChuSoHuu, dat, ketLuan } from "./thu-lib";
 
@@ -413,6 +416,8 @@ async function main() {
     dat(`Doanh nghiệp ${t === T ? "1" : "2"}: quyền lương trong CSDL = định nghĩa vai trò`, JSON.stringify(thuc) === JSON.stringify(mong), thuc.filter((x) => !mong.includes(x)).concat(mong.filter((x) => !thuc.includes(x)).map((x) => `thiếu ${x}`)).join("; "));
   }
 
+  await vongHai();
+
   await chu.$disconnect();
   ketLuan("QA tính lương (0.21.0)");
 }
@@ -422,3 +427,174 @@ main().catch(async (e) => {
   await chu.$disconnect();
   process.exit(1);
 });
+
+
+// =====================================================================================================================
+// QA 0.21.0 vòng 2 — chính sách QĐ-156 → QĐ-166.
+// =====================================================================================================================
+async function vongHai() {
+  console.log("\n=== QA 0.21.0 vòng 2 — QĐ-156 → QĐ-166 ===\n");
+  const tenant = await seedNenMong(chu, `qa-lu-v2-${DAU}`, "DN QA lương vòng 2");
+  const T = tenant.id;
+  const vaiTro = async (code: string) => (await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: T, code } } })).id;
+  const MK = `Qa-v2-${DAU}-9x`;
+  const bam = await bamMatKhau(MK);
+  async function nguoi(ten: string, vai: string, hai = true) {
+    const u = await chu.user.create({
+      data: {
+        tenantId: T, email: `v2${Math.random().toString(36).slice(2, 8)}.${DAU}@thu.test`, passwordHash: bam, fullName: ten,
+        ...(hai ? { totpEnabledAt: MOC, totpSecretEnc: "v1:thu" } : {}),
+        userRoles: { create: { tenantId: T, roleId: await vaiTro(vai) } },
+        staffProfile: { create: { tenantId: T, hiredAt: NGAY("2025-01-01") } },
+      },
+    });
+    return u.id;
+  }
+  const gd = await nguoi("GĐ v2", "ceo");
+  const ad = await nguoi("QT v2", "admin");
+  const kt = await nguoi("KT v2", "finance");
+  const hr = await nguoi("NS v2", "nhan-su-hr");
+  const nvR = await nguoi("NV làm tròn", "sales", false);
+  const nvN = await nguoi("NV tài khoản", "sales", false);
+  const xs = [] as string[];
+  for (let i = 1; i <= 4; i++) xs.push(await nguoi(`NV tách ${i}`, "technical", false));
+  const voi2 = <R>(u: string, f: (nc: NguCanh) => Promise<R>) => voi(T, u, f);
+  await chu.payrollParamSet.updateMany({ where: { tenantId: T, confirmedAt: null }, data: { confirmedBy: kt, confirmedAt: MOC } });
+
+  // Lịch T2–T6 cả ca; T7, CN nghỉ → tháng 3/2026 công chuẩn 22.
+  const ca = await chu.workShift.create({ data: { tenantId: T, code: "hc", name: "HC", startMinute: 480, endMinute: 1020, breakStartMinute: 720, breakMinutes: 60 } });
+  const lich = await chu.workSchedule.create({ data: { tenantId: T, code: "hc", name: "HC", shiftId: ca.id, days: ["ca", "ca", "ca", "ca", "ca", "nghi", "nghi"] } });
+  const tatCa = [nvR, nvN, ...xs];
+  const bc = await chu.timesheet.create({ data: { tenantId: T, year: 2026, month: 3, generatedAt: MOC, generatedBy: hr, feedbackDeadline: MOC } });
+  for (const u of tatCa) {
+    await chu.scheduleAssignment.create({ data: { tenantId: T, userId: u, scheduleId: lich.id, effectiveFrom: NGAY("2026-01-01") } });
+    for (const ngay of cacNgayTrongThang(2026, 3)) {
+      if (thuTrongTuan(ngay) >= 5) continue;
+      await chu.timesheetRow.create({ data: { tenantId: T, timesheetId: bc.id, userId: u, workDate: NGAY(ngay), isAdjustment: false, dayType: "thuong", expectedValue: 1, workValue: 1, flags: [] } });
+    }
+  }
+  await chu.timesheet.update({ where: { id: bc.id }, data: { status: "da-khoa", lockedAt: MOC, lockedBy: hr } });
+  const hs2 = (o: Record<string, unknown>) => LuocDoHoSoLuong.parse({ hieuLucTu: "2026-01-01", loaiHopDong: "chinh-thuc", cachTra: "thang", phuongPhapThue: "luy-tien", soTaiKhoan: "0001111", nganHang: "VCB", ...o });
+  const pcThang = (await chu.salaryAllowanceType.findMany({ where: { tenantId: T, code: "xang-xe" } }))[0];
+
+  // ------------------------------------------------------------------
+  console.log("— V2-A. LỖI 5: đổi trường KHÔNG ảnh hưởng tiền (tài khoản) giữa tháng chia đoạn → lệch tiền do làm tròn từng đoạn —");
+  await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: nvR, luongCoBan: 11_111_111, phuCap: [{ loaiId: pcThang.id, soTien: 777_777 }] })));
+  await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: nvR, hieuLucTu: "2026-03-09", luongCoBan: 11_111_111, phuCap: [{ loaiId: pcThang.id, soTien: 777_777 }], soTaiKhoan: "0002222" })));
+  await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: nvR, hieuLucTu: "2026-03-20", luongCoBan: 11_111_111, phuCap: [{ loaiId: pcThang.id, soTien: 777_777 }], soTaiKhoan: "0003333", ghiChu: "Đổi tài khoản lần 2" })));
+  for (const u of [nvN, ...xs]) await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: u, luongCoBan: 10_000_000 })));
+  const k3 = await voi2(kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 3 }));
+  await voi2(kt, (nc) => tinhKyLuong(nc, k3.id));
+  const dR = await chu.payrollLine.findFirstOrThrow({ where: { runId: k3.id, userId: nvR } });
+  const rR = dR.result as unknown as KetQuaLuong;
+  dat("LỖI 5: đủ công cả tháng, lương không đổi → lương theo công đúng 11.111.111 (trước: 11.111.112, ba đoạn làm tròn riêng)", rR.luongTheoCong === 11_111_111, `${rR.luongTheoCong} (${rR.doan?.length} đoạn)`);
+  dat("LỖI 5: …phụ cấp tháng đủ 777.777", rR.tongPhuCap === 777_777, String(rR.tongPhuCap));
+  dat("LỖI 5: …chỉ một đoạn (đổi tài khoản / ghi chú không tách đoạn)", rR.doan?.length === 1, String(rR.doan?.length));
+
+  // ------------------------------------------------------------------
+  console.log("\n— V2-B. LỖI 6: hai phiên bản liên tiếp che việc đổi tài khoản (QĐ-159 / QĐ-161) —");
+  // Nhân sự cấu kết: tạo bản hiệu lực GẦN ĐÂY mang tài khoản lạ, rồi ngay sau đó một bản LÙI NGÀY mang lại tài khoản cũ.
+  // Thông báo cuối cùng nhân viên nhận nói "đổi thành ****1111" (tài khoản của mình) trong khi tài khoản ĐANG ÁP DỤNG là
+  // tài khoản lạ. Dựng bằng vai chủ để đặt mốc tạo cách đây 60 ngày (QĐ-161 xét "30 ngày").
+  const homNay = homNayVN();
+  const lui = (n: number) => new Date(Date.parse(`${homNay}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+  const taoLuc = new Date(Date.now() - 60 * 86_400_000);
+  const ban = (hieuLuc: string, tk: string, phut: number) => chu.salaryProfile.create({
+    data: { tenantId: T, userId: nvN, effectiveFrom: NGAY(hieuLuc), contractType: "chinh-thuc", payBasis: "thang", baseSalary: 10_000_000n, insuranceSalary: 0n, taxMethod: "luy-tien", bankAccount: tk, bankName: "VCB", createdBy: hr, createdAt: new Date(taoLuc.getTime() + phut * 60_000) },
+  });
+  await ban(lui(5), "9999888", 0); // tài khoản lạ, hiệu lực từ 5 ngày trước
+  await ban("2026-01-02", "0001111", 1); // "trả lại" tài khoản cũ nhưng lùi ngày — không bao giờ thắng bản trên
+  const { taiKhoanHienHanh } = await import("../src/modules/luong/service");
+  const tkN = (await voiTenant(T, (tx) => taiKhoanHienHanh(tx, [nvN], homNay))).get(nvN)!;
+  dat("(bối cảnh) tài khoản đang áp dụng hôm nay là tài khoản lạ ****9888", tkN.bankAccount === "9999888");
+  const ctK3 = await voi2(kt, (nc) => chiTietKyLuong(nc, k3.id));
+  const dongN = ctK3.dong.find((d) => d.userId === nvN) as unknown as { taiKhoanDoiLuc: Date | null };
+  dat("LỖI 6: màn hình duyệt cảnh báo tài khoản nhận lương mới ÁP DỤNG trong 30 ngày (dù phiên bản tạo đã lâu)", Boolean(dongN.taiKhoanDoiLuc), JSON.stringify(dongN.taiKhoanDoiLuc));
+  // Qua service: bản mới lùi ngày mang tài khoản cũ → thông báo phải nói rõ tài khoản đang / sẽ áp dụng.
+  await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: nvN, hieuLucTu: "2026-01-03", luongCoBan: 10_000_000, soTaiKhoan: "0004444" })));
+  const tb = await chu.notification.findFirstOrThrow({ where: { tenantId: T, userId: nvN, type: "doi-tai-khoan-luong" }, orderBy: { createdAt: "desc" } });
+  dat("LỖI 6: thông báo đổi tài khoản nêu tài khoản ĐANG áp dụng (****9888) khi bản vừa tạo không phải bản áp dụng", (tb.body ?? "").includes("****9888"), tb.body ?? "");
+  dat("…thông báo / nhật ký không chứa số tài khoản đầy đủ", !(tb.body ?? "").includes("9999888") && !JSON.stringify(await chu.auditLog.findMany({ where: { tenantId: T, action: "doi-tai-khoan-luong" }, select: { before: true, after: true } })).includes("9999888"));
+
+  // ------------------------------------------------------------------
+  console.log("\n— V2-C. QĐ-159 tự sửa hồ sơ; QĐ-165 kỳ riêng: tự duyệt, chạy chéo với gửi duyệt kỳ chung —");
+  for (const [ten, u] of [["Nhân sự", hr], ["Giám đốc", gd], ["Quản trị", ad]] as const) {
+    await biChan(`QĐ-159: ${ten} tự lập hồ sơ lương của mình`, () => voi2(u, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: u, luongCoBan: 99_000_000 }))), "tu-sua-ho-so");
+    await biChan(`QĐ-159: ${ten} tự thêm người phụ thuộc`, () => voi2(u, (nc) => themNguoiPhuThuoc(nc, { nguoiId: u, hoTen: "Con tự khai", quanHe: "Con", soGiayTo: null, tuThang: "2026-01", denThang: null })), "tu-sua-ho-so");
+  }
+  // Kỳ chung tháng 3 đang nháp có dòng của X1..X4. Tách Xi sang kỳ riêng ĐỒNG THỜI với gửi duyệt kỳ chung: không được để
+  // Xi vừa có dòng ở kỳ chung đã gửi duyệt vừa thuộc kỳ riêng (trả lương hai lần).
+  let haiLan = 0;
+  for (const x of xs) {
+    const k = await chu.payrollRun.findUniqueOrThrow({ where: { id: k3.id } });
+    if (k.status !== "nhap") await voi2(gd, (nc) => traLaiKyLuong(nc, k3.id, { lyDo: "Đưa về nháp để thử lại" }));
+    await voi2(kt, (nc) => tinhKyLuong(nc, k3.id));
+    const coDong = await chu.payrollLine.count({ where: { runId: k3.id, userId: x } });
+    if (!coDong) continue;
+    await Promise.allSettled([
+      voi2(kt, (nc) => guiDuyetKyLuong(nc, k3.id)),
+      voi2(kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 3, ten: `Riêng ${x.slice(0, 6)}`, thanhVien: [x] })),
+    ]);
+    const chung = await chu.payrollRun.findUniqueOrThrow({ where: { id: k3.id } });
+    const rieng = await chu.payrollRun.count({ where: { tenantId: T, year: 2026, month: 3, members: { has: x } } });
+    if (chung.status !== "nhap" && rieng > 0 && (await chu.payrollLine.count({ where: { runId: k3.id, userId: x } })) > 0) haiLan++;
+  }
+  dat("LỖI 7: tách người sang kỳ riêng chạy chéo với gửi duyệt kỳ chung → không ai vừa ở kỳ chung đã gửi duyệt vừa ở kỳ riêng", haiLan === 0, `${haiLan} lần`);
+
+  // ------------------------------------------------------------------
+  console.log("\n— V2-E. QĐ-156 / 157 tính tay: vào + nghỉ việc cùng tháng, ba phiên bản trong tháng, phụ cấp chia / trả đủ —");
+  const nvV = await nguoi("NV vào ra cùng tháng", "sales", false);
+  const nvT = await nguoi("NV ba phiên bản", "sales", false);
+  const guiXe = await chu.salaryAllowanceType.create({ data: { tenantId: T, code: "gui-xe", name: "Gửi xe", taxable: false, insurable: false, basis: "thang", fullMonth: true } });
+  const dt = (await chu.salaryAllowanceType.findFirstOrThrow({ where: { tenantId: T, code: "dien-thoai" } })).id;
+  const at = (await chu.salaryAllowanceType.findFirstOrThrow({ where: { tenantId: T, code: "an-trua" } })).id;
+  const bc4 = await chu.timesheet.create({ data: { tenantId: T, year: 2026, month: 4, generatedAt: MOC, generatedBy: hr, feedbackDeadline: MOC } });
+  await chu.scheduleAssignment.create({ data: { tenantId: T, userId: nvV, scheduleId: lich.id, effectiveFrom: NGAY("2026-04-08") } });
+  await chu.scheduleAssignment.create({ data: { tenantId: T, userId: nvT, scheduleId: lich.id, effectiveFrom: NGAY("2026-01-01") } });
+  for (const ngay of cacNgayTrongThang(2026, 4)) {
+    if (thuTrongTuan(ngay) >= 5) continue;
+    for (const u of [nvT, ...(ngay >= "2026-04-08" && ngay <= "2026-04-17" ? [nvV] : [])]) {
+      await chu.timesheetRow.create({ data: { tenantId: T, timesheetId: bc4.id, userId: u, workDate: NGAY(ngay), isAdjustment: false, dayType: "thuong", expectedValue: 1, workValue: 1, flags: [] } });
+    }
+  }
+  await chu.timesheet.update({ where: { id: bc4.id }, data: { status: "da-khoa", lockedAt: MOC, lockedBy: hr } });
+  await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: nvV, hieuLucTu: "2026-04-08", luongCoBan: 11_000_000, phuCap: [{ loaiId: dt, soTien: 600_000 }, { loaiId: guiXe.id, soTien: 200_000 }, { loaiId: at, soTien: 30_000 }] })));
+  await chu.user.update({ where: { id: nvV }, data: { status: "ngung-hoat-dong" } });
+  await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: nvT, loaiHopDong: "thu-viec", tyLeThuViec: 85, luongCoBan: 10_000_000 })));
+  await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: nvT, hieuLucTu: "2026-04-08", luongCoBan: 10_000_000 })));
+  await voi2(hr, (nc) => taoHoSoLuong(nc, hs2({ nguoiId: nvT, hieuLucTu: "2026-04-20", luongCoBan: 13_200_000 })));
+  const k4 = await voi2(kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 4, ten: "Kiểm tính tay", thanhVien: [nvV, nvT] }));
+  await voi2(kt, (nc) => tinhKyLuong(nc, k4.id));
+  const rV = (await chu.payrollLine.findFirstOrThrow({ where: { runId: k4.id, userId: nvV } })).result as unknown as KetQuaLuong;
+  dat("Vào 08/04, nghỉ sau 17/04 (8 công / chuẩn 22): lương 11.000.000 × 8 / 22 = 4.000.000", rV.luongTheoCong === 4_000_000, String(rV.luongTheoCong));
+  dat("…phụ cấp: điện thoại 600.000 × 8/22 = 218.182 + gửi xe trả đủ 200.000 + ăn trưa 30.000 × 8 = 658.182", rV.tongPhuCap === 658_182, JSON.stringify(rV.phuCap));
+  const rT = (await chu.payrollLine.findFirstOrThrow({ where: { runId: k4.id, userId: nvT } })).result as unknown as KetQuaLuong;
+  dat("Ba phiên bản (thử việc 85% → chính thức 08/04 → tăng lương 20/04): 1.931.818 + 3.636.364 + 5.400.000 = 10.968.182", rT.luongTheoCong === 10_968_182 && rT.doan?.length === 3, `${rT.luongTheoCong} ${JSON.stringify(rT.doan?.map((d) => d.luongTheoCong))}`);
+  dat("…tổng các đoạn = lương theo công; tổng công các đoạn = công tính lương", (rT.doan ?? []).reduce((a, d) => a + d.luongTheoCong, 0) === rT.luongTheoCong && (rT.doan ?? []).reduce((a, d) => a + d.congTinhLuong, 0) === rT.congTinhLuong);
+  // QĐ-158 hàm thuần: thu hồi trước thuế lớn hơn thu nhập → thu nhập chịu thuế không âm; trần BH vẫn áp.
+  const { tinhLuong: tl, THAM_SO_MAC_DINH: tsm, chonBoHieuLuc: cb, LOAI_THAM_SO: lts } = await import("../src/modules/luong/tinh-toan");
+  const ts0: Record<string, unknown> = {};
+  for (const l of lts) ts0[l] = cb(tsm.filter((x) => x.loai === l).map((x) => ({ ...x, taoLuc: "2026-01-01" })), "2026-04-30")!.giaTri;
+  const dvT = (luong: number, dongBH: number, thuHoi: number) => tl({
+    ky: { nam: 2026, thang: 4 }, hoSo: { id: null, hieuLucTu: "2026-01-01", loaiHopDong: "chinh-thuc", tyLeThuViec: null, cachTra: "thang", luongCoBan: luong, luongDongBH: dongBH, thuongKpi: 0, huongHoaHong: false, phuongPhapThue: "luy-tien" },
+    phuCap: [], cong: { chuan: 22, thucTe: 22, nghiCoLuong: 0, nghiKhongLuong: 0, le: 0, tangCaPhut: { thuong: 0, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 }, phutMuon: 0, phutSom: 0, soDongDieuChinh: 0 },
+    soNguoiPhuThuoc: 0, kpi: { trangThai: "khong-co", heSo: null, xepLoai: null, danhGiaId: null }, hoaHong: { phanBo: [], truyThu: [] },
+    khoan: [{ chieu: "tru", loai: "dieu-chinh", soTien: thuHoi, chiuThue: true, lyDo: "Thu hồi lương trả thừa", tinhThue: "truoc-thue", tinhBH: true }],
+    thamSo: { ...(ts0 as never), soGioNgay: 8 },
+  });
+  const a1 = dvT(10_000_000, 10_000_000, 15_000_000);
+  dat("QĐ-158: thu hồi trước thuế 15tr > lương 10tr → thu nhập chịu thuế 0 (không âm), thuế 0, thực lĩnh âm → lỗi chặn gửi duyệt", a1.thuNhapChiuThue === 0 && a1.thue.tien === 0 && a1.thucLinh === -5_000_000 && a1.canhBao.some((c) => c.ma === "thuc-linh-am" && c.muc === "loi"));
+  const a2 = dvT(60_000_000, 60_000_000, 1_000_000);
+  dat("QĐ-158: lương đóng BH trên trần — thu hồi 1tr tính BH vẫn đóng ở trần 46.800.000 (BHXH 8% = 3.744.000)", a2.baoHiem.mucDongXH === 46_800_000 && a2.baoHiem.nld.bhxh === 3_744_000);
+  dat("…thu nhập chịu thuế giảm đúng 1tr", a2.thuNhapChiuThue === 59_000_000);
+
+  // ------------------------------------------------------------------
+  console.log("\n— V2-D. LỖI 8: QĐ-162 — đoán mật khẩu SONG SONG khi bật 2 lớp lách bộ đếm khóa tài khoản —");
+  const nvM = await nguoi("NV đoán mật khẩu", "sales", false);
+  const kq = await Promise.allSettled(Array.from({ length: 12 }, (_, i) => voi2(nvM, (nc) => batDau2Lop(nc, `sai-${i}`))));
+  const daKiem = kq.filter((r) => r.status === "rejected" && r.reason instanceof LoiNghiepVu && (r.reason.ma === "sai-mat-khau")).length;
+  const um = await chu.user.findUniqueOrThrow({ where: { id: nvM }, select: { lockedUntil: true, failedLoginCount: true } });
+  dat("LỖI 8: 12 lần đoán song song — mật khẩu chỉ bị kiểm tối đa 5 lần rồi khóa tạm (trước: mọi lần đều được kiểm, bộ đếm mất cập nhật)", daKiem <= 5 && Boolean(um.lockedUntil && um.lockedUntil > new Date()), `kiểm ${daKiem} lần, khóa: ${String(um.lockedUntil)}, đếm ${um.failedLoginCount}`);
+  await biChan("…đang khóa tạm: mật khẩu ĐÚNG cũng bị từ chối", () => voi2(nvM, (nc) => batDau2Lop(nc, MK)), "sai-ma");
+  await biChan("QĐ-162: bật 2 lớp thiếu mật khẩu → từ chối", () => voi2(nvR, (nc) => batDau2Lop(nc, "")));
+}

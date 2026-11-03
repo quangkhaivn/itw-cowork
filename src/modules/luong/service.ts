@@ -8,7 +8,7 @@ import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { banDoTen, lichCuaNhieuNguoi, ngayLeTrongKhoang } from "@/modules/cham-cong/chung";
 import { CO_NGAY, cacNgayTrongThang, congDuKien } from "@/modules/cham-cong/tinh-toan";
-import { dateVeNgay, ngayVeDate } from "@/modules/crm/chung";
+import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { ketQuaHieuLuc } from "@/modules/danh-gia/service";
 import { baoChoNguoiCoQuyen, taoThongBao } from "@/modules/thong-bao/service";
 import { batBuocQuyenLuong, docCauHinhLuong, ghiXem, locNguoiLuong, thamSoHieuLuc, trongPhamViLuong, xemDuocNguoiKhac, type BoApDung } from "./chung";
@@ -115,7 +115,12 @@ export async function taoKyLuong(nc: NguCanh, vao: z.input<typeof LuocDoTaoKy>) 
     const cungThang = await nc.tx.payrollRun.findMany({ where: { year: d.nam, month: d.thang }, select: { id: true, name: true, members: true, status: true } });
     const trung = cungThang.filter((k) => k.members.some((m) => d.thanhVien.includes(m)));
     if (trung.length) throw new LoiNghiepVu(`Có người đã thuộc kỳ lương riêng “${trung[0].name}” tháng ${nhanKy(d.nam, d.thang)}.`, 409, "trung-thanh-vien");
-    const chung = cungThang.find((k) => k.members.length === 0);
+    const timChung = cungThang.find((k) => k.members.length === 0);
+    // QA 0.21.0 v2: KHÓA DÒNG kỳ chung (QĐ-77) rồi mới đọc trạng thái — gửi duyệt kỳ chung chạy chéo (khóa dòng kỳ, không
+    // lấy khóa tư vấn) từng commit giữa lúc đọc "nháp" và lúc đánh dấu tính lại → người vừa ở kỳ chung đã gửi duyệt vừa
+    // ở kỳ riêng (trả lương hai lần).
+    if (timChung) await khoaChungTu(nc.tx, "payroll_runs", timChung.id);
+    const chung = timChung ? await nc.tx.payrollRun.findFirst({ where: { id: timChung.id }, select: { id: true, status: true } }) : null;
     if (chung) {
       const daCoDong = await nc.tx.payrollLine.count({ where: { runId: chung.id, userId: { in: d.thanhVien } } });
       if (daCoDong && chung.status !== "nhap") {
@@ -337,11 +342,16 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
 
     // QĐ-156: chia tháng thành các đoạn theo phiên bản hồ sơ hiệu lực từng ngày.
     const pbCuaNguoi = phienBan.filter((x) => x.userId === u.id).map((x) => ({ ...x, hieuLucTu: dateVeNgay(x.effectiveFrom), taoLuc: x.createdAt }));
+    // QA 0.21.0 v2: chỉ tách đoạn khi phiên bản đổi trường ẢNH HƯỞNG TIỀN theo công (loại HĐ, % thử việc, cách trả,
+    // lương, phụ cấp). Đổi tài khoản / mã số thuế / ghi chú giữa tháng không tách đoạn — tách thừa làm mỗi đoạn làm tròn
+    // riêng, người đủ công lệch 1 đ so với lương tháng.
+    const khoaTien = (pb: (typeof pbCuaNguoi)[number] | null) =>
+      pb ? JSON.stringify([pb.contractType, pb.probationPercent === null ? null : Number(pb.probationPercent), pb.payBasis, String(pb.baseSalary), pb.allowances]) : null;
     const doanNgay: { pb: (typeof pbCuaNguoi)[number] | null; tu: string; den: string }[] = [];
     for (const d of cacNgay) {
       const pb = chonBoHieuLuc(pbCuaNguoi, d);
       const cuoi = doanNgay[doanNgay.length - 1];
-      if (cuoi && cuoi.pb?.id === pb?.id) cuoi.den = d;
+      if (cuoi && khoaTien(cuoi.pb) === khoaTien(pb)) cuoi.den = d;
       else doanNgay.push({ pb, tu: d, den: d });
     }
     const viTriDoan = (ngay: string) => doanNgay.findIndex((x) => x.tu <= ngay && ngay <= x.den);
@@ -806,7 +816,7 @@ export async function khoaKyLuong(nc: NguCanh, id: string) {
  * Tài khoản ngân hàng hiện hành của mỗi người = phiên bản hồ sơ lương hiệu lực hôm nay (chưa có thì bản tạo sau cùng),
  * cùng mốc đổi tài khoản gần nhất (bản đầu tiên mang tài khoản khác bản trước) — QĐ-160, QĐ-161.
  */
-export async function taiKhoanHienHanh(tx: ClientTenant, userIds: string[], homNay = new Date().toISOString().slice(0, 10)) {
+export async function taiKhoanHienHanh(tx: ClientTenant, userIds: string[], homNay = homNayVN()) {
   const ds = await tx.salaryProfile.findMany({ where: { userId: { in: userIds } }, orderBy: { createdAt: "asc" }, select: { id: true, userId: true, effectiveFrom: true, createdAt: true, bankAccount: true, bankName: true, accountHolder: true } });
   const kq = new Map<string, { bankAccount: string | null; bankName: string | null; accountHolder: string | null; doiLuc: Date | null }>();
   for (const u of new Set(ds.map((d) => d.userId))) {
@@ -817,6 +827,16 @@ export async function taiKhoanHienHanh(tx: ClientTenant, userIds: string[], homN
       const a = cua[i - 1];
       const b = cua[i];
       if (a.bankAccount !== b.bankAccount || a.bankName !== b.bankName || a.accountHolder !== b.accountHolder) doiLuc = b.createdAt;
+    }
+    // QA 0.21.0 v2: cả mốc tài khoản ĐANG ÁP DỤNG bắt đầu có hiệu lực — một bản hiệu lực gần đây mang tài khoản khác bản áp
+    // dụng ngay trước nó, dù bản đó TẠO đã lâu (vd hẹn trước ngày hiệu lực, rồi che bằng một bản lùi ngày mang tài khoản cũ).
+    if (hien && hien.hieuLucTu <= homNay) {
+      const truocNgay = new Date(Date.parse(`${hien.hieuLucTu}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+      const truoc = chonBoHieuLuc(cua, truocNgay);
+      if (truoc && (truoc.bankAccount !== hien.bankAccount || truoc.bankName !== hien.bankName || truoc.accountHolder !== hien.accountHolder)) {
+        const apDung = ngayVeDate(hien.hieuLucTu);
+        if (!doiLuc || apDung > doiLuc) doiLuc = apDung;
+      }
     }
     kq.set(u, { bankAccount: hien.bankAccount, bankName: hien.bankName, accountHolder: hien.accountHolder, doiLuc });
   }

@@ -174,6 +174,14 @@ export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuon
   });
   await nc.suKien({ eventType: SU_KIEN.SALARY_PROFILE_CHANGED, objectType: "salary_profile", objectId: moi.id, payload: { nguoi: d.nguoiId, hieuLucTu: d.hieuLucTu } });
   // QĐ-159: đổi tài khoản nhận lương → báo chính nhân viên trong ứng dụng + kiểm toán (số tài khoản che, chỉ 4 số cuối).
+  // QA 0.21.0 v2: tài khoản ĐANG / SẼ áp dụng theo ngày hiệu lực có thể khác bản vừa tạo (bản lùi ngày không bao giờ thắng
+  // bản hiệu lực sau nó) — thông báo phải nói đúng tài khoản sẽ nhận lương, không chỉ số của bản vừa tạo.
+  const tatCa = (await nc.tx.salaryProfile.findMany({ where: { userId: d.nguoiId }, select: { id: true, effectiveFrom: true, createdAt: true, bankAccount: true } }))
+    .map((x) => ({ ...x, hieuLucTu: dateVeNgay(x.effectiveFrom), taoLuc: x.createdAt }));
+  const homNay = homNayVN();
+  const apDung = [homNay, ...new Set(tatCa.map((x) => x.hieuLucTu).filter((n) => n > homNay))].sort()
+    .map((n) => ({ ngay: n, tk: chonBoHieuLuc(tatCa, n)?.bankAccount ?? null }))
+    .filter((x) => x.tk !== d.soTaiKhoan);
   const doiTk = moiNhat && (moiNhat.bankAccount !== d.soTaiKhoan || moiNhat.bankName !== d.nganHang || moiNhat.accountHolder !== d.chuTaiKhoan);
   if (doiTk) {
     await nc.kiemToan({
@@ -184,7 +192,7 @@ export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuon
     await taoThongBao(nc.tx, nc.tenantId, {
       nguoiNhanId: d.nguoiId, loai: "doi-tai-khoan-luong", mucDo: "canh-bao",
       tieuDe: "Tài khoản nhận lương của bạn vừa được đổi",
-      noiDung: `${nc.hoSo.hoTen} đổi tài khoản nhận lương thành ${cheTaiKhoan(d.soTaiKhoan) ?? "(trống)"}${d.nganHang ? ` — ${d.nganHang}` : ""}. Không phải bạn yêu cầu thì báo ngay Kế toán / Giám đốc.`,
+      noiDung: `${nc.hoSo.hoTen} đổi tài khoản nhận lương thành ${cheTaiKhoan(d.soTaiKhoan) ?? "(trống)"}${d.nganHang ? ` — ${d.nganHang}` : ""} (hiệu lực từ ${d.hieuLucTu.split("-").reverse().join("/")}).${apDung.map((x) => ` Lưu ý: tài khoản ${x.ngay === homNay ? "đang áp dụng hôm nay" : `áp dụng từ ${x.ngay.split("-").reverse().join("/")}`} là ${cheTaiKhoan(x.tk) ?? "(trống)"}.`).join("")} Không phải bạn yêu cầu thì báo ngay Kế toán / Giám đốc.`,
       duongDan: "/luong/phieu-cua-toi", doiTuong: "salary_profile", doiTuongId: moi.id, khoaChongTrung: `doi-tai-khoan-luong:${moi.id}`,
     });
   }

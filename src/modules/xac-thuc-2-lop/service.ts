@@ -85,6 +85,9 @@ export async function batDau2Lop(nc: NguCanh, matKhau: string, maHienTai = "") {
   batBuocKhoa();
   const u = await nc.tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { totpEnabledAt: true, email: true, passwordHash: true } });
   if (!u) throw new LoiKhongTimThay("Tài khoản");
+  // QA 0.21.0 v2: xếp hàng từng người (khóa tư vấn tới hết giao dịch) — trước đây N yêu cầu SONG SONG cùng qua kiểm khóa
+  // tạm rồi cùng kiểm mật khẩu, bộ đếm sai mất cập nhật → đoán mật khẩu không giới hạn bằng phiên lấy cắp.
+  await nc.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`2-lop-bat-dau:${nc.hoSo.userId}`}))`;
   // Đang bị khóa tạm (sai mật khẩu / mã quá N lần — chung bộ đếm với đăng nhập) → từ chối, không kiểm gì. Không đếm tốc
   // độ ở lần ĐÚNG: bộ đếm sai đã khóa tài khoản sau N lần như đăng nhập.
   await chanNeuDangKhoaTam(nc);
@@ -173,8 +176,9 @@ async function ghiLanSai(nc: NguCanh): Promise<void> {
   await voiTenant(nc.tenantId, async (tx) => {
     const soLanToiDa = (await docCauHinh(tx, "bao_mat.so_lan_sai_toi_da")) ?? 5;
     const soPhutKhoa = (await docCauHinh(tx, "bao_mat.so_phut_khoa")) ?? 15;
-    const dong = await tx.user.findFirst({ where: { id: nc.hoSo.userId }, select: { failedLoginCount: true } });
-    const soLanSai = (dong?.failedLoginCount ?? 0) + 1;
+    // Khóa dòng người dùng rồi mới đọc bộ đếm: hai lần sai cùng lúc không ghi đè nhau (QA 0.21.0 v2).
+    const dong = (await tx.$queryRaw<{ failed_login_count: number }[]>`SELECT failed_login_count FROM users WHERE id = ${nc.hoSo.userId}::uuid FOR UPDATE`)[0];
+    const soLanSai = (dong?.failed_login_count ?? 0) + 1;
     const khoa = soLanSai >= soLanToiDa;
     await tx.user.update({
       where: { id: nc.hoSo.userId },
