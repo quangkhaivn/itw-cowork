@@ -4693,6 +4693,8 @@ model SalaryAllowanceType {
   insurable Boolean  @default(false)
   /// thang | ngay-cong
   basis     String   @default("thang") @db.VarChar(20)
+  /// 0.21.0 QĐ-157: phụ cấp cố định tháng được TRẢ ĐỦ, không chia theo công (mặc định tắt = chia theo công).
+  fullMonth Boolean  @default(false) @map("full_month")
   sortOrder Int      @default(0) @map("sort_order")
   status    String   @default("hoat-dong") @db.VarChar(20)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -4793,6 +4795,10 @@ model PayrollRun {
   year         Int
   month        Int
   status       String    @default("nhap") @db.VarChar(20)
+  /// QĐ-165: kỳ lương RIÊNG cho một nhóm người (vd lãnh đạo) — tên + danh sách người; rỗng = kỳ chung của tháng (mọi
+  /// người có hồ sơ lương, trừ người đã thuộc một kỳ riêng cùng tháng). Một kỳ chung mỗi tháng (chỉ mục riêng phần).
+  name         String?   @db.VarChar(100)
+  members      String[]  @default([]) @db.Uuid
   timesheetId  String?   @map("timesheet_id") @db.Uuid
   /// Có thay đổi (khoản cộng / trừ, điều chỉnh) sau lần tính gần nhất → phải tính lại trước khi gửi duyệt.
   dirty        Boolean   @default(true)
@@ -4817,30 +4823,35 @@ model PayrollRun {
   items           PayrollItem[]
   commissionItems PayrollCommissionItem[]
 
-  @@unique([tenantId, year, month])
+  @@index([tenantId, year, month])
   @@map("payroll_runs")
 }
 
 /// Dòng lương một người trong kỳ: số chính + ẢNH CHỤP ĐẦU VÀO (công, tham số, hồ sơ) + chi tiết kết quả (LU-28).
 model PayrollLine {
-  id                String   @id @default(uuid()) @db.Uuid
-  tenantId          String   @map("tenant_id") @db.Uuid
-  runId             String   @map("run_id") @db.Uuid
-  userId            String   @map("user_id") @db.Uuid
-  fullName          String   @map("full_name") @db.VarChar(255)
-  profileId         String?  @map("profile_id") @db.Uuid
-  grossIncome       BigInt   @map("gross_income")
-  taxableIncome     BigInt   @map("taxable_income")
-  employeeInsurance BigInt   @map("employee_insurance")
-  personalIncomeTax BigInt   @map("personal_income_tax")
-  otherDeductions   BigInt   @map("other_deductions")
-  netPay            BigInt   @map("net_pay")
-  employerInsurance BigInt   @map("employer_insurance")
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  runId             String    @map("run_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  fullName          String    @map("full_name") @db.VarChar(255)
+  profileId         String?   @map("profile_id") @db.Uuid
+  grossIncome       BigInt    @map("gross_income")
+  taxableIncome     BigInt    @map("taxable_income")
+  employeeInsurance BigInt    @map("employee_insurance")
+  personalIncomeTax BigInt    @map("personal_income_tax")
+  otherDeductions   BigInt    @map("other_deductions")
+  netPay            BigInt    @map("net_pay")
+  employerInsurance BigInt    @map("employer_insurance")
   inputs            Json
   result            Json
-  warnings          Json     @default("[]")
-  hasError          Boolean  @default(false) @map("has_error")
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  warnings          Json      @default("[]")
+  hasError          Boolean   @default(false) @map("has_error")
+  /// QĐ-160: tài khoản ngân hàng CHỤP lúc khóa kỳ — file chi lương dùng đúng tài khoản này.
+  bankAccount       String?   @map("bank_account") @db.VarChar(50)
+  bankName          String?   @map("bank_name") @db.VarChar(255)
+  accountHolder     String?   @map("account_holder") @db.VarChar(255)
+  bankCapturedAt    DateTime? @map("bank_captured_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   run    PayrollRun @relation(fields: [runId], references: [id], onDelete: Restrict)
@@ -4862,6 +4873,10 @@ model PayrollItem {
   category     String    @db.VarChar(20)
   amount       BigInt
   taxable      Boolean   @default(true)
+  /// QĐ-158 (chỉ khoản điều chỉnh): truoc-thue = vào / giảm thu nhập chịu thuế + lương đóng BH như truy thu hoa hồng;
+  /// sau-thue = cộng / trừ thẳng vào thực lĩnh (vd thu hồi tạm ứng).
+  taxStage     String?   @map("tax_stage") @db.VarChar(10)
+  insurable    Boolean   @default(false)
   reason       String    @db.Text
   /// Kỳ đã khóa mà khoản này điều chỉnh (chỉ category = dieu-chinh).
   adjustsRunId String?   @map("adjusts_run_id") @db.Uuid
