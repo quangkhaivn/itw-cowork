@@ -491,3 +491,19 @@ describe("QĐ-167: tham số lương hiển thị cho kế toán đọc (không 
     assert.match(thue, /35%/);
   });
 });
+
+describe("QĐ-168: phụ cấp chia theo công không vượt mức tháng", () => {
+  it("công tính lương vượt công chuẩn (điều chỉnh tháng trước) → kẹp ở mức tháng + cảnh báo số chưa trả", () => {
+    const dt = { ma: "dien-thoai", ten: "Điện thoại", soTien: 600_000, chiuThue: false, tinhBH: false, theo: "thang" as const };
+    const k = tinhLuong(dv({ phuCap: [dt], cong: { chuan: 24, thucTe: 25 } }));
+    assert.equal(k.tongPhuCap, 600_000);
+    const cb = k.canhBao.find((c) => c.ma === "phu-cap-vuot-muc-thang");
+    assert.ok(cb && /25\.000 đ/.test(cb.noiDung), cb?.noiDung);
+    assert.ok(!tinhLuong(dv({ phuCap: [dt], cong: { chuan: 24, thucTe: 24 } })).canhBao.some((c) => c.ma === "phu-cap-vuot-muc-thang"));
+  });
+  it("hai đoạn có mức khác nhau: trần là mức cao nhất trong tháng (500.000 + 1.166.667 < 2.000.000 → không kẹp)", () => {
+    const x = (soTien: number) => ({ ma: "xang-xe", ten: "Xăng xe", soTien, chiuThue: true, tinhBH: false, theo: "thang" as const });
+    const k = tinhLuong(dv({ cong: { chuan: 24, thucTe: 26 }, doan: [doan({ phuCap: [x(1_000_000)], cong: { thucTe: 12 } }), doan({ phuCap: [x(2_000_000)], cong: { thucTe: 14 } })] }));
+    assert.equal(k.tongPhuCap, 500_000 + 1_166_667);
+  });
+});

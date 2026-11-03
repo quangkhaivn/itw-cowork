@@ -277,13 +277,31 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
   }
   // QĐ-156: mọi phiên bản hồ sơ có hiệu lực trong tháng (chia đoạn theo ngày).
   const phienBan = await tx.salaryProfile.findMany({ where: { userId: { in: ids }, effectiveFrom: { lte: ngayVeDate(den) } }, orderBy: { createdAt: "asc" } });
-  // QĐ-166: phút tăng ca còn âm của kỳ tháng trước (đã khóa) chuyển sang kỳ này.
+  // QĐ-166 + QA v2 (QĐ-169): phút tăng ca còn âm lấy từ kỳ ĐÃ KHÓA GẦN NHẤT (trước tháng này) có dòng của người đó —
+  // không chỉ tháng liền trước (người nghỉ / kỳ riêng). Tháng trước còn kỳ chưa khóa → cảnh báo (khóa rồi tính lại).
   const truoc = thangLui(ky.year, ky.month, 1);
+  const dongDaKhoa = await tx.payrollLine.findMany({
+    where: { userId: { in: ids }, run: { status: { in: ["da-khoa", "da-chi"] }, OR: [{ year: { lt: ky.year } }, { year: ky.year, month: { lt: ky.month } }] } },
+    select: { userId: true, result: true, run: { select: { year: true, month: true } } },
+  });
+  const ganNhat = new Map<string, (typeof dongDaKhoa)[number]>();
+  for (const d of dongDaKhoa) {
+    const cu = ganNhat.get(d.userId);
+    if (!cu || d.run.year * 12 + d.run.month > cu.run.year * 12 + cu.run.month) ganNhat.set(d.userId, d);
+  }
   const noTruoc = new Map(
-    (await tx.payrollLine.findMany({ where: { userId: { in: ids }, run: { year: truoc.nam, month: truoc.thang, status: { in: ["da-khoa", "da-chi"] } } }, select: { userId: true, result: true } }))
+    [...ganNhat.values()]
       .map((d) => [d.userId, (d.result as unknown as KetQuaLuong).tangCaNoChuyenKySau ?? null] as const)
       .filter((x): x is readonly [string, PhutTangCa] => x[1] !== null),
   );
+  const kyTruocChuaKhoa = await tx.payrollRun.findMany({ where: { year: truoc.nam, month: truoc.thang, status: { notIn: ["da-khoa", "da-chi"] } }, select: { name: true } });
+  if (kyTruocChuaKhoa.length) {
+    canhBaoKy.push({
+      ma: "ky-truoc-chua-khoa",
+      muc: "canh-bao",
+      noiDung: `Kỳ lương tháng ${nhanKy(truoc.nam, truoc.thang)}${kyTruocChuaKhoa.some((k) => k.name) ? ` (${kyTruocChuaKhoa.map((k) => k.name ?? "kỳ chung").join(", ")})` : ""} chưa khóa — nợ tăng ca âm (nếu có) đang lấy từ kỳ đã khóa gần nhất. Khóa kỳ tháng trước rồi tính lại kỳ này để không trừ trùng / sót.`,
+    });
+  }
 
   // Lịch + lễ → công chuẩn, ngày lễ được trả (QĐ-145).
   const cacNgay = cacNgayTrongThang(ky.year, ky.month);

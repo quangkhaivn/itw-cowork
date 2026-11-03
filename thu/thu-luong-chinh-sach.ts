@@ -122,7 +122,7 @@ async function main() {
   await voi(T, hr, (nc) => taoHoSoLuong(nc, hs({ nguoiId: nvR, luongCoBan: 15_000_000, luongDongBH: 15_000_000, phuCap: [{ loaiId: dienThoai.id, soTien: 600_000 }], soTaiKhoan: "3333", nganHang: "MB" })));
 
   // Bảng công dựng tay (đã khóa) — mỗi ngày phải làm một dòng.
-  async function bangCong(nam: number, thang: number, ds: { userId: string; tu?: string; nghiKhongLuong?: boolean; tangCa?: Record<string, number>; dieuChinhTangCa?: { ngay: string; phut: number }[] }[]) {
+  async function bangCong(nam: number, thang: number, ds: { userId: string; tu?: string; nghiKhongLuong?: boolean; tangCa?: Record<string, number>; dieuChinhTangCa?: { ngay: string; phut: number }[]; dieuChinhCong?: { ngay: string; cong: number }[] }[]) {
     const bc = await chu.timesheet.create({ data: { tenantId: T, year: nam, month: thang, generatedAt: MOC, generatedBy: hr, feedbackDeadline: MOC } });
     for (const d of ds) {
       for (const ngay of cacNgayTrongThang(nam, thang)) {
@@ -136,6 +136,9 @@ async function main() {
             otMinutes: d.tangCa?.[ngay] ?? 0,
           },
         });
+      }
+      for (const a of d.dieuChinhCong ?? []) {
+        await chu.timesheetRow.create({ data: { tenantId: T, timesheetId: bc.id, userId: d.userId, workDate: NGAY(a.ngay), isAdjustment: true, dayType: "thuong", expectedValue: 0, workValue: a.cong, flags: ["dieu-chinh-ky-truoc"] } });
       }
       for (const a of d.dieuChinhTangCa ?? []) {
         await chu.timesheetRow.create({ data: { tenantId: T, timesheetId: bc.id, userId: d.userId, workDate: NGAY(a.ngay), isAdjustment: true, dayType: "thuong", otMinutes: a.phut, flags: ["dieu-chinh-ky-truoc"] } });
@@ -237,7 +240,8 @@ async function main() {
   await nemLoi("Khoản điều chỉnh bắt buộc chọn trước / sau thuế", "zod", async () => LuocDoKhoan.parse({ nguoiId: nvQ, chieu: "tru", loai: "dieu-chinh", soTien: 1_000_000, lyDo: "Trả thừa lương tháng 3", kyGocId: k3.id }));
   await nemLoi("Sau thuế không tính vào lương đóng BH", "zod", async () => LuocDoKhoan.parse({ nguoiId: nvQ, chieu: "tru", loai: "dieu-chinh", soTien: 1, cachTinh: "sau-thue", tinhBH: true, lyDo: "Trả thừa lương tháng 3", kyGocId: k3.id }));
   await bangCong(2026, 4, [
-    { userId: gd }, { userId: ad }, { userId: nvQ }, { userId: nvR },
+    { userId: gd }, { userId: ad }, { userId: nvR },
+    { userId: nvQ, dieuChinhCong: [{ ngay: "2026-03-13", cong: 1 }] },
     { userId: nvP, tangCa: { "2026-04-01": 60 }, dieuChinhTangCa: [{ ngay: "2026-03-02", phut: -300 }] },
   ]);
   const k4L = await voi(T, kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 4, ten: "Lãnh đạo", thanhVien: [gd] }));
@@ -249,6 +253,10 @@ async function main() {
   const rQ4 = kq(await dong(k4.id, nvQ));
   dat("Thu hồi trước thuế: giảm tổng thu nhập và thu nhập chịu thuế 1tr", rQ4.dieuChinhTruocThue === -1_000_000 && rQ4.tongThuNhap === rQ4.luongTheoCong + rQ4.tongPhuCap - 1_000_000 && rQ4.thuNhapChiuThue === rQ4.tongThuNhap - rQ4.phuCapKhongChiuThue);
   dat("…giảm lương đóng BH 1tr (đã chọn tính BH)", rQ4.baoHiem.luongDong === 12_000_000 - 1_000_000, String(rQ4.baoHiem.luongDong));
+  const dQ4 = await dong(k4.id, nvQ);
+  dat("QĐ-168: công tháng 4 = 24 + 1 công điều chỉnh tháng 3 → phụ cấp điện thoại kẹp ở mức tháng 600.000, có cảnh báo phần chưa trả",
+    rQ4.congTinhLuong === 25 && rQ4.phuCap.find((p) => p.ma === "dien-thoai")?.soTien === 600_000 && (dQ4.warnings as unknown as { ma: string; noiDung: string }[]).some((c) => c.ma === "phu-cap-vuot-muc-thang" && /25\.000 đ/.test(c.noiDung)),
+    JSON.stringify(rQ4.phuCap));
   const rR4 = kq(await dong(k4.id, nvR));
   dat("Thu hồi sau thuế: thuế / BH như không có khoản, trừ thẳng thực lĩnh", rR4.khoanTru === 300_000 && rR4.dieuChinhTruocThue === 0 && rR4.baoHiem.luongDong === 15_000_000 && rR4.thucLinh === rR4.tongThuNhap - rR4.baoHiem.nld.tong - rR4.thue.tien - 300_000);
   const kh = await chu.payrollItem.findMany({ where: { runId: k4.id }, orderBy: { amount: "desc" } });
@@ -272,6 +280,13 @@ async function main() {
   const rP5 = kq(dP5);
   dat("Tháng 5: nợ −240 phút của kỳ 4 (đã khóa) chuyển sang, ghi trong ảnh chụp", vP5.cong.tangCaNoKyTruoc?.thuong === -240);
   dat("…tăng ca tháng 5 chỉ trả 300 − 240 = 60 phút", rP5.tangCa.chiTiet.find((c) => c.loai === "thuong")?.phut === 60 && rP5.tangCaNoChuyenKySau === null, JSON.stringify(rP5.tangCa.chiTiet));
+  // QĐ-169: tháng 6 khi kỳ tháng 5 chưa khóa → nợ lấy từ kỳ ĐÃ KHÓA GẦN NHẤT (tháng 4) + cảnh báo.
+  await bangCong(2026, 6, [{ userId: nvP }, { userId: gd }, { userId: ad }, { userId: nvQ }, { userId: nvR }]);
+  const k6 = await voi(T, kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 6 }));
+  const r6 = await voi(T, kt, (nc) => tinhKyLuong(nc, k6.id));
+  const vP6 = (await dong(k6.id, nvP)).inputs as unknown as DauVaoLuong;
+  dat("QĐ-169: tháng 5 chưa khóa → nợ tăng ca lấy từ kỳ đã khóa gần nhất (tháng 4: −240 phút)", vP6.cong.tangCaNoKyTruoc?.thuong === -240, JSON.stringify(vP6.cong.tangCaNoKyTruoc));
+  dat("…kèm cảnh báo kỳ tháng trước chưa khóa", r6.canhBao.some((c) => c.ma === "ky-truoc-chua-khoa"));
   await nemLoi("Kỳ chung đã gửi duyệt có dòng người được chọn → không tách sang kỳ riêng", "nghiep-vu", async () => {
     await voi(T, kt, (nc) => guiDuyetKyLuong(nc, k5.id)).catch(() => undefined);
     await chu.payrollRun.update({ where: { id: k5.id }, data: { status: "cho-duyet", submittedAt: MOC, submittedBy: kt } });

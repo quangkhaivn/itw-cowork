@@ -627,7 +627,10 @@ export function tinhLuong(dv: DauVaoLuong): KetQuaLuong {
 
   // 3. Phụ cấp (QĐ-157): theo ngày công × công thực tế của đoạn; cố định tháng × công tính lương / công chuẩn; "trả
   // đủ" = mức của phiên bản cuối có phụ cấp đó, không chia.
+  // QA v2 (QĐ-168): phụ cấp cố định tháng chia theo công KHÔNG vượt mức tháng (kẹp ở 100% mức cao nhất trong tháng);
+  // phần công cộng thêm do dòng điều chỉnh tháng trước → cảnh báo kèm số tiền chưa trả, kế toán nhập khoản điều chỉnh.
   const phuCapMap = new Map<string, { ma: string; ten: string; soTien: bigint; chiuThue: boolean; tinhBH: boolean }>();
+  const mucThang = new Map<string, bigint>();
   const traDu = new Map<string, PhuCapDauVao>();
   doan.forEach((d, i) => {
     for (const p of d.phuCap) {
@@ -636,11 +639,29 @@ export function tinhLuong(dv: DauVaoLuong): KetQuaLuong {
       else if (p.traDu) {
         traDu.set(p.ma, p);
         continue;
-      } else st = chuan > 0n ? nhanChia([tien(p.soTien), congDoan[i]], [chuan]) : tien(p.soTien);
+      } else {
+        st = chuan > 0n ? nhanChia([tien(p.soTien), congDoan[i]], [chuan]) : tien(p.soTien);
+        mucThang.set(p.ma, (mucThang.get(p.ma) ?? 0n) > tien(p.soTien) ? mucThang.get(p.ma)! : tien(p.soTien));
+      }
       const cu = phuCapMap.get(p.ma);
       phuCapMap.set(p.ma, { ma: p.ma, ten: p.ten, soTien: (cu?.soTien ?? 0n) + st, chiuThue: p.chiuThue, tinhBH: p.tinhBH });
     }
   });
+  const vuotMuc: string[] = [];
+  for (const [ma, muc] of mucThang) {
+    const p = phuCapMap.get(ma)!;
+    if (p.soTien > muc) {
+      vuotMuc.push(`${p.ten} ${(p.soTien - muc).toLocaleString("vi-VN")} đ`);
+      p.soTien = muc;
+    }
+  }
+  if (vuotMuc.length) {
+    canhBao.push({
+      ma: "phu-cap-vuot-muc-thang",
+      muc: "canh-bao",
+      noiDung: `Công tính lương (${Number(congTL) / 100}) vượt công chuẩn (${Number(chuan) / 100}) do dòng điều chỉnh tháng trước — phụ cấp tháng kẹp ở mức tháng, phần chưa trả: ${vuotMuc.join(", ")}. Nếu tháng trước trả thiếu phụ cấp, nhập khoản "Điều chỉnh kỳ trước" (trước thuế).`,
+    });
+  }
   for (const p of traDu.values()) {
     const cu = phuCapMap.get(p.ma);
     phuCapMap.set(p.ma, { ma: p.ma, ten: p.ten, soTien: (cu?.soTien ?? 0n) + tien(p.soTien), chiuThue: p.chiuThue, tinhBH: p.tinhBH });

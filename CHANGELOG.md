@@ -53,6 +53,12 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 32 (LU-01 → LU-63). Quyết đ
 - Bài HTTP `thu:qa-email-http` (0.16.0) hỏng từ 0.18.0: người nhận thử không có "Đồng ý" trong sổ (EG-09 bắt buộc mặc định) → chiến dịch không gửi duyệt được. Bài thử ghi sổ đồng ý cho người nhận. `thu:qa-luong-http` thêm QĐ-162 qua HTTP: thiếu mật khẩu → 400, sai mật khẩu → 422 + cộng bộ đếm, đổi thiết bị thiếu mã máy cũ → 422, khóa mới chưa xác nhận không đăng nhập được, khóa cũ vẫn dùng.
 - `thu:qa-luong` thêm phần vòng 2: các lỗi trên + tự sửa hồ sơ / người phụ thuộc (Nhân sự, Giám đốc, Quản trị), tính tay vào + nghỉ việc cùng tháng (phụ cấp chia theo công / trả đủ / ngày công), ba phiên bản trong tháng (tổng đoạn = tổng dòng), thu hồi trước thuế lớn hơn thu nhập, thu hồi tính BH khi lương trên trần, nhật ký / thông báo không chứa số tài khoản đầy đủ.
 
+### Trước phát hành (QĐ-167 → QĐ-169)
+- **Tham số lương dễ đọc**: mỗi bộ hiện theo nhóm có nhãn + đơn vị, biểu thuế thành bảng bậc; nhập bộ mới bằng biểu mẫu từng ô (giữ chế độ JSON nâng cao).
+- Sửa câu mô tả cũ "kỳ lương dùng phiên bản hiệu lực ngày cuối tháng" (Hồ sơ lương, Tham số lương, hướng dẫn).
+- Phụ cấp tháng chia theo công không vượt mức tháng (cảnh báo phần do công điều chỉnh tháng trước); nợ tăng ca âm lấy từ kỳ đã khóa gần nhất có dòng của người đó, cảnh báo khi tháng trước chưa khóa.
+- `db:seed:mau`: dữ liệu mẫu DEMO cho Nhân sự (lịch, chấm công, bảng công đã khóa, việc giao, báo cáo, KPI + đánh giá đã chốt, thực tập, kỳ lương đã tính).
+
 ## 0.20.0 — 03/11/2026 — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
 
 **Chưa triển khai lên máy thật.** Năm migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`, `20261103090003_danh_gia_chinh_sach`, `20261103090004_danh_gia_giao_viec_nguoi_nghi`, `20261103090005_danh_gia_lap_chuoi_sai`), chạy lại `prisma/rls.sql` (7 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.
