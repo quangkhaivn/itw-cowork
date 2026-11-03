@@ -94,7 +94,7 @@ Mỗi lần mở trang hồ sơ lương đều được ghi nhật ký (ai, lúc
 ### Cách máy tính (để đối chiếu tay)
 
 - **Công tính lương** = công thực tế + nghỉ phép có lương + ngày lễ (lễ rơi vào ngày phải làm theo lịch). Nghỉ ốm, nghỉ không lương: không trả (ốm do BHXH chi). **Đi muộn / về sớm không trừ tiền** — chỉ in số phút trên phiếu.
-- **Công chuẩn** = số công phải làm theo lịch làm việc cả tháng (coi như không có lễ). Lương tháng = lương cơ bản × % thử việc × công tính lương ÷ công chuẩn.
+- **Công chuẩn** = số công phải làm theo lịch làm việc cả tháng (coi như không có lễ). Lương tháng = lương cơ bản × % thử việc × công tính lương ÷ công chuẩn. Người vào làm giữa tháng (lịch gán từ ngày vào) vẫn có công chuẩn cả tháng → lương theo số công thực làm; phiếu có cảnh báo "lịch bắt đầu giữa tháng" để soát người bị gán lịch muộn.
 - **Tăng ca**: chỉ giờ có đơn tăng ca **đã duyệt** trên bảng công; lương giờ = lương tháng ÷ công chuẩn ÷ 8; × hệ số theo ngày thường / nghỉ tuần / lễ / ban đêm.
 - **Thưởng KPI** = mức thưởng KPI × hệ số thưởng của phiếu đánh giá **đã chốt** của tháng (đánh giá theo quý thì trả vào tháng cuối quý).
 - **Hoa hồng** = tỷ lệ × tiền **đã thu thật** trong tháng (phiếu thu còn hiệu lực) của đơn người đó phụ trách. Phiếu thu bị hủy sau khi tháng đã khóa → tháng sau có **dòng truy thu** đúng số đã trả. Phiếu thu của tháng trước nhưng nhập muộn (sau khi tháng trước đã tính) → tính vào tháng này.
