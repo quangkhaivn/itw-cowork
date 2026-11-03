@@ -410,6 +410,8 @@ async function main() {
   const nguon = `qa-http-${DAU}`;
   const emailNhan = `nhan.${DAU}@khach.test`;
   await chu.lead.create({ data: { tenantId: T, code: `LD-QAH-${DAU}`, fullName: "Khách QA", email: emailNhan, emailNormalized: emailNhan, source: nguon, ownerId: nvKhac.id } });
+  // Từ 0.18.0 (EG-09) chỉ gửi cho người có "Đồng ý" còn hiệu lực trong sổ — bài 0.16 cần ghi sổ đồng ý cho người nhận thử.
+  await chu.emailConsent.create({ data: { tenantId: T, email: emailNhan, action: "dong-y", source: "nhap-tay", evidence: "Khách QA HTTP đồng ý nhận thư (dữ liệu thử)", occurredAt: new Date() } });
   const mau = await goi("/api/v1/email/mau", {
     phuongThuc: "POST",
     cookie: CG,
