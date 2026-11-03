@@ -64,6 +64,9 @@ async function goi(duong: string, o: { method?: string; than?: unknown; cookie?:
   return { status: r.status, json, text, headers: r.headers, cookies };
 }
 
+/** Trang "không tìm thấy". Trang trong khung (he-thong) có loading.tsx nên Next stream sẵn 200 rồi mới gặp notFound() — xét nội dung. */
+const khongThay = (r: PhanHoi) => (r.status === 404 || r.status === 200) && r.text.includes("Trang hoặc bản ghi này không tồn tại") && !r.text.includes("Không hiển thị được trang này");
+
 const maTotp = (khoa: string, lech = 0) => totp(base32Giai(khoa), Date.now() + lech * 30_000);
 
 async function main() {
@@ -149,9 +152,9 @@ async function main() {
   const inKhac = await goi(`/luong/phieu/${dNv2.id}/in`, { cookie: cNv });
   dat("LỖI 4: nhân viên mở bản in phiếu người khác → 404 (trước khi sửa: lỗi máy 500), không lộ số tiền", inKhac.status === 404 && !inKhac.text.includes(so2), String(inKhac.status));
   const kyTrang = await goi(`/luong/${ky.id}`, { cookie: cNv });
-  dat("LỖI 4: nhân viên mở trang bảng lương → 404 (trước khi sửa: trang lỗi)", kyTrang.status === 404 && !kyTrang.text.includes(so2), String(kyTrang.status));
+  dat("LỖI 4: nhân viên mở trang bảng lương → trang không tìm thấy (trước khi sửa: trang lỗi)", khongThay(kyTrang) && !kyTrang.text.includes(so2), String(kyTrang.status));
   const hsTrang = await goi(`/luong/ho-so?nguoi=${nv2.id}`, { cookie: cNv });
-  dat("LỖI 4: nhân viên mở trang hồ sơ lương → 404", hsTrang.status === 404, String(hsTrang.status));
+  dat("LỖI 4: nhân viên mở trang hồ sơ lương → trang không tìm thấy", khongThay(hsTrang), String(hsTrang.status));
   dat("…mỗi lần dò ở trang đều ghi vết từ chối quyền", (await chu.auditLog.count({ where: { tenantId: T, action: "tu-choi-quyen", actorId: nv.id } })) - tc0 >= 3);
   for (const [ten, duong] of [
     ["phiếu người khác", `/api/v1/luong/dong/${dNv2.id}`],
@@ -161,7 +164,6 @@ async function main() {
     ["xuất bảng lương", `/api/v1/luong/ky/${ky.id}/xuat?loai=bang-luong&dinhDang=csv`],
     ["xuất ngân hàng", `/api/v1/luong/ky/${ky.id}/xuat?loai=ngan-hang`],
     ["hồ sơ lương", `/api/v1/luong/ho-so/${nv2.id}`],
-    ["trang bảng lương", `/luong/${ky.id}`],
   ] as const) {
     const r = await goi(duong, { cookie: cNv });
     dat(`Nhân viên: ${ten} → từ chối, không lộ số tiền`, [401, 403, 404, 307].includes(r.status) && !r.text.includes(so2), String(r.status));
