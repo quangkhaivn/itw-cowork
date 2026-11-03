@@ -382,6 +382,8 @@ export interface PhuCapDauVao {
   chiuThue: boolean;
   tinhBH: boolean;
   theo: "thang" | "ngay-cong";
+  /** QĐ-157: phụ cấp cố định tháng TRẢ ĐỦ, không chia theo công (mặc định: chia theo công). */
+  traDu?: boolean;
 }
 
 export interface KhoanDauVao {
@@ -390,6 +392,13 @@ export interface KhoanDauVao {
   soTien: number;
   chiuThue: boolean;
   lyDo: string;
+  /**
+   * QĐ-158 — chỉ khoản điều chỉnh kỳ trước: `truoc-thue` = vào (cộng) / giảm (trừ) tổng thu nhập, thu nhập chịu thuế
+   * (nếu `chiuThue`) và lương đóng BH (nếu `tinhBH`) — như truy thu hoa hồng; `sau-thue` = cộng / trừ thẳng vào thực
+   * lĩnh. Không có (ảnh chụp cũ) → cách cũ: cộng vào tổng thu nhập, trừ sau thuế.
+   */
+  tinhThue?: "truoc-thue" | "sau-thue";
+  tinhBH?: boolean;
 }
 
 /** Phút tăng ca theo loại ngày, tách phần đêm (từ bảng công đã khóa). */
@@ -402,9 +411,26 @@ export interface PhutTangCa {
   leDem: number;
 }
 
+/**
+ * QĐ-156: một ĐOẠN của tháng có cùng phiên bản hồ sơ lương (đổi lương / hết thử việc giữa tháng → nhiều đoạn). Công,
+ * tăng ca, phụ cấp tính theo đoạn với mức của phiên bản đó; công chuẩn vẫn là của cả tháng.
+ */
+export interface DoanLuong {
+  hoSoId: string | null;
+  tu: string;
+  den: string;
+  loaiHopDong: LoaiHopDong;
+  tyLeThuViec: number | null;
+  cachTra: CachTra;
+  luongCoBan: number;
+  phuCap: PhuCapDauVao[];
+  cong: { thucTe: number; nghiCoLuong: number; le: number; tangCaPhut: PhutTangCa };
+}
+
 /** ẢNH CHỤP ĐẦU VÀO của một dòng lương (LU-28) — đủ để tính lại ra đúng số. */
 export interface DauVaoLuong {
   ky: { nam: number; thang: number };
+  /** Phiên bản hiệu lực cuối kỳ: thuế, BH, thưởng KPI, hoa hồng lấy theo bản này. */
   hoSo: {
     id: string | null;
     hieuLucTu: string;
@@ -418,6 +444,8 @@ export interface DauVaoLuong {
     phuongPhapThue: PhuongPhapThue;
   };
   phuCap: PhuCapDauVao[];
+  /** QĐ-156: các đoạn theo phiên bản hồ sơ. Không có (ảnh chụp cũ) → một đoạn = `hoSo` + `phuCap` + `cong`. */
+  doan?: DoanLuong[];
   cong: {
     /** Ngày công chuẩn của tháng theo lịch làm việc (coi như không có ngày lễ). */
     chuan: number;
@@ -427,6 +455,8 @@ export interface DauVaoLuong {
     /** Ngày lễ rơi vào ngày phải làm theo lịch — được trả lương. */
     le: number;
     tangCaPhut: PhutTangCa;
+    /** QĐ-166: phút tăng ca còn ÂM chuyển từ kỳ trước (≤ 0), trừ vào tăng ca kỳ này. */
+    tangCaNoKyTruoc?: PhutTangCa;
     /** Chỉ ghi nhận, KHÔNG trừ tiền (LU-21). */
     phutMuon: number;
     phutSom: number;
@@ -452,14 +482,22 @@ export interface CanhBaoLuong {
 export interface KetQuaLuong {
   congTinhLuong: number;
   luongTheoCong: number;
+  /** QĐ-156: chi tiết từng đoạn (một đoạn khi không đổi hồ sơ trong tháng). */
+  doan?: { tu: string; den: string; loaiHopDong: LoaiHopDong; tyLeThuViec: number | null; luongCoBan: number; congTinhLuong: number; luongTheoCong: number; tangCa: number }[];
   phuCap: { ma: string; ten: string; soTien: number; chiuThue: boolean; tinhBH: boolean }[];
   tongPhuCap: number;
   phuCapKhongChiuThue: number;
   tangCa: { tien: number; mienThue: number; chiTiet: { loai: keyof PhutTangCa; phut: number; heSo: number; tien: number }[] };
+  /** QĐ-166: phút tăng ca còn âm chưa trừ hết → chuyển kỳ sau (null = không còn). */
+  tangCaNoChuyenKySau?: PhutTangCa | null;
   thuongKpi: number;
   hoaHong: { doanhSo: number; tyLeBp: number; tien: number; truyThu: number; tungKhoan: number[] };
   khoanCong: number;
   khoanCongKhongChiuThue: number;
+  /** QĐ-158: điều chỉnh kỳ trước tính TRƯỚC thuế (có dấu: âm = thu hồi). */
+  dieuChinhTruocThue?: number;
+  /** QĐ-158: điều chỉnh kỳ trước cộng SAU thuế vào thực lĩnh. */
+  khoanCongSauThue?: number;
   khoanTru: number;
   tongThuNhap: number;
   thuNhapChiuThue: number;
@@ -497,86 +535,157 @@ export const NHAN_TANG_CA: Record<keyof PhutTangCa, string> = {
   leDem: "Ngày lễ – ban đêm",
 };
 
+export const PHUT_TANG_CA_RONG: PhutTangCa = { thuong: 0, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 };
+
+/**
+ * QĐ-166: trừ phút tăng ca ÂM (dòng điều chỉnh bảng công, nợ kỳ trước) vào phút dương của các đoạn, từ đoạn cuối
+ * ngược về đầu. Không đủ trừ → trả phần còn âm (`no` ≤ 0) để chuyển kỳ sau — KHÔNG kẹp về 0 lặng lẽ.
+ */
+export function truTangCaAm(phut: number[]): { phut: number[]; no: number } {
+  const kq = phut.map((x) => Math.max(0, x));
+  let thieu = phut.reduce((a, x) => a + Math.min(0, x), 0);
+  for (let i = kq.length - 1; i >= 0 && thieu < 0; i--) {
+    const lay = Math.min(kq[i], -thieu);
+    kq[i] -= lay;
+    thieu += lay;
+  }
+  return { phut: kq, no: thieu };
+}
+
 /**
  * Tính một dòng lương (LU-20 → LU-36). Hàm thuần: cùng đầu vào → cùng kết quả (kiểm lại ảnh chụp, LU-28).
  *
  *  1. Công tính lương = công thực tế + nghỉ có lương + lễ (nghỉ ốm, không lương không trả — BHXH chi ốm đau).
  *     Đi muộn / về sớm KHÔNG trừ tiền.
- *  2. Lương theo công: tháng = lương × % thử việc × công tính lương / công chuẩn; ngày = × công; giờ = × công × giờ/ngày.
- *  3. Phụ cấp: cố định tháng, hoặc × công thực tế. Tăng ca: lương giờ × giờ × hệ số theo loại ngày / đêm.
+ *  2. Lương theo công, TỪNG ĐOẠN phiên bản hồ sơ (QĐ-156): tháng = lương × % thử việc × công tính lương của đoạn /
+ *     công chuẩn CẢ THÁNG; ngày = × công; giờ = × công × giờ/ngày.
+ *  3. Phụ cấp: theo ngày công = × công thực tế; cố định tháng = × công tính lương / công chuẩn (QĐ-157), trừ loại
+ *     "trả đủ". Tăng ca: lương giờ của đoạn × giờ × hệ số; phút âm trừ dần, thiếu thì chuyển kỳ sau (QĐ-166).
  *  4. Thưởng KPI = mức thưởng × hệ số phiếu đã chốt (chưa chốt → 0 + cảnh báo). Hoa hồng theo phân bổ phiếu thu.
- *  5. Bảo hiểm NLĐ trên lương đóng BH (+ phụ cấp tính BH), có trần; nghỉ không lương ≥ N ngày → không đóng.
+ *  5. Bảo hiểm NLĐ trên lương đóng BH (+ phụ cấp tính BH ± điều chỉnh trước thuế tính BH), có trần; nghỉ không
+ *     lương ≥ N ngày → không đóng.
  *  6. Thuế: lũy tiến trên (thu nhập chịu thuế − BH − giảm trừ) hoặc 10% khi ≥ ngưỡng, hoặc không khấu trừ.
- *  7. Thực lĩnh = tổng thu nhập − BH NLĐ − thuế − khoản trừ. Âm → lỗi chặn gửi duyệt (LU-36).
+ *  7. Thực lĩnh = tổng thu nhập − BH NLĐ − thuế − khoản trừ + điều chỉnh cộng sau thuế. Âm → lỗi (LU-36).
  */
 export function tinhLuong(dv: DauVaoLuong): KetQuaLuong {
   const canhBao: CanhBaoLuong[] = [];
   const ts = dv.thamSo;
   const hs = dv.hoSo;
-  const base = tien(hs.luongCoBan);
   const gioNgay = BigInt(Math.max(1, Math.round(ts.soGioNgay)));
-
-  // 1. Công
-  const congTL = congTram(dv.cong.thucTe) + congTram(dv.cong.nghiCoLuong) + congTram(dv.cong.le);
   const chuan = congTram(dv.cong.chuan);
+
+  const doan: DoanLuong[] = dv.doan?.length
+    ? dv.doan
+    : [{
+        hoSoId: hs.id, tu: khoangThang(dv.ky.nam, dv.ky.thang).tu, den: khoangThang(dv.ky.nam, dv.ky.thang).den, loaiHopDong: hs.loaiHopDong,
+        tyLeThuViec: hs.tyLeThuViec, cachTra: hs.cachTra, luongCoBan: hs.luongCoBan, phuCap: dv.phuCap,
+        cong: { thucTe: dv.cong.thucTe, nghiCoLuong: dv.cong.nghiCoLuong, le: dv.cong.le, tangCaPhut: dv.cong.tangCaPhut },
+      }];
+
+  // 1–2. Công và lương theo công, từng đoạn.
+  let congTL = 0n;
+  let luongTheoCong = 0n;
+  let thieuLich = false;
+  const gio: { tu: bigint[]; mau: bigint[] }[] = [];
+  const congDoan: bigint[] = [];
+  const luongDoan: bigint[] = [];
+  for (const d of doan) {
+    const ctl = congTram(d.cong.thucTe) + congTram(d.cong.nghiCoLuong) + congTram(d.cong.le);
+    congDoan.push(ctl);
+    congTL += ctl;
+    const base = tien(d.luongCoBan);
+    let tyLeVan = VAN;
+    if (d.loaiHopDong === "thu-viec") {
+      const tl = d.tyLeThuViec ?? 100;
+      tyLeVan = phanVan(tl);
+      if (tl < ts["thu-viec"].tyLeToiThieu && !canhBao.some((c) => c.ma === "thu-viec-duoi-muc")) {
+        canhBao.push({ ma: "thu-viec-duoi-muc", muc: "loi", noiDung: `Lương thử việc ${tl}% thấp hơn mức tối thiểu ${ts["thu-viec"].tyLeToiThieu}%.` });
+      }
+    }
+    let l: bigint;
+    if (d.cachTra === "thang") {
+      if (chuan <= 0n) {
+        thieuLich = true;
+        l = 0n;
+        gio.push({ tu: [0n], mau: [1n] });
+      } else {
+        l = nhanChia([base, tyLeVan, ctl], [VAN, chuan]);
+        gio.push({ tu: [base, tyLeVan, 100n], mau: [VAN, chuan, gioNgay] });
+      }
+    } else if (d.cachTra === "ngay") {
+      l = nhanChia([base, tyLeVan, ctl], [VAN, 100n]);
+      gio.push({ tu: [base, tyLeVan], mau: [VAN, gioNgay] });
+    } else {
+      l = nhanChia([base, tyLeVan, ctl, gioNgay], [VAN, 100n]);
+      gio.push({ tu: [base, tyLeVan], mau: [VAN] });
+    }
+    luongDoan.push(l);
+    luongTheoCong += l;
+  }
+  if (thieuLich) canhBao.push({ ma: "thieu-lich", muc: "loi", noiDung: "Chưa có lịch làm việc trong tháng nên không có ngày công chuẩn — gán lịch ở Thiết lập chấm công." });
   if (congTL <= 0n) canhBao.push({ ma: "khong-co-cong", muc: "canh-bao", noiDung: "Không có công tính lương trong tháng." });
 
-  // 2. Lương theo công (% thử việc nhân vào lương — phần vạn)
-  let tyLeVan = VAN;
-  if (hs.loaiHopDong === "thu-viec") {
-    const tl = hs.tyLeThuViec ?? 100;
-    tyLeVan = phanVan(tl);
-    if (tl < ts["thu-viec"].tyLeToiThieu) {
-      canhBao.push({ ma: "thu-viec-duoi-muc", muc: "loi", noiDung: `Lương thử việc ${tl}% thấp hơn mức tối thiểu ${ts["thu-viec"].tyLeToiThieu}%.` });
+  // 3. Phụ cấp (QĐ-157): theo ngày công × công thực tế của đoạn; cố định tháng × công tính lương / công chuẩn; "trả
+  // đủ" = mức của phiên bản cuối có phụ cấp đó, không chia.
+  const phuCapMap = new Map<string, { ma: string; ten: string; soTien: bigint; chiuThue: boolean; tinhBH: boolean }>();
+  const traDu = new Map<string, PhuCapDauVao>();
+  doan.forEach((d, i) => {
+    for (const p of d.phuCap) {
+      let st: bigint;
+      if (p.theo === "ngay-cong") st = nhanChia([tien(p.soTien), congTram(d.cong.thucTe)], [100n]);
+      else if (p.traDu) {
+        traDu.set(p.ma, p);
+        continue;
+      } else st = chuan > 0n ? nhanChia([tien(p.soTien), congDoan[i]], [chuan]) : tien(p.soTien);
+      const cu = phuCapMap.get(p.ma);
+      phuCapMap.set(p.ma, { ma: p.ma, ten: p.ten, soTien: (cu?.soTien ?? 0n) + st, chiuThue: p.chiuThue, tinhBH: p.tinhBH });
     }
-  }
-  // Lương giờ = tuGio / mauGio (giữ dạng phân số, làm tròn ở từng khoản tiền).
-  let tuGio: bigint[];
-  let mauGio: bigint[];
-  let luongTheoCong: bigint;
-  if (hs.cachTra === "thang") {
-    if (chuan <= 0n) {
-      canhBao.push({ ma: "thieu-lich", muc: "loi", noiDung: "Chưa có lịch làm việc trong tháng nên không có ngày công chuẩn — gán lịch ở Thiết lập chấm công." });
-      luongTheoCong = 0n;
-      tuGio = [0n];
-      mauGio = [1n];
-    } else {
-      luongTheoCong = nhanChia([base, tyLeVan, congTL], [VAN, chuan]);
-      tuGio = [base, tyLeVan, 100n];
-      mauGio = [VAN, chuan, gioNgay];
-    }
-  } else if (hs.cachTra === "ngay") {
-    luongTheoCong = nhanChia([base, tyLeVan, congTL], [VAN, 100n]);
-    tuGio = [base, tyLeVan];
-    mauGio = [VAN, gioNgay];
-  } else {
-    luongTheoCong = nhanChia([base, tyLeVan, congTL, gioNgay], [VAN, 100n]);
-    tuGio = [base, tyLeVan];
-    mauGio = [VAN];
-  }
-
-  // 3. Phụ cấp
-  const congThucTe = congTram(dv.cong.thucTe);
-  const phuCap = dv.phuCap.map((p) => {
-    const st = p.theo === "ngay-cong" ? nhanChia([tien(p.soTien), congThucTe], [100n]) : tien(p.soTien);
-    return { ma: p.ma, ten: p.ten, soTien: st, chiuThue: p.chiuThue, tinhBH: p.tinhBH };
   });
+  for (const p of traDu.values()) {
+    const cu = phuCapMap.get(p.ma);
+    phuCapMap.set(p.ma, { ma: p.ma, ten: p.ten, soTien: (cu?.soTien ?? 0n) + tien(p.soTien), chiuThue: p.chiuThue, tinhBH: p.tinhBH });
+  }
+  const phuCap = [...phuCapMap.values()];
   const tongPhuCap = phuCap.reduce((a, p) => a + p.soTien, 0n);
   const phuCapKhongChiuThue = phuCap.filter((p) => !p.chiuThue).reduce((a, p) => a + p.soTien, 0n);
 
-  // Tăng ca
+  // Tăng ca (QĐ-166): phút từng đoạn; nợ kỳ trước + dòng điều chỉnh âm trừ từ đoạn cuối; còn thiếu → chuyển kỳ sau.
   const tc = ts["tang-ca"];
   let tienTangCa = 0n;
   let mienThueTangCa = 0n;
+  const tangCaDoan = doan.map(() => 0n);
   const chiTietTc: KetQuaLuong["tangCa"]["chiTiet"] = [];
+  const no: PhutTangCa = { ...PHUT_TANG_CA_RONG };
+  let coNo = false;
   for (const l of LOAI_TANG_CA) {
-    const phut = BigInt(Math.max(0, Math.round(dv.cong.tangCaPhut[l.loai] ?? 0)));
-    if (phut === 0n) continue;
+    const ds = doan.map((d) => Math.round(d.cong.tangCaPhut[l.loai] ?? 0));
+    ds[ds.length - 1] += Math.min(0, Math.round(dv.cong.tangCaNoKyTruoc?.[l.loai] ?? 0));
+    const tru = truTangCaAm(ds);
+    if (tru.no < 0) {
+      no[l.loai] = tru.no;
+      coNo = true;
+    }
     const heSo = tc[l.heSo] as number;
-    const t = nhanChia([...tuGio, phanVan(heSo), phut], [...mauGio, VAN, 60n]);
-    tienTangCa += t;
-    if (tc.phanVuotMienThue) mienThueTangCa += max0(t - nhanChia([...tuGio, phut], [...mauGio, 60n]));
-    chiTietTc.push({ loai: l.loai, phut: Number(phut), heSo, tien: so(t) });
+    let tongPhut = 0n;
+    let tongTien = 0n;
+    tru.phut.forEach((ph, i) => {
+      const phut = BigInt(ph);
+      if (phut <= 0n) return;
+      const t = nhanChia([...gio[i].tu, phanVan(heSo), phut], [...gio[i].mau, VAN, 60n]);
+      tongTien += t;
+      tongPhut += phut;
+      tangCaDoan[i] += t;
+      if (tc.phanVuotMienThue) mienThueTangCa += max0(t - nhanChia([...gio[i].tu, phut], [...gio[i].mau, 60n]));
+    });
+    tienTangCa += tongTien;
+    if (tongPhut > 0n) chiTietTc.push({ loai: l.loai, phut: Number(tongPhut), heSo, tien: so(tongTien) });
+  }
+  if (coNo) {
+    canhBao.push({
+      ma: "tang-ca-am-chuyen-ky-sau",
+      muc: "canh-bao",
+      noiDung: `Điều chỉnh giảm tăng ca lớn hơn tăng ca kỳ này — còn ${LOAI_TANG_CA.filter((l) => no[l.loai] < 0).map((l) => `${NHAN_TANG_CA[l.loai].toLowerCase()} ${-no[l.loai]} phút`).join(", ")} chuyển trừ ở kỳ sau.`,
+    });
   }
 
   // 4. Thưởng KPI
@@ -595,13 +704,21 @@ export function tinhLuong(dv: DauVaoLuong): KetQuaLuong {
   const hh = hs.huongHoaHong ? hoaHongTheoPhanBo(dv.hoaHong.phanBo.map((p) => tien(p.soTien)), ts["hoa-hong"]) : { doanhSo: 0n, tyLeBp: 0n, tungKhoan: [] as bigint[], tong: 0n };
   const truyThu = dv.hoaHong.truyThu.reduce((a, t) => a + truyThuHoaHong(tien(t.soTien), BigInt(t.tyLeBp)), 0n);
 
-  // Khoản cộng / trừ
-  const khoanCong = dv.khoan.filter((k) => k.chieu === "cong").reduce((a, k) => a + tien(k.soTien), 0n);
-  const khoanCongKhongThue = dv.khoan.filter((k) => k.chieu === "cong" && !k.chiuThue).reduce((a, k) => a + tien(k.soTien), 0n);
-  const khoanTru = dv.khoan.filter((k) => k.chieu === "tru").reduce((a, k) => a + tien(k.soTien), 0n);
+  // Khoản cộng / trừ (QĐ-158: điều chỉnh kỳ trước theo cách tính đã chọn).
+  const coDau = (k: KhoanDauVao) => (k.chieu === "cong" ? tien(k.soTien) : -tien(k.soTien));
+  const dcTruoc = dv.khoan.filter((k) => k.tinhThue === "truoc-thue");
+  const dcSau = dv.khoan.filter((k) => k.tinhThue === "sau-thue");
+  const thuong = dv.khoan.filter((k) => !k.tinhThue);
+  const khoanCong = thuong.filter((k) => k.chieu === "cong").reduce((a, k) => a + tien(k.soTien), 0n);
+  const khoanCongKhongThue = thuong.filter((k) => k.chieu === "cong" && !k.chiuThue).reduce((a, k) => a + tien(k.soTien), 0n);
+  const dieuChinhTruocThue = dcTruoc.reduce((a, k) => a + coDau(k), 0n);
+  const dieuChinhKhongThue = dcTruoc.filter((k) => !k.chiuThue).reduce((a, k) => a + coDau(k), 0n);
+  const dieuChinhBH = dcTruoc.filter((k) => k.tinhBH).reduce((a, k) => a + coDau(k), 0n);
+  const khoanCongSauThue = dcSau.filter((k) => k.chieu === "cong").reduce((a, k) => a + tien(k.soTien), 0n);
+  const khoanTru = [...thuong, ...dcSau].filter((k) => k.chieu === "tru").reduce((a, k) => a + tien(k.soTien), 0n);
 
-  const tongThuNhap = luongTheoCong + tongPhuCap + tienTangCa + thuongKpi + hh.tong + truyThu + khoanCong;
-  const thuNhapChiuThue = max0(tongThuNhap - phuCapKhongChiuThue - mienThueTangCa - khoanCongKhongThue);
+  const tongThuNhap = luongTheoCong + tongPhuCap + tienTangCa + thuongKpi + hh.tong + truyThu + khoanCong + dieuChinhTruocThue;
+  const thuNhapChiuThue = max0(tongThuNhap - phuCapKhongChiuThue - mienThueTangCa - khoanCongKhongThue - dieuChinhKhongThue);
 
   // 5. Bảo hiểm
   const bh = ts["bao-hiem"];
@@ -610,7 +727,7 @@ export function tinhLuong(dv: DauVaoLuong): KetQuaLuong {
   const phuCapBH = dv.phuCap
     .filter((p) => p.tinhBH)
     .reduce((a, p) => a + (p.theo === "ngay-cong" ? nhanChia([tien(p.soTien), chuan], [100n]) : tien(p.soTien)), 0n);
-  const luongDong = tien(hs.luongDongBH) > 0n ? tien(hs.luongDongBH) + phuCapBH : 0n;
+  const luongDong = tien(hs.luongDongBH) > 0n ? max0(tien(hs.luongDongBH) + phuCapBH + dieuChinhBH) : 0n;
   const ngayKhongLuong = chuan - congTL;
   let thamGia = luongDong > 0n;
   if (thamGia && ngayKhongLuong >= congTram(bh.ngayNghiKhongDong)) {
@@ -647,7 +764,7 @@ export function tinhLuong(dv: DauVaoLuong): KetQuaLuong {
   }
 
   // 7. Thực lĩnh
-  const thucLinh = tongThuNhap - nldTong - thue - khoanTru;
+  const thucLinh = tongThuNhap - nldTong - thue - khoanTru + khoanCongSauThue;
   if (thucLinh < 0n) {
     canhBao.push({ ma: "thuc-linh-am", muc: "loi", noiDung: `Thực lĩnh âm (${thucLinh.toLocaleString("vi-VN")} đ) — giảm khoản trừ (chuyển tạm ứng sang kỳ sau) rồi tính lại.` });
   }
@@ -655,14 +772,21 @@ export function tinhLuong(dv: DauVaoLuong): KetQuaLuong {
   return {
     congTinhLuong: Number(congTL) / 100,
     luongTheoCong: so(luongTheoCong),
+    doan: doan.map((d, i) => ({
+      tu: d.tu, den: d.den, loaiHopDong: d.loaiHopDong, tyLeThuViec: d.tyLeThuViec, luongCoBan: d.luongCoBan,
+      congTinhLuong: Number(congDoan[i]) / 100, luongTheoCong: so(luongDoan[i]), tangCa: so(tangCaDoan[i]),
+    })),
     phuCap: phuCap.map((p) => ({ ...p, soTien: so(p.soTien) })),
     tongPhuCap: so(tongPhuCap),
     phuCapKhongChiuThue: so(phuCapKhongChiuThue),
     tangCa: { tien: so(tienTangCa), mienThue: so(mienThueTangCa), chiTiet: chiTietTc },
+    tangCaNoChuyenKySau: coNo ? no : null,
     thuongKpi: so(thuongKpi),
     hoaHong: { doanhSo: so(hh.doanhSo), tyLeBp: Number(hh.tyLeBp), tien: so(hh.tong), truyThu: so(truyThu), tungKhoan: hh.tungKhoan.map(so) },
     khoanCong: so(khoanCong),
     khoanCongKhongChiuThue: so(khoanCongKhongThue),
+    dieuChinhTruocThue: so(dieuChinhTruocThue),
+    khoanCongSauThue: so(khoanCongSauThue),
     khoanTru: so(khoanTru),
     tongThuNhap: so(tongThuNhap),
     thuNhapChiuThue: so(thuNhapChiuThue),
@@ -776,6 +900,8 @@ export interface DongTongHopButToan {
   thue: number;
   tamUng: number;
   truKhac: number;
+  /** QĐ-158: điều chỉnh kỳ trước cộng sau thuế. */
+  congSauThue?: number;
   thucLinh: number;
 }
 
@@ -798,6 +924,7 @@ export function butToanLuong(ds: DongTongHopButToan[], tk: TaiKhoanLuong, daChi:
     { dienGiai: "Khấu trừ thuế TNCN", no: tk.phaiTra, co: tk.thue, soTien: cong((d) => d.thue) },
     { dienGiai: "Khấu trừ tạm ứng", no: tk.phaiTra, co: tk.tamUng, soTien: cong((d) => d.tamUng) },
     { dienGiai: "Khấu trừ khác (phạt, khác)", no: tk.phaiTra, co: tk.khauTruKhac, soTien: cong((d) => d.truKhac) },
+    { dienGiai: "Điều chỉnh kỳ trước cộng sau thuế", no: tk.khauTruKhac, co: tk.phaiTra, soTien: cong((d) => d.congSauThue ?? 0) },
   ];
   if (daChi) kq.push({ dienGiai: "Trả lương nhân viên", no: tk.phaiTra, co: tk.tien, soTien: cong((d) => d.thucLinh) });
   return kq.filter((x) => x.soTien !== 0);

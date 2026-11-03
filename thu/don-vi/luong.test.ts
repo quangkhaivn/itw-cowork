@@ -22,10 +22,12 @@ import {
   THAM_SO_MAC_DINH,
   thueLuyTien,
   tinhLuong,
+  truTangCaAm,
   truyThuHoaHong,
   tyLeHoaHong,
   type BoThamSo,
   type DauVaoLuong,
+  type DoanLuong,
   type LoaiThamSo,
   type ThamSoBieuThue,
 } from "../../src/modules/luong/tinh-toan";
@@ -346,5 +348,125 @@ describe("Xuất file và thư phiếu lương (LU-51 → LU-54)", () => {
     assert.match(t.tieuDe, /03\/2026/);
     assert.match(t.text, /17\.780\.000/);
     assert.equal(xml('a"<&'), "a&quot;&lt;&amp;");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chính sách Giám đốc sau QA (QĐ-156 → QĐ-166)
+// ---------------------------------------------------------------------------
+
+const TC0 = { thuong: 0, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 };
+function doan(o: Partial<DoanLuong> & { cong?: Partial<DoanLuong["cong"]> }): DoanLuong {
+  return {
+    hoSoId: null, tu: "2026-10-01", den: "2026-10-31", loaiHopDong: "chinh-thuc", tyLeThuViec: null, cachTra: "thang", luongCoBan: 20_000_000, phuCap: [],
+    ...o,
+    cong: { thucTe: 0, nghiCoLuong: 0, le: 0, tangCaPhut: TC0, ...o.cong },
+  };
+}
+
+describe("QĐ-156: đổi lương / hết thử việc giữa tháng — chia theo công của từng phiên bản", () => {
+  it("hết thử việc giữa tháng: 85% cho đoạn thử việc, 100% cho đoạn chính thức", () => {
+    const k = tinhLuong(dv({ cong: { chuan: 24, thucTe: 24 }, doan: [
+      doan({ tu: "2026-10-01", den: "2026-10-15", loaiHopDong: "thu-viec", tyLeThuViec: 85, cong: { thucTe: 12 } }),
+      doan({ tu: "2026-10-16", den: "2026-10-31", cong: { thucTe: 12 } }),
+    ] }));
+    assert.equal(k.luongTheoCong, 8_500_000 + 10_000_000);
+    assert.equal(k.doan?.length, 2);
+    assert.deepEqual(k.doan?.map((d) => d.luongTheoCong), [8_500_000, 10_000_000]);
+    assert.equal(k.congTinhLuong, 24);
+  });
+  it("tăng lương giữa tháng: mỗi đoạn làm tròn một lần, công chuẩn cả tháng", () => {
+    const k = tinhLuong(dv({ cong: { chuan: 24, thucTe: 24 }, doan: [
+      doan({ luongCoBan: 20_000_000, cong: { thucTe: 10 } }),
+      doan({ luongCoBan: 26_000_000, cong: { thucTe: 14 } }),
+    ] }));
+    assert.equal(k.luongTheoCong, 8_333_333 + 15_166_667);
+  });
+  it("tăng ca theo lương giờ của đoạn", () => {
+    const k = tinhLuong(dv({ cong: { chuan: 24, thucTe: 24 }, doan: [
+      doan({ luongCoBan: 19_200_000, cong: { thucTe: 12, tangCaPhut: { ...TC0, thuong: 60 } } }),
+      doan({ luongCoBan: 24_000_000, cong: { thucTe: 12, tangCaPhut: { ...TC0, thuong: 60 } } }),
+    ] }));
+    assert.equal(k.tangCa.tien, 150_000 + 187_500);
+  });
+  it("ảnh chụp cũ (không có đoạn) tính như một đoạn", () => {
+    assert.equal(tinhLuong(dv()).doan?.length, 1);
+    assert.equal(tinhLuong(dv()).thucLinh, 17_780_000);
+  });
+});
+
+describe("QĐ-157: phụ cấp cố định tháng chia theo công", () => {
+  const dt = { ma: "dien-thoai", ten: "Điện thoại", soTien: 500_000, chiuThue: false, tinhBH: false, theo: "thang" as const };
+  it("vào làm giữa tháng / nghỉ không lương: số tiền × công tính lương / công chuẩn", () => {
+    assert.equal(tinhLuong(dv({ phuCap: [dt], cong: { chuan: 24, thucTe: 12, nghiKhongLuong: 12 } })).tongPhuCap, 250_000);
+    assert.equal(tinhLuong(dv({ phuCap: [dt], cong: { chuan: 24, thucTe: 22, le: 2 } })).tongPhuCap, 500_000, "đủ công (gồm lễ) → đủ phụ cấp");
+  });
+  it("nghỉ không lương cả tháng → 0", () => {
+    assert.equal(tinhLuong(dv({ phuCap: [dt], cong: { chuan: 24, thucTe: 0, nghiKhongLuong: 24 } })).tongPhuCap, 0);
+  });
+  it("cờ trả đủ: không chia theo công", () => {
+    assert.equal(tinhLuong(dv({ phuCap: [{ ...dt, traDu: true }], cong: { chuan: 24, thucTe: 12 } })).tongPhuCap, 500_000);
+  });
+  it("hai phiên bản có mức phụ cấp khác nhau: cộng theo từng đoạn", () => {
+    const xang = (soTien: number) => ({ ma: "xang-xe", ten: "Xăng xe", soTien, chiuThue: true, tinhBH: false, theo: "thang" as const });
+    const k = tinhLuong(dv({ cong: { chuan: 24, thucTe: 24 }, doan: [doan({ phuCap: [xang(1_000_000)], cong: { thucTe: 12 } }), doan({ phuCap: [xang(2_000_000)], cong: { thucTe: 12 } })] }));
+    assert.equal(k.tongPhuCap, 1_500_000);
+    assert.equal(k.phuCap.length, 1);
+  });
+});
+
+describe("QĐ-158: điều chỉnh kỳ trước — trước thuế / sau thuế", () => {
+  const dc = (chieu: "cong" | "tru", tinhThue: "truoc-thue" | "sau-thue", o: { chiuThue?: boolean; tinhBH?: boolean } = {}) =>
+    ({ chieu, loai: "dieu-chinh", soTien: 1_000_000, chiuThue: o.chiuThue ?? true, tinhBH: o.tinhBH ?? false, lyDo: "Trả thừa lương tháng trước", tinhThue });
+  it("thu hồi TRƯỚC thuế: giảm tổng thu nhập, thu nhập chịu thuế và lương đóng BH", () => {
+    const k = tinhLuong(dv({ khoan: [dc("tru", "truoc-thue", { tinhBH: true })] }));
+    assert.equal(k.tongThuNhap, 19_000_000);
+    assert.equal(k.thuNhapChiuThue, 19_000_000);
+    assert.equal(k.baoHiem.luongDong, 19_000_000);
+    assert.equal(k.baoHiem.nld.tong, 1_995_000);
+    assert.equal(k.thue.tien, 75_250);
+    assert.equal(k.thucLinh, 16_929_750);
+    assert.equal(k.khoanTru, 0);
+  });
+  it("thu hồi SAU thuế: thuế / BH như không có, trừ thẳng vào thực lĩnh", () => {
+    const k = tinhLuong(dv({ khoan: [dc("tru", "sau-thue")] }));
+    assert.equal(k.tongThuNhap, 20_000_000);
+    assert.equal(k.thue.tien, 120_000);
+    assert.equal(k.thucLinh, 16_780_000);
+  });
+  it("bổ sung: trước thuế vào thu nhập chịu thuế; sau thuế cộng thẳng thực lĩnh", () => {
+    const a = tinhLuong(dv({ khoan: [dc("cong", "truoc-thue")] }));
+    assert.equal(a.tongThuNhap, 21_000_000);
+    assert.equal(a.thuNhapChiuThue, 21_000_000);
+    const b = tinhLuong(dv({ khoan: [dc("cong", "sau-thue")] }));
+    assert.equal(b.tongThuNhap, 20_000_000);
+    assert.equal(b.thucLinh, 18_780_000);
+    assert.equal(tinhLuong(dv({ khoan: [dc("cong", "truoc-thue", { chiuThue: false })] })).thuNhapChiuThue, 20_000_000);
+  });
+  it("hai chiều nhất quán: bổ sung rồi thu hồi cùng cách tính → về đúng như không có", () => {
+    for (const c of ["truoc-thue", "sau-thue"] as const) {
+      const k = tinhLuong(dv({ khoan: [dc("cong", c, { tinhBH: c === "truoc-thue" }), dc("tru", c, { tinhBH: c === "truoc-thue" })] }));
+      assert.equal(k.thucLinh, 17_780_000, c);
+    }
+  });
+});
+
+describe("QĐ-166: điều chỉnh giảm tăng ca lớn hơn tăng ca kỳ này → chuyển kỳ sau", () => {
+  it("trừ phút âm từ đoạn cuối về đầu; thiếu thì trả phần còn nợ", () => {
+    assert.deepEqual(truTangCaAm([120, -60]), { phut: [60, 0], no: 0 });
+    assert.deepEqual(truTangCaAm([30, -100]), { phut: [0, 0], no: -70 });
+    assert.deepEqual(truTangCaAm([100, -50]), { phut: [50, 0], no: 0 });
+    assert.deepEqual(truTangCaAm([-50, 100]), { phut: [0, 50], no: 0 });
+  });
+  it("không kẹp về 0 lặng lẽ: còn nợ → cảnh báo + chuyển kỳ sau", () => {
+    const k = tinhLuong(dv({ cong: { tangCaPhut: { ...TC0, thuong: -120 } } }));
+    assert.equal(k.tangCa.tien, 0);
+    assert.equal(k.tangCaNoChuyenKySau?.thuong, -120);
+    assert.ok(k.canhBao.some((c) => c.ma === "tang-ca-am-chuyen-ky-sau"));
+  });
+  it("nợ kỳ trước trừ vào tăng ca kỳ này", () => {
+    const k = tinhLuong(dv({ hoSo: { luongCoBan: 20_800_000 }, cong: { tangCaPhut: { ...TC0, thuong: 120 }, tangCaNoKyTruoc: { ...TC0, thuong: -60 } } }));
+    assert.equal(k.tangCa.tien, 150_000);
+    assert.equal(k.tangCaNoChuyenKySau, null);
   });
 });

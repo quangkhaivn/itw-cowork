@@ -154,7 +154,7 @@ export async function xuatButToan(nc: NguCanh, id: string) {
       const dv = d.inputs as unknown as DauVaoLuong;
       const tamUng = dv.khoan.filter((k) => k.chieu === "tru" && k.loai === "tam-ung").reduce((a, k) => a + k.soTien, 0);
       return {
-        tongThuNhap: kq.tongThuNhap, bhNld: kq.baoHiem.nld, bhDn: kq.baoHiem.dn, thue: kq.thue.tien, tamUng, truKhac: kq.khoanTru - tamUng, thucLinh: kq.thucLinh,
+        tongThuNhap: kq.tongThuNhap, bhNld: kq.baoHiem.nld, bhDn: kq.baoHiem.dn, thue: kq.thue.tien, tamUng, truKhac: kq.khoanTru - tamUng, congSauThue: kq.khoanCongSauThue ?? 0, thucLinh: kq.thucLinh,
       };
     }),
     tk,
