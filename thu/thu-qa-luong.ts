@@ -32,7 +32,7 @@ import {
 } from "../src/modules/luong/service";
 import { danhSachThamSo, luuMauNganHang, taoThamSo, xacNhanThamSo, xemMauNganHang } from "../src/modules/luong/tham-so";
 import { guiEmailPhieuLuong, taoBangTinhXml, xuatBangLuong, xuatButToan, xuatNganHang } from "../src/modules/luong/xuat";
-import type { DauVaoLuong, KetQuaLuong } from "../src/modules/luong/tinh-toan";
+import type { BoThamSo, DauVaoLuong, KetQuaLuong } from "../src/modules/luong/tinh-toan";
 import { batDau2Lop } from "../src/modules/xac-thuc-2-lop/service";
 import { bamMatKhau } from "../src/lib/xac-thuc";
 import { homNayVN } from "../src/modules/crm/chung";
@@ -580,7 +580,7 @@ async function vongHai() {
     phuCap: [], cong: { chuan: 22, thucTe: 22, nghiCoLuong: 0, nghiKhongLuong: 0, le: 0, tangCaPhut: { thuong: 0, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 }, phutMuon: 0, phutSom: 0, soDongDieuChinh: 0 },
     soNguoiPhuThuoc: 0, kpi: { trangThai: "khong-co", heSo: null, xepLoai: null, danhGiaId: null }, hoaHong: { phanBo: [], truyThu: [] },
     khoan: [{ chieu: "tru", loai: "dieu-chinh", soTien: thuHoi, chiuThue: true, lyDo: "Thu hồi lương trả thừa", tinhThue: "truoc-thue", tinhBH: true }],
-    thamSo: { ...(ts0 as never), soGioNgay: 8 },
+    thamSo: { ...(ts0 as unknown as BoThamSo), soGioNgay: 8 },
   });
   const a1 = dvT(10_000_000, 10_000_000, 15_000_000);
   dat("QĐ-158: thu hồi trước thuế 15tr > lương 10tr → thu nhập chịu thuế 0 (không âm), thuế 0, thực lĩnh âm → lỗi chặn gửi duyệt", a1.thuNhapChiuThue === 0 && a1.thue.tien === 0 && a1.thucLinh === -5_000_000 && a1.canhBao.some((c) => c.ma === "thuc-linh-am" && c.muc === "loi"));
