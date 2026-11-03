@@ -148,7 +148,10 @@ async function main() {
   dat("Thông báo giao việc nhắc bấm Nhận / Từ chối", tbGiao.length === 1 && /Nhận/.test(tbGiao[0].body ?? ""));
   const tuTao = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("Việc tự tạo của A")));
   dat("Việc tự tạo: không cần duyệt, không cần nhận", tuTao.canDuyet === false && tuTao.trangThaiNhan === null);
-  await nemLoi("Tự tạo + bật cần duyệt mà không có người duyệt khác → chặn", "nghiep-vu", () => voi(T, nvA, (nc) => taoViec(nc, viecMoi("Tự duyệt", { canDuyet: true }))), "thieu-nguoi-duyet");
+  // QĐ-154 (bổ sung): tự tạo + bật cần duyệt mà để trống người duyệt → quản lý trực tiếp (trước đây chặn vì thiếu người duyệt).
+  const tuTaoDuyet = await voi(T, nvA, (nc) => taoViec(nc, viecMoi("Tự tạo cần duyệt", { canDuyet: true })));
+  dat("Tự tạo + bật cần duyệt, để trống người duyệt → quản lý trực tiếp duyệt (QĐ-154)",
+    (await chu.taskApprover.findMany({ where: { taskId: tuTaoDuyet.id } })).map((x) => x.approverId).join() === tp);
   await nemLoi("DG-21: chọn chính người làm làm người duyệt → chặn", "nghiep-vu", () => voi(T, tp, (nc) => taoViec(nc, viecMoi("Sai người duyệt", { nguoiPhuTrachId: nvA, nguoiDuyetIds: [nvA] }))), "tu-duyet");
   await nemLoi("DG-09: trưởng phòng KD không giao được cho kỹ thuật viên phòng khác", "nghiep-vu", () => voi(T, tp, (nc) => taoViec(nc, viecMoi("Ngoài phạm vi", { nguoiPhuTrachId: nvC }))), "ngoai-pham-vi");
   await nemLoi("DG-09: nhân viên (phạm vi của mình) không giao cho đồng nghiệp", "nghiep-vu", () => voi(T, nvA, (nc) => taoViec(nc, viecMoi("A giao B", { nguoiPhuTrachId: nvB }))), "ngoai-pham-vi");
