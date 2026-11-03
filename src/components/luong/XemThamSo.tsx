@@ -1,13 +1,15 @@
-import type {
-  LoaiThamSo,
-  ThamSoBaoHiem,
-  ThamSoBieuThue,
-  ThamSoGiamTru,
-  ThamSoHoaHong,
-  ThamSoKhauTru10,
-  ThamSoTangCa,
-  ThamSoThuViec,
-  ThamSoVung,
+import { luocDoGiaTriThamSo } from "@/modules/luong/luoc-do";
+import {
+  LOAI_THAM_SO,
+  type LoaiThamSo,
+  type ThamSoBaoHiem,
+  type ThamSoBieuThue,
+  type ThamSoGiamTru,
+  type ThamSoHoaHong,
+  type ThamSoKhauTru10,
+  type ThamSoTangCa,
+  type ThamSoThuViec,
+  type ThamSoVung,
 } from "@/modules/luong/tinh-toan";
 
 /**
@@ -39,7 +41,13 @@ function Muc({ ds }: { ds: [string, string][] }) {
 }
 
 export default function XemThamSo({ loai, giaTri }: { loai: LoaiThamSo | string; giaTri: unknown }) {
-  try {
+  // Giá trị sai cấu trúc (sửa tay CSDL?) → hiện thô thay vì vỡ trang.
+  const hopLe = (LOAI_THAM_SO as readonly string[]).includes(loai) && luocDoGiaTriThamSo(loai as LoaiThamSo).safeParse(giaTri).success;
+  if (!hopLe) return <code style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(giaTri)}</code>;
+  return dung(loai as LoaiThamSo, giaTri);
+}
+
+function dung(loai: LoaiThamSo, giaTri: unknown) {
     switch (loai) {
       case "bao-hiem": {
         const g = giaTri as ThamSoBaoHiem;
@@ -123,8 +131,4 @@ export default function XemThamSo({ loai, giaTri }: { loai: LoaiThamSo | string;
         );
       }
     }
-  } catch {
-    // Giá trị sai cấu trúc (sửa tay CSDL?) → rơi xuống hiện thô bên dưới.
-  }
-  return <code style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(giaTri)}</code>;
 }
