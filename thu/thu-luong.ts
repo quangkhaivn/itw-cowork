@@ -348,8 +348,8 @@ async function main() {
   const k4 = await voi(T, kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 4 }));
   const bc4 = await bangCong(2026, 4, [{ userId: nvA }, { userId: nvB }, { userId: tt }, { userId: ad }]);
   await chu.timesheet.update({ where: { id: bc4.id }, data: { status: "da-khoa", lockedAt: MOC, lockedBy: hr } });
-  await nemLoi("Điều chỉnh chỉ cho kỳ ĐÃ KHÓA", "nghiep-vu", () => voi(T, kt, (nc) => themKhoanLuong(nc, k4.id, LuocDoKhoan.parse({ nguoiId: nvB, chieu: "cong", loai: "dieu-chinh", soTien: 500_000, lyDo: "Điều chỉnh kỳ chưa khóa", kyGocId: k4.id }))), "ky-goc-chua-khoa");
-  await voi(T, kt, (nc) => themKhoanLuong(nc, k4.id, LuocDoKhoan.parse({ nguoiId: nvB, chieu: "cong", loai: "dieu-chinh", soTien: 500_000, chiuThue: true, lyDo: "Bổ sung phụ cấp trực tháng 3 bị sót", kyGocId: k3.id })));
+  await nemLoi("Điều chỉnh chỉ cho kỳ ĐÃ KHÓA", "nghiep-vu", () => voi(T, kt, (nc) => themKhoanLuong(nc, k4.id, LuocDoKhoan.parse({ nguoiId: nvB, chieu: "cong", loai: "dieu-chinh", soTien: 500_000, cachTinh: "truoc-thue", lyDo: "Điều chỉnh kỳ chưa khóa", kyGocId: k4.id }))), "ky-goc-chua-khoa");
+  await voi(T, kt, (nc) => themKhoanLuong(nc, k4.id, LuocDoKhoan.parse({ nguoiId: nvB, chieu: "cong", loai: "dieu-chinh", soTien: 500_000, chiuThue: true, cachTinh: "truoc-thue", lyDo: "Bổ sung phụ cấp trực tháng 3 bị sót", kyGocId: k3.id })));
   await voi(T, kt, (nc) => tinhKyLuong(nc, k4.id));
   const hh4 = await chu.payrollCommissionItem.findMany({ where: { runId: k4.id }, orderBy: { paymentNo: "asc" } });
   const tru = hh4.find((h) => h.kind === "truy-thu");
@@ -358,7 +358,7 @@ async function main() {
   dat("QĐ-146: phiếu thu tháng 3 ghi SAU khi kỳ 3 đã tính → tính ở kỳ 4", hh4.some((h) => h.kind === "thu" && h.paymentId === p4.id));
   const kA4 = (await dong(k4.id, nvA)).result as unknown as KetQuaLuong;
   dat("…hoa hồng kỳ 4 = 2% × (7tr + 5tr) − 1tr truy thu", kA4.hoaHong.tien === 240_000 && kA4.hoaHong.truyThu === -1_000_000);
-  dat("LU-31: dòng điều chỉnh kỳ trước vào lương kỳ sau", ((await dong(k4.id, nvB)).result as unknown as KetQuaLuong).khoanCong === 500_000);
+  dat("LU-31: dòng điều chỉnh kỳ trước vào lương kỳ sau", ((await dong(k4.id, nvB)).result as unknown as KetQuaLuong).dieuChinhTruocThue === 500_000);
   await voi(T, kt, (nc) => guiDuyetKyLuong(nc, k4.id));
   await voi(T, gd, (nc) => duyetKyLuong(nc, k4.id));
   const dc = await chu.payrollItem.findFirstOrThrow({ where: { runId: k4.id, category: "dieu-chinh" } });
