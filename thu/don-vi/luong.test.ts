@@ -356,7 +356,7 @@ describe("Xuất file và thư phiếu lương (LU-51 → LU-54)", () => {
 // ---------------------------------------------------------------------------
 
 const TC0 = { thuong: 0, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 };
-function doan(o: Partial<DoanLuong> & { cong?: Partial<DoanLuong["cong"]> }): DoanLuong {
+function doan(o: Omit<Partial<DoanLuong>, "cong"> & { cong?: Partial<DoanLuong["cong"]> }): DoanLuong {
   return {
     hoSoId: null, tu: "2026-10-01", den: "2026-10-31", loaiHopDong: "chinh-thuc", tyLeThuViec: null, cachTra: "thang", luongCoBan: 20_000_000, phuCap: [],
     ...o,
