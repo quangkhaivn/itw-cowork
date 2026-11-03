@@ -230,10 +230,11 @@ Rồi `nginx -t && systemctl reload nginx`. Kiểm từ ngoài: `curl -i "http:/
 
 ### Nâng cấp lên 0.21.0 (Nhân sự giai đoạn 3: tính lương)
 
-- Ba migration: `20261104090001_nhan_su_luong` (8 bảng mới, CHECK, trigger bất biến) → `20261104090002_luong_cap_quyen_moi_doanh_nghiep` (một khối DO idempotent: quyền `luong.*` cho vai trò dựng sẵn của **mọi** doanh nghiệp, gỡ khỏi Trợ lý AI; tham số lương nạp sẵn + 3 loại phụ cấp còn thiếu) → `20261104090003_luong_email_phieu_luong` (loại thư `phieu-luong`). Sau đó chạy lại `prisma/rls.sql`, `npm run db:seed`, khởi động lại worker.
+- Ba migration: `20261104090001_nhan_su_luong` (8 bảng mới, CHECK, trigger bất biến) → `20261104090002_luong_cap_quyen_moi_doanh_nghiep` (một khối DO idempotent: quyền `luong.*` cho vai trò dựng sẵn của **mọi** doanh nghiệp, gỡ khỏi Trợ lý AI; tham số lương nạp sẵn + 3 loại phụ cấp còn thiếu) → `20261104090003_luong_email_phieu_luong` (loại thư `phieu-luong`) → `20261104090004_luong_chinh_sach_giam_doc` (phụ cấp trả đủ, điều chỉnh trước / sau thuế, tài khoản chụp lúc khóa, kỳ lương riêng; điền cách tính cho khoản điều chỉnh đã có, tạm tắt trigger bất biến đúng một câu lệnh). Sau đó chạy lại `prisma/rls.sql`, `npm run db:seed`, khởi động lại worker.
 - **Trước khi tính lương tháng đầu**: Kế toán mở Tính lương → Tham số, đối chiếu từng bộ nạp sẵn với văn bản pháp luật hiện hành rồi xác nhận (hoặc nhập bộ mới) — chưa xác nhận thì bảng lương không gửi duyệt được. Nhập chính sách hoa hồng thật (nạp sẵn 0 %). Đặt vùng lương tối thiểu của doanh nghiệp nếu không phải vùng I.
 - Mọi người tính / duyệt / xem lương người khác (Kế toán, Nhân sự, Giám đốc, Quản trị) **phải bật xác thực 2 lớp** trước — không thì trang lương chỉ hiện hướng dẫn bật.
-- Giám đốc có hồ sơ lương thì **không tự duyệt / khóa** được bảng lương có dòng của mình — cần người thứ hai có `luong.approve` (vd Phó giám đốc, hoặc Quản trị).
+- Giám đốc có hồ sơ lương thì **không tự duyệt / khóa** được bảng lương có dòng của mình — tách dòng lãnh đạo sang **kỳ lương riêng** (Quản trị / Giám đốc khác duyệt), hoặc cấp `luong.approve` cho người thứ hai.
+- Bật xác thực 2 lớp nay **bắt buộc nhập lại mật khẩu** — ứng dụng / tích hợp gọi `POST /api/v1/tai-khoan/2-lop/bat-dau` phải gửi `{ matKhau }`.
 - Thư phiếu lương dùng kết nối email của doanh nghiệp (Quản trị → Kết nối email); chưa kết nối thì thư nằm ở hàng chờ.
 
 ### Nâng cấp lên 0.20.0 (Nhân sự giai đoạn 2: giao việc, báo cáo, đánh giá, KPI, thực tập)

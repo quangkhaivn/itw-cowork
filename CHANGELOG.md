@@ -33,6 +33,17 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 32 (LU-01 → LU-63). Quyết đ
 - Bài thử `thu:luong` không còn phụ thuộc ngày thật (danh sách tham số cần xác nhận lấy theo ngày cố định — trước đây sẽ hỏng khi có bộ tham số nạp sẵn mới hiệu lực sau ngày chạy).
 - Bộ thử mới `npm run thu:qa-luong` (nối cuối `thu:tich-hop`): hai lỗi trên + IDOR qua mọi API lương với nhân viên / thực tập sinh / trưởng phòng / trợ lý AI; 2 lớp bắt buộc trên từng đường (cả tắt 2 lớp giữa phiên); trường lương không lọt sang danh sách người dùng / hồ sơ nhân sự; người tính không duyệt / khóa (máy chủ + CSDL); đổi hồ sơ, tham số, người phụ thuộc lúc chờ duyệt không đổi ảnh chụp; duyệt đôi, khóa – trả lại đồng thời; bất biến sau khóa qua SQL `cowork_app` (chuyển dòng sang kỳ nháp, thêm dòng / khoản, lùi trạng thái, đã chi kèm sửa, TRUNCATE); nhật ký xem cho xuất bảng lương / ngân hàng / bản in / kiểm lại / hồ sơ; chèn công thức (tab, CR, @, +) ở CSV và Excel, chèn XML vào tên, tổng file ngân hàng = tổng thực lĩnh, xmllint; không số lương nào trong nhật ký / sự kiện / thông báo / hàng chờ thư; RLS 8 bảng giữa hai doanh nghiệp; quyền `luong.*` trong CSDL khớp `vai-tro.ts`.
 
+### Chính sách Giám đốc quyết sau QA (QĐ-156 → QĐ-166)
+- **Đổi lương / hết thử việc giữa tháng chia theo ngày công** của từng phiên bản hồ sơ lương (bỏ cách lấy phiên bản ngày cuối tháng); ảnh chụp ghi đủ các đoạn; phiếu in từng đoạn.
+- **Phụ cấp cố định tháng chia theo công** (vào / nghỉ giữa tháng, nghỉ không lương; nghỉ không lương cả tháng = 0); cờ "trả đủ, không chia theo công" trên loại phụ cấp (mặc định tắt).
+- **Khoản điều chỉnh kỳ trước bắt buộc chọn tính trước thuế / sau thuế**: trước thuế vào / giảm thu nhập chịu thuế và (tùy chọn) lương đóng BH như truy thu hoa hồng; sau thuế cộng / trừ thẳng thực lĩnh.
+- **Tài khoản ngân hàng**: không ai tự lập / sửa hồ sơ lương của mình (403, kể cả Giám đốc / Quản trị); đổi tài khoản → thông báo cho nhân viên + kiểm toán che số; **chụp tài khoản vào dòng lương lúc khóa kỳ**, file chi dùng tài khoản đã chụp, thiếu tài khoản chặn khóa; màn hình duyệt cảnh báo tài khoản đổi trong 30 ngày.
+- **Bật 2 lớp / đổi điện thoại / tắt 2 lớp phải nhập lại mật khẩu hiện tại** (đổi điện thoại thêm mã máy cũ); sai cộng bộ đếm khóa tài khoản như đăng nhập. API `/api/v1/tai-khoan/2-lop/bat-dau` nay nhận `{ matKhau, ma? }`.
+- **Gửi lại phiếu lương** từng người (khóa chống trùng mới, ghi kiểm toán); **file chi ngân hàng mặc định Excel**, CSV ghi số tài khoản trong ngoặc kép.
+- **Dòng điều chỉnh bảng công làm giảm tăng ca** không đủ trừ → chuyển phần còn lại sang kỳ sau kèm cảnh báo (trước đây kẹp về 0 lặng lẽ).
+- **Kỳ lương riêng cho một nhóm người** (vd lãnh đạo); gửi duyệt khi không còn ai duyệt được → báo rõ, hướng dẫn tách.
+- Migration `20261104090004_luong_chinh_sach_giam_doc`. Bộ thử `npm run thu:luong-chinh-sach` (52 kiểm tra, nối cuối `thu:tich-hop`); 15 bài thử đơn vị mới; `thu:xac-thuc-2-lop` thêm kiểm tra mật khẩu khi bật / đổi điện thoại.
+
 ## 0.20.0 — 03/11/2026 — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
 
 **Chưa triển khai lên máy thật.** Năm migration mới (`20261103090001_nhan_su_danh_gia`, `20261103090002_qa_danh_gia_quyen`, `20261103090003_danh_gia_chinh_sach`, `20261103090004_danh_gia_giao_viec_nguoi_nghi`, `20261103090005_danh_gia_lap_chuoi_sai`), chạy lại `prisma/rls.sql` (7 bảng chỉ ghi thêm mới) và `npm run db:seed` (quyền `danh_gia.*`, mẫu phiếu thực tập chung). Worker cần khởi động lại (ba bước quét mới). Dựa trên 0.19.0.

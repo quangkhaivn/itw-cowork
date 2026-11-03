@@ -17,8 +17,10 @@ Một tháng lương đi đúng một đường:
 Người xem hoặc tính lương của người khác (Kế toán, Nhân sự, Giám đốc, Quản trị) **bắt buộc** bật xác thực 2 lớp. Chưa bật thì trang lương chỉ hiện hướng dẫn:
 
 1. Cài ứng dụng xác thực trên điện thoại (Google Authenticator hoặc Microsoft Authenticator).
-2. Vào **Tài khoản của tôi → Xác thực 2 lớp → Bật**, quét mã QR, nhập mã 6 số đang hiện.
+2. Vào **Tài khoản của tôi → Xác thực 2 lớp → Bật**, **nhập lại mật khẩu đăng nhập hiện tại**, quét mã QR, nhập mã 6 số đang hiện.
 3. Chép 10 mã khôi phục, cất nơi an toàn (mất điện thoại thì dùng mã này).
+
+Đổi điện thoại: **Đổi điện thoại** → mật khẩu hiện tại + mã 6 số trên điện thoại CŨ (mất máy cũ thì dùng mã khôi phục, hoặc nhờ Quản trị đặt lại). Tắt 2 lớp cũng cần mật khẩu + mã. Nhập sai mật khẩu / mã nhiều lần → tài khoản bị khóa tạm như khi đăng nhập sai.
 
 Nhân viên xem **phiếu lương của chính mình** thì không cần 2 lớp.
 
@@ -65,9 +67,10 @@ Cuối trang **Tham số lương**: chọn cột (STT, số tài khoản, tên c
   - *Khấu trừ 10 %* — không ký HĐLĐ hoặc dưới 3 tháng (máy gợi ý cho thời vụ, thực tập);
   - *Không khấu trừ* — người đã nộp cam kết 08/CK-TNCN.
   Thử việc theo hợp đồng thử việc riêng dưới 3 tháng thường khấu trừ 10 % — kế toán chọn theo hợp đồng thật.
-- Phụ cấp: điền số tiền cho từng loại (ăn trưa tính theo **ngày công thực tế**). Danh mục phụ cấp ở cuối trang: đặt chịu thuế / không, tính bảo hiểm / không.
-- Tài khoản ngân hàng, mã số thuế cá nhân.
-- **Đổi lương = lưu phiên bản mới** với ngày hiệu lực mới; phiên bản cũ giữ làm lịch sử (bấm tên nhân viên để xem). Không có nút “sửa đè”.
+- Phụ cấp: điền số tiền cho từng loại (ăn trưa tính theo **ngày công thực tế**). Danh mục phụ cấp ở cuối trang: đặt chịu thuế / không, tính bảo hiểm / không, và **“trả đủ, không chia theo công”**. Phụ cấp cố định tháng mặc định **chia theo công** (người vào làm / nghỉ việc giữa tháng, nghỉ không lương nhận phần tương ứng; nghỉ không lương cả tháng nhận 0); đánh dấu “trả đủ” cho khoản công ty muốn trả nguyên tháng (ví dụ gửi xe).
+- Tài khoản ngân hàng, mã số thuế cá nhân. **Đổi tài khoản** → nhân viên nhận thông báo ngay trong ứng dụng (chỉ hiện 4 số cuối) và hệ thống ghi nhật ký; bảng lương cảnh báo người đổi tài khoản trong 30 ngày.
+- **Đổi lương = lưu phiên bản mới** với ngày hiệu lực mới; phiên bản cũ giữ làm lịch sử (bấm tên nhân viên để xem). Không có nút “sửa đè”. Đổi lương / hết thử việc **giữa tháng**: tháng đó máy chia theo ngày công — phần công trước ngày đổi tính theo mức cũ, phần sau theo mức mới (phiếu lương in từng đoạn).
+- **Không ai tự lập hoặc sửa hồ sơ lương của chính mình** — kể cả Nhân sự, Kế toán, Giám đốc, Quản trị. Hồ sơ của Nhân sự do người khác có quyền lập.
 - **Người phụ thuộc**: bấm tên nhân viên → *Thêm người phụ thuộc*, chọn tháng bắt đầu giảm trừ. Hết giảm trừ thì *Kết thúc* (không xóa).
 
 Mỗi lần mở trang hồ sơ lương đều được ghi nhật ký (ai, lúc nào, xem của ai).
@@ -76,18 +79,20 @@ Mỗi lần mở trang hồ sơ lương đều được ghi nhật ký (ai, lúc
 
 1. **Chờ Nhân sự khóa bảng công** tháng đó (Nhân sự → Bảng công tháng). Bảng công chưa khóa thì không tính được. Nếu còn ngày **“thiếu giờ” chờ quản lý quyết**, máy báo danh sách người + ngày: nhắc quản lý quyết ở Chấm công → Ngày công thiếu giờ.
 2. **Tính lương → Tạo kỳ lương** (năm, tháng) → mở kỳ → **Tính lương**.
+   - Nếu Giám đốc (người duyệt) cũng có lương trong bảng: **Tạo kỳ lương riêng** (đặt tên, ví dụ “Lãnh đạo”, chọn người) — những người này ra khỏi kỳ chung; kỳ riêng do Quản trị hoặc Giám đốc khác duyệt. Khi gửi duyệt mà không còn ai duyệt được, máy báo rõ và chỉ cách tách.
 3. **Kiểm**:
    - Băng đỏ = lỗi phải sửa trước khi gửi duyệt (tham số chưa xác nhận; thực lĩnh âm; nhân viên chưa có lịch làm việc; lương thử việc dưới mức). Băng vàng = cảnh báo nên xem (phiếu đánh giá chưa chốt → thưởng KPI = 0; nghỉ không lương ≥ 14 ngày → tháng đó không đóng bảo hiểm; truy thu hoa hồng…).
    - Bấm tên từng người để xem phiếu chi tiết: công chuẩn / thực tế / nghỉ có lương / lễ, từng khoản thu nhập, bảo hiểm, giảm trừ, thuế.
    - Tải **Bảng lương Excel (nháp)** để đối chiếu.
-4. **Khoản cộng / trừ** (chỉ khi kỳ còn nháp): *Thêm khoản* — thưởng đột xuất, phụ cấp khác (chọn chịu thuế hay không), tạm ứng, phạt, khác; bắt buộc lý do. Thêm / xóa khoản xong phải bấm **Tính lại**.
+4. **Khoản cộng / trừ** (chỉ khi kỳ còn nháp): *Thêm khoản* — thưởng đột xuất, phụ cấp khác (chọn chịu thuế hay không), tạm ứng, phạt, khác; bắt buộc lý do. Thêm / xóa khoản xong phải bấm **Tính lại**. Khoản **Điều chỉnh kỳ trước**: xem mục 3.
    - Tạm ứng lớn hơn lương làm thực lĩnh âm → máy chặn. Chuyển phần còn lại sang tháng sau.
 5. **Gửi duyệt**. Giám đốc nhận thông báo.
 6. Giám đốc **Duyệt** rồi **Khóa** (hoặc **Trả lại** kèm lý do → kỳ về nháp, sửa rồi tính lại).
 7. Sau khi khóa:
-   - **File chi lương ngân hàng** (CSV hoặc Excel) → nộp lên ngân hàng điện tử. Thiếu số tài khoản của ai, máy báo tên — Nhân sự bổ sung ở hồ sơ lương rồi xuất lại.
+   - **File chi lương ngân hàng — dùng bản Excel** (mặc định) → nộp lên ngân hàng điện tử. Số tài khoản trong file là tài khoản **chụp lúc khóa kỳ**: Nhân sự đổi tài khoản sau đó không làm đổi file của kỳ đã khóa. Người được trả lương mà chưa có tài khoản thì **không khóa được** — máy báo tên, Nhân sự bổ sung trước khi khóa.
+   - ⚠ **Không mở bản CSV bằng Excel rồi lưu lại**: Excel tự đổi số tài khoản dài thành dạng số (mất số 0 đầu, thành 1,1E+12). Bản CSV đã ghi số tài khoản trong ngoặc kép cho phần mềm ngân hàng đọc; cần xem / sửa thì dùng bản Excel.
    - **Bút toán lương (CSV)** → nhập vào phần mềm kế toán (MISA: chứng từ nghiệp vụ khác).
-   - **Gửi email phiếu lương** → mỗi người nhận một thư (gửi một lần; bấm lại không gửi trùng).
+   - **Gửi email phiếu lương** → mỗi người nhận một thư (gửi một lần; bấm lại không gửi trùng). Ai báo không nhận được: bấm **Gửi lại phiếu** cạnh tên người đó (mỗi lần gửi lại là một thư mới, có ghi nhật ký).
    - Chuyển tiền xong bấm **Đánh dấu đã chi** (bút toán xuất sau đó có thêm dòng Nợ 334 / Có 1121).
    - Nhân viên xem phiếu của mình ở **Tính lương → Phiếu lương của tôi** và in / lưu PDF.
 
@@ -95,7 +100,9 @@ Mỗi lần mở trang hồ sơ lương đều được ghi nhật ký (ai, lúc
 
 - **Công tính lương** = công thực tế + nghỉ phép có lương + ngày lễ (lễ rơi vào ngày phải làm theo lịch). Nghỉ ốm, nghỉ không lương: không trả (ốm do BHXH chi). **Đi muộn / về sớm không trừ tiền** — chỉ in số phút trên phiếu.
 - **Công chuẩn** = số công phải làm theo lịch làm việc cả tháng (coi như không có lễ). Lương tháng = lương cơ bản × % thử việc × công tính lương ÷ công chuẩn. Người vào làm giữa tháng (lịch gán từ ngày vào) vẫn có công chuẩn cả tháng → lương theo số công thực làm; phiếu có cảnh báo "lịch bắt đầu giữa tháng" để soát người bị gán lịch muộn.
-- **Tăng ca**: chỉ giờ có đơn tăng ca **đã duyệt** trên bảng công; lương giờ = lương tháng ÷ công chuẩn ÷ 8; × hệ số theo ngày thường / nghỉ tuần / lễ / ban đêm.
+- **Tăng ca**: chỉ giờ có đơn tăng ca **đã duyệt** trên bảng công; lương giờ = lương tháng ÷ công chuẩn ÷ 8; × hệ số theo ngày thường / nghỉ tuần / lễ / ban đêm. Bảng công tháng này có **dòng điều chỉnh giảm tăng ca** lớn hơn số tăng ca của tháng → phần còn lại được trừ tiếp ở tháng sau (phiếu có cảnh báo), không bỏ qua.
+- **Đổi lương / hết thử việc giữa tháng**: mỗi đoạn = lương của phiên bản đó × công tính lương trong đoạn ÷ công chuẩn cả tháng.
+- **Phụ cấp cố định tháng** = số tiền × công tính lương ÷ công chuẩn (trừ loại “trả đủ”).
 - **Thưởng KPI** = mức thưởng KPI × hệ số thưởng của phiếu đánh giá **đã chốt** của tháng (đánh giá theo quý thì trả vào tháng cuối quý).
 - **Hoa hồng** = tỷ lệ × tiền **đã thu thật** trong tháng (phiếu thu còn hiệu lực) của đơn người đó phụ trách. Phiếu thu bị hủy sau khi tháng đã khóa → tháng sau có **dòng truy thu** đúng số đã trả. Phiếu thu của tháng trước nhưng nhập muộn (sau khi tháng trước đã tính) → tính vào tháng này.
 - **Bảo hiểm người lao động** trên lương đóng bảo hiểm (+ phụ cấp tính bảo hiểm), không vượt trần.
@@ -107,14 +114,20 @@ Mỗi dòng lương lưu “ảnh chụp đầu vào” (công, hồ sơ, tham s
 
 ## 3. Sửa sai sau khi đã khóa
 
-Không mở lại được. Ở **kỳ tháng sau** (còn nháp): *Thêm khoản* → loại **Điều chỉnh kỳ trước**, chọn tháng bị sai, cộng hoặc trừ số chênh lệch, ghi lý do rõ (ít nhất 10 ký tự). Khoản này được duyệt cùng bảng lương tháng sau.
+Không mở lại được. Ở **kỳ tháng sau** (còn nháp): *Thêm khoản* → loại **Điều chỉnh kỳ trước**, chọn tháng bị sai, cộng hoặc trừ số chênh lệch, ghi lý do rõ (ít nhất 10 ký tự), và **bắt buộc chọn cách tính**:
+
+- **Trước thuế** — lương, phụ cấp, thưởng trả **thiếu** (cộng) hoặc **thừa** (trừ, thu hồi): khoản này cộng / trừ vào tổng thu nhập và thu nhập chịu thuế (nếu khoản đó chịu thuế), và vào lương đóng bảo hiểm nếu đánh dấu “tính vào lương đóng BH” (khoản trả thừa đã từng tính BH). Thuế và bảo hiểm tháng này tự giảm / tăng theo.
+- **Sau thuế** — tạm ứng, khoản đã trừ sau thuế bị trừ thiếu / thừa: cộng / trừ thẳng vào thực lĩnh, không đụng thuế và bảo hiểm.
+
+Khoản này được duyệt cùng bảng lương tháng sau.
 
 Sai về **công** (chấm bù, đơn nghỉ duyệt muộn): Nhân sự xử lý ở chấm công, bảng công tháng sau tự sinh dòng điều chỉnh công → lương tháng sau tự tính phần chênh.
 
 ## 4. Giám đốc — duyệt
 
 - Mở kỳ ở trạng thái **Chờ duyệt**: xem tổng hợp, cảnh báo, từng dòng. **Duyệt** → **Khóa**, hoặc **Trả lại** kèm lý do.
-- **Người tính không được duyệt.** Bảng lương **có dòng của chính bạn** thì bạn không tự duyệt / khóa được — cần người thứ hai có quyền duyệt (Phó giám đốc / Quản trị).
+- **Người tính không được duyệt.** Bảng lương **có dòng của chính bạn** thì bạn không tự duyệt / khóa được — kế toán tách dòng của bạn sang **kỳ lương riêng** (Quản trị hoặc Giám đốc khác duyệt kỳ đó), hoặc cấp quyền duyệt cho người thứ hai.
+- Băng vàng **“Tài khoản nhận lương vừa đổi trong 30 ngày”**: gọi xác nhận trực tiếp với nhân viên trước khi duyệt / chi.
 - Khi khóa, máy kiểm lần cuối: phiếu thu nào đã hủy sau khi tính hoa hồng → không khóa được, trả lại để kế toán tính lại.
 
 ## 5. Bảo mật
@@ -122,3 +135,4 @@ Sai về **công** (chấm bù, đơn nghỉ duyệt muộn): Nhân sự xử l�
 - Mỗi lần ai xem bảng lương, phiếu lương hay hồ sơ lương **của người khác**, hoặc xuất file, hệ thống ghi nhật ký (ai, lúc nào, xem của những ai) — xem ở Quản trị → Nhật ký kiểm toán, hành động “Xem dữ liệu lương”. Nhật ký không ghi số tiền.
 - Trợ lý AI không có quyền lương và không đọc được số lương.
 - Nhân viên, thực tập sinh chỉ thấy phiếu của chính mình, và chỉ sau khi tháng đã khóa.
+- Không ai tự lập / sửa hồ sơ lương của chính mình. Đổi tài khoản nhận lương luôn báo cho chính nhân viên.
