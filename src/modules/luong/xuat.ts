@@ -3,9 +3,7 @@ import type { NguCanh } from "@/lib/api";
 import { taoCsv, voHieuCongThuc } from "@/lib/csv";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
-import { homNayVN } from "@/modules/crm/chung";
 import { batBuocQuyenLuong, docCauHinhLuong, docMauNganHang, ghiXem, locNguoiLuong, taiKhoanTu } from "./chung";
-import { hoSoApDung } from "./ho-so";
 import { xml } from "./thu-phieu";
 import {
   boDau,
@@ -104,39 +102,55 @@ export async function xuatBangLuong(nc: NguCanh, id: string, dinhDang: "xls" | "
  * File chi lương ngân hàng (LU-51): chỉ kỳ ĐÃ KHÓA, số tiền = thực lĩnh > 0, cột + nội dung theo mẫu cấu hình.
  * Số tài khoản lấy từ phiên bản hồ sơ lương HIỆN HÀNH (tài khoản không phải đầu vào tính lương). Thiếu tài khoản → chặn.
  */
-export async function xuatNganHang(nc: NguCanh, id: string, dinhDang: "csv" | "xls" = "csv") {
+/**
+ * CSV ghi các cột chỉ định LUÔN trong ngoặc kép (số tài khoản — QĐ-164); ô chữ chống chèn công thức như `taoCsv`.
+ * Lưu ý: Excel mở CSV vẫn có thể đổi chuỗi số dài thành số (mất số 0 đầu) — HUONG-DAN khuyên dùng bản Excel.
+ */
+export function taoCsvCotChuoi(tieuDe: string[], dong: (string | number)[][], cotChuoi: Set<number>): string {
+  const o = (x: string | number, i: number) => {
+    const s = typeof x === "number" ? String(x) : voHieuCongThuc(String(x));
+    return cotChuoi.has(i) || /[",;\n\r\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return "\ufeff" + [tieuDe.map((t, i) => o(t, cotChuoi.has(i) ? -1 : i)), ...dong.map((h) => h.map(o))].map((h) => h.join(",")).join("\r\n") + "\r\n";
+}
+
+/**
+ * File chi lương ngân hàng (LU-51): chỉ kỳ ĐÃ KHÓA, số tiền = thực lĩnh > 0, cột + nội dung theo mẫu cấu hình. Tài khoản
+ * lấy ĐÚNG tài khoản đã CHỤP vào dòng lương lúc khóa kỳ (QĐ-160) — đổi tài khoản sau khóa không đổi file của kỳ đó.
+ * Mặc định bản Excel (QĐ-164).
+ */
+export async function xuatNganHang(nc: NguCanh, id: string, dinhDang: "csv" | "xls" = "xls") {
   batBuocQuyenLuong(nc, "luong.export", { objectType: "payroll_run", objectId: id });
   const { ky, dong, ma } = await docKyVaDong(nc, id);
   if (!laKyDaKhoa(ky.status)) throw new LoiNghiepVu("Chỉ xuất file chi lương khi kỳ lương đã khóa.", 409, "chua-khoa");
   const mau = await docMauNganHang(nc.tx);
-  const hs = await hoSoApDung(nc.tx, dong.map((d) => d.userId), homNayVN());
   const chi = dong.filter((d) => d.netPay > 0n);
-  const thieu = chi.filter((d) => !(hs.get(d.userId)?.bankAccount));
+  const thieu = chi.filter((d) => !d.bankAccount);
   if (thieu.length) {
-    throw new LoiNghiepVu(`Chưa có số tài khoản ngân hàng: ${thieu.map((d) => d.fullName).join(", ")}. Nhân sự bổ sung ở Hồ sơ lương (phiên bản mới) rồi xuất lại.`, 422, "thieu-tai-khoan");
+    throw new LoiNghiepVu(`Dòng lương chưa chụp tài khoản ngân hàng lúc khóa: ${thieu.map((d) => d.fullName).join(", ")}. Chi riêng cho những người này và ghi chú căn cứ.`, 422, "thieu-tai-khoan");
   }
   const rows = chi.map((d, i) => {
-    const h = hs.get(d.userId)!;
     const nd = dienNoiDung(mau.noiDung, { hoTen: d.fullName, thang: ky.month, nam: ky.year, maNv: ma.get(d.userId) ?? null });
+    const chu = d.accountHolder ?? d.fullName;
     const gt: Record<CotNganHang, string | number> = {
       stt: i + 1,
-      "so-tai-khoan": h.bankAccount ?? "",
-      "chu-tai-khoan": (mau.boDau ? boDau(h.accountHolder ?? d.fullName) : (h.accountHolder ?? d.fullName)).toUpperCase(),
-      "ngan-hang": h.bankName ?? "",
+      "so-tai-khoan": d.bankAccount ?? "",
+      "chu-tai-khoan": (mau.boDau ? boDau(chu) : chu).toUpperCase(),
+      "ngan-hang": d.bankName ?? "",
       "so-tien": Number(d.netPay),
       "noi-dung": mau.boDau ? boDau(nd) : nd,
       "ma-nhan-vien": ma.get(d.userId) ?? "",
       "ho-ten": d.fullName,
     };
-    // Số tài khoản là CHUỖI (giữ số 0 đầu) — ô chữ, đã chống chèn công thức.
     return mau.cot.map((c) => gt[c]);
   });
   const tieuDe = mau.cot.map((c) => NHAN_COT_NGAN_HANG[c]);
   await ghiXem(nc, "xuat-chi-luong-ngan-hang", { objectType: "payroll_run", objectId: id }, chi.map((d) => d.userId));
   await nc.kiemToan({ action: "xuat-luong", objectType: "payroll_run", objectId: id, after: { loai: "ngan-hang", dinhDang, soDong: rows.length } });
   await nc.suKien({ eventType: SU_KIEN.PAYROLL_EXPORTED, objectType: "payroll_run", objectId: id, payload: { loai: "ngan-hang" } });
-  const ten = `chi-luong-${ky.year}-${thang2(ky.month)}.${dinhDang}`;
-  return tepTraVe(dinhDang === "csv" ? taoCsv(tieuDe, rows) : taoBangTinhXml("Chi lương", tieuDe, rows), ten, dinhDang);
+  const ten = `chi-luong-${ky.year}-${thang2(ky.month)}${ky.name ? "-rieng" : ""}.${dinhDang}`;
+  const cotTk = new Set(mau.cot.map((c, i) => (c === "so-tai-khoan" ? i : -1)).filter((i) => i >= 0));
+  return tepTraVe(dinhDang === "csv" ? taoCsvCotChuoi(tieuDe, rows, cotTk) : taoBangTinhXml("Chi lương", tieuDe, rows), ten, dinhDang);
 }
 
 /** Bút toán lương (LU-53): CSV tổng hợp theo cặp tài khoản (Cấu hình nhóm Tính lương). Chỉ kỳ đã khóa. */
@@ -190,4 +204,23 @@ export async function guiEmailPhieuLuong(nc: NguCanh, id: string) {
   });
   await nc.kiemToan({ action: "gui-phieu-luong", objectType: "payroll_run", objectId: id, after: { xepHang: kq.count, daCoTruoc: du.length - kq.count, khongEmail: dong.length - du.length } });
   return { xepHang: kq.count, daCoTruoc: du.length - kq.count, khongEmail: dong.length - du.length };
+}
+
+/**
+ * QĐ-163: GỬI LẠI phiếu lương của một dòng (nhân viên báo không nhận được thư). Mỗi lần gửi lại là một khóa chống trùng
+ * mới (`phieu-luong:<dòng>:lai-<n>`) để hàng chờ nhận thư mới; ghi kiểm toán. Chỉ kỳ đã khóa.
+ */
+export async function guiLaiPhieuLuong(nc: NguCanh, dongId: string) {
+  batBuocQuyenLuong(nc, "luong.export", { objectType: "payroll_line", objectId: dongId });
+  const d = await nc.tx.payrollLine.findFirst({ where: { id: dongId }, include: { run: { select: { status: true, year: true, month: true } } } });
+  if (!d) throw new LoiKhongTimThay("Phiếu lương");
+  if (!laKyDaKhoa(d.run.status)) throw new LoiNghiepVu("Chỉ gửi phiếu lương khi kỳ đã khóa.", 409, "chua-khoa");
+  const u = await nc.tx.user.findFirst({ where: { id: d.userId, status: "hoat-dong" }, select: { email: true } });
+  if (!u?.email) throw new LoiNghiepVu("Nhân viên không còn hoạt động hoặc chưa có email.", 422, "khong-email");
+  await nc.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`gui-lai-phieu:${dongId}`}))`;
+  const daGui = await nc.tx.emailTransactional.count({ where: { kind: "phieu-luong", dedupeKey: { startsWith: `phieu-luong:${dongId}` } } });
+  const khoa = `phieu-luong:${dongId}:lai-${daGui}`;
+  await nc.tx.emailTransactional.create({ data: { tenantId: nc.tenantId, kind: "phieu-luong", email: u.email, dedupeKey: khoa, payload: { dongId } } });
+  await nc.kiemToan({ action: "gui-lai-phieu-luong", objectType: "payroll_line", objectId: dongId, after: { nguoi: d.userId, ky: `${String(d.run.month).padStart(2, "0")}/${d.run.year}`, lan: daGui } });
+  return { xepHang: 1, lan: daGui };
 }

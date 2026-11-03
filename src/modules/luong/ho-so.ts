@@ -3,6 +3,7 @@ import type { NguCanh } from "@/lib/api";
 import type { ClientTenant } from "@/lib/db";
 import { laLoiTrung, LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { SU_KIEN } from "@/lib/su-kien";
+import { taoThongBao } from "@/modules/thong-bao/service";
 import { banDoTen } from "@/modules/cham-cong/chung";
 import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { batBuocQuyenLuong, ghiXem, locNguoiLuong, trongPhamViLuong } from "./chung";
@@ -120,8 +121,22 @@ export async function lichSuHoSo(nc: NguCanh, userId: string) {
  * Tạo PHIÊN BẢN hồ sơ lương mới (LU-02). Không sửa bản cũ: cùng ngày hiệu lực thì bản mới đè (bản tạo sau thắng).
  * Nhật ký ghi các trường đổi so với bản trước, KHÔNG ghi số tiền (QĐ-148).
  */
+/** QĐ-159: không ai tự lập / sửa hồ sơ lương (kể cả người phụ thuộc) của CHÍNH MÌNH — kể cả Nhân sự, Kế toán, Giám đốc, Quản trị. */
+function chanTuSua(nc: NguCanh, nguoiId: string) {
+  if (nguoiId === nc.hoSo.userId) {
+    throw new LoiNghiepVu("Không ai tự lập hoặc sửa hồ sơ lương của chính mình (kể cả Nhân sự, Kế toán, Giám đốc, Quản trị) — nhờ người khác có quyền lập hồ sơ lương.", 403, "tu-sua-ho-so");
+  }
+}
+
+/** Che số tài khoản cho nhật ký / thông báo: chỉ giữ 4 số cuối (QĐ-159). */
+export function cheTaiKhoan(tk: string | null | undefined): string | null {
+  if (!tk) return null;
+  return tk.length <= 4 ? "****" : `****${tk.slice(-4)}`;
+}
+
 export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuong>) {
   batBuocQuyenLuong(nc, "luong.update", { objectType: "salary_profile", objectId: d.nguoiId });
+  chanTuSua(nc, d.nguoiId);
   const u = await nc.tx.user.findFirst({ where: { id: d.nguoiId, isSystem: false }, select: { id: true, fullName: true, status: true } });
   if (!u) throw new LoiKhongTimThay("Nhân viên");
   if (d.phuCap.length) {
@@ -129,6 +144,8 @@ export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuon
     if (loai.length !== d.phuCap.length) throw new LoiDinhDang("phuCap", "Có loại phụ cấp không tồn tại hoặc đã ngừng.");
   }
   const truoc = (await hoSoApDung(nc.tx, [d.nguoiId], d.hieuLucTu)).get(d.nguoiId) ?? null;
+  // Tài khoản ngân hàng so với phiên bản TẠO SAU CÙNG (bản người nhận đang thấy), không phụ thuộc ngày hiệu lực.
+  const moiNhat = await nc.tx.salaryProfile.findFirst({ where: { userId: d.nguoiId }, orderBy: { createdAt: "desc" }, select: { bankAccount: true, bankName: true, accountHolder: true } });
   const moi = await nc.tx.salaryProfile.create({
     data: {
       tenantId: nc.tenantId, userId: d.nguoiId, effectiveFrom: ngayVeDate(d.hieuLucTu), contractType: d.loaiHopDong, probationPercent: d.tyLeThuViec,
@@ -156,7 +173,22 @@ export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuon
     after: { nguoi: d.nguoiId, hieuLucTu: d.hieuLucTu, loaiHopDong: d.loaiHopDong, cachTra: d.cachTra, phienBanTruoc: truoc?.id ?? null, truongDoi: truoc ? truongDoi : ["tạo mới"] },
   });
   await nc.suKien({ eventType: SU_KIEN.SALARY_PROFILE_CHANGED, objectType: "salary_profile", objectId: moi.id, payload: { nguoi: d.nguoiId, hieuLucTu: d.hieuLucTu } });
-  return { id: moi.id, nguoi: { id: u.id, hoTen: u.fullName } };
+  // QĐ-159: đổi tài khoản nhận lương → báo chính nhân viên trong ứng dụng + kiểm toán (số tài khoản che, chỉ 4 số cuối).
+  const doiTk = moiNhat && (moiNhat.bankAccount !== d.soTaiKhoan || moiNhat.bankName !== d.nganHang || moiNhat.accountHolder !== d.chuTaiKhoan);
+  if (doiTk) {
+    await nc.kiemToan({
+      action: "doi-tai-khoan-luong", objectType: "salary_profile", objectId: moi.id,
+      before: { nguoi: d.nguoiId, taiKhoan: cheTaiKhoan(moiNhat.bankAccount), nganHang: moiNhat.bankName },
+      after: { nguoi: d.nguoiId, taiKhoan: cheTaiKhoan(d.soTaiKhoan), nganHang: d.nganHang, hieuLucTu: d.hieuLucTu },
+    });
+    await taoThongBao(nc.tx, nc.tenantId, {
+      nguoiNhanId: d.nguoiId, loai: "doi-tai-khoan-luong", mucDo: "canh-bao",
+      tieuDe: "Tài khoản nhận lương của bạn vừa được đổi",
+      noiDung: `${nc.hoSo.hoTen} đổi tài khoản nhận lương thành ${cheTaiKhoan(d.soTaiKhoan) ?? "(trống)"}${d.nganHang ? ` — ${d.nganHang}` : ""}. Không phải bạn yêu cầu thì báo ngay Kế toán / Giám đốc.`,
+      duongDan: "/luong/phieu-cua-toi", doiTuong: "salary_profile", doiTuongId: moi.id, khoaChongTrung: `doi-tai-khoan-luong:${moi.id}`,
+    });
+  }
+  return { id: moi.id, nguoi: { id: u.id, hoTen: u.fullName }, doiTaiKhoan: Boolean(doiTk) };
 }
 
 // ---------------------------------------------------------------------------
@@ -167,14 +199,14 @@ export async function danhSachLoaiPhuCap(nc: NguCanh) {
   if (!nc.hoSo.quyen.has("luong.update")) batBuocQuyenLuong(nc, "luong.view", { objectType: "salary_allowance_type" });
   else batBuocQuyenLuong(nc, "luong.update", { objectType: "salary_allowance_type" });
   const ds = await nc.tx.salaryAllowanceType.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
-  return ds.map((x) => ({ id: x.id, ma: x.code, ten: x.name, chiuThue: x.taxable, tinhBH: x.insurable, theo: x.basis, thuTu: x.sortOrder, trangThai: x.status }));
+  return ds.map((x) => ({ id: x.id, ma: x.code, ten: x.name, chiuThue: x.taxable, tinhBH: x.insurable, theo: x.basis, traDu: x.fullMonth, thuTu: x.sortOrder, trangThai: x.status }));
 }
 
 export async function taoLoaiPhuCap(nc: NguCanh, d: z.infer<typeof LuocDoLoaiPhuCap>) {
   batBuocQuyenLuong(nc, "luong.update", { objectType: "salary_allowance_type" });
   try {
     const x = await nc.tx.salaryAllowanceType.create({
-      data: { tenantId: nc.tenantId, code: d.ma, name: d.ten, taxable: d.chiuThue, insurable: d.tinhBH, basis: d.theo, sortOrder: d.thuTu, status: d.trangThai, createdBy: nc.hoSo.userId },
+      data: { tenantId: nc.tenantId, code: d.ma, name: d.ten, taxable: d.chiuThue, insurable: d.tinhBH, basis: d.theo, fullMonth: d.traDu, sortOrder: d.thuTu, status: d.trangThai, createdBy: nc.hoSo.userId },
     });
     await nc.kiemToan({ action: "tao", objectType: "salary_allowance_type", objectId: x.id, after: d });
     return { id: x.id };
@@ -190,8 +222,8 @@ export async function suaLoaiPhuCap(nc: NguCanh, id: string, d: z.infer<typeof L
   const cu = await nc.tx.salaryAllowanceType.findFirst({ where: { id } });
   if (!cu) throw new LoiKhongTimThay("Loại phụ cấp");
   if (cu.code !== d.ma) throw new LoiDinhDang("ma", "Không đổi mã của loại phụ cấp đã có.");
-  await nc.tx.salaryAllowanceType.update({ where: { id }, data: { name: d.ten, taxable: d.chiuThue, insurable: d.tinhBH, basis: d.theo, sortOrder: d.thuTu, status: d.trangThai } });
-  await nc.kiemToan({ action: "sua", objectType: "salary_allowance_type", objectId: id, before: { ten: cu.name, chiuThue: cu.taxable, tinhBH: cu.insurable, theo: cu.basis, trangThai: cu.status }, after: d });
+  await nc.tx.salaryAllowanceType.update({ where: { id }, data: { name: d.ten, taxable: d.chiuThue, insurable: d.tinhBH, basis: d.theo, fullMonth: d.traDu, sortOrder: d.thuTu, status: d.trangThai } });
+  await nc.kiemToan({ action: "sua", objectType: "salary_allowance_type", objectId: id, before: { ten: cu.name, chiuThue: cu.taxable, tinhBH: cu.insurable, theo: cu.basis, traDu: cu.fullMonth, trangThai: cu.status }, after: d });
   return { id };
 }
 
@@ -201,6 +233,7 @@ export async function suaLoaiPhuCap(nc: NguCanh, id: string, d: z.infer<typeof L
 
 export async function themNguoiPhuThuoc(nc: NguCanh, d: z.infer<typeof LuocDoNguoiPhuThuoc>) {
   batBuocQuyenLuong(nc, "luong.update", { objectType: "salary_dependent" });
+  chanTuSua(nc, d.nguoiId);
   const u = await nc.tx.user.findFirst({ where: { id: d.nguoiId, isSystem: false }, select: { id: true } });
   if (!u) throw new LoiKhongTimThay("Nhân viên");
   if (d.denThang && d.denThang < d.tuThang) throw new LoiDinhDang("denThang", "Tháng kết thúc phải từ tháng bắt đầu trở đi.");
@@ -220,6 +253,7 @@ export async function ketThucNguoiPhuThuoc(nc: NguCanh, id: string, d: z.infer<t
   batBuocQuyenLuong(nc, "luong.update", { objectType: "salary_dependent", objectId: id });
   const x = await nc.tx.salaryDependent.findFirst({ where: { id } });
   if (!x) throw new LoiKhongTimThay("Người phụ thuộc");
+  chanTuSua(nc, x.userId);
   if (`${d.denThang}-01` < dateVeNgay(x.fromMonth)) throw new LoiNghiepVu("Tháng kết thúc phải từ tháng bắt đầu trở đi.", 422, "sai-thang");
   await nc.tx.salaryDependent.update({ where: { id }, data: { toMonth: ngayVeDate(`${d.denThang}-01`) } });
   await nc.kiemToan({ action: "sua", objectType: "salary_dependent", objectId: id, before: { denThang: x.toMonth ? dateVeNgay(x.toMonth).slice(0, 7) : null }, after: { denThang: d.denThang } });

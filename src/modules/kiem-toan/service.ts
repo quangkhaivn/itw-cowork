@@ -45,6 +45,8 @@ export const NHAN_HANH_DONG: Record<string, string> = {
   "chi-luong": "Đánh dấu đã chi lương",
   "xuat-luong": "Xuất file lương",
   "gui-phieu-luong": "Gửi email phiếu lương",
+  "doi-tai-khoan-luong": "Đổi tài khoản nhận lương",
+  "gui-lai-phieu-luong": "Gửi lại phiếu lương",
 };
 
 export const NHAN_DOI_TUONG: Record<string, string> = {

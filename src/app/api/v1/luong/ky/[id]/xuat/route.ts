@@ -10,6 +10,6 @@ const Loc = z.object({ loai: z.enum(["bang-luong", "ngan-hang", "but-toan"]), di
 export const GET = xuLyApi<{ id: string }>(async (nc, req, { id }) => {
   const q = docTruyVan(req, Loc);
   if (q.loai === "bang-luong") return xuatBangLuong(nc, id, q.dinhDang ?? "xls");
-  if (q.loai === "ngan-hang") return xuatNganHang(nc, id, q.dinhDang ?? "csv");
+  if (q.loai === "ngan-hang") return xuatNganHang(nc, id, q.dinhDang ?? "xls");
   return xuatButToan(nc, id);
 }, { quyen: "luong.export" });

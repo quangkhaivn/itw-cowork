@@ -113,7 +113,11 @@ export type HanhDong =
   | "gui-phieu-luong"
   // 0.20.0 chính sách (QĐ-135, QĐ-140)
   | "chuyen-buoc-duyet"
-  | "sua-ky-danh-gia";
+  | "sua-ky-danh-gia"
+  // 0.21.0 chính sách lương (QĐ-159, QĐ-162, QĐ-163)
+  | "doi-tai-khoan-luong"
+  | "gui-lai-phieu-luong"
+  | "doi-thiet-bi-2-lop";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

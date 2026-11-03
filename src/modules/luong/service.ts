@@ -8,12 +8,12 @@ import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { banDoTen, lichCuaNhieuNguoi, ngayLeTrongKhoang } from "@/modules/cham-cong/chung";
 import { CO_NGAY, cacNgayTrongThang, congDuKien } from "@/modules/cham-cong/tinh-toan";
-import { dateVeNgay } from "@/modules/crm/chung";
+import { dateVeNgay, ngayVeDate } from "@/modules/crm/chung";
 import { ketQuaHieuLuc } from "@/modules/danh-gia/service";
 import { baoChoNguoiCoQuyen, taoThongBao } from "@/modules/thong-bao/service";
 import { batBuocQuyenLuong, docCauHinhLuong, ghiXem, locNguoiLuong, thamSoHieuLuc, trongPhamViLuong, xemDuocNguoiKhac, type BoApDung } from "./chung";
 import { hoSoApDung, soNguoiPhuThuoc } from "./ho-so";
-import { NHAN_LOAI_KHOAN, type LuocDoKhoan, type LuocDoLyDo, type LuocDoTaoKy } from "./luoc-do";
+import { LuocDoTaoKy, NHAN_LOAI_KHOAN, type LuocDoKhoan, type LuocDoLyDo } from "./luoc-do";
 import {
   coLoi,
   khoangThang,
@@ -29,6 +29,11 @@ import {
   type KetQuaLuong,
   type PhutTangCa,
   type TrangThaiKy,
+  chonBoHieuLuc,
+  PHUT_TANG_CA_RONG,
+  type CachTra,
+  type DoanLuong,
+  type LoaiHopDong,
 } from "./tinh-toan";
 
 /**
@@ -84,7 +89,7 @@ export async function danhSachKyLuong(nc: NguCanh) {
   return ds.map((k) => {
     const t = theoKy.get(k.id);
     return {
-      id: k.id, nam: k.year, thang: k.month, nhan: nhanKy(k.year, k.month), trangThai: k.status as TrangThaiKy,
+      id: k.id, nam: k.year, thang: k.month, nhan: nhanKyLuong(k), rieng: k.members.length > 0, soThanhVien: k.members.length, trangThai: k.status as TrangThaiKy,
       nhanTrangThai: NHAN_TRANG_THAI_KY[k.status as TrangThaiKy], canTinhLai: k.dirty, tinhLuc: k.calculatedAt,
       soNguoi: t?._count._all ?? 0, soLoi: loiKy.get(k.id) ?? 0,
       tongThuNhap: Number(t?._sum.grossIncome ?? 0), tongThucLinh: Number(t?._sum.netPay ?? 0),
@@ -93,17 +98,45 @@ export async function danhSachKyLuong(nc: NguCanh) {
   });
 }
 
-export async function taoKyLuong(nc: NguCanh, d: z.infer<typeof LuocDoTaoKy>) {
+/**
+ * Tạo kỳ lương tháng: kỳ CHUNG (mọi người có hồ sơ lương, trừ người đã thuộc kỳ riêng cùng tháng) hoặc kỳ RIÊNG cho một
+ * nhóm người — QĐ-165, dùng khi bảng lương có dòng của người duyệt (vd Giám đốc): tách dòng lãnh đạo sang kỳ riêng để
+ * Quản trị / Giám đốc khác duyệt. Một người chỉ thuộc một kỳ riêng mỗi tháng; người đã có dòng ở kỳ chung không ở
+ * trạng thái nháp thì không tách được.
+ */
+export async function taoKyLuong(nc: NguCanh, vao: z.input<typeof LuocDoTaoKy>) {
   batBuocQuyenLuong(nc, "luong.create", { objectType: "payroll_run" });
+  const d = LuocDoTaoKy.parse(vao);
+  // Khóa tư vấn theo (doanh nghiệp, tháng): hai lần tạo kỳ riêng cùng lúc không chen người trùng.
+  await nc.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ky-luong:${nc.tenantId}:${d.nam}-${d.thang}`}))`;
+  if (d.thanhVien.length) {
+    const nguoi = await nc.tx.user.findMany({ where: { id: { in: d.thanhVien }, isSystem: false }, select: { id: true } });
+    if (nguoi.length !== d.thanhVien.length) throw new LoiKhongTimThay("Nhân viên");
+    const cungThang = await nc.tx.payrollRun.findMany({ where: { year: d.nam, month: d.thang }, select: { id: true, name: true, members: true, status: true } });
+    const trung = cungThang.filter((k) => k.members.some((m) => d.thanhVien.includes(m)));
+    if (trung.length) throw new LoiNghiepVu(`Có người đã thuộc kỳ lương riêng “${trung[0].name}” tháng ${nhanKy(d.nam, d.thang)}.`, 409, "trung-thanh-vien");
+    const chung = cungThang.find((k) => k.members.length === 0);
+    if (chung) {
+      const daCoDong = await nc.tx.payrollLine.count({ where: { runId: chung.id, userId: { in: d.thanhVien } } });
+      if (daCoDong && chung.status !== "nhap") {
+        throw new LoiNghiepVu(`Kỳ chung tháng ${nhanKy(d.nam, d.thang)} đang “${NHAN_TRANG_THAI_KY[chung.status as TrangThaiKy]}” và đã có dòng của người được chọn — trả lại kỳ chung về nháp trước rồi tách.`, 409, "da-co-dong-ky-chung");
+      }
+      // Kỳ chung còn nháp: phải tính lại để bỏ những người vừa tách ra.
+      if (daCoDong) await nc.tx.payrollRun.update({ where: { id: chung.id }, data: { dirty: true } });
+    }
+  }
   try {
-    const ky = await nc.tx.payrollRun.create({ data: { tenantId: nc.tenantId, year: d.nam, month: d.thang, createdBy: nc.hoSo.userId } });
-    await nc.kiemToan({ action: "tao-ky-luong", objectType: "payroll_run", objectId: ky.id, after: { ky: nhanKy(d.nam, d.thang) } });
+    const ky = await nc.tx.payrollRun.create({ data: { tenantId: nc.tenantId, year: d.nam, month: d.thang, name: d.ten, members: d.thanhVien, createdBy: nc.hoSo.userId } });
+    await nc.kiemToan({ action: "tao-ky-luong", objectType: "payroll_run", objectId: ky.id, after: { ky: nhanKy(d.nam, d.thang), ten: d.ten, soNguoi: d.thanhVien.length, thanhVien: d.thanhVien } });
     return { id: ky.id };
   } catch (e) {
-    if (laLoiTrung(e)) throw new LoiNghiepVu(`Kỳ lương ${nhanKy(d.nam, d.thang)} đã có.`, 409, "ky-da-co");
+    if (laLoiTrung(e)) throw new LoiNghiepVu(d.ten ? `Kỳ lương riêng “${d.ten}” tháng ${nhanKy(d.nam, d.thang)} đã có.` : `Kỳ lương chung ${nhanKy(d.nam, d.thang)} đã có.`, 409, "ky-da-co");
     throw e;
   }
 }
+
+/** Nhãn kỳ: "03/2026" hoặc "03/2026 — Lãnh đạo". */
+export const nhanKyLuong = (k: { year: number; month: number; name: string | null }) => `${nhanKy(k.year, k.month)}${k.name ? ` — ${k.name}` : ""}`;
 
 // ---------------------------------------------------------------------------
 // Tính lương (LU-21 → LU-30)
@@ -219,8 +252,32 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
     where: { id: { in: [...hoSo.keys()] }, isSystem: false },
     select: { id: true, fullName: true, status: true, staffProfile: { select: { hiredAt: true } } },
   });
-  const nguoi = users.filter((u) => u.status === "hoat-dong" || coCong.has(u.id)).sort((a, b) => a.fullName.localeCompare(b.fullName, "vi"));
+  // QĐ-165: kỳ RIÊNG chỉ gồm người trong danh sách; kỳ CHUNG bỏ người đã thuộc một kỳ riêng cùng tháng.
+  const thanhVien = new Set(ky.members);
+  const oKyRieng = new Set(
+    ky.members.length ? [] : (await tx.payrollRun.findMany({ where: { year: ky.year, month: ky.month, id: { not: id } }, select: { members: true } })).flatMap((r) => r.members),
+  );
+  const thuocKy = (u: string) => (ky.members.length ? thanhVien.has(u) : !oKyRieng.has(u));
+  const nguoi = users
+    .filter((u) => (u.status === "hoat-dong" || coCong.has(u.id)) && thuocKy(u.id))
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, "vi"));
   const ids = nguoi.map((u) => u.id);
+  if (ky.members.length) {
+    const thieuHs = ky.members.filter((m) => !ids.includes(m));
+    if (thieuHs.length) {
+      const ten = await banDoTen(tx, thieuHs);
+      canhBaoKy.push({ ma: "thanh-vien-khong-co-ho-so", muc: "canh-bao", noiDung: `Người trong kỳ riêng chưa có hồ sơ lương hiệu lực tháng này: ${thieuHs.map((m) => ten.get(m) ?? "—").join(", ")}.` });
+    }
+  }
+  // QĐ-156: mọi phiên bản hồ sơ có hiệu lực trong tháng (chia đoạn theo ngày).
+  const phienBan = await tx.salaryProfile.findMany({ where: { userId: { in: ids }, effectiveFrom: { lte: ngayVeDate(den) } }, orderBy: { createdAt: "asc" } });
+  // QĐ-166: phút tăng ca còn âm của kỳ tháng trước (đã khóa) chuyển sang kỳ này.
+  const truoc = thangLui(ky.year, ky.month, 1);
+  const noTruoc = new Map(
+    (await tx.payrollLine.findMany({ where: { userId: { in: ids }, run: { year: truoc.nam, month: truoc.thang, status: { in: ["da-khoa", "da-chi"] } } }, select: { userId: true, result: true } }))
+      .map((d) => [d.userId, (d.result as unknown as KetQuaLuong).tangCaNoChuyenKySau ?? null] as const)
+      .filter((x): x is readonly [string, PhutTangCa] => x[1] !== null),
+  );
 
   // Lịch + lễ → công chuẩn, ngày lễ được trả (QĐ-145).
   const cacNgay = cacNgayTrongThang(ky.year, ky.month);
@@ -247,7 +304,8 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
   const phanBo = await phanBoTinhHoaHong(tx, id, huongHH, ky.year, ky.month, ch.luiThang);
   const truyThu = await canTruyThu(tx, ky.year, ky.month);
   const coDong = new Set(ids);
-  const truyThuMoCoi = truyThu.filter((t) => !coDong.has(t.user_id));
+  // Chỉ xét truy thu của người thuộc kỳ này (kỳ riêng / kỳ chung — QĐ-165); người thuộc kỳ khác do kỳ đó truy thu.
+  const truyThuMoCoi = truyThu.filter((t) => !coDong.has(t.user_id) && thuocKy(t.user_id));
   if (truyThuMoCoi.length) {
     const ten = await banDoTen(tx, truyThuMoCoi.map((t) => t.user_id));
     canhBaoKy.push({ ma: "truy-thu-khong-co-dong", muc: "canh-bao", noiDung: `Có hoa hồng cần truy thu nhưng người nhận không có dòng lương kỳ này: ${truyThuMoCoi.map((t) => `${ten.get(t.user_id) ?? "—"} (phiếu ${t.payment_no})`).join("; ")}. Thu hồi ngoài bảng lương hoặc ở kỳ có dòng.` });
@@ -268,34 +326,82 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
     // phần cuối tháng và người làm đủ nửa tháng nhận đủ lương tháng. Ngày lễ chỉ trả khi ngày đó thật sự có lịch.
     const lichDau = cacNgay.map((d) => l(d)).find((x) => x !== null) ?? null;
     let chuan = 0;
-    let ngayLe = 0;
+    const leNgay = new Map<string, number>();
     for (const d of cacNgay) {
       const that = l(d);
       const ap = that ?? lichDau;
       chuan += congDuKien(d, ap?.ca ?? null, ap?.ngay ?? null, false).giaTri;
-      if (that && le.has(d) && (!ngayVao || d >= ngayVao)) ngayLe += congDuKien(d, that.ca, that.ngay, false).giaTri;
+      if (that && le.has(d) && (!ngayVao || d >= ngayVao)) leNgay.set(d, congDuKien(d, that.ca, that.ngay, false).giaTri);
     }
+    const r2 = (x: number) => Math.round(x * 100) / 100;
+
+    // QĐ-156: chia tháng thành các đoạn theo phiên bản hồ sơ hiệu lực từng ngày.
+    const pbCuaNguoi = phienBan.filter((x) => x.userId === u.id).map((x) => ({ ...x, hieuLucTu: dateVeNgay(x.effectiveFrom), taoLuc: x.createdAt }));
+    const doanNgay: { pb: (typeof pbCuaNguoi)[number] | null; tu: string; den: string }[] = [];
+    for (const d of cacNgay) {
+      const pb = chonBoHieuLuc(pbCuaNguoi, d);
+      const cuoi = doanNgay[doanNgay.length - 1];
+      if (cuoi && cuoi.pb?.id === pb?.id) cuoi.den = d;
+      else doanNgay.push({ pb, tu: d, den: d });
+    }
+    const viTriDoan = (ngay: string) => doanNgay.findIndex((x) => x.tu <= ngay && ngay <= x.den);
+    const congDoan = doanNgay.map(() => ({ thucTe: 0, nghiCoLuong: 0, le: 0, tangCaPhut: { ...PHUT_TANG_CA_RONG } as PhutTangCa }));
     const cua = dong.filter((r) => r.userId === u.id);
-    const tc: PhutTangCa = { thuong: 0, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 };
-    let thucTe = 0, nghiCo = 0, nghiKhong = 0, muon = 0, som = 0, soDc = 0;
+    const tc: PhutTangCa = { ...PHUT_TANG_CA_RONG };
+    let thucTe = 0, nghiCo = 0, nghiKhong = 0, muon = 0, som = 0, soDc = 0, congNgoaiHoSo = 0;
     for (const r of cua) {
+      // Dòng điều chỉnh (ngày của kỳ trước) tính vào đoạn cuối tháng — cùng mức với phiên bản cuối kỳ.
+      const i = r.isAdjustment ? doanNgay.length - 1 : viTriDoan(dateVeNgay(r.workDate));
+      const cd = congDoan[i];
       thucTe += Number(r.workValue);
-      if (r.leavePaid) nghiCo += Number(r.leaveDays);
-      else nghiKhong += Number(r.leaveDays);
+      cd.thucTe += Number(r.workValue);
+      if (r.leavePaid) {
+        nghiCo += Number(r.leaveDays);
+        cd.nghiCoLuong += Number(r.leaveDays);
+      } else nghiKhong += Number(r.leaveDays);
+      if (!doanNgay[i].pb && Number(r.workValue) > 0) congNgoaiHoSo += Number(r.workValue);
       muon += r.lateMinutes;
       som += r.earlyMinutes;
       if (r.isAdjustment) soDc++;
       const ngay = r.otMinutes - r.otNightMinutes;
-      if (r.dayType === "le") { tc.le += ngay; tc.leDem += r.otNightMinutes; }
-      else if (r.dayType === "nghi-tuan") { tc.nghiTuan += ngay; tc.nghiTuanDem += r.otNightMinutes; }
-      else { tc.thuong += ngay; tc.thuongDem += r.otNightMinutes; }
+      const loai: [keyof PhutTangCa, keyof PhutTangCa] = r.dayType === "le" ? ["le", "leDem"] : r.dayType === "nghi-tuan" ? ["nghiTuan", "nghiTuanDem"] : ["thuong", "thuongDem"];
+      tc[loai[0]] += ngay;
+      tc[loai[1]] += r.otNightMinutes;
+      cd.tangCaPhut[loai[0]] += ngay;
+      cd.tangCaPhut[loai[1]] += r.otNightMinutes;
     }
-    const r2 = (x: number) => Math.round(x * 100) / 100;
+    let ngayLe = 0;
+    for (const [d, v] of leNgay) {
+      const i = viTriDoan(d);
+      if (!doanNgay[i]?.pb) continue;
+      congDoan[i].le += v;
+      ngayLe += v;
+    }
+    const phuCapCua = (pb: { allowances: unknown }) =>
+      (Array.isArray(pb.allowances) ? (pb.allowances as { loaiId: string; soTien: number }[]) : []).filter((x) => loaiPc.has(x.loaiId)).map((x) => {
+        const lp = loaiPc.get(x.loaiId)!;
+        return { ma: lp.code, ten: lp.name, soTien: Number(x.soTien), chiuThue: lp.taxable, tinhBH: lp.insurable, theo: lp.basis as "thang" | "ngay-cong", traDu: lp.fullMonth };
+      });
+    const doan: DoanLuong[] = doanNgay.flatMap((x, i) =>
+      x.pb
+        ? [{
+            hoSoId: x.pb.id, tu: x.tu, den: x.den, loaiHopDong: x.pb.contractType as LoaiHopDong, tyLeThuViec: x.pb.probationPercent === null ? null : Number(x.pb.probationPercent),
+            cachTra: x.pb.payBasis as CachTra, luongCoBan: Number(x.pb.baseSalary), phuCap: phuCapCua(x.pb),
+            cong: { thucTe: r2(congDoan[i].thucTe), nghiCoLuong: r2(congDoan[i].nghiCoLuong), le: r2(congDoan[i].le), tangCaPhut: congDoan[i].tangCaPhut },
+          }]
+        : [],
+    );
+    // Phần dòng điều chỉnh rơi vào đoạn cuối không có hồ sơ (đã nghỉ việc) — dồn vào đoạn có hồ sơ cuối cùng.
+    if (!doanNgay[doanNgay.length - 1].pb && doan.length) {
+      const cuoi = congDoan[doanNgay.length - 1];
+      const d = doan[doan.length - 1];
+      d.cong.nghiCoLuong = r2(d.cong.nghiCoLuong + cuoi.nghiCoLuong);
+      for (const k of Object.keys(cuoi.tangCaPhut) as (keyof PhutTangCa)[]) d.cong.tangCaPhut[k] += cuoi.tangCaPhut[k];
+    }
     const p = phieuTheoNguoi.get(u.id);
     const kq = p ? ketQuaHieuLuc({ ...p, adjustments: p.adjustments }) : null;
     const pbCua = phanBo.filter((x) => x.owner_id === u.id);
     const ttCua = truyThu.filter((x) => x.user_id === u.id);
-    const pcHoSo = Array.isArray(h.allowances) ? (h.allowances as { loaiId: string; soTien: number }[]) : [];
     const khoanCua = khoan.filter((k) => k.userId === u.id);
 
     const dv: DauVaoLuong = {
@@ -306,11 +412,13 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
         luongCoBan: Number(h.baseSalary), luongDongBH: Number(h.insuranceSalary), thuongKpi: Number(h.kpiBonus), huongHoaHong: h.commissionEnabled,
         phuongPhapThue: h.taxMethod as DauVaoLuong["hoSo"]["phuongPhapThue"],
       },
-      phuCap: pcHoSo.filter((x) => loaiPc.has(x.loaiId)).map((x) => {
-        const lp = loaiPc.get(x.loaiId)!;
-        return { ma: lp.code, ten: lp.name, soTien: Number(x.soTien), chiuThue: lp.taxable, tinhBH: lp.insurable, theo: lp.basis as "thang" | "ngay-cong" };
-      }),
-      cong: { chuan: r2(chuan), thucTe: r2(thucTe), nghiCoLuong: r2(nghiCo), nghiKhongLuong: r2(nghiKhong), le: r2(ngayLe), tangCaPhut: tc, phutMuon: muon, phutSom: som, soDongDieuChinh: soDc },
+      phuCap: phuCapCua(h),
+      doan,
+      cong: {
+        chuan: r2(chuan), thucTe: r2(thucTe), nghiCoLuong: r2(nghiCo), nghiKhongLuong: r2(nghiKhong), le: r2(ngayLe), tangCaPhut: tc,
+        ...(noTruoc.has(u.id) && { tangCaNoKyTruoc: noTruoc.get(u.id)! }),
+        phutMuon: muon, phutSom: som, soDongDieuChinh: soDc,
+      },
       soNguoiPhuThuoc: npt.get(u.id) ?? 0,
       kpi: kq
         ? { trangThai: "da-chot", heSo: kq.heSoThuong, xepLoai: kq.xepLoai, danhGiaId: p!.id }
@@ -319,10 +427,16 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
         phanBo: pbCua.map((x) => ({ id: x.allocation_id, so: x.number, soTien: Math.round(Number(x.amount)) })),
         truyThu: ttCua.map((x) => ({ id: x.allocation_id, so: x.payment_no, soTien: Number(x.amount), tyLeBp: x.rate_bp })),
       },
-      khoan: khoanCua.map((k) => ({ chieu: k.direction as "cong" | "tru", loai: k.category, soTien: Number(k.amount), chiuThue: k.taxable, lyDo: k.reason })),
+      khoan: khoanCua.map((k) => ({
+        chieu: k.direction as "cong" | "tru", loai: k.category, soTien: Number(k.amount), chiuThue: k.taxable, lyDo: k.reason,
+        ...(k.taxStage && { tinhThue: k.taxStage as "truoc-thue" | "sau-thue", tinhBH: k.insurable }),
+      })),
       thamSo,
     };
     const kqL = tinhLuong(dv);
+    if (congNgoaiHoSo > 0) {
+      kqL.canhBao.push({ ma: "cong-ngoai-ho-so", muc: "canh-bao", noiDung: `Có ${r2(congNgoaiHoSo)} công trong những ngày chưa có hồ sơ lương hiệu lực — không được trả. Lập hồ sơ lương có hiệu lực từ ngày vào làm nếu cần trả.` });
+    }
     const ngayLichDau = lichDau ? cacNgay.find((d) => l(d) !== null) : undefined;
     if (ngayLichDau && ngayLichDau !== tu) {
       kqL.canhBao.push({ ma: "lich-tu-giua-thang", muc: "canh-bao", noiDung: `Lịch làm việc bắt đầu từ ${ngayLichDau.split("-").reverse().join("/")} — công chuẩn vẫn tính cả tháng theo lịch đó, lương theo số công thực có. Nếu người này đã làm từ trước ngày đó, gán lịch từ ngày vào làm rồi sinh lại bảng công.` });
@@ -381,10 +495,15 @@ export async function chiTietKyLuong(nc: NguCanh, id: string) {
   const ten = await banDoTen(nc.tx, [ky.calculatedBy, ky.submittedBy, ky.approvedBy, ky.lockedBy, ky.paidBy, ...khoan.flatMap((k) => [k.userId, k.createdBy, k.approvedBy])]);
   const kyDaKhoa = await nc.tx.payrollRun.findMany({ where: { status: { in: ["da-khoa", "da-chi"] }, id: { not: id } }, orderBy: [{ year: "desc" }, { month: "desc" }], take: 12, select: { id: true, year: true, month: true } });
   await ghiXem(nc, "bang-luong", { objectType: "payroll_run", objectId: id }, dong.map((d) => d.userId));
+  // QĐ-161: tài khoản ngân hàng đổi trong 30 ngày gần đây → cảnh báo trên màn hình duyệt (rủi ro đổi tài khoản để rút lương).
+  const tkHien = await taiKhoanHienHanh(nc.tx, dong.map((d) => d.userId));
+  const moc30 = Date.now() - 30 * 86_400_000;
+  const conNguoiDuyet = (await nguoiDuyetDuoc(nc.tx, ky)).length > 0;
   const coDongCuaToi = (await nc.tx.payrollLine.count({ where: { runId: id, userId: nc.hoSo.userId } })) > 0;
   const tong = (f: (d: (typeof dong)[number]) => bigint) => Number(dong.reduce((a, d) => a + f(d), 0n));
   return {
-    id: ky.id, nam: ky.year, thang: ky.month, nhan: nhanKy(ky.year, ky.month), trangThai: ky.status as TrangThaiKy,
+    id: ky.id, nam: ky.year, thang: ky.month, nhan: nhanKyLuong(ky), ten: ky.name, rieng: ky.members.length > 0, trangThai: ky.status as TrangThaiKy,
+    conNguoiDuyet,
     nhanTrangThai: NHAN_TRANG_THAI_KY[ky.status as TrangThaiKy], canTinhLai: ky.dirty, canhBao: (ky.warnings ?? []) as unknown as CanhBaoLuong[],
     lyDoTraLai: ky.returnReason,
     buoc: {
@@ -413,6 +532,11 @@ export async function chiTietKyLuong(nc: NguCanh, id: string) {
         tangCa: kq.tangCa.tien, thuongKpi: kq.thuongKpi, hoaHong: kq.hoaHong.tien + kq.hoaHong.truyThu, khoanCong: kq.khoanCong,
         tongThuNhap: Number(d.grossIncome), bhNld: Number(d.employeeInsurance), thue: Number(d.personalIncomeTax), khoanTru: Number(d.otherDeductions),
         thucLinh: Number(d.netPay), bhDn: Number(d.employerInsurance), canhBao: (d.warnings ?? []) as unknown as CanhBaoLuong[], coLoi: d.hasError,
+        taiKhoanChup: d.bankCapturedAt ? { soDuoi: d.bankAccount ? d.bankAccount.slice(-4) : null, nganHang: d.bankName } : null,
+        taiKhoanDoiLuc: (() => {
+          const t = tkHien.get(d.userId)?.doiLuc;
+          return t && t.getTime() >= moc30 ? t : null;
+        })(),
       };
     }),
     khoan: khoan.map((k) => {
@@ -502,11 +626,14 @@ export async function themKhoanLuong(nc: NguCanh, kyId: string, d: z.infer<typeo
   const k = await nc.tx.payrollItem.create({
     data: {
       tenantId: nc.tenantId, runId: kyId, userId: d.nguoiId, direction: d.chieu, category: d.loai, amount: BigInt(d.soTien),
-      taxable: d.chieu === "cong" ? d.chiuThue : false, reason: d.lyDo, adjustsRunId: d.kyGocId ?? null, createdBy: nc.hoSo.userId,
+      // QĐ-158: điều chỉnh trước thuế giữ cờ chịu thuế cả hai chiều (thu hồi giảm đúng phần đã chịu thuế); khoản khác
+      // chỉ khoản cộng mới có cờ chịu thuế (khoản trừ thường trừ sau thuế).
+      taxable: d.cachTinh === "truoc-thue" || d.chieu === "cong" ? d.chiuThue : false, reason: d.lyDo, adjustsRunId: d.kyGocId ?? null, createdBy: nc.hoSo.userId,
+      taxStage: d.cachTinh, insurable: d.cachTinh === "truoc-thue" ? d.tinhBH : false,
     },
   });
   await nc.tx.payrollRun.update({ where: { id: kyId }, data: { dirty: true } });
-  await nc.kiemToan({ action: "them-khoan-luong", objectType: "payroll_item", objectId: k.id, after: { ky: nhanKy(ky.year, ky.month), nguoi: d.nguoiId, chieu: d.chieu, loai: d.loai, lyDo: d.lyDo, kyGoc: d.kyGocId ?? null } });
+  await nc.kiemToan({ action: "them-khoan-luong", objectType: "payroll_item", objectId: k.id, after: { ky: nhanKy(ky.year, ky.month), nguoi: d.nguoiId, chieu: d.chieu, loai: d.loai, cachTinh: d.cachTinh, lyDo: d.lyDo, kyGoc: d.kyGocId ?? null } });
   return { id: k.id };
 }
 
@@ -550,7 +677,42 @@ async function kiemThamSo(tx: ClientTenant, ky: KyLuong) {
 async function kiemKhongTuDuyet(nc: NguCanh, ky: KyLuong, viec: string) {
   if (ky.calculatedBy === nc.hoSo.userId) throw new LoiNghiepVu(`Người tính bảng lương không được ${viec} — cần người khác có quyền duyệt.`, 403, "nguoi-tinh-khong-duyet");
   const coDong = await nc.tx.payrollLine.count({ where: { runId: ky.id, userId: nc.hoSo.userId } });
-  if (coDong > 0) throw new LoiNghiepVu(`Bảng lương có dòng của chính bạn — không tự ${viec}. Nhờ người khác có quyền duyệt.`, 403, "tu-duyet");
+  if (coDong > 0) throw new LoiNghiepVu(`Bảng lương có dòng của chính bạn — không tự ${viec}. Nhờ người khác có quyền duyệt, hoặc tách dòng của bạn sang một kỳ lương riêng (Tính lương → Tạo kỳ lương riêng).`, 403, "tu-duyet");
+}
+
+/**
+ * QĐ-165: người duyệt được = đang hoạt động, có `luong.approve`, không phải người tính, KHÔNG có dòng trong bảng. Không còn
+ * ai → báo rõ và hướng dẫn tách dòng lãnh đạo sang một kỳ lương riêng để Quản trị / Giám đốc khác duyệt.
+ */
+export async function nguoiDuyetDuoc(tx: ClientTenant, ky: Pick<KyLuong, "id" | "calculatedBy">): Promise<{ id: string; hoTen: string }[]> {
+  const coQuyenDuyet = await tx.user.findMany({
+    where: {
+      status: "hoat-dong", isSystem: false,
+      userRoles: { some: { status: "hoat-dong", role: { status: "hoat-dong", rolePermissions: { some: { status: "hoat-dong", permission: { code: "luong.approve", status: "hoat-dong" } } } } } },
+    },
+    select: { id: true, fullName: true },
+  });
+  const coDong = new Set((await tx.payrollLine.findMany({ where: { runId: ky.id }, select: { userId: true } })).map((d) => d.userId));
+  return coQuyenDuyet.filter((u) => u.id !== ky.calculatedBy && !coDong.has(u.id)).map((u) => ({ id: u.id, hoTen: u.fullName }));
+}
+
+async function batBuocConNguoiDuyet(tx: ClientTenant, ky: KyLuong) {
+  if ((await nguoiDuyetDuoc(tx, ky)).length > 0) return;
+  const coDong = await tx.payrollLine.findMany({
+    where: { runId: ky.id },
+    select: { userId: true, fullName: true },
+  });
+  const nguoiDuyet = await tx.user.findMany({
+    where: { id: { in: coDong.map((d) => d.userId) }, userRoles: { some: { status: "hoat-dong", role: { rolePermissions: { some: { status: "hoat-dong", permission: { code: "luong.approve" } } } } } } },
+    select: { fullName: true },
+  });
+  throw new LoiNghiepVu(
+    `Không còn ai duyệt được bảng lương này: mọi người có quyền duyệt hoặc là người tính, hoặc có dòng trong bảng${nguoiDuyet.length ? ` (${nguoiDuyet.map((u) => u.fullName).join(", ")})` : ""}. ` +
+      "Tách dòng của lãnh đạo sang một kỳ lương riêng: Tính lương → Tạo kỳ lương riêng (chọn người, đặt tên, ví dụ “Lãnh đạo”), tính lại kỳ này rồi gửi duyệt; kỳ riêng do Quản trị hoặc Giám đốc khác duyệt. Hoặc cấp quyền duyệt lương cho một người thứ hai.",
+    422,
+    "khong-con-nguoi-duyet",
+    { nguoiCoDongCoQuyenDuyet: nguoiDuyet.map((u) => u.fullName) },
+  );
 }
 
 export async function guiDuyetKyLuong(nc: NguCanh, id: string) {
@@ -567,6 +729,7 @@ export async function guiDuyetKyLuong(nc: NguCanh, id: string) {
   await kiemThamSo(nc.tx, ky);
   const huy = await phieuThuDaHuy(nc.tx, id);
   if (huy.length) throw new LoiNghiepVu(`Phiếu thu ${huy.join(", ")} đã hủy sau khi tính hoa hồng — tính lại.`, 422, "phieu-thu-da-huy");
+  await batBuocConNguoiDuyet(nc.tx, ky);
   await nc.tx.payrollRun.update({ where: { id }, data: { status: "cho-duyet", submittedAt: new Date(), submittedBy: nc.hoSo.userId, returnReason: null } });
   await ghiTrangThai(nc, ky, "gui-duyet-luong", "cho-duyet");
   await baoChoNguoiCoQuyen(nc.tx, nc.tenantId, "luong.approve", {
@@ -613,7 +776,23 @@ export async function khoaKyLuong(nc: NguCanh, id: string) {
   await kiemKhongTuDuyet(nc, ky, "khóa");
   const huy = await phieuThuDaHuy(nc.tx, id);
   if (huy.length) throw new LoiNghiepVu(`Phiếu thu ${huy.join(", ")} đã hủy sau khi tính hoa hồng — trả lại bảng lương để tính lại.`, 422, "phieu-thu-da-huy");
-  await nc.tx.payrollRun.update({ where: { id }, data: { status: "da-khoa", lockedAt: new Date(), lockedBy: nc.hoSo.userId } });
+  // QĐ-160: chụp tài khoản ngân hàng hiện hành vào từng dòng (TRƯỚC khi đổi trạng thái — sau khóa dòng bất biến).
+  // File chi lương dùng đúng tài khoản đã chụp. Người được trả lương (> 0) mà chưa có tài khoản → chặn khóa.
+  const bayGio = new Date();
+  const dongKhoa = await nc.tx.payrollLine.findMany({ where: { runId: id }, select: { id: true, userId: true, fullName: true, netPay: true } });
+  const tk = await taiKhoanHienHanh(nc.tx, dongKhoa.map((d) => d.userId));
+  const thieuTk = dongKhoa.filter((d) => d.netPay > 0n && !tk.get(d.userId)?.bankAccount);
+  if (thieuTk.length) {
+    throw new LoiNghiepVu(`Chưa có số tài khoản ngân hàng: ${thieuTk.map((d) => d.fullName).join(", ")}. Nhân sự bổ sung ở Hồ sơ lương (phiên bản mới) rồi khóa lại — tài khoản được chụp vào bảng lương lúc khóa.`, 422, "thieu-tai-khoan");
+  }
+  for (const d of dongKhoa) {
+    const t = tk.get(d.userId);
+    await nc.tx.payrollLine.update({
+      where: { id: d.id },
+      data: { bankAccount: t?.bankAccount ?? null, bankName: t?.bankName ?? null, accountHolder: t?.accountHolder || (t?.bankAccount ? d.fullName : null), bankCapturedAt: bayGio },
+    });
+  }
+  await nc.tx.payrollRun.update({ where: { id }, data: { status: "da-khoa", lockedAt: bayGio, lockedBy: nc.hoSo.userId } });
   await ghiTrangThai(nc, ky, "khoa-luong", "da-khoa");
   const dong = await nc.tx.payrollLine.findMany({ where: { runId: id }, select: { id: true, userId: true } });
   for (const d of dong) {
@@ -621,6 +800,27 @@ export async function khoaKyLuong(nc: NguCanh, id: string) {
     await taoThongBao(nc.tx, nc.tenantId, { nguoiNhanId: d.userId, loai: "phieu-luong", tieuDe: `Phiếu lương tháng ${nhanKy(ky.year, ky.month)} đã có`, duongDan: `/luong/phieu-cua-toi`, doiTuong: "payroll_line", doiTuongId: d.id, khoaChongTrung: `phieu-luong:${d.id}` });
   }
   return { id, trangThai: "da-khoa" };
+}
+
+/**
+ * Tài khoản ngân hàng hiện hành của mỗi người = phiên bản hồ sơ lương hiệu lực hôm nay (chưa có thì bản tạo sau cùng),
+ * cùng mốc đổi tài khoản gần nhất (bản đầu tiên mang tài khoản khác bản trước) — QĐ-160, QĐ-161.
+ */
+export async function taiKhoanHienHanh(tx: ClientTenant, userIds: string[], homNay = new Date().toISOString().slice(0, 10)) {
+  const ds = await tx.salaryProfile.findMany({ where: { userId: { in: userIds } }, orderBy: { createdAt: "asc" }, select: { id: true, userId: true, effectiveFrom: true, createdAt: true, bankAccount: true, bankName: true, accountHolder: true } });
+  const kq = new Map<string, { bankAccount: string | null; bankName: string | null; accountHolder: string | null; doiLuc: Date | null }>();
+  for (const u of new Set(ds.map((d) => d.userId))) {
+    const cua = ds.filter((d) => d.userId === u).map((d) => ({ ...d, hieuLucTu: dateVeNgay(d.effectiveFrom), taoLuc: d.createdAt }));
+    const hien = chonBoHieuLuc(cua, homNay) ?? cua[cua.length - 1];
+    let doiLuc: Date | null = null;
+    for (let i = 1; i < cua.length; i++) {
+      const a = cua[i - 1];
+      const b = cua[i];
+      if (a.bankAccount !== b.bankAccount || a.bankName !== b.bankName || a.accountHolder !== b.accountHolder) doiLuc = b.createdAt;
+    }
+    kq.set(u, { bankAccount: hien.bankAccount, bankName: hien.bankName, accountHolder: hien.accountHolder, doiLuc });
+  }
+  return kq;
 }
 
 /** Đánh dấu đã chi (QĐ-141: người có `luong.export` — người lập file chi ngân hàng). */

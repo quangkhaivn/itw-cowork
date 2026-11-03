@@ -57,10 +57,25 @@ const chuoiTuyChon = (toiDa: number) =>
     .nullable()
     .transform((s) => (s ? s : null));
 
-export const LuocDoTaoKy = z.object({
-  nam: z.coerce.number().int().min(2000, "Năm không hợp lệ.").max(2100, "Năm không hợp lệ."),
-  thang: z.coerce.number().int().min(1, "Tháng 1 – 12.").max(12, "Tháng 1 – 12."),
-});
+export const LuocDoTaoKy = z
+  .object({
+    nam: z.coerce.number().int().min(2000, "Năm không hợp lệ.").max(2100, "Năm không hợp lệ."),
+    thang: z.coerce.number().int().min(1, "Tháng 1 – 12.").max(12, "Tháng 1 – 12."),
+    /** QĐ-165: kỳ RIÊNG cho một nhóm người — tên + danh sách. Bỏ trống cả hai = kỳ chung của tháng. */
+    ten: z
+      .string()
+      .trim()
+      .max(100)
+      .optional()
+      .nullable()
+      .transform((s) => (s ? s : null)),
+    thanhVien: z.array(z.uuid("Người không hợp lệ.")).max(500).optional().default([]),
+  })
+  .superRefine((d, ctx) => {
+    if (d.thanhVien.length > 0 && (!d.ten || d.ten.length < 2)) ctx.addIssue({ code: "custom", path: ["ten"], message: "Đặt tên cho kỳ lương riêng (ví dụ: Lãnh đạo)." });
+    if (d.ten && d.thanhVien.length === 0) ctx.addIssue({ code: "custom", path: ["thanhVien"], message: "Chọn ít nhất một người cho kỳ lương riêng." });
+  })
+  .transform((d) => ({ ...d, thanhVien: [...new Set(d.thanhVien)] }));
 
 export const LuocDoHoSoLuong = z
   .object({
@@ -106,6 +121,8 @@ export const LuocDoLoaiPhuCap = z.object({
   chiuThue: z.boolean(),
   tinhBH: z.boolean(),
   theo: z.enum(["thang", "ngay-cong"]),
+  /** QĐ-157: phụ cấp cố định tháng trả đủ, không chia theo công (mặc định tắt). */
+  traDu: z.boolean().default(false),
   thuTu: z.coerce.number().int().min(0).max(10_000).default(0),
   trangThai: z.enum(["hoat-dong", "ngung"]).default("hoat-dong"),
 });
@@ -149,8 +166,18 @@ export const LuocDoKhoan = z
       .nullable()
       .optional()
       .transform((v) => v || null),
+    /** QĐ-158 — bắt buộc với khoản điều chỉnh: tính trước thuế (vào thu nhập chịu thuế / BH) hay sau thuế. */
+    cachTinh: z
+      .union([z.enum(["truoc-thue", "sau-thue"]), z.literal("")])
+      .nullable()
+      .optional()
+      .transform((v) => v || null),
+    tinhBH: z.boolean().default(false),
   })
   .superRefine((d, ctx) => {
+    if (d.loai === "dieu-chinh" && !d.cachTinh) ctx.addIssue({ code: "custom", path: ["cachTinh"], message: "Chọn khoản điều chỉnh tính TRƯỚC thuế (lương, phụ cấp, thưởng trả thừa / thiếu) hay SAU thuế (tạm ứng, khoản đã trừ sau thuế)." });
+    if (d.loai !== "dieu-chinh" && d.cachTinh) ctx.addIssue({ code: "custom", path: ["cachTinh"], message: "Chỉ khoản điều chỉnh kỳ trước mới chọn cách tính." });
+    if (d.tinhBH && d.cachTinh !== "truoc-thue") ctx.addIssue({ code: "custom", path: ["tinhBH"], message: "Chỉ khoản điều chỉnh trước thuế mới tính vào lương đóng BH." });
     if ((d.loai === "dieu-chinh") !== Boolean(d.kyGocId)) ctx.addIssue({ code: "custom", path: ["kyGocId"], message: "Khoản điều chỉnh phải chọn kỳ đã khóa được điều chỉnh (và chỉ khoản điều chỉnh)." });
     if (d.loai === "dieu-chinh" && d.lyDo.length < 10) ctx.addIssue({ code: "custom", path: ["lyDo"], message: "Lý do điều chỉnh ít nhất 10 ký tự." });
     if ((d.loai === "tam-ung" || d.loai === "phat") && d.chieu !== "tru") ctx.addIssue({ code: "custom", path: ["chieu"], message: "Tạm ứng / phạt là khoản trừ." });
