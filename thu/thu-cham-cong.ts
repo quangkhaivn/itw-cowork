@@ -168,7 +168,8 @@ async function main() {
   const vpT2 = await voi(T2, ngoai, (nc) => taoDiaDiem(nc, LuocDoDiaDiem.parse({ ten: "VP khác", viDo: 10, kinhDo: 106 })));
   await nemLoi("SN duy nhất toàn hệ thống — doanh nghiệp khác không đăng ký trùng", () => voi(T2, ngoai, (nc) => taoMay(nc, { soSeri: SN, ten: "Máy giả", diaDiemId: vpT2.id, ipChoPhep: [] })));
   const bt = await adms("GET", "cdata", `SN=${SN}&options=all&pushver=2.4.1&language=69`);
-  dat("Bắt tay: 200 + GET OPTION FROM + ATTLOGStamp", bt.status === 200 && bt.than.startsWith(`GET OPTION FROM: ${SN}`) && bt.than.includes("ATTLOGStamp=None"));
+  // 0.22.0 (QĐ-175): máy đã gọi khi CHƯA đăng ký (dòng "máy lạ" ở trên) → đăng ký xong trả ATTLOGStamp=0 để máy gửi lại toàn bộ log.
+  dat("Bắt tay: 200 + GET OPTION FROM + ATTLOGStamp=0 (máy từng gọi khi chưa đăng ký)", bt.status === 200 && bt.than.startsWith(`GET OPTION FROM: ${SN}`) && bt.than.includes("ATTLOGStamp=0"));
   const thanAttlog = [
     `${PIN_A}\t2026-10-05 17:05:10\t1\t1\t0\t0\t0`,
     `${PIN_B}\t2026-10-05 17:20:00\t1\t1\t0\t0\t0`,

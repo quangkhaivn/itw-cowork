@@ -157,7 +157,10 @@ async function main() {
   console.log("\n— D. Kỳ lương: chặn khi bảng công chưa khóa / còn ngày thiếu giờ —");
   const k3 = await voi(T, kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 3 }));
   await nemLoi("Một tháng một kỳ lương", "nghiep-vu", () => voi(T, kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 3 })), "ky-da-co");
-  await nemLoi("LU-21: chưa có bảng công → chặn", "nghiep-vu", () => voi(T, kt, (nc) => tinhKyLuong(nc, k3.id)), "bang-cong-chua-khoa");
+  // 0.22.0 (QĐ-172): chưa có bảng công KHÔNG chặn — tính bằng công mặc định (đủ công chuẩn) + cảnh báo vàng.
+  const r0 = await voi(T, kt, (nc) => tinhKyLuong(nc, k3.id));
+  dat("0.22.0: chưa có bảng công → vẫn tính, cảnh báo vàng bang-cong-chua-khoa, mọi dòng nguồn công mặc định",
+    r0.canhBao.some((c) => c.ma === "bang-cong-chua-khoa" && c.muc === "canh-bao") && r0.soDong > 0 && r0.nguonCong["mac-dinh"] === r0.soDong, JSON.stringify(r0.nguonCong));
 
   async function bangCong(nam: number, thang: number, dong: { userId: string; vang?: string[]; thieuGio?: string[]; tangCaPhut?: Record<string, number> }[]) {
     const bc = await chu.timesheet.create({ data: { tenantId: T, year: nam, month: thang, generatedAt: MOC, generatedBy: hr, feedbackDeadline: MOC } });
@@ -186,11 +189,16 @@ async function main() {
     { userId: tt },
     { userId: ad },
   ]);
-  await nemLoi("LU-21: bảng công còn nháp → chặn", "nghiep-vu", () => voi(T, kt, (nc) => tinhKyLuong(nc, k3.id)), "bang-cong-chua-khoa");
+  // 0.22.0: bảng công NHÁP không được dùng (chưa qua phản hồi) — vẫn tính bằng công mặc định, cảnh báo "chưa khóa".
+  const rNhap = await voi(T, kt, (nc) => tinhKyLuong(nc, k3.id));
+  dat("0.22.0: bảng công còn nháp → không dùng, vẫn tính (mặc định) + cảnh báo chưa khóa", rNhap.nguonCong["bang-cong"] === 0 && rNhap.canhBao.some((c) => c.ma === "bang-cong-chua-khoa" && /chưa khóa/.test(c.noiDung)));
   await chu.timesheet.update({ where: { id: bc3.id }, data: { status: "da-khoa", lockedAt: MOC, lockedBy: hr } });
-  const loiTg = await nemLoi("LU-22: còn ngày thiếu giờ chờ quyết → chặn", "nghiep-vu", () => voi(T, kt, (nc) => tinhKyLuong(nc, k3.id)), "con-ngay-thieu-gio");
-  const dsTg = (loiTg?.chiTiet ?? []) as { nguoiId: string; ngay: string }[];
-  dat("…và báo đúng danh sách (người, ngày)", dsTg.length === 1 && dsTg[0].nguoiId === nvB && dsTg[0].ngay === "2026-03-05");
+  // 0.22.0 (QĐ-172): ngày thiếu giờ còn chờ quyết KHÔNG chặn — tính theo công hiện tại + cảnh báo (kỳ và dòng).
+  const rTg = await voi(T, kt, (nc) => tinhKyLuong(nc, k3.id));
+  dat("0.22.0: còn ngày thiếu giờ chờ quyết → vẫn tính, cảnh báo vàng cấp kỳ", rTg.canhBao.some((c) => c.ma === "con-ngay-thieu-gio" && c.muc === "canh-bao"));
+  const dTgB = await chu.payrollLine.findFirstOrThrow({ where: { runId: k3.id, userId: nvB } });
+  dat("…dòng của B có cảnh báo ngày chờ quyết đúng ngày 05/03, nguồn công = bảng công",
+    (dTgB.warnings as { ma: string; noiDung: string }[]).some((c) => c.ma === "thieu-gio-cho-quyet" && c.noiDung.includes("05/03/2026")) && (dTgB.inputs as { nguon: { nguonCong: string } }).nguon.nguonCong === "bang-cong");
   await chu.attendanceDayReview.create({ data: { tenantId: T, userId: nvB, workDate: NGAY("2026-03-05"), decision: "nua", note: "Về sớm có việc riêng", reviewedBy: gd, reviewedAt: MOC } });
 
   // Thu tiền (hoa hồng) + phiếu đánh giá đã chốt cho B.
@@ -212,8 +220,9 @@ async function main() {
   const r1 = await voi(T, kt, (nc) => tinhKyLuong(nc, k3.id));
   dat("Tính được sau khi quyết ngày thiếu giờ; 4 dòng", r1.soDong === 4, JSON.stringify(r1));
   dat("Cảnh báo kỳ: ngày thiếu giờ quyết sau khi khóa bảng công", r1.canhBao.some((c) => c.ma === "thieu-gio-quyet-sau-khoa"));
-  dat("LU-11: tham số nạp sẵn chưa xác nhận → lỗi cấp kỳ", r1.canhBao.some((c) => c.ma === "tham-so-chua-xac-nhan" && c.muc === "loi"));
-  await nemLoi("…và không gửi duyệt được", "nghiep-vu", () => voi(T, kt, (nc) => guiDuyetKyLuong(nc, k3.id)), "ky-co-loi");
+  // 0.22.0 (QĐ-170): tham số chưa xác nhận → cảnh báo vàng (Cấu hình luong.chan_khi_tham_so_chua_xac_nhan = 0 mặc định);
+  // bật chặn → lỗi cấp kỳ, không gửi duyệt được (đường chặt — thử ở thu-mo-dan).
+  dat("0.22.0: tham số nạp sẵn chưa xác nhận → cảnh báo vàng cấp kỳ (không còn là lỗi)", r1.canhBao.some((c) => c.ma === "tham-so-chua-xac-nhan" && c.muc === "canh-bao"));
   for (const b of ts0.canXacNhan) await voi(T, kt, (nc) => xacNhanThamSo(nc, b.id));
   await nemLoi("Xác nhận lần hai → 409", "nghiep-vu", () => voi(T, kt, (nc) => xacNhanThamSo(nc, ts0.canXacNhan[0].id)), "da-xac-nhan");
   dat("Hết băng cảnh báo sau khi xác nhận", (await voi(T, kt, (nc) => danhSachThamSo(nc, "2026-04-30"))).canXacNhan.length === 0);

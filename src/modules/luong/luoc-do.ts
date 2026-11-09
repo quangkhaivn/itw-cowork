@@ -261,7 +261,7 @@ export const LuocDoCongTayLuong = z.object({
   nguoiId: z.uuid("Chọn nhân viên."),
   /** Trống = đủ công chuẩn (trừ nghỉ không lương). Chưa gồm ngày lễ (lễ tự cộng theo lịch). */
   soNgayCong: z
-    .union([z.coerce.number().min(0, "Số ngày công không âm.").max(31, "Tối đa 31 ngày."), z.literal(""), z.null()])
+    .union([z.null(), z.literal(""), z.coerce.number().min(0, "Số ngày công không âm.").max(31, "Tối đa 31 ngày.")])
     .optional()
     .transform((x) => (x === "" || x === undefined || x === null ? null : Math.round(Number(x) * 100) / 100)),
   gioTangCa: z.coerce.number().min(0, "Giờ tăng ca không âm.").max(300, "Tối đa 300 giờ.").default(0),

@@ -196,8 +196,10 @@ async function main() {
   console.log("\n— E. QĐ-160 / 161: chụp tài khoản lúc khóa, chặn khóa khi thiếu tài khoản, cảnh báo đổi tài khoản —");
   await voi(T, kt, (nc) => guiDuyetKyLuong(nc, k3.id));
   await voi(T, gd, (nc) => duyetKyLuong(nc, k3.id));
-  const loiTk = await nemLoi("Người được trả lương mà chưa có tài khoản → chặn khóa", "nghiep-vu", () => voi(T, gd, (nc) => khoaKyLuong(nc, k3.id)), "thieu-tai-khoan");
-  dat("…báo đúng tên người thiếu", /Nhân viên Q/.test(loiTk?.message ?? ""));
+  // 0.22.0 (QĐ-173): thiếu tài khoản KHÔNG còn chặn khóa — dòng đó trả tay. Trước khi khóa, màn hình kỳ lương dự kiến Q
+  // vào danh sách "Trả tay"; ở đây Nhân sự bổ sung tài khoản cho Q trước khi khóa nên Q vẫn chuyển khoản.
+  const ctTruocKhoa = await voi(T, gd, (nc) => chiTietKyLuong(nc, k3.id));
+  dat("0.22.0: người chưa có tài khoản → dự kiến trả tay (không chặn khóa), báo đúng tên", ctTruocKhoa.traTay.ds.some((d) => d.hoTen === "Nhân viên Q") && ctTruocKhoa.traTay.tong > 0);
   await voi(T, hr, (nc) => taoHoSoLuong(nc, hs({ nguoiId: nvQ, hieuLucTu: "2026-03-16", luongCoBan: 12_000_000, luongDongBH: 12_000_000, phuCap: [{ loaiId: dienThoai.id, soTien: 600_000 }, { loaiId: guiXe.id, soTien: 200_000 }], soTaiKhoan: "0099887766", nganHang: "ACB" })));
   await voi(T, gd, (nc) => khoaKyLuong(nc, k3.id));
   const dQ = await dong(k3.id, nvQ);
