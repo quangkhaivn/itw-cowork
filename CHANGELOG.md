@@ -55,6 +55,14 @@ Nới lỏng chặn → cảnh báo không được mở lỗ hổng toàn vẹn
 - **[Thấp] CSV hồ sơ lương đổi số tài khoản giữ tên chủ tài khoản cũ**; **CSV ánh xạ PIN**: một người hai dòng báo hợp lệ ở xem trước rồi hỏng cả lô lúc ghi. Đã sửa cả hai.
 - Diễn tập nâng cấp 0.21.1 (itw + demo) → 0.22.0: quyền `may_cham_cong.*` khớp `vai-tro.ts` ở cả hai doanh nghiệp, kỳ lương nháp 10/2026 tính lại được (tổng thực lĩnh không đổi), bảng công đã khóa không đổi.
 
+### QA độc lập — vòng 2 (09/11/2026, sau QĐ-181 → QĐ-189)
+Bài: mục V2 trong `thu/thu-qa-mo-dan.ts`. Không thêm migration.
+- **[Cao] Xác minh sở hữu (QĐ-181) không chống được doanh nghiệp đã biết SN**: giao thức máy (ADMS) không xác thực — B đăng ký SN của A, tự biết mã, GIẢ một lần chấm mang mã qua `/iclock` → máy "đã xác minh" cho B, B nhận log tồn của A. Đường để B biết SN khi dùng chung IP là danh sách máy lạ. Sửa: máy lạ thấy nhờ cùng IP chỉ hiện **3 ký tự cuối SN** (gõ đúng SN đọc trên máy mới hiện đủ / đăng ký được); tra đúng SN tối đa 30 lần / phút / doanh nghiệp. Phần còn lại (người đã biết SN bằng đường khác) chờ quyết định chính sách.
+- **[Thấp] Người dùng tạm mang mã xác minh chấm lại sau khi xác minh** → lần chấm thành "PIN chưa khớp", có thể bị gán nhầm. Nay giữ mã đã dùng và bỏ lần chấm mang mã đó (trừ khi Nhân sự đã gán mã đó cho ai).
+- **[Thấp] Đặt lịch mặc định với ngày không có thật**: 30/02 lăn thành 02/03 rồi ghi lịch sử; tháng 13 → lỗi CSDL 500. Nay lỗi định dạng.
+- **[Thấp] Đặt lịch mặc định chạy cùng lúc Khóa bảng công cùng tháng** → cả hai thành công (5/5 lần thử), lịch mặc định lọt vào tháng vừa khóa (trái QĐ-187). Nay khóa chia sẻ các bảng công từ tháng chọn trước khi kiểm.
+- Đã kiểm, không lỗi: hai lần kích hoạt đồng thời (không trùng, cách ly trống, Stamp đúng); kích hoạt ‖ hủy đăng ký (nhất quán); 4 hàm khu cách ly `search_path = public, pg_temp`, PUBLIC không EXECUTE; thứ tự nguồn công khóa → tay → nháp → mặc định khi chuyển qua lại; diễn tập 0.21.1 → 0.22.0: máy DEMO0001 đã xác minh, không bị đặt lại Stamp, lần chấm vào thẳng doanh nghiệp.
+
 ## 0.21.1 — 09/11/2026 — Dữ liệu mẫu Nhân sự, sao lưu bị ngắt
 
 - **Dữ liệu mẫu DEMO cho Nhân sự** trong `npm run db:seed:mau` (doanh nghiệp `demo`), chạy lại không nhân đôi: địa điểm + ca + lịch, 10 mã chấm công, máy chấm công giả `DEMO0001`, lần chấm tháng trước (bảng công đã khóa) và hôm nay, đơn nghỉ / tăng ca, 9 việc giao ở đủ trạng thái, báo cáo ngày / tuần, bộ KPI và 3 phiếu đánh giá đã chốt, thực tập sinh `thuctap@demo.test` có nhật ký và phiếu nháp, kỳ lương 10/2026 nháp đã tính. Tham số lương nạp sẵn vẫn chờ kế toán xác nhận.

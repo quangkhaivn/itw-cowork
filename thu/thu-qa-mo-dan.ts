@@ -440,6 +440,33 @@ async function main() {
   }
   dat("V8: đặt lịch mặc định ‖ khóa bảng công cùng tháng (5 lần) → không lần nào cả hai cùng thành công", caHaiThanhCong === 0, `${caHaiThanhCong}/5 lần lịch mặc định lọt vào tháng vừa khóa`);
 
+  // V9: chuyển qua lại giữa các nguồn công (QĐ-183): nháp → tay → (bỏ tay) nháp → bảng khóa (lấy lại công).
+  const ktA = await nguoi("ke-toan-a", "finance", { t: TA, hai: true });
+  const bc6 = await chu.timesheet.create({ data: { tenantId: TA, year: 2026, month: 6, generatedAt: BAY2, generatedBy: hrA, feedbackDeadline: BAY2 } });
+  const ngay6 = cacNgayTrongThang(2026, 6).filter((x) => thuTrongTuan(x) < 5);
+  for (const d of ngay6) {
+    await chu.timesheetRow.create({ data: { tenantId: TA, timesheetId: bc6.id, userId: nvNpt, workDate: NGAY(d), isAdjustment: false, dayType: "thuong", expectedValue: 1, workValue: d <= "2026-06-12" ? 1 : 0, flags: [] } });
+  }
+  const k6 = await voi(TA, ktA, (nc) => taoKyLuong(nc, { nam: 2026, thang: 6 }));
+  const nguon6 = async () => {
+    await voi(TA, ktA, (nc) => tinhKyLuong(nc, k6.id));
+    const l = await chu.payrollLine.findFirstOrThrow({ where: { runId: k6.id, userId: nvNpt } });
+    return `${(l.inputs as { nguon: { nguonCong: string } }).nguon.nguonCong}:${(l.result as unknown as KetQuaLuong).congTinhLuong}`;
+  };
+  const n1 = await nguon6();
+  await voi(TA, hrA, (nc) => nhapCongTayLuong(nc, k6.id, congTay({ nguoiId: nvNpt, soNgayCong: 15 })));
+  const n2 = await nguon6();
+  await voi(TA, ktA, (nc) => xoaCongTayLuong(nc, k6.id, nvNpt));
+  const n3 = await nguon6();
+  await chu.timesheet.update({ where: { id: bc6.id }, data: { status: "da-khoa", lockedAt: BAY2, lockedBy: hrA } });
+  await voi(TA, hrA, (nc) => nhapCongTayLuong(nc, k6.id, congTay({ nguoiId: nvNpt, soNgayCong: 20 }))).catch(() => null);
+  await voi(TA, ktA, (nc) => layLaiCongTuBangCong(nc, k6.id));
+  const l6 = await chu.payrollLine.findFirstOrThrow({ where: { runId: k6.id, userId: nvNpt } });
+  const n4 = `${(l6.inputs as { nguon: { nguonCong: string } }).nguon.nguonCong}:${(l6.result as unknown as KetQuaLuong).congTinhLuong}`;
+  const so6 = ngay6.filter((d) => d <= "2026-06-12").length;
+  dat("V9: nguồn công nháp → tay → bỏ tay (về nháp) → bảng khóa: đúng thứ tự khóa → tay → nháp → mặc định",
+    n1 === `bang-cong-nhap:${so6}` && n2 === "nhap-tay:15" && n3 === `bang-cong-nhap:${so6}` && n4 === `bang-cong:${so6}`, [n1, n2, n3, n4].join(" → "));
+
   void LoiDinhDang;
   await chu.$disconnect();
   ketLuan("QA 0.22.0 mở dần");
