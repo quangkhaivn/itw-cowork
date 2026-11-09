@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { layIpKhach } from "@/lib/yeu-cau";
 import DauTrang from "@/components/ui/DauTrang";
 import TrongRong from "@/components/ui/TrongRong";
 import { taoNguCanh } from "@/lib/api";
@@ -20,8 +22,10 @@ export const dynamic = "force-dynamic";
  */
 export default async function BangDieuKhien() {
   const nd = await yeuCauDangNhap();
+  // Cùng IP người xem như trang Thiết lập ban đầu — đếm máy lạ theo đúng một cách (QĐ-175).
+  const ip = layIpKhach(await headers());
   const { bdk, tq, thietLap } = await docDuLieu(nd, async (tx) => {
-    const nc = taoNguCanh(tx, nd.phien.tenantId, nd.hoSo);
+    const nc = taoNguCanh(tx, nd.phien.tenantId, nd.hoSo, ip);
     return {
       bdk: await bangDieuKhien(nc),
       tq: await tongQuanHeThong(tx, nd.hoSo),

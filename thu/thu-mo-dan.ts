@@ -121,7 +121,7 @@ async function main() {
 
   // ==================================================================
   console.log("— B1. Lịch mặc định của doanh nghiệp (QĐ-171) —");
-  dat("Seed: doanh nghiệp chưa có lịch → tạo “Hành chính T2–T6 08:00–17:00” làm mặc định", await seedLichMacDinh(chu, T));
+  dat("Seed: doanh nghiệp chưa có lịch → tạo “Hành chính T2–T6 08:00–17:00” làm mặc định", await seedLichMacDinh(chu, T, "2025-01-01"));
   dat("Seed chạy lại: đã có lịch → không tạo thêm", !(await seedLichMacDinh(chu, T)) && (await chu.workSchedule.count({ where: { tenantId: T } })) === 1);
   const lichMd = await chu.workSchedule.findFirstOrThrow({ where: { tenantId: T, isDefault: true }, include: { shift: true } });
   dat("…lịch T2–T6 cả ca, ca 08:00–17:00", JSON.stringify(lichMd.days) === JSON.stringify(["ca", "ca", "ca", "ca", "ca", "nghi", "nghi"]) && lichMd.shift.startMinute === 480 && lichMd.shift.endMinute === 1020);

@@ -3,7 +3,6 @@ import DauTrang from "@/components/ui/DauTrang";
 import TrangThai from "@/components/ui/TrangThai";
 import TrongRong from "@/components/ui/TrongRong";
 import FormNhanh, { type TruongForm } from "@/components/nhan-su/FormNhanh";
-import NutGoi from "@/components/luong/NutGoi";
 import { taoNguCanh } from "@/lib/api";
 import { coQuyen } from "@/lib/phan-quyen";
 import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
@@ -144,8 +143,9 @@ export default async function TrangThietLap({ searchParams }: { searchParams: Th
                 <td><code>{l.ma}</code></td><td>{l.ten}{l.macDinh && <span className="huy-hieu tot"> Mặc định</span>}</td><td>{l.ca.name}</td>
                 {(l.ngay as PhanNgay[]).map((p, i) => <td key={i} className={p === "nghi" ? "phu" : undefined}>{NHAN_PHAN_NGAY[p]}</td>)}
                 <td className="so">{l.soLanGan}</td>
-                {sua && <td style={{ display: "flex", gap: 6 }}>{!l.macDinh && l.trangThai === "hoat-dong" && <NutGoi url={`/api/v1/nhan-su/lich-lam/${l.id}/mac-dinh`} nhan="Đặt làm mặc định" lopNut="nut nho"
-                  xacNhan={`Dùng lịch “${l.ten}” cho mọi người CHƯA được gán lịch? (Người đã gán lịch giữ nguyên lịch của mình.)`} />}<FormNhanh nhanNut="Sửa" tieuDe={`Sửa lịch ${l.ma}`} url={`/api/v1/nhan-su/lich-lam/${l.id}`} phuongThuc="PUT" lopNut="nut nho" rong={640}
+                {sua && <td style={{ display: "flex", gap: 6 }}>{l.trangThai === "hoat-dong" && <FormNhanh nhanNut={l.macDinh ? "Áp lại từ ngày…" : "Đặt làm mặc định"} tieuDe={`Lịch mặc định: ${l.ten}`} url={`/api/v1/nhan-su/lich-lam/${l.id}/mac-dinh`} lopNut="nut nho"
+                  truong={[{ ten: "tuNgay", nhan: "Áp dụng từ ngày (cho người CHƯA được gán lịch)", kieu: "date", batBuoc: true, goiY: "Chỉ áp từ ngày này trở đi; không đổi tháng đã khóa bảng công. Người đã gán lịch giữ lịch của mình." }]}
+                  giaTriDau={{ tuNgay: homNayVN() }} />}<FormNhanh nhanNut="Sửa" tieuDe={`Sửa lịch ${l.ma}`} url={`/api/v1/nhan-su/lich-lam/${l.id}`} phuongThuc="PUT" lopNut="nut nho" rong={640}
                   truong={[...tLich, { ten: "trangThai", nhan: "Trạng thái", kieu: "select", luaChon: TRANG_THAI }]}
                   giaTriDau={{ ma: l.ma, ten: l.ten, caId: l.ca.id, ngay: l.ngay as string[], trangThai: l.trangThai }} /></td>}
               </tr>

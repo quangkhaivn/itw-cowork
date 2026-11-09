@@ -74,7 +74,7 @@ async function main() {
   console.log("=== QA 0.22.0 — Mở dần, bổ sung sau ===\n");
   const T = (await seedNenMong(chu, `qa-md-${DAU}`, "Doanh nghiệp QA mở dần")).id;
   const T2 = (await seedNenMong(chu, `qa-md2-${DAU}`, "Doanh nghiệp QA mở dần 2")).id;
-  await seedLichMacDinh(chu, T);
+  await seedLichMacDinh(chu, T, "2025-01-01");
   const vaiTro = async (code: string, t = T) => (await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: t, code } } })).id;
   async function nguoi(ten: string, vai: string, o: { hai?: boolean; t?: string } = {}) {
     const t = o.t ?? T;

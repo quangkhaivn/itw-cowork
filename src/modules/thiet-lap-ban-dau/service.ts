@@ -5,7 +5,7 @@ import { congNgay } from "@/modules/cham-cong/tinh-toan";
 import { homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { KHOA_LOGO } from "@/modules/ho-so-cong-ty/service";
 import { nguoiGiuQuyen } from "@/modules/thong-bao/service";
-import { hoSoApDung } from "@/modules/luong/ho-so";
+import { hoSoApDung, soNguoiPhuThuocChuaDu } from "@/modules/luong/ho-so";
 import { LOAI_THAM_SO, chonBoHieuLuc } from "@/modules/luong/tinh-toan";
 import { dateVeNgay } from "@/modules/crm/chung";
 
@@ -89,6 +89,8 @@ export async function viecThietLap(nc: NguCanh, homNay = homNayVN()): Promise<{ 
     }
     const hs = await hoSoApDung(tx, idsHoatDong, homNay);
     const thieuTk = [...hs.values()].filter((h) => !h.bankAccount && h.paymentMethod !== "tien-mat").length;
+    // QĐ-182: người phụ thuộc "chưa ghi tên" (chưa được giảm trừ) đang trong thời gian giảm trừ tháng này.
+    const nptChuaDu = [...(await soNguoiPhuThuocChuaDu(tx, idsHoatDong, `${homNay.slice(0, 7)}-01`)).values()].reduce((a, b) => a + b, 0);
     nhom.push({
       ma: "ke-toan",
       ten: "Kế toán",
@@ -96,6 +98,7 @@ export async function viecThietLap(nc: NguCanh, homNay = homNayVN()): Promise<{ 
         viec("tham-so-luong", "Xác nhận tham số lương", chuaXacNhan, "/luong/tham-so", "Chưa xác nhận vẫn gửi duyệt / duyệt được (có cảnh báo, kiểm toán ghi lại)."),
         viec("ho-so-luong", "Hồ sơ lương", idsHoatDong.length - hs.size, "/luong/ho-so", "Người chưa có hồ sơ không vào bảng lương; bảng lương liệt kê riêng kèm nút tạo hồ sơ. Có thể nhập CSV."),
         viec("tai-khoan", "Tài khoản ngân hàng", thieuTk, "/luong/ho-so", "Chưa có tài khoản thì trả tay / tiền mặt — không chặn khóa kỳ, không vào file ngân hàng."),
+        viec("nguoi-phu-thuoc", "Người phụ thuộc chưa ghi tên", nptChuaDu, "/luong/ho-so", "Chưa có họ tên + MST / số giấy tờ thì CHƯA được giảm trừ gia cảnh — bổ sung ở Hồ sơ lương."),
       ],
     });
   }
