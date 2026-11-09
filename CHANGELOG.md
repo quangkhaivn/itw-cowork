@@ -2,7 +2,7 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.22.0 (chưa phát hành) — Mở dần, bổ sung sau
+## 0.22.0 — 09/11/2026 — Mở dần, bổ sung sau
 
 **Chưa triển khai lên máy thật.** Bốn migration mới (`20261109090001_mo_dan`, `20261109090002_may_cham_cong_cap_quyen`, `20261109090003_may_la_tran_ghi`, `20261109090004_qa_mo_dan`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm `attendance_manual_days`, hàm máy lạ) và `npm run db:seed` (lịch mặc định cho doanh nghiệp chưa có lịch, quyền `may_cham_cong.*`). Khởi động lại worker. `version` trong package.json giữ nguyên.
 

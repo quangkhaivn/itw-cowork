@@ -2,7 +2,7 @@
 
 > **Cách nhanh nhất, không cần cài Git, Node.js hay Docker:** bấm đúp **`CAI-NHANH-TGTH-COWORK.bat`**. Bộ cài tự tải mọi thứ vào `L:\TGTH-Cowork` (không có ổ L: thì vào thư mục người dùng), dựng xong thì mở phần mềm. Đã cài bản cũ thì bấm lại tệp này để cập nhật: dữ liệu thử và `.env` được giữ. Phần dưới đây là cách cài bằng Docker Desktop.
 
-Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.21`) chạy riêng trên **một máy Windows**, với **dữ liệu thử DEMO**. Nó không kết nối và không đụng gì tới bản đang chạy thật ở thegioitinhoc.io.vn.
+Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.22`) chạy riêng trên **một máy Windows**, với **dữ liệu thử DEMO**. Nó không kết nối và không đụng gì tới bản đang chạy thật ở thegioitinhoc.io.vn.
 
 - **Cơ sở dữ liệu**: PostgreSQL 16 và Redis 7 chạy trong Docker Desktop. Chỉ máy này truy cập được, qua cổng 55432 và 56379.
 - **Phần mềm**: ứng dụng Next.js và worker chạy bằng Node.js. Mở trong trình duyệt tại **http://127.0.0.1:3000**.
@@ -54,7 +54,7 @@ Mở thư mục `TGTH-Cowork\may-ca-nhan`:
 | **`CAI-DAT.bat`** | Chạy lại sau mỗi lần cập nhật mã. Dữ liệu và `.env` được giữ nguyên. |
 | **`XOA-DU-LIEU-THU.bat`** | Xoá sạch dữ liệu thử để cài lại từ đầu. Phải gõ `XOA` để xác nhận. |
 
-**Cập nhật bản mới:** bấm đúp lại `TAI-VE-VA-CAI-DAT.bat`. Tệp này lấy mã mới nhất của nhánh `release/0.21` rồi cài lại.
+**Cập nhật bản mới:** bấm đúp lại `TAI-VE-VA-CAI-DAT.bat`. Tệp này lấy mã mới nhất của nhánh `release/0.22` rồi cài lại.
 
 ## 4b. Thử phần Nhân sự (0.19 → 0.21): chấm công, giao việc, đánh giá, thực tập, lương
 
