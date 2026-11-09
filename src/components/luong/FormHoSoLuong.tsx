@@ -34,6 +34,7 @@ export interface HoSoDau {
   nganHang: string | null;
   chuTaiKhoan: string | null;
   maSoThue: string | null;
+  hinhThucTraKhai?: "chuyen-khoan" | "tien-mat";
 }
 
 const tienChu = (n: number | null | undefined) => (n ? n.toLocaleString("vi-VN") : "");
@@ -72,6 +73,7 @@ export default function FormHoSoLuong({
     nganHang: dau?.nganHang ?? "",
     chuTaiKhoan: dau?.chuTaiKhoan ?? "",
     maSoThue: dau?.maSoThue ?? "",
+    hinhThucTra: (dau?.hinhThucTraKhai ?? "chuyen-khoan") as "chuyen-khoan" | "tien-mat",
     ghiChu: "",
   });
   const [g, datG] = useState(khoiTao);
@@ -147,7 +149,13 @@ export default function FormHoSoLuong({
             {loaiPhuCap.map((p) => o(`pc-${p.id}`, `Phụ cấp ${p.ten} (${p.theo === "ngay-cong" ? "đ / ngày công" : "đ / tháng"}${p.chiuThue ? "" : ", không chịu thuế"})`, (
               <input id={`hs-pc-${p.id}`} inputMode="numeric" value={g.phuCap[p.id] ?? ""} onChange={(e) => doi("phuCap", { ...g.phuCap, [p.id]: e.target.value })} />
             )))}
-            {o("soTaiKhoan", "Số tài khoản nhận lương", <input id="hs-soTaiKhoan" value={g.soTaiKhoan} onChange={(e) => doi("soTaiKhoan", e.target.value)} />)}
+            {o("hinhThucTra", "Hình thức trả lương", (
+              <select id="hs-hinhThucTra" value={g.hinhThucTra} onChange={(e) => doi("hinhThucTra", e.target.value as "chuyen-khoan" | "tien-mat")}>
+                <option value="chuyen-khoan">Chuyển khoản</option>
+                <option value="tien-mat">Tiền mặt / trả tay</option>
+              </select>
+            ), "Chưa có số tài khoản thì luôn trả tay — không chặn khóa kỳ; dòng không vào file ngân hàng mà vào danh sách “Trả tay”.")}
+            {o("soTaiKhoan", "Số tài khoản nhận lương (không bắt buộc)", <input id="hs-soTaiKhoan" value={g.soTaiKhoan} onChange={(e) => doi("soTaiKhoan", e.target.value)} />)}
             {o("nganHang", "Ngân hàng", <input id="hs-nganHang" value={g.nganHang} onChange={(e) => doi("nganHang", e.target.value)} />)}
             {o("chuTaiKhoan", "Tên chủ tài khoản", <input id="hs-chuTaiKhoan" value={g.chuTaiKhoan} onChange={(e) => doi("chuTaiKhoan", e.target.value)} />, "Trống = họ tên nhân viên.")}
             {o("maSoThue", "Mã số thuế cá nhân", <input id="hs-maSoThue" value={g.maSoThue} onChange={(e) => doi("maSoThue", e.target.value)} />)}

@@ -67,6 +67,9 @@ function moTaHoSo(h: DongHoSo, tenPhuCap: Map<string, string>) {
     chuTaiKhoan: h.accountHolder,
     maSoThue: h.taxCode,
     ghiChu: h.note,
+    /** 0.22.0 (QĐ-173): chuyen-khoan | tien-mat; không có số tài khoản → thực tế trả tay. */
+    hinhThucTra: (h.paymentMethod === "tien-mat" || !h.bankAccount ? "tien-mat" : "chuyen-khoan") as "chuyen-khoan" | "tien-mat",
+    hinhThucTraKhai: h.paymentMethod as "chuyen-khoan" | "tien-mat",
     taoLuc: h.createdAt,
   };
 }
@@ -151,7 +154,7 @@ export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuon
       tenantId: nc.tenantId, userId: d.nguoiId, effectiveFrom: ngayVeDate(d.hieuLucTu), contractType: d.loaiHopDong, probationPercent: d.tyLeThuViec,
       payBasis: d.cachTra, baseSalary: BigInt(d.luongCoBan), insuranceSalary: BigInt(d.luongDongBH), kpiBonus: BigInt(d.thuongKpi),
       commissionEnabled: d.huongHoaHong, taxMethod: d.phuongPhapThue, allowances: d.phuCap, bankAccount: d.soTaiKhoan, bankName: d.nganHang,
-      accountHolder: d.chuTaiKhoan, taxCode: d.maSoThue, note: d.ghiChu, createdBy: nc.hoSo.userId,
+      accountHolder: d.chuTaiKhoan, taxCode: d.maSoThue, note: d.ghiChu, createdBy: nc.hoSo.userId, paymentMethod: d.hinhThucTra,
     },
   });
   const truongDoi: string[] = [];
@@ -167,6 +170,7 @@ export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuon
     if (so(truoc.allowances, d.phuCap)) truongDoi.push("phụ cấp");
     if (so(truoc.bankAccount, d.soTaiKhoan) || so(truoc.bankName, d.nganHang) || so(truoc.accountHolder, d.chuTaiKhoan)) truongDoi.push("tài khoản ngân hàng");
     if (so(truoc.taxCode, d.maSoThue)) truongDoi.push("mã số thuế");
+    if (truoc.paymentMethod !== d.hinhThucTra) truongDoi.push("hình thức trả");
   }
   await nc.kiemToan({
     action: "tao-ho-so-luong", objectType: "salary_profile", objectId: moi.id,

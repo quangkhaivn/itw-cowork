@@ -12,7 +12,7 @@ import { LoiKhongTimThay } from "@/lib/loi";
 import { coQuyen } from "@/lib/phan-quyen";
 import { docDuLieu, yeuCauQuyen } from "@/lib/trang";
 import { LOAI_KHOAN, NHAN_LOAI_KHOAN } from "@/modules/luong/luoc-do";
-import { chiTietKyLuong } from "@/modules/luong/service";
+import { chiTietKyLuong, NHAN_NGUON_CONG } from "@/modules/luong/service";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +52,20 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
         hanhDong={
           <span style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-start" }}>
             {tt === "nhap" && k.quyen.tinh && <NutGoi url={`${url}/tinh`} nhan={k.buoc.tinh ? "Tính lại" : "Tính lương"} lopNut="nut chinh" />}
+            {tt === "nhap" && k.quyen.tinh && k.bangCong?.trangThai === "da-khoa" && k.dong.some((d) => d.nguonCong !== "bang-cong") && (
+              <NutGoi url={`${url}/lay-lai-cong`} nhan="Lấy lại công từ bảng công" xacNhan="Bảng công tháng này đã khóa. Bỏ công nhập tay của những người có trong bảng công và tính lại theo bảng công?" />
+            )}
+            {k.quyen.nhapCong && k.dong.some((d) => d.nguonCong !== "bang-cong") && (
+              <FormNhanh nhanNut="Nhập công tay" tieuDe="Nhập công tay (người chưa có bảng công khóa)" url={`${url}/cong-tay`} phuongThuc="PUT"
+                truong={[
+                  { ten: "nguoiId", nhan: "Nhân viên", kieu: "select", caDong: true, luaChon: k.dong.filter((d) => d.nguonCong !== "bang-cong").map((d) => ({ giaTri: d.userId, nhan: d.hoTen })) },
+                  { ten: "soNgayCong", nhan: "Số ngày công (trống = đủ công chuẩn)", kieu: "number", trongLaNull: true, goiY: "Ngày đi làm thực tế, chưa gồm ngày lễ (lễ tự cộng theo lịch)." },
+                  { ten: "gioTangCa", nhan: "Giờ tăng ca (ngày thường)", kieu: "number" },
+                  { ten: "nghiKhongLuong", nhan: "Nghỉ không lương (ngày)", kieu: "number" },
+                  { ten: "lyDo", nhan: "Lý do / căn cứ", kieu: "textarea", batBuoc: true, caDong: true, goiY: "Ví dụ: chưa có máy chấm công, theo bảng chấm công giấy của phòng." },
+                ]}
+                giaTriDau={{ nguoiId: k.dong.find((d) => d.nguonCong !== "bang-cong")?.userId ?? "", soNgayCong: null, gioTangCa: 0, nghiKhongLuong: 0, lyDo: "" }} />
+            )}
             {tt === "nhap" && k.quyen.tinh && k.buoc.tinh && <NutGoi url={`${url}/gui-duyet`} nhan="Gửi duyệt" xacNhan="Gửi bảng lương cho Giám đốc duyệt? Sau khi gửi không sửa được cho tới khi bị trả lại." />}
             {tt === "cho-duyet" && k.quyen.duyet && <NutGoi url={`${url}/duyet`} nhan="Duyệt" lopNut="nut chinh" />}
             {tt === "da-duyet" && k.quyen.duyet && <NutGoi url={`${url}/khoa`} nhan="Khóa bảng lương" lopNut="nut chinh" xacNhan="Khóa bảng lương? Sau khi khóa KHÔNG sửa được nữa; nhân viên xem được phiếu lương của mình." />}
@@ -76,7 +90,15 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
       )}
       {k.lyDoTraLai && tt === "nhap" && <div className="hop-thong-bao canh-bao">Bị trả lại: {k.lyDoTraLai}</div>}
       {tt === "nhap" && k.canTinhLai && k.buoc.tinh && <div className="hop-thong-bao canh-bao">Có thay đổi sau lần tính gần nhất — bấm “Tính lại” trước khi gửi duyệt.</div>}
-      {k.canhBao.map((c, i) => <div key={i} className={`hop-thong-bao ${c.muc === "loi" ? "loi" : "canh-bao"}`}>{c.noiDung}</div>)}
+      {k.canhBao.map((c, i) => <div key={i} className={`hop-thong-bao ${c.muc === "loi" ? "loi" : "canh-bao"}`} role={c.ma === "tham-so-chua-xac-nhan" ? "alert" : undefined}>{c.ma === "tham-so-chua-xac-nhan" && <strong>Tham số lương chưa xác nhận. </strong>}{c.noiDung}{c.ma === "tham-so-chua-xac-nhan" && <> <Link href="/luong/tham-so">Xác nhận ở Tham số lương</Link>.</>}</div>)}
+      {k.chuaCoHoSo.length > 0 && (
+        <section className="the">
+          <div className="dau"><h2>Chưa có hồ sơ lương ({k.chuaCoHoSo.length})</h2><span className="phu nho">Không bắt buộc — phần mềm vẫn tính lương cho người đã có hồ sơ</span></div>
+          <div className="than" style={{ padding: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {k.chuaCoHoSo.map((u) => <Link key={u.id} className="nut nho" href={`/luong/ho-so?nguoi=${u.id}`}>Tạo hồ sơ: {u.hoTen}</Link>)}
+          </div>
+        </section>
+      )}
 
       {k.quyen.xuat && (
         <section className="the">
@@ -108,13 +130,14 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
 
       <section className="the">
         <div className="dau"><h2>Dòng lương</h2></div>
-        {k.dong.length === 0 ? <TrongRong tieuDe={k.buoc.tinh ? "Không có dòng nào trong phạm vi bạn xem được" : "Chưa tính lương"}><p>Bấm “Tính lương” sau khi bảng công tháng đã khóa và hồ sơ lương đã lập.</p></TrongRong> : (
+        {k.dong.length === 0 ? <TrongRong tieuDe={k.buoc.tinh ? "Không có dòng nào trong phạm vi bạn xem được" : "Chưa tính lương"}><p>Bấm “Tính lương”. Chưa có bảng công khóa thì công lấy từ công nhập tay hoặc tạm tính đủ công chuẩn (có cảnh báo).</p></TrongRong> : (
           <div className="cuon-ngang"><table className="bang bang-luong">
             <thead><tr><th>Nhân viên</th><th className="so">Công TL</th><th className="so">Lương theo công</th><th className="so">Phụ cấp</th><th className="so">Tăng ca</th><th className="so">KPI</th><th className="so">Hoa hồng</th><th className="so">Khoản cộng</th><th className="so">Tổng thu nhập</th><th className="so">BH</th><th className="so">Thuế</th><th className="so">Khoản trừ</th><th className="so">Thực lĩnh</th><th>Cảnh báo</th></tr></thead>
             <tbody>{k.dong.map((d) => (
               <tr key={d.id}>
                 <td>
                   <Link href={`/luong/phieu/${d.id}/in`}>{d.hoTen}</Link>
+                  <div className="goi-y">Công: {NHAN_NGUON_CONG[d.nguonCong]}{d.traTay && " · trả tay"}</div>
                   {d.taiKhoanDoiLuc && <span className="huy-hieu canh-bao" title="Tài khoản nhận lương đổi trong 30 ngày"> TK mới đổi</span>}
                   {d.taiKhoanChup && <div className="goi-y">TK chụp lúc khóa: …{d.taiKhoanChup.soDuoi ?? "—"}{d.taiKhoanChup.nganHang ? ` · ${d.taiKhoanChup.nganHang}` : ""}</div>}
                   {daKhoa && k.quyen.xuat && <NutGoi url={`/api/v1/luong/dong/${d.id}/gui-lai`} nhan="Gửi lại phiếu" lopNut="nut nho" xacNhan={`Gửi lại thư phiếu lương cho ${d.hoTen}?`} />}
@@ -165,6 +188,38 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
           </table></div>
         )}
       </section>
+
+      {k.congTay.length > 0 && (
+        <section className="the">
+          <div className="dau"><h2>Công nhập tay</h2></div>
+          <div className="cuon-ngang"><table className="bang">
+            <thead><tr><th>Nhân viên</th><th className="so">Số ngày công</th><th className="so">Giờ tăng ca</th><th className="so">Nghỉ không lương</th><th>Lý do</th><th>Người nhập</th><th /></tr></thead>
+            <tbody>{k.congTay.map((c) => (
+              <tr key={c.nguoiId}>
+                <td>{c.hoTen}</td><td className="so">{c.soNgayCong ?? "đủ công chuẩn"}</td><td className="so">{c.gioTangCa}</td><td className="so">{c.nghiKhongLuong}</td><td>{c.lyDo}</td>
+                <td>{c.nguoiNhap} · {dinhDangNgayGio(c.luc)}</td>
+                <td>{k.quyen.nhapCong && <NutGoi url={`${url}/cong-tay?nguoiId=${c.nguoiId}`} phuongThuc="DELETE" nhan="Bỏ" lopNut="nut nho" xacNhan={`Bỏ công nhập tay của ${c.hoTen}?`} />}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        </section>
+      )}
+
+      {k.traTay.soNguoi > 0 && (
+        <section className="the">
+          <div className="dau"><h2>Trả tay / tiền mặt ({k.traTay.soNguoi} người · {tien(k.traTay.tong)} đ)</h2>
+            {k.traTay.daKhoa && k.quyen.xuat && <a className="nut nho" href={`${url}/xuat?loai=tra-tay&dinhDang=xls`}>Danh sách trả tay (Excel)</a>}
+          </div>
+          <p className="phu nho" style={{ marginTop: 0 }}>Người chưa có số tài khoản hoặc hồ sơ chọn “Tiền mặt / trả tay”: không vào file chi lương ngân hàng, không chặn khóa kỳ. {k.traTay.daKhoa ? "Hình thức trả đã chụp lúc khóa." : "Dự kiến theo hồ sơ hiện hành — chốt lúc khóa kỳ."}</p>
+          <div className="cuon-ngang"><table className="bang">
+            <thead><tr><th>Nhân viên</th><th className="so">Thực lĩnh</th></tr></thead>
+            <tbody>
+              {k.traTay.ds.map((d) => <tr key={d.userId}><td>{d.hoTen}</td><td className="so">{tien(d.thucLinh)}</td></tr>)}
+              <tr><td><strong>Tổng</strong></td><td className="so"><strong>{tien(k.traTay.tong)}</strong></td></tr>
+            </tbody>
+          </table></div>
+        </section>
+      )}
 
       {k.hoaHong.length > 0 && (
         <section className="the">

@@ -108,6 +108,8 @@ export const LuocDoHoSoLuong = z
       .nullable()
       .transform((s) => (s ? s : null)),
     ghiChu: chuoiTuyChon(1000),
+    /** 0.22.0 (QĐ-173): hình thức trả — không có số tài khoản thì luôn trả tay. */
+    hinhThucTra: z.enum(["chuyen-khoan", "tien-mat"]).default("chuyen-khoan"),
   })
   .superRefine((d, ctx) => {
     if (d.loaiHopDong === "thu-viec" && !d.tyLeThuViec) ctx.addIssue({ code: "custom", path: ["tyLeThuViec"], message: "Nhập % lương thử việc." });
@@ -252,4 +254,17 @@ export const LuocDoXuatNganHang = z.object({
   cot: z.array(z.enum(COT_NGAN_HANG)).min(1, "Chọn ít nhất một cột.").max(COT_NGAN_HANG.length),
   noiDung: z.string().trim().min(1, "Nhập mẫu nội dung.").max(200),
   boDau: z.boolean(),
+});
+
+/** 0.22.0 (QĐ-172): công nhập tay trên dòng lương nháp (người chưa có bảng công khóa). */
+export const LuocDoCongTayLuong = z.object({
+  nguoiId: z.uuid("Chọn nhân viên."),
+  /** Trống = đủ công chuẩn (trừ nghỉ không lương). Chưa gồm ngày lễ (lễ tự cộng theo lịch). */
+  soNgayCong: z
+    .union([z.coerce.number().min(0, "Số ngày công không âm.").max(31, "Tối đa 31 ngày."), z.literal(""), z.null()])
+    .optional()
+    .transform((x) => (x === "" || x === undefined || x === null ? null : Math.round(Number(x) * 100) / 100)),
+  gioTangCa: z.coerce.number().min(0, "Giờ tăng ca không âm.").max(300, "Tối đa 300 giờ.").default(0),
+  nghiKhongLuong: z.coerce.number().min(0).max(31, "Tối đa 31 ngày.").default(0),
+  lyDo: z.string().trim().min(5, "Ghi lý do ít nhất 5 ký tự.").max(500),
 });

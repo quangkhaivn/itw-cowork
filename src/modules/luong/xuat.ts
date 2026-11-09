@@ -120,11 +120,9 @@ export async function xuatNganHang(nc: NguCanh, id: string, dinhDang: "csv" | "x
   const { ky, dong, ma } = await docKyVaDong(nc, id);
   if (!laKyDaKhoa(ky.status)) throw new LoiNghiepVu("Chỉ xuất file chi lương khi kỳ lương đã khóa.", 409, "chua-khoa");
   const mau = await docMauNganHang(nc.tx);
-  const chi = dong.filter((d) => d.netPay > 0n);
-  const thieu = chi.filter((d) => !d.bankAccount);
-  if (thieu.length) {
-    throw new LoiNghiepVu(`Dòng lương chưa chụp tài khoản ngân hàng lúc khóa: ${thieu.map((d) => d.fullName).join(", ")}. Chi riêng cho những người này và ghi chú căn cứ.`, 422, "thieu-tai-khoan");
-  }
+  // 0.22.0 (QĐ-173): chỉ dòng CHUYỂN KHOẢN (có tài khoản chụp lúc khóa). Dòng trả tay / tiền mặt không vào file — tải
+  // danh sách "Trả tay" riêng (xuatTraTay), có tổng tiền.
+  const chi = dong.filter((d) => d.netPay > 0n && !laTraTay(d));
   const rows = chi.map((d, i) => {
     const nd = dienNoiDung(mau.noiDung, { hoTen: d.fullName, thang: ky.month, nam: ky.year, maNv: ma.get(d.userId) ?? null });
     const chu = d.accountHolder ?? d.fullName;
@@ -149,6 +147,30 @@ export async function xuatNganHang(nc: NguCanh, id: string, dinhDang: "csv" | "x
   return tepTraVe(dinhDang === "csv" ? taoCsvCotChuoi(tieuDe, rows, cotTk) : taoBangTinhXml("Chi lương", tieuDe, rows), ten, dinhDang);
 }
 
+/** Dòng trả tay / tiền mặt của kỳ đã khóa (QĐ-173): hình thức chụp lúc khóa; dòng khóa trước 0.22.0 → không có tài khoản. */
+export function laTraTay(d: { payMethod: string | null; bankAccount: string | null }): boolean {
+  return d.payMethod ? d.payMethod === "tien-mat" : !d.bankAccount;
+}
+
+/**
+ * Danh sách TRẢ TAY (QĐ-173): người không có tài khoản ngân hàng hoặc hồ sơ chọn "Tiền mặt / trả tay" — thực lĩnh > 0,
+ * dòng tổng, cột ký nhận. Chỉ kỳ đã khóa (hình thức trả đã chụp).
+ */
+export async function xuatTraTay(nc: NguCanh, id: string, dinhDang: "csv" | "xls" = "xls") {
+  batBuocQuyenLuong(nc, "luong.export", { objectType: "payroll_run", objectId: id });
+  const { ky, dong, ma } = await docKyVaDong(nc, id);
+  if (!laKyDaKhoa(ky.status)) throw new LoiNghiepVu("Chỉ xuất danh sách trả tay khi kỳ lương đã khóa.", 409, "chua-khoa");
+  const tay = dong.filter((d) => d.netPay > 0n && laTraTay(d));
+  const tieuDe = ["STT", "Mã NV", "Họ tên", "Thực lĩnh", "Ký nhận"];
+  const rows: (string | number)[][] = tay.map((d, i) => [i + 1, ma.get(d.userId) ?? "", d.fullName, Number(d.netPay), ""]);
+  rows.push(["", "", "TỔNG CỘNG", tay.reduce((a, d) => a + Number(d.netPay), 0), ""]);
+  await ghiXem(nc, "xuat-tra-tay", { objectType: "payroll_run", objectId: id }, tay.map((d) => d.userId));
+  await nc.kiemToan({ action: "xuat-luong", objectType: "payroll_run", objectId: id, after: { loai: "tra-tay", dinhDang, soDong: tay.length } });
+  await nc.suKien({ eventType: SU_KIEN.PAYROLL_EXPORTED, objectType: "payroll_run", objectId: id, payload: { loai: "tra-tay" } });
+  const ten = `tra-tay-${ky.year}-${thang2(ky.month)}${ky.name ? "-rieng" : ""}.${dinhDang}`;
+  return tepTraVe(dinhDang === "csv" ? taoCsv(tieuDe, rows) : taoBangTinhXml("Trả tay", tieuDe, rows, [`DANH SÁCH TRẢ LƯƠNG TAY / TIỀN MẶT THÁNG ${nhanKy(ky.year, ky.month)}`]), ten, dinhDang);
+}
+
 /** Bút toán lương (LU-53): CSV tổng hợp theo cặp tài khoản (Cấu hình nhóm Tính lương). Chỉ kỳ đã khóa. */
 export async function xuatButToan(nc: NguCanh, id: string) {
   batBuocQuyenLuong(nc, "luong.export", { objectType: "payroll_run", objectId: id });
@@ -165,6 +187,7 @@ export async function xuatButToan(nc: NguCanh, id: string) {
       const tamUng = dv.khoan.filter((k) => k.chieu === "tru" && k.loai === "tam-ung").reduce((a, k) => a + k.soTien, 0);
       return {
         tongThuNhap: kq.tongThuNhap, bhNld: kq.baoHiem.nld, bhDn: kq.baoHiem.dn, thue: kq.thue.tien, tamUng, truKhac: kq.khoanTru - tamUng, congSauThue: kq.khoanCongSauThue ?? 0, thucLinh: kq.thucLinh,
+        traTay: laTraTay(d),
       };
     }),
     tk,
