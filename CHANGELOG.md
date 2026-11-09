@@ -2,6 +2,12 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.21.1 — 09/11/2026 — Dữ liệu mẫu Nhân sự, sao lưu bị ngắt
+
+- **Dữ liệu mẫu DEMO cho Nhân sự** trong `npm run db:seed:mau` (doanh nghiệp `demo`), chạy lại không nhân đôi: địa điểm + ca + lịch, 10 mã chấm công, máy chấm công giả `DEMO0001`, lần chấm tháng trước (bảng công đã khóa) và hôm nay, đơn nghỉ / tăng ca, 9 việc giao ở đủ trạng thái, báo cáo ngày / tuần, bộ KPI và 3 phiếu đánh giá đã chốt, thực tập sinh `thuctap@demo.test` có nhật ký và phiếu nháp, kỳ lương 10/2026 nháp đã tính. Tham số lương nạp sẵn vẫn chờ kế toán xác nhận.
+- **Sao lưu bị ngắt** trước khi bộ đủ (dump + đính kèm + `.env` mã hóa) nay xóa cả các tệp đã ghi của lần đó, để `thu-phuc-hoi.sh` không chọn nhầm bộ dở dang. Bài thử phục hồi không còn phụ thuộc máy có `rclone`.
+- Không có migration mới.
+
 ## 0.21.0 — 09/11/2026 — Nhân sự, giai đoạn 3: tính lương
 
 **Chưa triển khai lên máy thật.** Ba migration mới (`20261104090001_nhan_su_luong`, `20261104090002_luong_cap_quyen_moi_doanh_nghiep`, `20261104090003_luong_email_phieu_luong`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm `salary_profiles`, REVOKE DELETE `payroll_param_sets` / `payroll_runs`) và `npm run db:seed`. Khởi động lại worker (thư phiếu lương). Dựa trên 0.20.0 (chưa phát hành). `version` trong package.json giữ nguyên.
