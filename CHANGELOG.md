@@ -4,7 +4,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 ## 0.22.0 (chưa phát hành) — Mở dần, bổ sung sau
 
-**Chưa triển khai lên máy thật.** Ba migration mới (`20261109090001_mo_dan`, `20261109090002_may_cham_cong_cap_quyen`, `20261109090003_may_la_tran_ghi`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm `attendance_manual_days`, hàm máy lạ) và `npm run db:seed` (lịch mặc định cho doanh nghiệp chưa có lịch, quyền `may_cham_cong.*`). Khởi động lại worker. `version` trong package.json giữ nguyên.
+**Chưa triển khai lên máy thật.** Bốn migration mới (`20261109090001_mo_dan`, `20261109090002_may_cham_cong_cap_quyen`, `20261109090003_may_la_tran_ghi`, `20261109090004_qa_mo_dan`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm `attendance_manual_days`, hàm máy lạ) và `npm run db:seed` (lịch mặc định cho doanh nghiệp chưa có lịch, quyền `may_cham_cong.*`). Khởi động lại worker. `version` trong package.json giữ nguyên.
 
 Giám đốc: *"phần mềm mở, để kế toán, nhân sự và kỹ thuật có thể thêm thông tin và kết nối máy chấm công sau. Đừng đòi hỏi có đầy đủ ngay từ ban đầu."* Luật: `BUSINESS_RULES.md` mục 33 (MD-01 → MD-22). Quyết định QĐ-170 → QĐ-180.
 
@@ -27,6 +27,21 @@ Giám đốc: *"phần mềm mở, để kế toán, nhân sự và kỹ thuật
 ### Kiểm thử
 - Mới: `thu/thu-mo-dan.ts` (`npm run thu:mo-dan`, nối cuối `thu:tich-hop`), `thu/don-vi/mo-dan.test.ts` (16 bài).
 - Bài cũ đổi kỳ vọng theo luật mới: `thu-luong` (chưa có bảng công / bảng công nháp / ngày thiếu giờ chờ quyết → vẫn tính + cảnh báo; tham số chưa xác nhận → cảnh báo vàng), `thu-luong-chinh-sach` (thiếu tài khoản → dự kiến trả tay, không chặn khóa), `thu-cham-cong` (máy từng gọi khi chưa đăng ký → bắt tay `ATTLOGStamp=0`), `thu-qa-cham-cong` và `don-vi/cham-cong.test.ts` (so quyền QĐ-117 bỏ qua mã `may_cham_cong.*` cấp ở migration 0.22.0).
+
+### QA độc lập (09/11/2026)
+Nới lỏng chặn → cảnh báo không được mở lỗ hổng toàn vẹn / bảo mật. Bài tái hiện: `thu/thu-qa-mo-dan.ts` (`npm run thu:qa-mo-dan`, nối cuối `thu:tich-hop`). Migration `20261109090004_qa_mo_dan`.
+- **[Cao] Khóa kỳ lương tính KHÔNG có bảng công lỗi 500**: CHECK `payroll_runs_buoc_check` (0.21.0) còn bắt buộc `timesheet_id` khi đã khóa — đúng trường hợp 0.22.0 hứa hỗ trợ (công nhập tay / mặc định) không khóa được. Migration bỏ riêng điều kiện đó.
+- **[Cao] Tự bỏ công nhập tay của chính mình**: Kế toán / Nhân sự xóa được công nhập tay trên dòng của mình → dòng quay về "mặc định đủ công chuẩn" (lách luật "không tự nhập công"). Nay 403 `tu-nhap-cong` + kiểm phạm vi lương.
+- **[Trung bình] Đổi sang tiền mặt né cảnh báo đổi tài khoản**: đổi hình thức nhận lương (giữ nguyên số tài khoản) không báo nhân viên, không gắn cờ "TK mới đổi" (QĐ-159 / QĐ-161). Nay báo nhân viên + kiểm toán `doi-tai-khoan-luong` (ghi cả hình thức trả) + cờ trên màn hình duyệt.
+- **[Trung bình] Mặc định đủ công khi bảng công nháp ghi vắng**: chỉ có cảnh báo chung "tạm tính đủ công". Nay thêm cảnh báo dòng `cong-mac-dinh-lech-bang-nhap` nêu số công trong bảng công nháp (nguy cơ trả thừa). Không chặn (MD-01).
+- **[Trung bình] Kỹ thuật tự gán PIN có lần chấm chưa khớp cho mình** (nhận công của người khác; 0.22.0 mở `anhXaPin` cho Kỹ thuật). Nay 403 `khong-tu-gan-pin` với mọi người (API + CSV).
+- **[Trung bình] Hàm SECURITY DEFINER máy lạ bị che bằng bảng tạm**: `SET search_path = public` vẫn tìm `pg_temp` trước → phiên `cowork_app` tạo bảng tạm `attendance_devices` là `ds_may_la` trả máy lạ của mọi IP (lộ SN / IP doanh nghiệp khác), `xoa_may_la` xóa được dòng chưa đăng ký. Nay `search_path = public, pg_temp` cho `ghi_may_la` / `ds_may_la` / `xoa_may_la` / `tra_may_cham_cong`.
+- **[Thấp] Đặt công tay chồng nghỉ phép**: đặt 1 công cho ngày đã nghỉ phép có lương → trả hai lần. Nay công + nghỉ ≤ 1 / ngày (`apCongTay`).
+- **[Thấp] Công nhập tay vượt công chuẩn** (vd 31 / 22) chỉ hiện "Công nhập tay: 31 công". Nay thêm cảnh báo `cong-tay-vuot-chuan`.
+- **[Thấp] Kỹ thuật thấy ngày vào làm** trong danh sách PIN chưa khớp (hồ sơ nhân sự). Nay chỉ người có `nhan_su.view` thấy.
+- **[Thấp] Trần 500 máy lạ phụ thuộc tham số ứng dụng truyền**: nay cứng trong hàm (`p_tran` chỉ hạ được).
+- **[Thấp] CSV hồ sơ lương đổi số tài khoản giữ tên chủ tài khoản cũ**; **CSV ánh xạ PIN**: một người hai dòng báo hợp lệ ở xem trước rồi hỏng cả lô lúc ghi. Đã sửa cả hai.
+- Diễn tập nâng cấp 0.21.1 (itw + demo) → 0.22.0: quyền `may_cham_cong.*` khớp `vai-tro.ts` ở cả hai doanh nghiệp, kỳ lương nháp 10/2026 tính lại được (tổng thực lĩnh không đổi), bảng công đã khóa không đổi.
 
 ## 0.21.1 — 09/11/2026 — Dữ liệu mẫu Nhân sự, sao lưu bị ngắt
 
