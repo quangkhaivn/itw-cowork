@@ -2,7 +2,7 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.21.0 (chưa phát hành) — Nhân sự, giai đoạn 3: tính lương
+## 0.21.0 — 09/11/2026 — Nhân sự, giai đoạn 3: tính lương
 
 **Chưa triển khai lên máy thật.** Ba migration mới (`20261104090001_nhan_su_luong`, `20261104090002_luong_cap_quyen_moi_doanh_nghiep`, `20261104090003_luong_email_phieu_luong`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm `salary_profiles`, REVOKE DELETE `payroll_param_sets` / `payroll_runs`) và `npm run db:seed`. Khởi động lại worker (thư phiếu lương). Dựa trên 0.20.0 (chưa phát hành). `version` trong package.json giữ nguyên.
 
