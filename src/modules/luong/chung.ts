@@ -31,7 +31,8 @@ export const MA_LOI_2_LOP = "luong-can-2-lop";
  * diện hướng dẫn bật ở "Tài khoản của tôi". Kiểm ở MÁY CHỦ, không phụ thuộc danh sách vai trò bắt buộc của Cấu hình.
  */
 export function batBuoc2Lop(nc: NguCanh): void {
-  if (!nc.hoSo.da2Lop) {
+  // 0.22.0 (QĐ-177): Cấu hình `luong.bat_buoc_2_lop` = 0 tạm bỏ bắt buộc (mặc định 1 — giữ bắt buộc).
+  if (!nc.hoSo.da2Lop && !nc.hoSo.luongKhongBatBuoc2Lop) {
     throw new LoiNghiepVu(
       "Xem hoặc tính lương của người khác bắt buộc bật xác thực 2 lớp. Vào “Tài khoản của tôi” → Xác thực 2 lớp để bật, rồi đăng nhập lại.",
       403,
@@ -97,6 +98,8 @@ const KHOA = {
   tamUng: "luong.tk_tam_ung",
   khauTruKhac: "luong.tk_khau_tru_khac",
   tien: "luong.tk_tien",
+  tienMat: "luong.tk_tien_mat",
+  chanThamSoChuaXacNhan: "luong.chan_khi_tham_so_chua_xac_nhan",
 } as const;
 
 export type CauHinhLuong = { -readonly [K in keyof typeof KHOA]: number };
@@ -116,7 +119,7 @@ export async function docCauHinhLuong(tx: ClientTenant): Promise<CauHinhLuong> {
 }
 
 export const taiKhoanTu = (c: CauHinhLuong): TaiKhoanLuong => ({
-  chiPhi: c.chiPhi, phaiTra: c.phaiTra, bhxh: c.bhxh, bhyt: c.bhyt, bhtn: c.bhtn, kpcd: c.kpcd, thue: c.thue, tamUng: c.tamUng, khauTruKhac: c.khauTruKhac, tien: c.tien,
+  chiPhi: c.chiPhi, phaiTra: c.phaiTra, bhxh: c.bhxh, bhyt: c.bhyt, bhtn: c.bhtn, kpcd: c.kpcd, thue: c.thue, tamUng: c.tamUng, khauTruKhac: c.khauTruKhac, tien: c.tien, tienMat: c.tienMat,
 });
 
 /** Khóa tenant_settings (JSON) của mẫu file chi lương ngân hàng — cột + nội dung (LU-51). */

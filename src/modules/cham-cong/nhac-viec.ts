@@ -33,7 +33,7 @@ export async function quetChamCong(tenantId: string, bayGio = new Date()) {
       const dem = await baoChoNguoiCoQuyen(tx, tenantId, "nhan_su.update", {
         loai: "may-cham-cong-mat-ket-noi",
         mucDo: "canh-bao",
-        tieuDe: `Máy chấm công "${m.name}" (${m.location.name}) mất kết nối`,
+        tieuDe: `Máy chấm công "${m.name}" (${m.location?.name ?? "chưa chọn địa điểm"}) mất kết nối`,
         noiDung: m.lastSeenAt
           ? `Lần cuối máy gọi về lúc ${m.lastSeenAt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false })}. Kiểm tra nguồn điện, mạng và địa chỉ máy chủ trên máy.`
           : "Máy đã đăng ký nhưng chưa từng gọi về. Kiểm tra địa chỉ máy chủ / cổng khai trên máy (docs/HUONG-DAN-CHAM-CONG.md).",

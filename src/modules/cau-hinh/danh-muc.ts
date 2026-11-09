@@ -1244,6 +1244,45 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     dungTuPhase: 8,
   },
   {
+    // 0.22.0 (QĐ-173): trả lương tiền mặt / trả tay — bút toán chi lương tách phần không chuyển khoản.
+    khoa: "luong.tk_tien_mat",
+    nhom: "Tính lương",
+    nhan: "Tài khoản tiền mặt chi lương (trả tay)",
+    moTa: "Bên Có của phần lương trả tay / tiền mặt khi đánh dấu đã chi (mặc định 1111 — tiền mặt). Phần chuyển khoản vẫn dùng tài khoản tiền chi lương.",
+    donVi: "số tài khoản",
+    toiThieu: 100,
+    toiDa: 99999999,
+    soNguyen: true,
+    macDinh: 1111,
+    dungTuPhase: 8,
+  },
+  {
+    // 0.22.0 (QĐ-170): tham số lương chưa xác nhận KHÔNG chặn gửi duyệt / duyệt (chỉ cảnh báo + ghi kiểm toán).
+    khoa: "luong.chan_khi_tham_so_chua_xac_nhan",
+    nhom: "Tính lương",
+    nhan: "Chặn gửi duyệt khi tham số lương chưa xác nhận",
+    moTa: "0 = vẫn gửi duyệt / duyệt được, bảng lương và màn hình duyệt hiện băng cảnh báo, kiểm toán ghi “duyệt khi tham số chưa xác nhận”. 1 = chặt: tham số chưa được kế toán xác nhận thì không gửi duyệt được. Mặc định 0.",
+    donVi: "bật / tắt",
+    toiThieu: 0,
+    toiDa: 1,
+    soNguyen: true,
+    macDinh: 0,
+    dungTuPhase: 8,
+  },
+  {
+    // 0.22.0 (QĐ-177): 2 lớp bắt buộc với thao tác lương — giữ bắt buộc mặc định.
+    khoa: "luong.bat_buoc_2_lop",
+    nhom: "Tính lương",
+    nhan: "Bắt buộc xác thực 2 lớp khi xem / tính lương người khác",
+    moTa: "1 = bắt buộc (khuyến nghị): ai chưa bật 2 lớp thì không xem / tính / duyệt lương người khác, trang lương hiện hướng dẫn bật từng bước. 0 = tạm không bắt buộc (chỉ nên dùng khi mới triển khai). Phiếu lương của chính mình không bao giờ cần 2 lớp. Chỉ người có quyền sửa Cấu hình đổi được; mỗi lần đổi ghi nhật ký kiểm toán. Mặc định 1.",
+    donVi: "bật / tắt",
+    toiThieu: 0,
+    toiDa: 1,
+    soNguyen: true,
+    macDinh: 1,
+    dungTuPhase: 8,
+  },
+  {
     // QĐ-133 (0.20.0): chốt phiếu đánh giá mặc định chỉ Giám đốc.
     khoa: "danh_gia.truong_phong_duoc_chot",
     nhom: "Đánh giá nhân sự",

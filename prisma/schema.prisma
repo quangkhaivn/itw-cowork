@@ -193,6 +193,8 @@ model Tenant {
   payrollLines           PayrollLine[]
   payrollItems           PayrollItem[]
   payrollCommissionItems PayrollCommissionItem[]
+  payrollManualInputs    PayrollManualInput[]
+  attendanceManualDays   AttendanceManualDay[]
 
   @@map("tenants")
 }
@@ -3718,6 +3720,8 @@ model WorkSchedule {
   shiftId   String   @map("shift_id") @db.Uuid
   days      Json
   status    String   @default("hoat-dong") @db.VarChar(30)
+  /// 0.22.0 (QĐ-171): lịch mặc định của doanh nghiệp — áp cho người CHƯA được gán lịch nào. Tối đa một lịch / doanh nghiệp.
+  isDefault Boolean  @default(false) @map("is_default")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy String?  @map("created_by") @db.Uuid
@@ -3828,7 +3832,8 @@ model AttendanceDevice {
   tenantId         String    @map("tenant_id") @db.Uuid
   serialNumber     String    @unique @map("serial_number") @db.VarChar(64)
   name             String    @db.VarChar(255)
-  locationId       String    @map("location_id") @db.Uuid
+  /// 0.22.0: trống = chưa chọn địa điểm (Kỹ thuật đăng ký máy trước, Nhân sự bổ sung sau).
+  locationId       String?   @map("location_id") @db.Uuid
   /// Danh sách IP được gọi vào (trống = mọi IP).
   ipAllowlist      String[]  @default([]) @map("ip_allowlist")
   status           String    @default("hoat-dong") @db.VarChar(30)
@@ -3846,7 +3851,7 @@ model AttendanceDevice {
   updatedBy        String?   @map("updated_by") @db.Uuid
 
   tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  location WorkLocation      @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  location WorkLocation?     @relation(fields: [locationId], references: [id], onDelete: Restrict)
   punches  AttendancePunch[]
 
   @@index([tenantId])
@@ -4735,6 +4740,8 @@ model SalaryProfile {
   accountHolder     String?  @map("account_holder") @db.VarChar(255)
   taxCode           String?  @map("tax_code") @db.VarChar(20)
   note              String?  @db.Text
+  /// 0.22.0 (QĐ-173): chuyen-khoan | tien-mat (trả tay). Không có số tài khoản thì luôn trả tay.
+  paymentMethod     String   @default("chuyen-khoan") @map("payment_method") @db.VarChar(20)
   createdBy         String?  @map("created_by") @db.Uuid
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -4851,6 +4858,8 @@ model PayrollLine {
   bankName          String?   @map("bank_name") @db.VarChar(255)
   accountHolder     String?   @map("account_holder") @db.VarChar(255)
   bankCapturedAt    DateTime? @map("bank_captured_at") @db.Timestamptz(6)
+  /// 0.22.0 (QĐ-173): hình thức trả CHỤP lúc khóa kỳ — chuyen-khoan (vào file ngân hàng) | tien-mat (danh sách "Trả tay").
+  payMethod         String?   @map("pay_method") @db.VarChar(20)
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -4919,4 +4928,59 @@ model PayrollCommissionItem {
 
   @@index([tenantId, runId, userId])
   @@map("payroll_commission_items")
+}
+
+/// 0.22.0 (QĐ-172): CÔNG NHẬP TAY trên dòng lương NHÁP (kế toán / nhân sự) cho người chưa có bảng công khóa.
+/// `work_days` trống = đủ công chuẩn trừ nghỉ không lương. Bất biến khi kỳ đã khóa (trigger chan_sua_ky_luong_da_khoa).
+model PayrollManualInput {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  runId           String   @map("run_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  workDays        Decimal? @map("work_days") @db.Decimal(5, 2)
+  otMinutes       Int      @default(0) @map("ot_minutes")
+  unpaidLeaveDays Decimal  @default(0) @map("unpaid_leave_days") @db.Decimal(5, 2)
+  reason          String   @db.Text
+  createdBy       String   @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, userId])
+  @@index([tenantId, runId])
+  @@map("payroll_manual_inputs")
+}
+
+/// 0.22.0 (QĐ-174): Nhân sự ĐẶT CÔNG một ngày cho người không có máy / GPS — chỉ ghi thêm, bản ghi sau thắng.
+/// Chỉ khi bảng công tháng đó chưa khóa (trigger). Bảng công đọc giá trị này thay cho công tính từ lần chấm.
+model AttendanceManualDay {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  workDate  DateTime @map("work_date") @db.Date
+  workValue Decimal  @map("work_value") @db.Decimal(3, 2)
+  reason    String   @db.Text
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, workDate, createdAt], map: "attendance_manual_days_tenant_id_user_id_work_date_created_at_i")
+  @@map("attendance_manual_days")
+}
+
+/// 0.22.0 (QĐ-175): MÁY LẠ — SN chưa đăng ký đã gọi /iclock. KHÔNG có tenant_id (chưa biết của doanh nghiệp nào):
+/// ứng dụng không có quyền trên bảng, chỉ đọc / ghi qua hàm SECURITY DEFINER (ghi_may_la, ds_may_la, xoa_may_la).
+/// Không lưu lần chấm của máy lạ.
+model AttendanceUnknownDevice {
+  id           String   @id @default(uuid()) @db.Uuid
+  serialNumber String   @unique @map("serial_number") @db.VarChar(64)
+  lastIp       String?  @map("last_ip") @db.VarChar(45)
+  firstSeenAt  DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  hitCount     Int      @default(1) @map("hit_count")
+  model        String?  @db.VarChar(100)
+
+  @@map("attendance_unknown_devices")
 }

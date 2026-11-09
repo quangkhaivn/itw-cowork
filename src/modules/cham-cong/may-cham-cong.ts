@@ -165,7 +165,7 @@ function phanTichInfoAnToan(info: string): Prisma.InputJsonValue | null {
 async function ghiAttlog(
   tx: ClientTenant,
   tenantId: string,
-  may: { id: string; locationId: string },
+  may: { id: string; locationId: string | null },
   dong: { pin: string; luc: Date; trangThai: number | null; xacThuc: number | null; maCongViec: string | null; dongGoc: string }[],
   bayGio: Date,
 ): Promise<number> {
@@ -232,7 +232,7 @@ export async function danhSachMay(nc: NguCanh, bayGio = new Date()) {
       soSeri: xemChiTiet ? m.serialNumber : null,
       ten: m.name,
       trangThai: m.status,
-      diaDiem: { id: m.location.id, ten: m.location.name },
+      diaDiem: m.location ? { id: m.location.id, ten: m.location.name } : null,
       lanCuoi: m.lastSeenAt,
       ipCuoi: xemChiTiet ? m.lastIp : null,
       ipChoPhep: xemChiTiet ? m.ipAllowlist : [],

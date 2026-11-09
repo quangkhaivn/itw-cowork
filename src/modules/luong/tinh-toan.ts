@@ -912,6 +912,8 @@ export interface TaiKhoanLuong {
   tamUng: number;
   khauTruKhac: number;
   tien: number;
+  /** 0.22.0 (QĐ-173): Có của phần trả tay / tiền mặt khi đã chi (mặc định 1111). Không khai → dùng `tien`. */
+  tienMat?: number;
 }
 
 export interface DongTongHopButToan {
@@ -924,6 +926,8 @@ export interface DongTongHopButToan {
   /** QĐ-158: điều chỉnh kỳ trước cộng sau thuế. */
   congSauThue?: number;
   thucLinh: number;
+  /** 0.22.0 (QĐ-173): dòng trả tay / tiền mặt (không vào file ngân hàng) — bút toán chi tách tài khoản tiền mặt. */
+  traTay?: boolean;
 }
 
 /**
@@ -947,7 +951,11 @@ export function butToanLuong(ds: DongTongHopButToan[], tk: TaiKhoanLuong, daChi:
     { dienGiai: "Khấu trừ khác (phạt, khác)", no: tk.phaiTra, co: tk.khauTruKhac, soTien: cong((d) => d.truKhac) },
     { dienGiai: "Điều chỉnh kỳ trước cộng sau thuế", no: tk.khauTruKhac, co: tk.phaiTra, soTien: cong((d) => d.congSauThue ?? 0) },
   ];
-  if (daChi) kq.push({ dienGiai: "Trả lương nhân viên", no: tk.phaiTra, co: tk.tien, soTien: cong((d) => d.thucLinh) });
+  if (daChi) {
+    // QĐ-173: phần chuyển khoản Có tài khoản tiền gửi, phần trả tay Có tài khoản tiền mặt — tổng hai dòng = tổng thực lĩnh.
+    kq.push({ dienGiai: "Trả lương nhân viên (chuyển khoản)", no: tk.phaiTra, co: tk.tien, soTien: cong((d) => (d.traTay ? 0 : d.thucLinh)) });
+    kq.push({ dienGiai: "Trả lương nhân viên (tiền mặt / trả tay)", no: tk.phaiTra, co: tk.tienMat ?? tk.tien, soTien: cong((d) => (d.traTay ? d.thucLinh : 0)) });
+  }
   return kq.filter((x) => x.soTien !== 0);
 }
 

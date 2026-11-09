@@ -66,14 +66,14 @@ export default async function TrangMayChamCong() {
               const tt = (m.thongTin ?? {}) as Record<string, string>;
               return (
                 <tr key={m.id}>
-                  <td>{m.ten}</td><td><code>{m.soSeri}</code></td><td>{m.diaDiem.ten}</td>
+                  <td>{m.ten}</td><td><code>{m.soSeri}</code></td><td>{m.diaDiem?.ten ?? "Chưa chọn"}</td>
                   <td><span className={`huy-hieu ${m.trucTuyen ? "tot" : "loi"}`}>{m.trucTuyen ? "Trực tuyến" : "Mất kết nối"}</span></td>
                   <td>{m.lanCuoi ? dinhDangNgayGio(m.lanCuoi) : "Chưa từng gọi về"}</td><td>{m.ipCuoi ?? "—"}</td>
                   <td className="nho">{[tt.phienBan, tt.soNguoi && `${tt.soNguoi} người`, tt.soBanGhi && `${tt.soBanGhi} bản ghi`].filter(Boolean).join(" · ") || "—"}</td>
                   <td><TrangThai giaTri={m.trangThai} /></td>
                   {sua && <td><FormNhanh nhanNut="Sửa" tieuDe={`Sửa ${m.ten}`} url={`/api/v1/nhan-su/may-cham-cong/${m.id}`} phuongThuc="PUT" lopNut="nut nho"
                     truong={[...tMay, { ten: "trangThai", nhan: "Trạng thái", kieu: "select", luaChon: TRANG_THAI }]}
-                    giaTriDau={{ ten: m.ten, diaDiemId: m.diaDiem.id, ipChoPhep: m.ipChoPhep, trangThai: m.trangThai }} /></td>}
+                    giaTriDau={{ ten: m.ten, diaDiemId: m.diaDiem?.id ?? "", ipChoPhep: m.ipChoPhep, trangThai: m.trangThai }} /></td>}
                 </tr>
               );
             })}</tbody>

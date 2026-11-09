@@ -31,7 +31,15 @@ export interface HoSoQuyen {
   da2Lop: boolean;
   /** Vai trò của người này nằm trong danh sách bắt buộc 2 lớp mà người này chưa bật (XT-06). */
   phaiBat2Lop: boolean;
+  /**
+   * 0.22.0 (QĐ-177): Cấu hình `luong.bat_buoc_2_lop` = 0 → thao tác lương không đòi 2 lớp. Chỉ đọc khi người này CHƯA
+   * bật 2 lớp (đã bật thì không cần biết).
+   */
+  luongKhongBatBuoc2Lop: boolean;
 }
+
+/** Khóa Cấu hình: 2 lớp bắt buộc với thao tác lương (mặc định 1 = bắt buộc). */
+export const KHOA_LUONG_BAT_BUOC_2_LOP = "luong.bat_buoc_2_lop";
 
 /** Khóa `tenant_settings` giữ danh sách mã vai trò bắt buộc 2 lớp (mảng JSON). Chưa đặt = không bắt buộc. */
 export const KHOA_BAT_BUOC_2_LOP = "bao_mat.vai_tro_bat_buoc_2_lop";
@@ -91,10 +99,14 @@ export async function layHoSoQuyen(tx: ClientTenant, userId: string): Promise<Ho
   const phamVi = gopPhamVi(cap);
 
   let phaiBat2Lop = false;
+  let luongKhongBatBuoc2Lop = false;
   if (!nguoiDung.totpEnabledAt && !nguoiDung.isSystem) {
-    const dong = await tx.tenantSetting.findFirst({ where: { key: KHOA_BAT_BUOC_2_LOP, status: "hoat-dong" }, select: { value: true } });
+    const ds = await tx.tenantSetting.findMany({ where: { key: { in: [KHOA_BAT_BUOC_2_LOP, KHOA_LUONG_BAT_BUOC_2_LOP] }, status: "hoat-dong" }, select: { key: true, value: true } });
+    const dong = ds.find((d) => d.key === KHOA_BAT_BUOC_2_LOP);
     const batBuoc = Array.isArray(dong?.value) ? (dong.value as unknown[]).filter((x): x is string => typeof x === "string") : [];
     phaiBat2Lop = vaiTro.some((v) => batBuoc.includes(v.code));
+    // Chỉ đúng giá trị 0 mới tắt; thiếu / sai kiểu → giữ bắt buộc (mặc định an toàn).
+    luongKhongBatBuoc2Lop = ds.find((d) => d.key === KHOA_LUONG_BAT_BUOC_2_LOP)?.value === 0;
   }
 
   return {
@@ -109,6 +121,7 @@ export async function layHoSoQuyen(tx: ClientTenant, userId: string): Promise<Ho
     doiMatKhauLuc: mocMuonHon(nguoiDung.passwordChangedAt, nguoiDung.securityChangedAt),
     da2Lop: Boolean(nguoiDung.totpEnabledAt),
     phaiBat2Lop,
+    luongKhongBatBuoc2Lop,
   };
 }
 

@@ -50,7 +50,7 @@ BEGIN
                                    'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                                    'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
                                    'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
-                                   'salary_profiles', 'approval_transfers')
+                                   'salary_profiles', 'approval_transfers', 'attendance_manual_days')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -74,7 +74,8 @@ END $$;
 --    đánh giá evaluation_adjustments, nhận xét nhật ký thực tập intern_journal_comments,
 --    và (QA 0.19.0) xét ngày công thiếu giờ attendance_day_reviews (QĐ-116), và (0.21.0) phiên bản
 --    hồ sơ lương salary_profiles (LU-02 — sửa = phiên bản mới),
---    (0.20.0 chính sách) lịch sử chuyển bước duyệt approval_transfers (QĐ-135)
+--    (0.20.0 chính sách) lịch sử chuyển bước duyệt approval_transfers (QĐ-135),
+--    (0.22.0) đặt công một ngày attendance_manual_days (QĐ-174 — bản ghi sau thắng)
 --    Không cấp UPDATE/DELETE cho ứng dụng, và chặn thêm bằng trigger để kể cả
 --    chủ sở hữu cũng không lỡ tay sửa lịch sử.
 -- --------------------------------------------------------------------------
@@ -92,7 +93,7 @@ DECLARE
                             'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                             'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
                             'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
-                            'salary_profiles', 'approval_transfers'];
+                            'salary_profiles', 'approval_transfers', 'attendance_manual_days'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -129,6 +130,17 @@ REVOKE DELETE ON public.payroll_param_sets FROM cowork_app;
 REVOKE DELETE ON public.payroll_runs FROM cowork_app;
 REVOKE ALL ON FUNCTION public.tra_may_cham_cong(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.tra_may_cham_cong(text) TO cowork_app;
+-- 0.22.0 (QĐ-175): MÁY LẠ — bảng không có tenant_id (chưa biết thuộc doanh nghiệp nào). Ứng dụng KHÔNG có quyền trực tiếp
+-- (RLS bật, không chính sách); chỉ ghi qua ghi_may_la (đường /iclock), đọc qua ds_may_la (lọc theo IP người xem / IP máy
+-- của doanh nghiệp / đúng SN, cần app.tenant_id), xóa qua xoa_may_la (chỉ khi SN đã được đăng ký).
+REVOKE ALL ON public.attendance_unknown_devices FROM cowork_app;
+ALTER TABLE public.attendance_unknown_devices ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON FUNCTION public.ghi_may_la(text, text, text, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.ds_may_la(text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.xoa_may_la(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ghi_may_la(text, text, text, integer) TO cowork_app;
+GRANT EXECUTE ON FUNCTION public.ds_may_la(text, text) TO cowork_app;
+GRANT EXECUTE ON FUNCTION public.xoa_may_la(text) TO cowork_app;
 
 -- --------------------------------------------------------------------------
 -- 4. Bảng `tenants`: sổ đăng ký doanh nghiệp.

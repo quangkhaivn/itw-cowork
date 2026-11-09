@@ -48,6 +48,9 @@ export const PHAN_HE = [
   // 0.21.0 — Nhân sự giai đoạn 3: tính lương (QĐ-141). view own = phiếu của mình, view rộng hơn = xem lương người
   // khác; create = tính; update = hồ sơ lương; approve = duyệt + khóa; export = xuất file + đánh dấu đã chi.
   "luong",
+  // 0.22.0 — máy chấm công (QĐ-176): Kỹ thuật đăng ký / sửa / xem máy, máy lạ, ánh xạ PIN ↔ nhân viên (chỉ thấy tên)
+  // mà KHÔNG cần quyền hồ sơ nhân sự hay lương.
+  "may_cham_cong",
 ] as const;
 
 // Thêm phân hệ mới: thêm vào CUỐI mảng trên + MO_TA_PHAN_HE, rồi khai quyền cho
@@ -112,6 +115,7 @@ export const MO_TA_PHAN_HE: Record<PhanHe, string> = {
   nhan_su: "Nhân sự",
   danh_gia: "Đánh giá nhân sự",
   luong: "Tính lương",
+  may_cham_cong: "Máy chấm công",
 };
 
 export const MO_TA_HANH_DONG: Record<HanhDongQuyen, string> = {
@@ -174,6 +178,8 @@ const DANH_GIA_QUAN_LY = [...DANH_GIA_CA_NHAN, maQuyen("danh_gia", "update"), ma
  * duyệt. Giám đốc / Quản trị: toàn quyền (duyệt, khóa). Trợ lý AI: không có (LU-60).
  */
 const LUONG_CUA_TOI = maQuyen("luong", "view");
+/** 0.22.0 (QĐ-176): kết nối máy chấm công — Kỹ thuật, Trưởng kỹ thuật, Nhân sự; Giám đốc / Quản trị có sẵn ("*"). */
+const MAY_CHAM_CONG = [maQuyen("may_cham_cong", "view"), maQuyen("may_cham_cong", "create"), maQuyen("may_cham_cong", "update")];
 function rieng(ds: string[], pv: PhamVi): Record<string, PhamVi> {
   return Object.fromEntries(ds.map((m) => [m, pv]));
 }
@@ -297,8 +303,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...CHAM_CONG_QUAN_LY,
       ...DANH_GIA_QUAN_LY,
       LUONG_CUA_TOI,
+      ...MAY_CHAM_CONG,
     ],
-    phamViRieng: { [LUONG_CUA_TOI]: "own" },
+    phamViRieng: { [LUONG_CUA_TOI]: "own", ...rieng(MAY_CHAM_CONG, "all") },
   },
   {
     code: "technical",
@@ -313,8 +320,9 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
       LUONG_CUA_TOI,
+      ...MAY_CHAM_CONG,
     ],
-    phamViRieng: { [LUONG_CUA_TOI]: "own" },
+    phamViRieng: { [LUONG_CUA_TOI]: "own", ...rieng(MAY_CHAM_CONG, "all") },
   },
   {
     code: "project-manager",
@@ -449,6 +457,7 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       // 0.21.0: hồ sơ lương + xem bảng lương toàn công ty, KHÔNG duyệt (QĐ-141).
       maQuyen("luong", "view"),
       maQuyen("luong", "update"),
+      ...MAY_CHAM_CONG,
     ],
     phamViRieng: { ...rieng(tron(["task"], LAM_VIEC), "own"), [maQuyen("danh_gia", "create")]: "own" },
   },
