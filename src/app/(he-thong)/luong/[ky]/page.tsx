@@ -180,7 +180,7 @@ export default async function TrangKyLuong({ params }: { params: Promise<{ ky: s
             <thead><tr><th>Nhân viên</th><th>Loại</th><th className="so">Số tiền</th><th>Lý do</th><th>Kỳ gốc</th><th>Người nhập</th><th>Người duyệt</th><th /></tr></thead>
             <tbody>{k.khoan.map((x) => (
               <tr key={x.id}>
-                <td>{x.hoTen}</td><td>{x.nhanLoai}{x.chieu === "cong" && !x.chiuThue ? " (không chịu thuế)" : ""}</td>
+                <td>{x.hoTen}</td><td>{x.nhanLoai}{x.chieu === "cong" && !x.chiuThue ? " (không chịu thuế)" : ""}{x.tuDoiChieu && <span className="huy-hieu canh-bao" title="Tạo tự động khi bảng công tháng trước khóa sau khi lương đã khóa bằng công tạm — xem lại, giữ hoặc xóa"> Đối chiếu công</span>}</td>
                 <td className="so">{x.chieu === "tru" ? "−" : "+"}{tien(x.soTien)}</td><td>{x.lyDo}</td><td>{x.kyGoc ?? ""}</td><td>{x.nguoiNhap}</td><td>{x.nguoiDuyet ?? "—"}</td>
                 <td>{tt === "nhap" && k.quyen.tinh && <NutGoi url={`/api/v1/luong/khoan/${x.id}`} phuongThuc="DELETE" nhan="Xóa" lopNut="nut nho" xacNhan="Xóa khoản này?" />}</td>
               </tr>

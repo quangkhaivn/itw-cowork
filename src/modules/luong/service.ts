@@ -13,6 +13,7 @@ import { ketQuaHieuLuc } from "@/modules/danh-gia/service";
 import { baoChoNguoiCoQuyen, nguoiGiuQuyen, taoThongBao } from "@/modules/thong-bao/service";
 import { batBuoc2Lop, batBuocQuyenLuong, docCauHinhLuong, ghiXem, locNguoiLuong, thamSoHieuLuc, trongPhamViLuong, xemDuocNguoiKhac, type BoApDung } from "./chung";
 import { hoSoApDung, soNguoiPhuThuoc, soNguoiPhuThuocChuaDu } from "./ho-so";
+import { apDoiChieuChoKy } from "./doi-chieu";
 import { LuocDoTaoKy, NHAN_LOAI_KHOAN, type LuocDoCongTayLuong, type LuocDoKhoan, type LuocDoLyDo } from "./luoc-do";
 import {
   coLoi,
@@ -374,6 +375,8 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
     canhBaoKy.push({ ma: "truy-thu-khong-co-dong", muc: "canh-bao", noiDung: `Có hoa hồng cần truy thu nhưng người nhận không có dòng lương kỳ này: ${truyThuMoCoi.map((t) => `${ten.get(t.user_id) ?? "—"} (phiếu ${t.payment_no})`).join("; ")}. Thu hồi ngoài bảng lương hoặc ở kỳ có dòng.` });
   }
 
+  // QĐ-191: áp các khoản đối chiếu công đang chờ kỳ (bảng công tháng trước khóa sau khi lương đã khóa bằng công tạm).
+  await apDoiChieuChoKy(nc, ky, ids);
   const khoan = await tx.payrollItem.findMany({ where: { runId: id }, orderBy: { createdAt: "asc" } });
   const khoanMoCoi = khoan.filter((k) => !coDong.has(k.userId));
   if (khoanMoCoi.length) canhBaoKy.push({ ma: "khoan-khong-co-dong", muc: "loi", noiDung: `${khoanMoCoi.length} khoản cộng / trừ của người không có dòng lương kỳ này — xóa khoản hoặc bổ sung hồ sơ lương.` });
@@ -732,7 +735,7 @@ export async function chiTietKyLuong(nc: NguCanh, id: string) {
       const g = kyGoc.find((x) => x.id === k.adjustsRunId);
       return {
         id: k.id, nguoiId: k.userId, hoTen: ten.get(k.userId) ?? "—", chieu: k.direction, loai: k.category, nhanLoai: NHAN_LOAI_KHOAN[k.category as keyof typeof NHAN_LOAI_KHOAN] ?? k.category,
-        soTien: Number(k.amount), chiuThue: k.taxable, lyDo: k.reason, kyGoc: g ? nhanKy(g.year, g.month) : null,
+        soTien: Number(k.amount), chiuThue: k.taxable, lyDo: k.reason, kyGoc: g ? nhanKy(g.year, g.month) : null, tuDoiChieu: Boolean(k.reconciliationId),
         nguoiNhap: ten.get(k.createdBy) ?? "—", nguoiDuyet: k.approvedBy ? (ten.get(k.approvedBy) ?? "—") : null, luc: k.createdAt,
       };
     }),

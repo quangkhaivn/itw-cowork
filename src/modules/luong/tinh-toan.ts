@@ -988,3 +988,70 @@ export function nguoiPhuThuocDuGiayTo(hoTen: string | null | undefined, soGiayTo
   const ten = (hoTen ?? "").trim();
   return ten.length >= 2 && !/\(nhập CSV — bổ sung họ tên\)/.test(ten) && giayToNguoiPhuThuocHopLe(soGiayTo);
 }
+
+// ---------------------------------------------------------------------------
+// 0.22.0 (QĐ-191): đối chiếu công sau khi khóa bảng công
+// ---------------------------------------------------------------------------
+
+/** Một dòng bảng công đã khóa (đủ để tính công tính lương). */
+export interface DongCongDoiChieu {
+  ngay: string;
+  dieuChinh: boolean;
+  cong: number;
+  nghi: number;
+  nghiCoLuong: boolean;
+  phutTangCa: number;
+  phutTangCaDem: number;
+  loaiNgay: string;
+  phutMuon: number;
+  phutSom: number;
+}
+
+/**
+ * Thay CÔNG trong ảnh chụp đầu vào bằng công của bảng công đã khóa (giữ nguyên mọi thứ khác: hồ sơ, đoạn, lễ, phụ cấp, KPI,
+ * hoa hồng, khoản, tham số). Dòng điều chỉnh → đoạn cuối; ngày ngoài mọi đoạn (không có hồ sơ) bỏ qua. Hàm thuần.
+ */
+export function thayCongTuBangCong(dv: DauVaoLuong, dong: DongCongDoiChieu[]): DauVaoLuong {
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const rong = (): PhutTangCa => ({ ...PHUT_TANG_CA_RONG });
+  const doanCu: DoanLuong[] = dv.doan?.length
+    ? dv.doan
+    : [{
+        hoSoId: dv.hoSo.id, tu: khoangThang(dv.ky.nam, dv.ky.thang).tu, den: khoangThang(dv.ky.nam, dv.ky.thang).den, loaiHopDong: dv.hoSo.loaiHopDong,
+        tyLeThuViec: dv.hoSo.tyLeThuViec, cachTra: dv.hoSo.cachTra, luongCoBan: dv.hoSo.luongCoBan, phuCap: dv.phuCap,
+        cong: { thucTe: dv.cong.thucTe, nghiCoLuong: dv.cong.nghiCoLuong, le: dv.cong.le, tangCaPhut: dv.cong.tangCaPhut },
+      }];
+  const doan = doanCu.map((d) => ({ ...d, cong: { thucTe: 0, nghiCoLuong: 0, le: d.cong.le, tangCaPhut: rong() } }));
+  const tc = rong();
+  let thucTe = 0, nghiCo = 0, nghiKhong = 0, muon = 0, som = 0, soDc = 0;
+  for (const r of dong) {
+    const i = r.dieuChinh ? doan.length - 1 : doan.findIndex((d) => d.tu <= r.ngay && r.ngay <= d.den);
+    if (r.dieuChinh) soDc++;
+    muon += r.phutMuon;
+    som += r.phutSom;
+    if (!r.nghiCoLuong) nghiKhong += r.nghi;
+    if (i < 0) continue;
+    const d = doan[i];
+    d.cong.thucTe += r.cong;
+    thucTe += r.cong;
+    if (r.nghiCoLuong) {
+      d.cong.nghiCoLuong += r.nghi;
+      nghiCo += r.nghi;
+    }
+    const ngayTc = r.phutTangCa - r.phutTangCaDem;
+    const loai: [keyof PhutTangCa, keyof PhutTangCa] = r.loaiNgay === "le" ? ["le", "leDem"] : r.loaiNgay === "nghi-tuan" ? ["nghiTuan", "nghiTuanDem"] : ["thuong", "thuongDem"];
+    d.cong.tangCaPhut[loai[0]] += ngayTc;
+    d.cong.tangCaPhut[loai[1]] += r.phutTangCaDem;
+    tc[loai[0]] += ngayTc;
+    tc[loai[1]] += r.phutTangCaDem;
+  }
+  for (const d of doan) {
+    d.cong.thucTe = r2(d.cong.thucTe);
+    d.cong.nghiCoLuong = r2(d.cong.nghiCoLuong);
+  }
+  return {
+    ...dv,
+    ...(dv.doan?.length ? { doan } : {}),
+    cong: { ...dv.cong, thucTe: r2(thucTe), nghiCoLuong: r2(nghiCo), nghiKhongLuong: r2(nghiKhong), tangCaPhut: tc, phutMuon: muon, phutSom: som, soDongDieuChinh: soDc },
+  };
+}

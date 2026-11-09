@@ -10,6 +10,7 @@ import { dateVeNgay, ngayVeDate } from "@/modules/crm/chung";
 import { baoChoNguoiCoQuyen, taoThongBao } from "@/modules/thong-bao/service";
 import { banDoTen, docCauHinhChamCong, lichMacDinh, locNguoiXem, nguoiChuaGanLich, so } from "./chung";
 import { tinhCong } from "./tinh-cong";
+import { doiChieuCongSauKhoa } from "@/modules/luong/doi-chieu";
 import type { LuocDoGiaiQuyetPhanHoi, LuocDoPhanHoiCong, LuocDoSinhBangCong } from "./luoc-do";
 import { NHAN_CO, NHAN_NGUON } from "./service";
 import {
@@ -264,7 +265,9 @@ export async function khoaBangCong(nc: NguCanh, id: string, bayGio = new Date())
   await nc.tx.timesheet.update({ where: { id }, data: { status: "da-khoa", lockedAt: bayGio, lockedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "khoa-bang-cong", objectType: "timesheet", objectId: id, before: { trangThai: "nhap" }, after: { trangThai: "da-khoa", nam: bang.year, thang: bang.month } });
   await nc.suKien({ eventType: SU_KIEN.TIMESHEET_LOCKED, objectType: "timesheet", objectId: id, payload: { nam: bang.year, thang: bang.month } });
-  return { id, trangThai: "da-khoa" };
+  // QĐ-191: kỳ lương tháng này đã khóa bằng công TẠM → đối chiếu với bảng công vừa khóa, tạo khoản điều chỉnh nháp (chỉ trả số đếm).
+  const doiChieu = await doiChieuCongSauKhoa(nc, id);
+  return { id, trangThai: "da-khoa", doiChieu };
 }
 
 /** Xuất CSV cho tính lương / kế toán (NS-54): tổng hợp theo người, hoặc chi tiết từng ngày. */
