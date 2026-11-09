@@ -4,6 +4,7 @@ import TrongRong from "@/components/ui/TrongRong";
 import FormNhanh from "@/components/nhan-su/FormNhanh";
 import Can2Lop from "@/components/luong/Can2Lop";
 import FormHoSoLuong from "@/components/luong/FormHoSoLuong";
+import NhapCsvXemTruoc from "@/components/nhan-su/NhapCsvXemTruoc";
 import { docLuong, tien } from "@/components/luong/doc-luong";
 import { taoNguCanh } from "@/lib/api";
 import { LoiKhongTimThay } from "@/lib/loi";
@@ -115,12 +116,20 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
                 {n.hoSo ? (
                   <><td>{n.hoSo.nhanLoaiHopDong}</td><td>{n.hoSo.nhanCachTra}</td><td className="so">{tien(n.hoSo.luongCoBan)}</td><td className="so">{tien(n.hoSo.luongDongBH)}</td></>
                 ) : <td colSpan={4}><span className="huy-hieu canh-bao">Chưa có hồ sơ lương</span></td>}
-                <td className="so">{n.soNguoiPhuThuoc}</td><td>{n.hoSo?.soTaiKhoan ? "Có" : "—"}</td><td>{n.hoSo ? n.hoSo.hieuLucTu.split("-").reverse().join("/") : ""}</td>
+                <td className="so">{n.soNguoiPhuThuoc}</td><td>{n.hoSo?.soTaiKhoan ? (n.hoSo.hinhThucTra === "tien-mat" ? "Có (trả tay)" : "Có") : n.hoSo ? "Trả tay" : "—"}</td><td>{n.hoSo ? n.hoSo.hieuLucTu.split("-").reverse().join("/") : ""}</td>
               </tr>
             ))}</tbody>
           </table></div>
         )}
       </section>
+      {sua && (
+        <section className="the">
+          <div className="dau"><h2>Nhập CSV hồ sơ lương</h2></div>
+          <NhapCsvXemTruoc url="/api/v1/luong/ho-so/nhap-csv" nhanGhi="Tạo phiên bản hồ sơ"
+            goiY="Cột: Email, Loại hợp đồng (Chính thức / Thử việc / Thời vụ / Thực tập), Lương cơ bản, Lương đóng BH, Số tài khoản, Ngân hàng, Mã số thuế, Số người phụ thuộc; tùy chọn % lương thử việc, Hình thức trả. Hiệu lực từ ngày 1 tháng này; trường không có trong tệp giữ theo hồ sơ hiện hành. Không nhập được hồ sơ của chính mình; đổi tài khoản vẫn báo nhân viên. Ô bắt đầu bằng = + - @ bị báo lỗi dòng."
+            cot={[["hoTen", "Nhân viên"], ["loaiHopDong", "Hợp đồng"], ["luongCoBan", "Lương cơ bản"], ["luongDongBH", "Lương đóng BH"], ["taiKhoan", "Tài khoản"], ["hinhThucTra", "Hình thức trả"], ["soNguoiPhuThuoc", "Người phụ thuộc"], ["taoMoi", "Hồ sơ mới"], ["doiTaiKhoan", "Đổi tài khoản"]]} />
+        </section>
+      )}
       <section className="the">
         <div className="dau">
           <h2>Danh mục phụ cấp</h2>

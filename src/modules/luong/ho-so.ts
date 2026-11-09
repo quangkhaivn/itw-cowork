@@ -7,8 +7,9 @@ import { taoThongBao } from "@/modules/thong-bao/service";
 import { banDoTen } from "@/modules/cham-cong/chung";
 import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { batBuocQuyenLuong, ghiXem, locNguoiLuong, trongPhamViLuong } from "./chung";
-import type { LuocDoHoSoLuong, LuocDoKetThucNguoiPhuThuoc, LuocDoLoaiPhuCap, LuocDoNguoiPhuThuoc } from "./luoc-do";
-import { chonBoHieuLuc, NHAN_CACH_TRA, NHAN_LOAI_HOP_DONG, NHAN_PHUONG_PHAP_THUE, type CachTra, type LoaiHopDong, type PhuongPhapThue } from "./tinh-toan";
+import { LuocDoHoSoLuong, type LuocDoKetThucNguoiPhuThuoc, type LuocDoLoaiPhuCap, type LuocDoNguoiPhuThuoc } from "./luoc-do";
+import { phanTichCsvHoSoLuong } from "./nhap-csv";
+import { chonBoHieuLuc, NHAN_CACH_TRA, NHAN_LOAI_HOP_DONG, NHAN_PHUONG_PHAP_THUE, THUE_GOI_Y, type CachTra, type LoaiHopDong, type PhuongPhapThue } from "./tinh-toan";
 
 /**
  * Hồ sơ lương (LU-01 → LU-05): phiên bản theo ngày hiệu lực (chỉ ghi thêm), danh mục phụ cấp, người phụ thuộc.
@@ -270,4 +271,87 @@ export async function ketThucNguoiPhuThuoc(nc: NguCanh, id: string, d: z.infer<t
   await nc.tx.salaryDependent.update({ where: { id }, data: { toMonth: ngayVeDate(`${d.denThang}-01`) } });
   await nc.kiemToan({ action: "sua", objectType: "salary_dependent", objectId: id, before: { denThang: x.toMonth ? dateVeNgay(x.toMonth).slice(0, 7) : null }, after: { denThang: d.denThang } });
   return { id };
+}
+
+// ---------------------------------------------------------------------------
+// 0.22.0 (QĐ-179) — nhập CSV hồ sơ lương hàng loạt
+// ---------------------------------------------------------------------------
+
+/**
+ * Nhập CSV hồ sơ lương: XEM TRƯỚC (`ghi` = false) kiểm từng dòng — email có thật, trong phạm vi, không phải chính mình
+ * (QĐ-159), không trùng trong tệp, qua đúng lược đồ hồ sơ; GHI tạo PHIÊN BẢN MỚI cho từng dòng hợp lệ qua `taoHoSoLuong`
+ * (kiểm toán, đổi tài khoản → báo nhân viên). Trường không có trong tệp giữ theo phiên bản đang hiệu lực (phụ cấp, thưởng
+ * KPI, hoa hồng, cách trả…). Số người phụ thuộc lớn hơn số đang đăng ký → thêm người phụ thuộc "chưa ghi tên" từ tháng
+ * hiệu lực (Nhân sự bổ sung họ tên sau); nhỏ hơn → chỉ cảnh báo (kết thúc người phụ thuộc làm tay, có tháng).
+ */
+export async function nhapCsvHoSoLuong(nc: NguCanh, noiDung: string, ghi: boolean, hieuLucTu = `${homNayVN().slice(0, 7)}-01`) {
+  batBuocQuyenLuong(nc, "luong.update", { objectType: "salary_profile" });
+  const { dong, loi, thieuCot } = phanTichCsvHoSoLuong(noiDung);
+  if (thieuCot.length) throw new LoiNghiepVu(`Tệp thiếu cột: ${thieuCot.join(", ")}.`, 422, "thieu-cot");
+  const emails = [...new Set(dong.map((d) => d.email))];
+  const nguoi = await nc.tx.user.findMany({ where: { isSystem: false, email: { in: emails, mode: "insensitive" } }, select: { id: true, email: true, fullName: true, status: true } });
+  const theoEmail = new Map(nguoi.map((u) => [u.email.toLowerCase(), u]));
+  const hien = await hoSoApDung(nc.tx, nguoi.map((u) => u.id), hieuLucTu);
+  const npt = await soNguoiPhuThuoc(nc.tx, nguoi.map((u) => u.id), hieuLucTu);
+  const loc = await locNguoiLuong(nc);
+  const loiDong = [...loi];
+  const daGap = new Map<string, number>();
+  const hopLe: { soDong: number; nguoiId: string; hoTen: string; hoSo: z.infer<typeof LuocDoHoSoLuong>; soNguoiPhuThuoc: number | null; nptHienTai: number; taoMoi: boolean; doiTaiKhoan: boolean }[] = [];
+  for (const d of dong) {
+    const u = theoEmail.get(d.email);
+    if (!u || (loc.userId && !loc.userId.in.includes(u.id))) { loiDong.push({ soDong: d.soDong, lyDo: `Không có nhân viên với email ${d.email}.` }); continue; }
+    if (u.status !== "hoat-dong") { loiDong.push({ soDong: d.soDong, lyDo: `${u.fullName} đã ngừng hoạt động.` }); continue; }
+    if (u.id === nc.hoSo.userId) { loiDong.push({ soDong: d.soDong, lyDo: "Không ai tự nhập hồ sơ lương của chính mình (QĐ-159) — nhờ người khác có quyền." }); continue; }
+    if (daGap.has(u.id)) { loiDong.push({ soDong: d.soDong, lyDo: `Trùng email với dòng ${daGap.get(u.id)}.` }); continue; }
+    daGap.set(u.id, d.soDong);
+    const h = hien.get(u.id) ?? null;
+    const loaiHd = d.loaiHopDong ?? ((h?.contractType as LoaiHopDong | undefined) ?? "chinh-thuc");
+    const vao = {
+      nguoiId: u.id, hieuLucTu, loaiHopDong: loaiHd,
+      tyLeThuViec: d.tyLeThuViec ?? (h?.probationPercent !== null && h?.probationPercent !== undefined ? Number(h.probationPercent) : null),
+      cachTra: h?.payBasis ?? "thang", luongCoBan: d.luongCoBan, luongDongBH: d.luongDongBH ?? (h ? Number(h.insuranceSalary) : 0),
+      thuongKpi: h ? Number(h.kpiBonus) : 0, huongHoaHong: h?.commissionEnabled ?? false,
+      phuongPhapThue: h && (!d.loaiHopDong || d.loaiHopDong === h.contractType) ? h.taxMethod : THUE_GOI_Y[loaiHd],
+      phuCap: Array.isArray(h?.allowances) ? (h!.allowances as { loaiId: string; soTien: number }[]) : [],
+      soTaiKhoan: d.soTaiKhoan ?? h?.bankAccount ?? null, nganHang: d.nganHang ?? h?.bankName ?? null, chuTaiKhoan: h?.accountHolder ?? null,
+      maSoThue: d.maSoThue ?? h?.taxCode ?? null, ghiChu: `Nhập CSV hồ sơ lương (dòng ${d.soDong})`,
+      hinhThucTra: d.hinhThucTra ?? ((h?.paymentMethod as "chuyen-khoan" | "tien-mat" | undefined) ?? "chuyen-khoan"),
+    };
+    const kt = LuocDoHoSoLuong.safeParse(vao);
+    if (!kt.success) { loiDong.push({ soDong: d.soDong, lyDo: kt.error.issues.map((i) => i.message).join("; ") }); continue; }
+    hopLe.push({
+      soDong: d.soDong, nguoiId: u.id, hoTen: u.fullName, hoSo: kt.data, soNguoiPhuThuoc: d.soNguoiPhuThuoc, nptHienTai: npt.get(u.id) ?? 0, taoMoi: !h,
+      doiTaiKhoan: Boolean(h && (h.bankAccount ?? null) !== kt.data.soTaiKhoan),
+    });
+  }
+  loiDong.sort((a, b) => a.soDong - b.soDong);
+  const xemTruoc = {
+    soDong: dong.length + loi.length,
+    hieuLucTu,
+    hopLe: hopLe.map((h) => ({
+      soDong: h.soDong, hoTen: h.hoTen, loaiHopDong: NHAN_LOAI_HOP_DONG[h.hoSo.loaiHopDong], luongCoBan: h.hoSo.luongCoBan, luongDongBH: h.hoSo.luongDongBH,
+      taiKhoan: cheTaiKhoan(h.hoSo.soTaiKhoan), hinhThucTra: h.hoSo.hinhThucTra === "tien-mat" || !h.hoSo.soTaiKhoan ? "Trả tay" : "Chuyển khoản",
+      soNguoiPhuThuoc: h.soNguoiPhuThuoc ?? h.nptHienTai, taoMoi: h.taoMoi, doiTaiKhoan: h.doiTaiKhoan,
+    })),
+    loi: loiDong.slice(0, 200),
+    soLoi: loiDong.length,
+  };
+  if (!ghi) return { ...xemTruoc, daGhi: 0, canhBao: [] as string[] };
+  let daGhi = 0;
+  const canhBao: string[] = [];
+  for (const h of hopLe) {
+    await taoHoSoLuong(nc, h.hoSo);
+    daGhi++;
+    if (h.soNguoiPhuThuoc !== null && h.soNguoiPhuThuoc > h.nptHienTai) {
+      for (let i = h.nptHienTai; i < h.soNguoiPhuThuoc; i++) {
+        await themNguoiPhuThuoc(nc, { nguoiId: h.nguoiId, hoTen: `Người phụ thuộc ${i + 1} (nhập CSV — bổ sung họ tên)`, quanHe: "chưa ghi", soGiayTo: null, tuThang: hieuLucTu.slice(0, 7), denThang: null });
+      }
+      canhBao.push(`${h.hoTen}: thêm ${h.soNguoiPhuThuoc - h.nptHienTai} người phụ thuộc chưa ghi tên — bổ sung họ tên, quan hệ ở Hồ sơ lương.`);
+    } else if (h.soNguoiPhuThuoc !== null && h.soNguoiPhuThuoc < h.nptHienTai) {
+      canhBao.push(`${h.hoTen}: tệp ghi ${h.soNguoiPhuThuoc} người phụ thuộc, đang đăng ký ${h.nptHienTai} — kết thúc người phụ thuộc ở Hồ sơ lương (có tháng kết thúc), không tự xóa.`);
+    }
+  }
+  // Nhật ký tổng: không ghi số tiền (QĐ-148). Từng phiên bản đã có nhật ký riêng "tao-ho-so-luong".
+  await nc.kiemToan({ action: "nhap-ho-so-luong", objectType: "salary_profile", after: { soDong: xemTruoc.soDong, daGhi, soLoi: loiDong.length, hieuLucTu } });
+  return { ...xemTruoc, daGhi, canhBao };
 }
