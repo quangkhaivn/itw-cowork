@@ -7,6 +7,7 @@ import { docDuLieu, yeuCauDangNhap } from "@/lib/trang";
 import { NHAN_HANH_DONG, NHAN_DOI_TUONG } from "@/modules/kiem-toan/service";
 import { tongQuanHeThong } from "@/modules/tong-quan/service";
 import { bangDieuKhien } from "@/modules/bang-dieu-khien/service";
+import { nhomDuocThay, viecThietLap } from "@/modules/thiet-lap-ban-dau/service";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,15 @@ export const dynamic = "force-dynamic";
  */
 export default async function BangDieuKhien() {
   const nd = await yeuCauDangNhap();
-  const { bdk, tq } = await docDuLieu(nd, async (tx) => ({
-    bdk: await bangDieuKhien(taoNguCanh(tx, nd.phien.tenantId, nd.hoSo)),
-    tq: await tongQuanHeThong(tx, nd.hoSo),
-  }));
+  const { bdk, tq, thietLap } = await docDuLieu(nd, async (tx) => {
+    const nc = taoNguCanh(tx, nd.phien.tenantId, nd.hoSo);
+    return {
+      bdk: await bangDieuKhien(nc),
+      tq: await tongQuanHeThong(tx, nd.hoSo),
+      // 0.22.0 (QĐ-180): card nhắc "Thiết lập ban đầu" cho người còn việc chưa xong (chỉ phần mình phụ trách).
+      thietLap: nhomDuocThay(nc).length ? await viecThietLap(nc) : null,
+    };
+  });
 
   const khongCoKhoiNao = !bdk.banHang && !bdk.pipeline && !bdk.baoGia && !bdk.donHang && !bdk.kho && !bdk.dichVu && !bdk.duAn && !bdk.marketing;
 
@@ -32,6 +38,16 @@ export default async function BangDieuKhien() {
         tieuDe={`Xin chào, ${nd.hoSo.hoTen}`}
         moTa="Số liệu thật, tính ngay lúc mở trang. Mỗi người chỉ thấy phần thuộc phạm vi của mình — không có con số minh họa."
       />
+
+      {thietLap && thietLap.soViecChuaXong > 0 && (
+        <section className="the">
+          <div className="dau"><h2>Thiết lập ban đầu: còn {thietLap.soViecChuaXong} việc</h2><Link className="nut nho chinh" href="/thiet-lap-ban-dau">Xem và bổ sung</Link></div>
+          <p className="phu nho" style={{ margin: "0 16px 12px" }}>
+            {thietLap.nhom.flatMap((n) => n.viec.filter((v) => !v.xong).map((v) => v.ten)).slice(0, 5).join(" · ")}
+            {thietLap.soViecChuaXong > 5 ? " …" : ""} — không bắt buộc, phần mềm vẫn chạy.
+          </p>
+        </section>
+      )}
 
       {bdk.banHang && (
         <>
