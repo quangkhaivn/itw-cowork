@@ -38,7 +38,7 @@ Thông tin đăng nhập được ghi vào tệp `THONG-TIN-DANG-NHAP.txt` trong
 
 | Doanh nghiệp (ô "Mã doanh nghiệp") | Tài khoản | Mật khẩu |
 |---|---|---|
-| `demo`: công ty mẫu, có sẵn khách, báo giá, đơn hàng, kho, hoá đơn | `giamdoc@demo.test` (Giám đốc). Các vai trò khác: `quantri@`, `tp.kinhdoanh@`, `kd1@`, `kd2@`, `marketing@`, `ketoan@`, `tp.kythuat@`, `ktv1@`, `cskh@`, `kho@` (đều `…@demo.test`) | `MauThu2026x` |
+| `demo`: công ty mẫu, có sẵn khách, báo giá, đơn hàng, kho, hoá đơn và dữ liệu Nhân sự (mục 4b) | `giamdoc@demo.test` (Giám đốc). Các vai trò khác: `quantri@`, `tp.kinhdoanh@`, `kd1@`, `kd2@`, `marketing@`, `ketoan@`, `tp.kythuat@`, `ktv1@`, `cskh@`, `kho@`, `thuctap@` (thực tập sinh) (đều `…@demo.test`) | `MauThu2026x` |
 | `itw`: doanh nghiệp trống, để thử khai báo từ đầu | `admin@thegioitinhoc.vn` | Xem trong `THONG-TIN-DANG-NHAP.txt` (lần đầu bắt đổi) |
 
 Mỗi vai trò thấy một menu khác nhau, nên có thể đăng nhập từng tài khoản để xem phân quyền.
@@ -58,7 +58,16 @@ Mở thư mục `TGTH-Cowork\may-ca-nhan`:
 
 ## 4b. Thử phần Nhân sự (0.19 → 0.21): chấm công, giao việc, đánh giá, thực tập, lương
 
-Đăng nhập `giamdoc@demo.test` (doanh nghiệp `demo`), menu **Nhân sự**:
+Đăng nhập `giamdoc@demo.test` (doanh nghiệp `demo`), menu **Nhân sự**. **Có sẵn dữ liệu mẫu DEMO** (nạp ở bước 7 của bộ cài, mọi tên và ghi chú có chữ "DEMO"), nên mở ra là thấy ngay:
+
+- **Thiết lập chấm công**: địa điểm *Văn phòng DEMO* (bán kính 150 m), ca 08:00–17:00, lịch thứ 2 – thứ 6 + sáng thứ 7 gán cho 10 nhân viên (mỗi người một mã chấm công 1001 → 1010), máy chấm công mẫu SN `DEMO0001` (máy giả, sẽ hiện *mất kết nối*), ngày lễ trong năm.
+- **Chấm công tháng trước** (đúng giờ, đi muộn, về sớm, quên chấm có giải trình), một đơn nghỉ phép và một đơn tăng ca đã duyệt, **bảng công tháng trước đã khóa**.
+- **Hôm nay** (theo ngày nạp): bảng trực tiếp có người đã vào ca, đi muộn, đang ở hiện trường, chưa đến, và một lần chấm GPS ngoài vùng chờ xem xét. Nạp trước 08:00 thì chỉ có các lần chấm tới giờ nạp.
+- **Công việc** ở đủ trạng thái (chờ nhận, đang làm, chờ duyệt, đã duyệt có điểm, bị trả lại), một mẫu việc, một việc định kỳ; **báo cáo ngày** tuần này và một **báo cáo tuần** có nhận xét.
+- **Bộ KPI Kinh doanh** và kỳ đánh giá tháng trước với 3 phiếu đã chốt (loại A, B, C); thực tập sinh `thuctap@demo.test` có hồ sơ, 2 nhật ký tuần, phiếu đánh giá đang nháp.
+- **Kỳ lương tháng trước** đã tính, còn ở **nháp**: tham số lương nạp sẵn chưa được kế toán xác nhận nên chưa gửi duyệt được (xác nhận ở *Tính lương → Tham số lương* rồi tính lại). Xem kỳ lương phải bật xác thực 2 lớp (dưới đây).
+
+Các chức năng:
 
 - **Bảng chấm công trực tiếp**: ai đã vào ca, đi muộn, chưa đến, đang ở hiện trường; tự làm mới mỗi 10 giây. **Chấm công** (GPS): bấm Vào ca / Ra ca trên trình duyệt (trình duyệt hỏi quyền vị trí → Cho phép).
 - **Công việc**: giao việc có độ khó, cần duyệt; người nhận bấm Nhận / Từ chối; thẻ *Chờ tôi duyệt*, *Chờ tôi nhận*; **Mẫu & định kỳ**.
@@ -66,13 +75,13 @@ Mở thư mục `TGTH-Cowork\may-ca-nhan`:
 - **Thực tập**: nhật ký tuần, phiếu đánh giá theo mẫu của trường, in A4.
 - **Tính lương**: bắt buộc **xác thực 2 lớp** — vào *Tài khoản của tôi → Bật xác thực 2 lớp* (cài Google Authenticator / Microsoft Authenticator trên điện thoại, quét mã). Sau đó: Hồ sơ lương, Tham số lương, Kỳ lương, Phiếu lương của tôi.
 
-### Những phần chưa có — bổ sung ngay trong phần mềm khi đang chạy
+### Thay bằng dữ liệu của mình — ngay trong phần mềm khi đang chạy
 
 | Phần | Bổ sung ở đâu |
 |---|---|
-| **Máy chấm công vân tay** (ZKTeco) | Mở bằng **`CHAY-MANG-NOI-BO.bat`** (thay cho CHAY.bat) — cửa sổ hiện IP của máy tính. Trên máy chấm công: *Comm. → Cloud Server Setting (ADMS)*: Server Address = IP đó, Port = 3000, tắt HTTPS. Trong Cowork: **Nhân sự → Máy chấm công → Đăng ký máy** (nhập số serial SN). Gán mã chấm công (PIN) cho nhân viên ở **Nhân sự → Hồ sơ nhân sự**. Khoảng 1 phút sau máy hiện *Trực tuyến*. |
+| **Máy chấm công vân tay** (ZKTeco) | Mở bằng **`CHAY-MANG-NOI-BO.bat`** (thay cho CHAY.bat) — cửa sổ hiện IP của máy tính. Trên máy chấm công: *Comm. → Cloud Server Setting (ADMS)*: Server Address = IP đó, Port = 3000, tắt HTTPS. Trong Cowork: **Nhân sự → Máy chấm công → Đăng ký máy** (nhập số serial SN; máy mẫu `DEMO0001` chuyển *Ngừng hoạt động*). Gán mã chấm công (PIN) cho nhân viên ở **Nhân sự → Hồ sơ nhân sự**. Khoảng 1 phút sau máy hiện *Trực tuyến*. |
 | **Mẫu phiếu đánh giá sinh viên của trường** | **Thực tập → Mẫu phiếu → Thêm mẫu (từ mẫu chung)** → soạn bằng biểu mẫu (ô thông tin, phần, tiêu chí, thang điểm), bấm *Xem trước bản in* để so với mẫu giấy. |
-| **Địa điểm làm việc / bán kính GPS, ca, lịch làm việc, ngày lễ** | **Nhân sự → Thiết lập chấm công**. |
+| **Địa điểm làm việc / bán kính GPS, ca, lịch làm việc, ngày lễ** (sửa toạ độ *Văn phòng DEMO*, thêm lễ âm lịch) | **Nhân sự → Thiết lập chấm công**. |
 | **Tham số lương** (bảo hiểm, lương tối thiểu vùng, giảm trừ, biểu thuế) | **Tính lương → Tham số lương**: đúng thì bấm *Xác nhận*, sai thì *Nhập bộ mới* cùng ngày hiệu lực. Bảng lương dùng tham số chưa xác nhận sẽ không gửi duyệt được. |
 | **Hồ sơ lương, phụ cấp, người phụ thuộc, tài khoản ngân hàng** | **Tính lương → Hồ sơ lương** (một người không tự sửa hồ sơ của chính mình). |
 | **Logo công ty** (in phiếu, báo giá) | **Quản trị → Hồ sơ công ty**. |
