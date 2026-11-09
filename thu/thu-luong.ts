@@ -189,9 +189,10 @@ async function main() {
     { userId: tt },
     { userId: ad },
   ]);
-  // 0.22.0: bảng công NHÁP không được dùng (chưa qua phản hồi) — vẫn tính bằng công mặc định, cảnh báo "chưa khóa".
+  // 0.22.0 (QĐ-183): bảng công NHÁP → nguồn công TẠM ("bảng công nháp") cho người có dòng, cảnh báo "chưa khóa".
   const rNhap = await voi(T, kt, (nc) => tinhKyLuong(nc, k3.id));
-  dat("0.22.0: bảng công còn nháp → không dùng, vẫn tính (mặc định) + cảnh báo chưa khóa", rNhap.nguonCong["bang-cong"] === 0 && rNhap.canhBao.some((c) => c.ma === "bang-cong-chua-khoa" && /chưa khóa/.test(c.noiDung)));
+  dat("0.22.0: bảng công còn nháp → dùng làm nguồn công tạm (bang-cong-nhap) + cảnh báo chưa khóa",
+    rNhap.nguonCong["bang-cong"] === 0 && rNhap.nguonCong["bang-cong-nhap"] === 4 && rNhap.canhBao.some((c) => c.ma === "bang-cong-chua-khoa" && /chưa khóa/.test(c.noiDung)), JSON.stringify(rNhap.nguonCong));
   await chu.timesheet.update({ where: { id: bc3.id }, data: { status: "da-khoa", lockedAt: MOC, lockedBy: hr } });
   // 0.22.0 (QĐ-172): ngày thiếu giờ còn chờ quyết KHÔNG chặn — tính theo công hiện tại + cảnh báo (kỳ và dòng).
   const rTg = await voi(T, kt, (nc) => tinhKyLuong(nc, k3.id));

@@ -81,6 +81,8 @@ async function main() {
   console.log("=== QA độc lập Nhân sự – chấm công (0.19.0) ===\n");
   const T = (await seedNenMong(chu, `qa-cc-${DAU}`, "QA chấm công")).id;
   const T2 = (await seedNenMong(chu, `qa-cc2-${DAU}`, "QA chấm công 2")).id;
+  // 0.22.0 (QĐ-181): bài 0.19 thử máy đã được tin — tắt xác minh sở hữu (xác minh thử ở thu-mo-dan).
+  for (const t of [T, T2]) await chu.tenantSetting.create({ data: { tenantId: t, key: "may_cham_cong.xac_minh_so_huu", value: 0 } });
   const vaiTro = async (t: string, code: string) => (await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: t, code } } })).id;
   async function nguoi(t: string, ten: string, vai: string, quanLyId?: string, tenDay?: string) {
     const u = await chu.user.create({

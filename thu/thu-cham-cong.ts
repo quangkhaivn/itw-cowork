@@ -85,6 +85,9 @@ async function main() {
   await caiDat(T, "nghi_phep.cong_don_theo_thang", 0);
   await caiDat(T, "nghi_phep.so_ngay_nam", 5);
   await caiDat(T, "nghi_phep.tham_nien_so_nam", 50);
+  // 0.22.0 (QĐ-181): bài 0.19 thử máy đã được tin — tắt xác minh sở hữu (xác minh thử ở thu-mo-dan).
+  await caiDat(T, "may_cham_cong.xac_minh_so_huu", 0);
+  await caiDat(T2, "may_cham_cong.xac_minh_so_huu", 0);
 
   // ------------------------------------------------------------------
   console.log("— Thiết lập: địa điểm, ca, lịch, ngày lễ, mã chấm công —");

@@ -74,6 +74,8 @@ async function main() {
   console.log("=== QA 0.22.0 — Mở dần, bổ sung sau ===\n");
   const T = (await seedNenMong(chu, `qa-md-${DAU}`, "Doanh nghiệp QA mở dần")).id;
   const T2 = (await seedNenMong(chu, `qa-md2-${DAU}`, "Doanh nghiệp QA mở dần 2")).id;
+  // QĐ-181: bài này thử máy chấm công sau khi đã tin máy — tắt xác minh sở hữu cho hai doanh nghiệp thử (xác minh thử ở thu-mo-dan).
+  for (const t of [T, T2]) await chu.tenantSetting.create({ data: { tenantId: t, key: "may_cham_cong.xac_minh_so_huu", value: 0 } });
   await seedLichMacDinh(chu, T, "2025-01-01");
   const vaiTro = async (code: string, t = T) => (await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: t, code } } })).id;
   async function nguoi(ten: string, vai: string, o: { hai?: boolean; t?: string } = {}) {
@@ -137,8 +139,11 @@ async function main() {
   await voi(T, kt, (nc) => tinhKyLuong(nc, k3.id));
   const lB = await chu.payrollLine.findFirstOrThrow({ where: { runId: k3.id, userId: nvB } });
   const wB = lB.warnings as { ma: string; noiDung: string }[];
-  dat("L3: bảng công nháp ghi B vắng nửa tháng, lương tạm tính đủ công → cảnh báo “bảng công nháp ít hơn”",
-    wB.some((c) => c.ma === "cong-mac-dinh-lech-bang-nhap"), JSON.stringify(wB.map((c) => c.ma)));
+  // QĐ-183 (chính sách sau QA): có bảng công nháp → dùng làm nguồn công TẠM (không còn "mặc định đủ công") + cảnh báo.
+  const kqB = lB.result as unknown as KetQuaLuong;
+  dat("L3 (QĐ-183): bảng công nháp ghi B vắng nửa tháng → lương lấy công TẠM từ bảng nháp (nguồn bang-cong-nhap) + cảnh báo",
+    (lB.inputs as { nguon: { nguonCong: string } }).nguon.nguonCong === "bang-cong-nhap" && wB.some((c) => c.ma === "cong-bang-nhap") && kqB.congTinhLuong === ngay3.filter((d) => d >= "2026-03-16").length,
+    `${JSON.stringify(wB.map((c) => c.ma))} công ${kqB.congTinhLuong}`);
   await chu.timesheetRow.deleteMany({ where: { timesheetId: bc3.id } });
   await chu.timesheet.delete({ where: { id: bc3.id } });
 
