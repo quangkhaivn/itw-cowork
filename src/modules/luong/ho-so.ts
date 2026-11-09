@@ -149,7 +149,7 @@ export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuon
   }
   const truoc = (await hoSoApDung(nc.tx, [d.nguoiId], d.hieuLucTu)).get(d.nguoiId) ?? null;
   // Tài khoản ngân hàng so với phiên bản TẠO SAU CÙNG (bản người nhận đang thấy), không phụ thuộc ngày hiệu lực.
-  const moiNhat = await nc.tx.salaryProfile.findFirst({ where: { userId: d.nguoiId }, orderBy: { createdAt: "desc" }, select: { bankAccount: true, bankName: true, accountHolder: true } });
+  const moiNhat = await nc.tx.salaryProfile.findFirst({ where: { userId: d.nguoiId }, orderBy: { createdAt: "desc" }, select: { bankAccount: true, bankName: true, accountHolder: true, paymentMethod: true } });
   const moi = await nc.tx.salaryProfile.create({
     data: {
       tenantId: nc.tenantId, userId: d.nguoiId, effectiveFrom: ngayVeDate(d.hieuLucTu), contractType: d.loaiHopDong, probationPercent: d.tyLeThuViec,
@@ -187,17 +187,20 @@ export async function taoHoSoLuong(nc: NguCanh, d: z.infer<typeof LuocDoHoSoLuon
   const apDung = [homNay, ...new Set(tatCa.map((x) => x.hieuLucTu).filter((n) => n > homNay))].sort()
     .map((n) => ({ ngay: n, tk: chonBoHieuLuc(tatCa, n)?.bankAccount ?? null }))
     .filter((x) => x.tk !== d.soTaiKhoan);
-  const doiTk = moiNhat && (moiNhat.bankAccount !== d.soTaiKhoan || moiNhat.bankName !== d.nganHang || moiNhat.accountHolder !== d.chuTaiKhoan);
+  // QA 0.22.0: đổi HÌNH THỨC nhận lương (chuyển khoản ↔ tiền mặt / trả tay) cũng là đổi nơi nhận tiền — báo nhân viên +
+  // kiểm toán như đổi tài khoản; trước đây chuyển sang tiền mặt (giữ nguyên số tài khoản) không báo ai, không gắn cờ QĐ-161.
+  const doiHinhThuc = Boolean(moiNhat && moiNhat.paymentMethod !== d.hinhThucTra);
+  const doiTk = moiNhat && (moiNhat.bankAccount !== d.soTaiKhoan || moiNhat.bankName !== d.nganHang || moiNhat.accountHolder !== d.chuTaiKhoan || doiHinhThuc);
   if (doiTk) {
     await nc.kiemToan({
       action: "doi-tai-khoan-luong", objectType: "salary_profile", objectId: moi.id,
-      before: { nguoi: d.nguoiId, taiKhoan: cheTaiKhoan(moiNhat.bankAccount), nganHang: moiNhat.bankName },
-      after: { nguoi: d.nguoiId, taiKhoan: cheTaiKhoan(d.soTaiKhoan), nganHang: d.nganHang, hieuLucTu: d.hieuLucTu },
+      before: { nguoi: d.nguoiId, taiKhoan: cheTaiKhoan(moiNhat.bankAccount), nganHang: moiNhat.bankName, hinhThucTra: moiNhat.paymentMethod },
+      after: { nguoi: d.nguoiId, taiKhoan: cheTaiKhoan(d.soTaiKhoan), nganHang: d.nganHang, hinhThucTra: d.hinhThucTra, hieuLucTu: d.hieuLucTu },
     });
     await taoThongBao(nc.tx, nc.tenantId, {
       nguoiNhanId: d.nguoiId, loai: "doi-tai-khoan-luong", mucDo: "canh-bao",
       tieuDe: "Tài khoản nhận lương của bạn vừa được đổi",
-      noiDung: `${nc.hoSo.hoTen} đổi tài khoản nhận lương thành ${cheTaiKhoan(d.soTaiKhoan) ?? "(trống)"}${d.nganHang ? ` — ${d.nganHang}` : ""} (hiệu lực từ ${d.hieuLucTu.split("-").reverse().join("/")}).${apDung.map((x) => ` Lưu ý: tài khoản ${x.ngay === homNay ? "đang áp dụng hôm nay" : `áp dụng từ ${x.ngay.split("-").reverse().join("/")}`} là ${cheTaiKhoan(x.tk) ?? "(trống)"}.`).join("")} Không phải bạn yêu cầu thì báo ngay Kế toán / Giám đốc.`,
+      noiDung: `${nc.hoSo.hoTen} đổi ${doiHinhThuc ? `hình thức nhận lương thành ${d.hinhThucTra === "tien-mat" ? "TIỀN MẶT / trả tay" : "chuyển khoản"} — ` : ""}tài khoản nhận lương thành ${cheTaiKhoan(d.soTaiKhoan) ?? "(trống)"}${d.nganHang ? ` — ${d.nganHang}` : ""} (hiệu lực từ ${d.hieuLucTu.split("-").reverse().join("/")}).${apDung.map((x) => ` Lưu ý: tài khoản ${x.ngay === homNay ? "đang áp dụng hôm nay" : `áp dụng từ ${x.ngay.split("-").reverse().join("/")}`} là ${cheTaiKhoan(x.tk) ?? "(trống)"}.`).join("")} Không phải bạn yêu cầu thì báo ngay Kế toán / Giám đốc.`,
       duongDan: "/luong/phieu-cua-toi", doiTuong: "salary_profile", doiTuongId: moi.id, khoaChongTrung: `doi-tai-khoan-luong:${moi.id}`,
     });
   }
@@ -313,7 +316,9 @@ export async function nhapCsvHoSoLuong(nc: NguCanh, noiDung: string, ghi: boolea
       thuongKpi: h ? Number(h.kpiBonus) : 0, huongHoaHong: h?.commissionEnabled ?? false,
       phuongPhapThue: h && (!d.loaiHopDong || d.loaiHopDong === h.contractType) ? h.taxMethod : THUE_GOI_Y[loaiHd],
       phuCap: Array.isArray(h?.allowances) ? (h!.allowances as { loaiId: string; soTien: number }[]) : [],
-      soTaiKhoan: d.soTaiKhoan ?? h?.bankAccount ?? null, nganHang: d.nganHang ?? h?.bankName ?? null, chuTaiKhoan: h?.accountHolder ?? null,
+      // QA 0.22.0: tệp đổi số tài khoản → KHÔNG giữ tên chủ tài khoản của tài khoản cũ (file ngân hàng dùng họ tên nhân viên).
+      soTaiKhoan: d.soTaiKhoan ?? h?.bankAccount ?? null, nganHang: d.nganHang ?? h?.bankName ?? null,
+      chuTaiKhoan: d.soTaiKhoan && d.soTaiKhoan !== (h?.bankAccount ?? null) ? null : (h?.accountHolder ?? null),
       maSoThue: d.maSoThue ?? h?.taxCode ?? null, ghiChu: `Nhập CSV hồ sơ lương (dòng ${d.soDong})`,
       hinhThucTra: d.hinhThucTra ?? ((h?.paymentMethod as "chuyen-khoan" | "tien-mat" | undefined) ?? "chuyen-khoan"),
     };
@@ -321,7 +326,7 @@ export async function nhapCsvHoSoLuong(nc: NguCanh, noiDung: string, ghi: boolea
     if (!kt.success) { loiDong.push({ soDong: d.soDong, lyDo: kt.error.issues.map((i) => i.message).join("; ") }); continue; }
     hopLe.push({
       soDong: d.soDong, nguoiId: u.id, hoTen: u.fullName, hoSo: kt.data, soNguoiPhuThuoc: d.soNguoiPhuThuoc, nptHienTai: npt.get(u.id) ?? 0, taoMoi: !h,
-      doiTaiKhoan: Boolean(h && (h.bankAccount ?? null) !== kt.data.soTaiKhoan),
+      doiTaiKhoan: Boolean(h && ((h.bankAccount ?? null) !== kt.data.soTaiKhoan || h.paymentMethod !== kt.data.hinhThucTra)),
     });
   }
   loiDong.sort((a, b) => a.soDong - b.soDong);

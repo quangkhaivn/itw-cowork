@@ -399,11 +399,13 @@ export async function danhSachPinChuaKhop(nc: NguCanh) {
     select: { attendancePin: true, hiredAt: true, user: { select: { id: true, fullName: true } } },
   });
   const theoPin = new Map(chu.map((c) => [c.attendancePin!, c]));
+  // QA 0.22.0 (QĐ-176): Kỹ thuật (chỉ `may_cham_cong.*`) chỉ thấy TÊN người đã gán — ngày vào làm là hồ sơ nhân sự.
+  const xemHoSo = coQuyen(nc.hoSo, "nhan_su.view");
   return nhom.map((n) => {
     const c = theoPin.get(n.pin!);
     return {
       pin: n.pin!, soLanCham: n._count._all, dauTien: n._min.punchedAt, ganNhat: n._max.punchedAt,
-      nguoiDaGan: c ? { id: c.user.id, hoTen: c.user.fullName, ngayVaoLam: c.hiredAt ? c.hiredAt.toISOString().slice(0, 10) : null } : null,
+      nguoiDaGan: c ? { id: c.user.id, hoTen: c.user.fullName, ngayVaoLam: xemHoSo && c.hiredAt ? c.hiredAt.toISOString().slice(0, 10) : null } : null,
     };
   });
 }
@@ -417,6 +419,11 @@ export async function anhXaPin(nc: NguCanh, d: z.input<typeof LuocDoAnhXaPin>) {
   if (cuaAi && cuaAi.userId !== d.nguoiId) throw new LoiNghiepVu("Mã chấm công này đã gán cho người khác.", 409, "pin-da-gan");
   if (u.staffProfile?.attendancePin && u.staffProfile.attendancePin !== d.pin) {
     throw new LoiNghiepVu(`${u.fullName} đang có mã chấm công ${u.staffProfile.attendancePin}. Đổi mã ở hồ sơ nhân sự nếu máy đã khai lại.`, 409, "da-co-pin");
+  }
+  // QA 0.22.0: gán PIN đang có lần chấm CHƯA KHỚP cho chính mình = tự nhận công (có thể là lần chấm của người khác) —
+  // cùng luật "không tự đặt công cho mình" (QĐ-174). Kỹ thuật (0.22.0) và Nhân sự đều nhờ người khác gán.
+  if (d.nguoiId === nc.hoSo.userId && (await nc.tx.attendancePunch.count({ where: { pin: d.pin, userId: null } })) > 0) {
+    throw new LoiNghiepVu("Không tự gán mã chấm công đang có lần chấm chưa khớp cho chính mình — nhờ Nhân sự / người khác có quyền gán.", 403, "khong-tu-gan-pin");
   }
   await nc.tx.staffProfile.upsert({
     where: { userId: d.nguoiId },
@@ -546,6 +553,7 @@ export async function nhapCsvAnhXaPin(nc: NguCanh, noiDung: string, ghi: boolean
     const u = theoEmail.get(d.email);
     if (!u) { loiDong.push({ soDong: d.soDong, lyDo: `Không có nhân viên với email ${d.email}.` }); continue; }
     if (u.status !== "hoat-dong") { loiDong.push({ soDong: d.soDong, lyDo: `${u.fullName} đã ngừng hoạt động.` }); continue; }
+    if (u.id === nc.hoSo.userId) { loiDong.push({ soDong: d.soDong, lyDo: "Không tự gán mã chấm công cho chính mình — nhờ người khác có quyền." }); continue; }
     if (pinTrongTep.has(d.pin)) { loiDong.push({ soDong: d.soDong, lyDo: `PIN ${d.pin} trùng dòng ${pinTrongTep.get(d.pin)}.` }); continue; }
     pinTrongTep.set(d.pin, d.soDong);
     const chu = chuPin.get(d.pin);

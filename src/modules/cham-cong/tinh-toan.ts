@@ -563,7 +563,10 @@ export const CO_CONG_TAY = "cong-nhap-tay";
  */
 export function apCongTay(cong: CongNgay, giaTri: number | undefined): CongNgay {
   if (giaTri === undefined) return cong;
-  return { ...cong, giaTriCong: giaTri, phutMuon: 0, phutSom: 0, co: [CO_CONG_TAY] };
+  // QA 0.22.0: một ngày tối đa 1 công GỒM phần nghỉ phép đã duyệt — đặt 1 công cho ngày đã nghỉ phép cả ngày không được
+  // trả hai lần (công + nghỉ có lương). Phần nghỉ giữ nguyên, công đặt tay chỉ lấp phần còn lại.
+  const conLai = Math.max(0, Math.round((1 - cong.nghiNgay) * 100) / 100);
+  return { ...cong, giaTriCong: Math.min(giaTri, conLai), phutMuon: 0, phutSom: 0, co: [CO_CONG_TAY] };
 }
 
 // ---------------------------------------------------------------------------

@@ -284,6 +284,14 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
   const dong = bang ? await tx.timesheetRow.findMany({ where: { timesheetId: bang.id } }) : [];
   const coCong = new Set(dong.map((r) => r.userId));
   const congTay = new Map((await tx.payrollManualInput.findMany({ where: { runId: id } })).map((x) => [x.userId, x]));
+  // QA 0.22.0: bảng công NHÁP không dùng để tính (chưa qua phản hồi / khóa) nhưng dùng để CẢNH BÁO — người đang tạm tính
+  // "mặc định đủ công" mà bảng công nháp ghi ít công hơn (vắng, nghỉ không lương) → nêu rõ chênh lệch, tránh trả thừa lặng lẽ.
+  const congNhap = new Map<string, number>();
+  if (bangTim && !bang) {
+    for (const r of await tx.timesheetRow.findMany({ where: { timesheetId: bangTim.id, isAdjustment: false, dayType: { not: "le" } }, select: { userId: true, workValue: true, leaveDays: true, leavePaid: true } })) {
+      congNhap.set(r.userId, (congNhap.get(r.userId) ?? 0) + Number(r.workValue) + (r.leavePaid ? Number(r.leaveDays) : 0));
+    }
+  }
   const hoSo = await hoSoApDung(tx, null, den);
   const users = await tx.user.findMany({
     where: { id: { in: [...hoSo.keys()] }, isSystem: false },
@@ -450,12 +458,27 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
           muc: "canh-bao",
           noiDung: `Chưa có công của người này (bảng công đã khóa hoặc công nhập tay) — tạm tính ĐỦ công chuẩn: ${r2(muc)} công${ngayVao && ngayVao > tu ? ` (từ ngày vào làm ${ngayVao.split("-").reverse().join("/")})` : ""}. Nhập công tay trên dòng này, hoặc “Lấy lại công từ bảng công” khi bảng công khóa.`,
         });
+        const nhap = congNhap.get(u.id);
+        if (nhap !== undefined && nhap + 0.01 < muc) {
+          canhBaoCong.push({
+            ma: "cong-mac-dinh-lech-bang-nhap",
+            muc: "canh-bao",
+            noiDung: `Bảng công NHÁP tháng này ghi ${r2(nhap)} công (gồm nghỉ có lương), ít hơn ${r2(muc)} công đang tạm tính — có thể TRẢ THỪA. Kiểm lại vắng / nghỉ không lương: nhập công tay trên dòng này, hoặc chờ Nhân sự khóa bảng công rồi “Lấy lại công từ bảng công”.`,
+          });
+        }
       } else {
         canhBaoCong.push({
           ma: "cong-nhap-tay",
           muc: "canh-bao",
           noiDung: `Công nhập tay: ${r2(muc)} công${tay!.workDays === null ? " (đủ công chuẩn)" : ""}${nghiKhong ? `, nghỉ không lương ${nghiKhong} ngày` : ""}${tay!.otMinutes ? `, tăng ca ${r2(tay!.otMinutes / 60)} giờ (ngày thường)` : ""} — lý do: ${tay!.reason}`,
         });
+        if (tay!.workDays !== null && muc > tongDk + 0.01) {
+          canhBaoCong.push({
+            ma: "cong-tay-vuot-chuan",
+            muc: "canh-bao",
+            noiDung: `Công nhập tay ${r2(muc)} công VƯỢT số ngày phải làm theo lịch (${r2(tongDk)} công) — lương theo công sẽ cao hơn lương tháng. Kiểm lại; ngày làm thêm nên nhập là giờ tăng ca.`,
+          });
+        }
       }
     } else if (tay) {
       canhBaoCong.push({ ma: "cong-tay-bo-qua", muc: "canh-bao", noiDung: "Đã có bảng công khóa của người này — công nhập tay trên dòng bị bỏ qua (bấm “Lấy lại công từ bảng công” để xóa công nhập tay)." });
@@ -987,14 +1010,15 @@ export async function taiKhoanHienHanh(tx: ClientTenant, userIds: string[], homN
     for (let i = 1; i < cua.length; i++) {
       const a = cua[i - 1];
       const b = cua[i];
-      if (a.bankAccount !== b.bankAccount || a.bankName !== b.bankName || a.accountHolder !== b.accountHolder) doiLuc = b.createdAt;
+      // QA 0.22.0: đổi hình thức trả (chuyển khoản ↔ tiền mặt) tính như đổi tài khoản (QĐ-161).
+      if (a.bankAccount !== b.bankAccount || a.bankName !== b.bankName || a.accountHolder !== b.accountHolder || a.paymentMethod !== b.paymentMethod) doiLuc = b.createdAt;
     }
     // QA 0.21.0 v2: cả mốc tài khoản ĐANG ÁP DỤNG bắt đầu có hiệu lực — một bản hiệu lực gần đây mang tài khoản khác bản áp
     // dụng ngay trước nó, dù bản đó TẠO đã lâu (vd hẹn trước ngày hiệu lực, rồi che bằng một bản lùi ngày mang tài khoản cũ).
     if (hien && hien.hieuLucTu <= homNay) {
       const truocNgay = new Date(Date.parse(`${hien.hieuLucTu}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
       const truoc = chonBoHieuLuc(cua, truocNgay);
-      if (truoc && (truoc.bankAccount !== hien.bankAccount || truoc.bankName !== hien.bankName || truoc.accountHolder !== hien.accountHolder)) {
+      if (truoc && (truoc.bankAccount !== hien.bankAccount || truoc.bankName !== hien.bankName || truoc.accountHolder !== hien.accountHolder || truoc.paymentMethod !== hien.paymentMethod)) {
         const apDung = ngayVeDate(hien.hieuLucTu);
         if (!doiLuc || apDung > doiLuc) doiLuc = apDung;
       }
@@ -1066,7 +1090,11 @@ export async function xoaCongTayLuong(nc: NguCanh, kyId: string, nguoiId: string
   batBuocNhapCong(nc, kyId);
   const ky = await docKyKhoa(nc, kyId);
   batBuocTrangThai(ky, ["nhap"], "xóa công nhập tay");
-  const cu = await nc.tx.payrollManualInput.findFirst({ where: { runId: kyId, userId: nguoiId } });
+  // QA 0.22.0: bỏ công nhập tay = dòng quay về "mặc định đủ công chuẩn" — cùng luật "không tự nhập công cho mình" và cùng
+  // phạm vi như khi nhập (trước đây tự bỏ được công nhập tay của chính mình → được trả đủ công).
+  if (nguoiId === nc.hoSo.userId) throw new LoiNghiepVu("Không ai tự bỏ công nhập tay tính lương của chính mình — nhờ Kế toán / Nhân sự khác.", 403, "tu-nhap-cong");
+  if (!(await trongPhamViLuong(nc, nguoiId))) throw new LoiKhongTimThay("Công nhập tay");
+  const cu =await nc.tx.payrollManualInput.findFirst({ where: { runId: kyId, userId: nguoiId } });
   if (!cu) throw new LoiKhongTimThay("Công nhập tay");
   await nc.tx.payrollManualInput.delete({ where: { id: cu.id } });
   await nc.tx.payrollRun.update({ where: { id: kyId }, data: { dirty: true } });
