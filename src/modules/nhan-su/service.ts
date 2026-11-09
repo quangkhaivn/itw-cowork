@@ -172,9 +172,16 @@ export async function datLichMacDinh(nc: NguCanh, id: string, tuNgay: string = h
   const l = await nc.tx.workSchedule.findFirst({ where: { id }, select: { id: true, name: true, status: true, isDefault: true } });
   if (!l) throw new LoiKhongTimThay("Lịch làm");
   if (l.status !== "hoat-dong") throw new LoiNghiepVu("Lịch đã ngừng — bật lại trước khi chọn làm mặc định.", 422, "lich-ngung");
+  // QA 0.22.0 v2: ngày phải có thật (Date của JS tự "lăn" 30/02 → 02/03, tháng 13 → lỗi CSDL 500).
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tuNgay) || Number.isNaN(Date.parse(`${tuNgay}T00:00:00Z`)) || new Date(`${tuNgay}T00:00:00Z`).toISOString().slice(0, 10) !== tuNgay) {
+    throw new LoiDinhDang("tuNgay", "Ngày áp dụng không hợp lệ.");
+  }
   // QĐ-187: chỉ áp từ ngày chọn trở đi; không hồi tố vào tháng đã khóa bảng công (không sinh dòng điều chỉnh).
   const nam = Number(tuNgay.slice(0, 4));
   const thang = Number(tuNgay.slice(5, 7));
+  // QA 0.22.0 v2: khóa CHIA SẺ các bảng công từ tháng chọn trở đi trước khi kiểm — "Khóa bảng công" chạy cùng lúc (khóa ghi
+  // cùng dòng) phải chờ, hoặc lần đặt này chờ nó xong rồi thấy "đã khóa" (409). Không khóa thì lịch mặc định lọt vào tháng vừa khóa.
+  await nc.tx.$queryRaw`SELECT id FROM timesheets WHERE (year > ${nam} OR (year = ${nam} AND month >= ${thang})) FOR SHARE`;
   const khoa = await nc.tx.timesheet.findFirst({
     where: { status: "da-khoa", OR: [{ year: { gt: nam } }, { year: nam, month: { gte: thang } }] },
     orderBy: [{ year: "desc" }, { month: "desc" }],

@@ -53,6 +53,8 @@ export interface PhanHoiHttpAdms {
 
 /** 0.22.0 (QĐ-175): trần số máy lạ lưu toàn hệ thống và nhịp ghi tối đa một lần / SN / 30 giây. */
 export const MAY_LA_TOI_DA = 500;
+/** QA 0.22.0 v2: số lần tra đúng SN máy lạ / doanh nghiệp / phút. */
+export const MAY_LA_TIM_SN_MOI_PHUT = 30;
 const MAY_LA_GHI_MOI_GIAY = 30;
 
 /**
@@ -159,7 +161,9 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
         return { status: 200, than: boDoc.phanHoiOk(dong.length + loi.length) };
       }
       const maXacMinh = tb.verifyPin!;
-      await tx.attendanceDevice.update({ where: { id: tb.id }, data: { verifyStatus: "da-xac-minh", verifyPin: null, verifyExpiresAt: null, verifiedAt: luc } });
+      // QA 0.22.0 v2: GIỮ mã đã dùng (`verify_pin`, hết hạn) — người dùng tạm trên máy chưa xóa vẫn chấm được; lần chấm mang mã
+      // này sau khi xác minh bị bỏ (không thành "PIN chưa khớp" để rồi bị gán nhầm cho ai đó).
+      await tx.attendanceDevice.update({ where: { id: tb.id }, data: { verifyStatus: "da-xac-minh", verifyExpiresAt: null, verifiedAt: luc } });
       const ton = await tx.$queryRaw<{ pin: string; punched_at: Date; status: number | null; verify_code: number | null; work_code: string | null; raw_line: string | null }[]>`
         SELECT * FROM public.lay_log_cach_ly(${tb.id}::uuid)`;
       const tatCa = [
@@ -181,7 +185,10 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
       return { status: 200, than: boDoc.phanHoiOk(dong.length + loi.length) };
     }
     if (yc.bang === "ATTLOG") {
-      const { dong, loi } = boDoc.phanTichAttlog(than);
+      const { dong: dongMay, loi } = boDoc.phanTichAttlog(than);
+      // QA 0.22.0 v2: bỏ lần chấm của người dùng tạm mang mã xác minh đã dùng — trừ khi Nhân sự đã chủ động gán mã đó cho ai.
+      const boMa = tb.verifyPin && dongMay.some((d) => d.pin === tb.verifyPin) && !(await tx.staffProfile.findFirst({ where: { attendancePin: tb.verifyPin }, select: { userId: true } }));
+      const dong = boMa ? dongMay.filter((d) => d.pin !== tb.verifyPin) : dongMay;
       const soMoi = await ghiAttlog(tx, may.tenantId, tb, dong, luc);
       if (yc.stamp) await tx.attendanceDevice.update({ where: { id: tb.id }, data: { attlogStamp: yc.stamp } });
       if (dong.length || loi.length) {
@@ -190,7 +197,7 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
           payload: { soDong: dong.length, soMoi, soTrung: dong.length - soMoi, soLoi: loi.length, loi: loi.slice(0, 20) },
         });
       }
-      return { status: 200, than: boDoc.phanHoiOk(dong.length + loi.length) };
+      return { status: 200, than: boDoc.phanHoiOk(dongMay.length + loi.length) };
     }
     // OPERLOG, ATTPHOTO, BIODATA… — chưa dùng; nhận và báo OK để máy không gửi lại mãi.
     if (yc.bang === "OPERLOG" && yc.stamp) await tx.attendanceDevice.update({ where: { id: tb.id }, data: { operlogStamp: yc.stamp } });
@@ -588,7 +595,9 @@ export async function nhanVienChoAnhXa(nc: NguCanh) {
 }
 
 export interface MayLa {
+  /** Số sê-ri — CHE (chỉ 3 ký tự cuối) trừ khi người xem đã gõ đúng SN (QA 0.22.0 v2). */
   soSeri: string;
+  soSeriDayDu: boolean;
   ipCuoi: string | null;
   lanDau: Date;
   lanCuoi: Date;
@@ -605,9 +614,25 @@ export interface MayLa {
 export async function danhSachMayLa(nc: NguCanh, sn: string | null = null): Promise<MayLa[]> {
   batBuocQuyenMay(nc, "create", { objectType: "attendance_unknown_device" });
   const snSach = sn && laSoSeriHopLe(sn) ? sn : null;
+  // QA 0.22.0 v2: tra đúng SN là "máy dò" (có / không có máy lạ mang SN này) — giới hạn theo doanh nghiệp để không dò SN.
+  if (snSach && !(await demVaKiem(`may-la:tim-sn:${nc.tenantId}`, MAY_LA_TIM_SN_MOI_PHUT, 60)).choPhep) {
+    throw new LoiNghiepVu("Tìm SN quá nhiều lần trong một phút — thử lại sau.", 429, "qua-nhieu-lan");
+  }
   const ds = await nc.tx.$queryRaw<{ serial_number: string; last_ip: string | null; first_seen_at: Date; last_seen_at: Date; hit_count: number; model: string | null; cung_ip_nguoi_xem: boolean }[]>`
     SELECT * FROM public.ds_may_la(${nc.ip}, ${snSach})`;
-  return ds.map((m) => ({ soSeri: m.serial_number, ipCuoi: m.last_ip, lanDau: m.first_seen_at, lanCuoi: m.last_seen_at, soLan: Number(m.hit_count), model: m.model, cungIpVoiBan: m.cung_ip_nguoi_xem }));
+  // QA 0.22.0 v2: máy lạ thấy được chỉ vì CÙNG IP (người xem / máy đã đăng ký) → CHE số sê-ri. Nhiều doanh nghiệp có thể dùng
+  // chung IP công khai; SN đầy đủ là thứ duy nhất cần để đăng ký và — vì giao thức máy không xác thực — để giả lần chấm mang
+  // mã xác minh (QĐ-181 không chặn được người đã biết SN). Người đứng cạnh máy đọc SN trên máy và gõ vào (tra đúng SN → hiện đủ).
+  const snHoa = snSach?.toUpperCase() ?? null;
+  return ds.map((m) => {
+    const dayDu = snHoa !== null && m.serial_number === snHoa;
+    return { soSeri: dayDu ? m.serial_number : cheSoSeri(m.serial_number), soSeriDayDu: dayDu, ipCuoi: m.last_ip, lanDau: m.first_seen_at, lanCuoi: m.last_seen_at, soLan: Number(m.hit_count), model: m.model, cungIpVoiBan: m.cung_ip_nguoi_xem };
+  });
+}
+
+/** SN che: chỉ 3 ký tự cuối (đủ để nhận ra máy nào, không đủ để đăng ký / giả lần chấm). */
+export function cheSoSeri(sn: string): string {
+  return `…${sn.slice(-3)}`;
 }
 
 /** "Kiểm tra kết nối" một máy (QĐ-178): lần gọi cuối, IP nguồn, trực tuyến hay chưa, thông tin máy tự báo. */

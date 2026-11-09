@@ -111,7 +111,8 @@ export default async function TrangMayChamCong({ searchParams }: { searchParams:
           <div className="dau"><h2>Máy đang gọi nhưng chưa đăng ký</h2></div>
           <p className="phu nho" style={{ marginTop: 0 }}>
             Cowork KHÔNG lưu lần chấm của máy chưa đăng ký. Chỉ hiện máy gọi từ cùng mạng (IP) với bạn hoặc với một máy đã đăng ký của công ty —
-            không thấy máy của mình thì gõ đúng SN để tìm.
+            không thấy máy của mình thì gõ đúng SN để tìm. Số sê-ri chỉ hiện 3 ký tự cuối (nhiều công ty có thể dùng chung IP): đọc SN đầy đủ
+            trên máy (Menu → Thông tin hệ thống) rồi gõ vào ô tìm hoặc ô đăng ký.
           </p>
           <form method="get" style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <input name="sn" defaultValue={snTim ?? ""} placeholder="Tìm đúng SN" aria-label="Số sê-ri cần tìm" />
@@ -120,13 +121,13 @@ export default async function TrangMayChamCong({ searchParams }: { searchParams:
           {d.mayLa.length === 0 ? <p className="phu">Không có máy lạ nào bạn được thấy.</p> : (
             <div className="cuon-ngang"><table className="bang">
               <thead><tr><th>SN</th><th>Mẫu máy</th><th>IP</th><th>Lần đầu</th><th>Lần cuối</th><th className="so">Số lần gọi</th><th /></tr></thead>
-              <tbody>{d.mayLa.map((m) => (
-                <tr key={m.soSeri}>
+              <tbody>{d.mayLa.map((m, i) => (
+                <tr key={`${m.soSeri}-${i}`}>
                   <td><code>{m.soSeri}</code></td><td>{m.model ?? "—"}</td><td>{m.ipCuoi ?? "—"}{m.cungIpVoiBan && <span className="huy-hieu"> cùng mạng với bạn</span>}</td>
                   <td>{dinhDangNgayGio(m.lanDau)}</td><td>{dinhDangNgayGio(m.lanCuoi)}</td><td className="so">{m.soLan}</td>
                   <td><FormNhanh nhanNut="Đăng ký máy này" tieuDe={`Đăng ký máy ${m.soSeri}`} url="/api/v1/nhan-su/may-cham-cong" lopNut="nut nho chinh"
-                    truong={[{ ten: "soSeri", nhan: "Số sê-ri (SN)", kieu: "text", batBuoc: true }, ...tMay]}
-                    giaTriDau={{ soSeri: m.soSeri, ten: m.model ? `Máy ${m.model}` : `Máy ${m.soSeri}`, diaDiemId: "", ipChoPhep: [] }} /></td>
+                    truong={[{ ten: "soSeri", nhan: "Số sê-ri (SN)", kieu: "text", batBuoc: true, goiY: m.soSeriDayDu ? undefined : `Gõ SN đầy đủ đọc trên máy (kết thúc bằng ${m.soSeri.slice(1)}).` }, ...tMay]}
+                    giaTriDau={{ soSeri: m.soSeriDayDu ? m.soSeri : "", ten: m.model ? `Máy ${m.model}` : `Máy ${m.soSeri}`, diaDiemId: "", ipChoPhep: [] }} /></td>
                 </tr>
               ))}</tbody>
             </table></div>

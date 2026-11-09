@@ -11,6 +11,7 @@ import { sinhBangCong } from "../src/modules/cham-cong/bang-cong";
 import { bangTrucTiep } from "../src/modules/cham-cong/truc-tiep";
 import {
   danhSachMay,
+  cheSoSeri,
   danhSachMayLa,
   danhSachPinChuaKhop,
   huyDangKyMay,
@@ -390,10 +391,10 @@ async function main() {
   await adms("POST", "cdata", `SN=${SN2}&table=ATTLOG&Stamp=5`, "7001\t2026-11-03 08:00:00\t0\t1\t0\t0\n");
   dat("…máy lạ gửi ATTLOG: KHÔNG lưu lần chấm nào", (await chu.attendancePunch.count({ where: { tenantId: { in: [T, T2] } } })) === punchTruoc && (await chu.attendancePunch.count({ where: { tenantId: { in: [T, T2] }, pin: "7001" } })) === 0);
   const thayCungIp = await voi(T, ktv, (nc) => danhSachMayLa(nc), IP_VP);
-  dat("…Kỹ thuật cùng IP với máy thấy máy lạ (đánh dấu cùng mạng)", thayCungIp.some((m) => m.soSeri === SN && m.cungIpVoiBan));
+  dat("…Kỹ thuật cùng IP với máy thấy máy lạ (đánh dấu cùng mạng)", thayCungIp.some((m) => m.soSeri === cheSoSeri(SN) && !m.soSeriDayDu && m.cungIpVoiBan));
   dat("…người xem ở IP khác KHÔNG thấy (doanh nghiệp chưa có máy nào cùng IP)", !(await voi(T, ktv, (nc) => danhSachMayLa(nc), IP_KHAC)).some((m) => m.soSeri === SN));
   dat("…doanh nghiệp khác ở IP khác KHÔNG thấy", !(await voi(T2, ktvT2, (nc) => danhSachMayLa(nc), IP_KHAC)).some((m) => m.soSeri === SN));
-  dat("…gõ đúng SN thì tìm thấy", (await voi(T, ktv, (nc) => danhSachMayLa(nc, SN.toLowerCase()), IP_KHAC)).some((m) => m.soSeri === SN));
+  dat("…gõ đúng SN thì tìm thấy", (await voi(T, ktv, (nc) => danhSachMayLa(nc, SN.toLowerCase()), IP_KHAC)).some((m) => m.soSeri === SN && m.soSeriDayDu));
   await nemLoi("…nhân viên không xem được máy lạ", "quyen", () => voi(T, nvA, (nc) => danhSachMayLa(nc)));
   await nemLoi("…vai ứng dụng không đọc thẳng bảng máy lạ (chỉ qua hàm)", "csdl", () => voiTenant(T, (tx) => tx.attendanceUnknownDevice.findMany()));
   const may = await voi(T, ktv, (nc) => taoMay(nc, { soSeri: SN, ten: "Máy kho", diaDiemId: null, ipChoPhep: [] }));
@@ -404,7 +405,7 @@ async function main() {
   const batTay = await adms("GET", "cdata", `SN=${SN}&options=all`);
   dat("…lần gọi kế tiếp trả ATTLOGStamp=0 (máy gửi lại toàn bộ log — vào khu cách ly)", batTay.status === 200 && batTay.than.includes("ATTLOGStamp=0"));
   dat("…sau khi có máy đăng ký ở IP này, doanh nghiệp thấy máy lạ khác gọi từ cùng IP dù người xem ở IP khác",
-    (await voi(T, ktv, (nc) => danhSachMayLa(nc), IP_KHAC)).some((m) => m.soSeri === SN2.toUpperCase()));
+    (await voi(T, ktv, (nc) => danhSachMayLa(nc), IP_KHAC)).some((m) => m.soSeri === cheSoSeri(SN2.toUpperCase())));
   await voi(T, ktv, (nc) => suaMay(nc, may.id, { ten: "Máy kho tầng 1" }));
   dat("Kỹ thuật sửa tên máy được", (await chu.attendanceDevice.findUniqueOrThrow({ where: { id: may.id } })).name === "Máy kho tầng 1");
   const dsMay = await voi(T, ktv, (nc) => danhSachMay(nc, BAY));
@@ -437,7 +438,7 @@ async function main() {
   dat("…Tạo lại mã: mã mới, hạn 24 giờ", maMoi.maXacMinh !== may.maXacMinh && maMoi.hetHan.getTime() === BAY.getTime() + 24 * 3_600_000);
   await adms("POST", "cdata", `SN=${SN}&table=ATTLOG&Stamp=11`, `${maMoi.maXacMinh}\t2026-11-03 09:30:00\t0\t15\t0\t0\n`);
   const daXm = await chu.attendanceDevice.findUniqueOrThrow({ where: { id: may.id } });
-  dat("1. Chấm 1 lần bằng người dùng mang mã xác minh → máy ĐÃ XÁC MINH, mã bị xóa", daXm.verifyStatus === "da-xac-minh" && daXm.verifyPin === null && daXm.verifiedAt?.getTime() === BAY.getTime());
+  dat("1. Chấm 1 lần bằng người dùng mang mã xác minh → máy ĐÃ XÁC MINH, mã hết hạn (giữ mã đã dùng để bỏ lần chấm của người dùng tạm — QA v2)", daXm.verifyStatus === "da-xac-minh" && daXm.verifyExpiresAt === null && daXm.verifiedAt?.getTime() === BAY.getTime());
   dat("…log tồn trong khu cách ly được nhận vào doanh nghiệp (2 lần chấm PIN 7001), lần chấm mã xác minh không tính",
     (await chu.attendancePunch.count({ where: { tenantId: T, deviceId: may.id, pin: "7001" } })) === 2 && (await chu.attendancePunch.count({ where: { tenantId: T, pin: maMoi.maXacMinh } })) === 0);
   dat("…khu cách ly của máy trống", (await chu.attendanceQuarantineLog.count({ where: { deviceId: may.id } })) === 0);
@@ -453,7 +454,7 @@ async function main() {
   // 1. Đường tấn công: hai doanh nghiệp CÙNG IP (NAT / tòa nhà). Máy của A (T) gọi về chưa đăng ký; B (T2) cùng IP thấy và đăng ký TRƯỚC.
   const SN_A = `MA${DAU.toUpperCase()}`.slice(0, 20);
   await adms("GET", "cdata", `SN=${SN_A}&options=all`);
-  dat("1. Tấn công: B cùng IP thấy máy lạ của A", (await voi(T2, ktvT2, (nc) => danhSachMayLa(nc), IP_VP)).some((m) => m.soSeri === SN_A));
+  dat("1. Tấn công: B cùng IP thấy máy lạ của A — nhưng chỉ SN che (QA v2: không đủ để đăng ký / giả lần chấm)", (await voi(T2, ktvT2, (nc) => danhSachMayLa(nc), IP_VP)).some((m) => m.soSeri === cheSoSeri(SN_A) && !m.soSeriDayDu));
   const mayB = await voi(T2, ktvT2, (nc) => taoMay(nc, { soSeri: SN_A, ten: "Máy chiếm", diaDiemId: null, ipChoPhep: [] }, BAY));
   await adms("POST", "cdata", `SN=${SN_A}&table=ATTLOG&Stamp=1`, "7101\t2026-11-03 08:00:00\t0\t1\t0\t0\n7102\t2026-11-03 08:01:00\t0\t1\t0\t0\n");
   dat("…máy của A gửi log: B KHÔNG nhận lần chấm nào (chưa xác minh)", (await chu.attendancePunch.count({ where: { tenantId: T2 } })) === 0 && (await voi(T2, ktvT2, (nc) => danhSachPinChuaKhop(nc))).length === 0);

@@ -4,11 +4,13 @@ import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
 import { LoiKhongTimThay, LoiNghiepVu, LoiDinhDang } from "../src/lib/loi";
 import { seedLichMacDinh, seedNenMong } from "../prisma/seed/index";
 import { apCongTay, cacNgayTrongThang, thuTrongTuan } from "../src/modules/cham-cong/tinh-toan";
-import { anhXaPin, danhSachMayLa, danhSachPinChuaKhop, nhapCsvAnhXaPin, taoMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
+import { anhXaPin, cheSoSeri, danhSachMayLa, danhSachPinChuaKhop, huyDangKyMay, nhapCsvAnhXaPin, taoMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
+import { khoaBangCong } from "../src/modules/cham-cong/bang-cong";
+import { datLichMacDinh } from "../src/modules/nhan-su/service";
 import { lichCuaNhieuNguoi } from "../src/modules/cham-cong/chung";
 import { datCongTay } from "../src/modules/cham-cong/cong-tay";
 import { LuocDoDatCongTay } from "../src/modules/cham-cong/luoc-do";
-import { nhapCsvHoSoLuong, taoHoSoLuong } from "../src/modules/luong/ho-so";
+import { nhapCsvHoSoLuong, suaNguoiPhuThuoc, taoHoSoLuong } from "../src/modules/luong/ho-so";
 import { LuocDoCongTayLuong, LuocDoHoSoLuong } from "../src/modules/luong/luoc-do";
 import {
   chiTietKyLuong,
@@ -26,6 +28,11 @@ import { daChiKyLuong } from "../src/modules/luong/service";
 import { viecThietLap } from "../src/modules/thiet-lap-ban-dau/service";
 import type { KetQuaLuong } from "../src/modules/luong/tinh-toan";
 import { clientChuSoHuu, dat, ketLuan } from "./thu-lib";
+
+/** Vấn đề đã báo nhưng chờ quyết định chính sách — in ra, không làm hỏng bài. */
+function tonDong(ten: string, conTonTai: boolean, chiTiet = "") {
+  console.log(conTonTai ? `  ⚠ TỒN ĐỌNG (chờ chính sách): ${ten}${chiTiet ? ` — ${chiTiet}` : ""}` : `  ✓ (đã đóng) ${ten}`);
+}
 
 /**
  * QA 0.22.0 — "Mở dần — bổ sung sau": việc nới lỏng (chặn → cảnh báo) không được mở lỗ hổng toàn vẹn / bảo mật. Mỗi lỗi
@@ -287,7 +294,7 @@ async function main() {
   await adms("GET", "cdata", `SN=${SNLA}&options=all`, null, IP_A);
   dat("M2: B ở IP khác không thấy máy lạ đang gọi từ văn phòng A (dù A đã có máy ở IP đó)",
     !(await voi(T2, ktvT2, (nc) => danhSachMayLa(nc), IP_B)).some((m) => m.soSeri === SNLA));
-  dat("…A thấy (IP máy đã đăng ký của A)", (await voi(T, ktv, (nc) => danhSachMayLa(nc), IP_B)).some((m) => m.soSeri === SNLA));
+  dat("…A thấy (IP máy đã đăng ký của A) — SN che", (await voi(T, ktv, (nc) => danhSachMayLa(nc), IP_B)).some((m) => m.soSeri === cheSoSeri(SNLA)));
   // M3: hàm SECURITY DEFINER không bị che bởi bảng tạm (pg_temp) của phiên ứng dụng.
   let thayQuaBangTam = false;
   let loiBangTam = "";
@@ -333,6 +340,105 @@ async function main() {
   dat("G3: doanh nghiệp B không đọc được công nhập tay / đặt công tay của A", (await voiTenant(T2, (tx) => tx.payrollManualInput.count())) === 0 && (await voiTenant(T2, (tx) => tx.attendanceManualDay.count())) === 0);
   await nemLoi("G3: …không ghi đặt công tay mang tenant_id của A từ phiên B (RLS WITH CHECK)", "csdl",
     () => voiTenant(T2, (tx) => tx.attendanceManualDay.create({ data: { tenantId: T, userId: nvA, workDate: NGAY("2026-02-02"), workValue: 1, reason: "chen cheo tenant", createdBy: ktvT2 } })));
+
+  // ==================================================================
+  console.log("\n— V2. Vòng QA 2: xác minh sở hữu máy (QĐ-181), nguồn công, lịch mặc định —");
+  const TA = (await seedNenMong(chu, `qa-v2a-${DAU}`, "QA v2 A")).id;
+  const TB = (await seedNenMong(chu, `qa-v2b-${DAU}`, "QA v2 B")).id;
+  const ktvA = await nguoi("ktv-a", "technical", { t: TA });
+  const hrA = await nguoi("hr-a", "nhan-su-hr", { t: TA, hai: true });
+  const ktvB = await nguoi("ktv-b", "technical", { t: TB });
+  const IP_CHUNG = "198.51.100.200";
+  const BAY2 = new Date("2026-11-05T02:00:00Z");
+  const adms2 = (phuongThuc: string, ts: string, than: string | null = null, ip = IP_CHUNG) =>
+    xuLyAdms({ phuongThuc, doan: "cdata", truyVan: new URLSearchParams(ts), than, ip }, { bayGio: () => BAY2 });
+  const dongLog = (pin: string, luc: string) => `${pin}\t${luc}\t0\t1\t0\t0\n`;
+
+  // V1: B cùng IP thấy máy lạ của A, đăng ký trước, rồi GIẢ một lần chấm mang mã của chính B (B biết mã vì B là người đăng ký).
+  const SNX = `VX${DAU.toUpperCase()}`.slice(0, 20);
+  await adms2("GET", `SN=${SNX}&options=all`);
+  const bThay = await voi(TB, ktvB, (nc) => danhSachMayLa(nc), IP_CHUNG);
+  dat("V1a: B cùng IP thấy máy lạ của A nhưng KHÔNG thấy SN đầy đủ (che, chỉ 3 ký tự cuối)",
+    bThay.some((m) => m.soSeri === cheSoSeri(SNX) && !m.soSeriDayDu) && !JSON.stringify(bThay).includes(SNX), JSON.stringify(bThay.map((m) => m.soSeri)));
+  let doSn = 0;
+  for (let i = 0; i < 40; i++) {
+    try { await voi(TB, ktvB, (nc) => danhSachMayLa(nc, `VX${String(i).padStart(4, "0")}`), IP_CHUNG); } catch (e) { if (e instanceof LoiNghiepVu && e.ma === "qua-nhieu-lan") { doSn = i; break; } }
+  }
+  dat("V1b: tra đúng SN (máy dò có / không) bị giới hạn mỗi phút → không dò SN hàng loạt", doSn > 0 && doSn <= 30, `chặn ở lần ${doSn}`);
+  // Phần còn lại: ai ĐÃ BIẾT SN (đọc nhãn máy, nhà cung cấp…) vẫn giả được lần chấm mang mã của chính mình.
+  const mayX = await voi(TB, ktvB, (nc) => taoMay(nc, { soSeri: SNX, ten: "Chiếm", diaDiemId: null, ipChoPhep: [] }, BAY2), IP_CHUNG);
+  await adms2("POST", `SN=${SNX}&table=ATTLOG&Stamp=1`, dongLog("31", "2026-11-04 08:00:00") + dongLog("32", "2026-11-04 08:02:00"));
+  await adms2("POST", `SN=${SNX}&table=ATTLOG&Stamp=2`, dongLog(mayX.maXacMinh!, "2026-11-05 08:59:00"));
+  const xX = await chu.attendanceDevice.findUniqueOrThrow({ where: { id: mayX.id } });
+  const nhanCuaA = await chu.attendancePunch.count({ where: { tenantId: TB, deviceId: mayX.id } });
+  tonDong("V1c (QĐ-181): B ĐÃ BIẾT SN của A đăng ký trước rồi GIẢ lần chấm mang mã của chính B qua /iclock (không cần máy) → máy “đã xác minh” cho B, B nhận log tồn của A",
+    xX.verifyStatus === "da-xac-minh" && nhanCuaA === 2, `trạng thái ${xX.verifyStatus}, B nhận ${nhanCuaA} lần chấm của A`);
+
+  // V2: hai lần kích hoạt đồng thời → không trùng lần chấm, khu cách ly trống, Stamp đúng.
+  const SNY = `VY${DAU.toUpperCase()}`.slice(0, 20);
+  const mayY = await voi(TA, ktvA, (nc) => taoMay(nc, { soSeri: SNY, ten: "Máy Y", diaDiemId: null, ipChoPhep: [] }, BAY2));
+  await adms2("POST", `SN=${SNY}&table=ATTLOG&Stamp=5`, dongLog("41", "2026-11-04 08:00:00") + dongLog("42", "2026-11-04 17:00:00"));
+  const kichHoat = dongLog("42", "2026-11-04 17:00:00") + dongLog("43", "2026-11-05 08:00:00") + dongLog(mayY.maXacMinh!, "2026-11-05 08:30:00");
+  const kqY = await Promise.allSettled([adms2("POST", `SN=${SNY}&table=ATTLOG&Stamp=9`, kichHoat), adms2("POST", `SN=${SNY}&table=ATTLOG&Stamp=9`, kichHoat)]);
+  const pY = await chu.attendancePunch.findMany({ where: { tenantId: TA, deviceId: mayY.id }, select: { pin: true, punchedAt: true } });
+  const yY = await chu.attendanceDevice.findUniqueOrThrow({ where: { id: mayY.id } });
+  dat("V2: hai lần kích hoạt đồng thời → đã xác minh, 3 lần chấm (41, 42, 43) mỗi lần đúng 1 bản, không có lần chấm mã xác minh, cách ly trống, Stamp=9",
+    yY.verifyStatus === "da-xac-minh" && pY.length === 3 && new Set(pY.map((x) => `${x.pin}|${x.punchedAt.toISOString()}`)).size === 3 && !pY.some((x) => x.pin === mayY.maXacMinh)
+      && (await chu.attendanceQuarantineLog.count({ where: { deviceId: mayY.id } })) === 0 && yY.attlogStamp === "9",
+    `${yY.verifyStatus} ${JSON.stringify(pY.map((x) => x.pin))} stamp=${yY.attlogStamp} ${kqY.map((k) => k.status === "fulfilled" ? k.value.status : String(k.reason)).join(" | ")}`);
+
+  // V3: lần chấm mang mã xác minh SAU khi đã xác minh (người dùng tạm chưa xóa) → không thành "PIN chưa khớp" chờ gán.
+  await adms2("POST", `SN=${SNY}&table=ATTLOG&Stamp=10`, dongLog(mayY.maXacMinh!, "2026-11-05 09:30:00"));
+  const conMa = await chu.attendancePunch.count({ where: { tenantId: TA, deviceId: mayY.id, pin: mayY.maXacMinh! } });
+  dat("V3: chấm lại bằng người dùng tạm mang mã xác minh sau khi đã xác minh → không lưu (không vào “PIN chưa khớp”, không gán nhầm được)", conMa === 0, `${conMa} lần chấm mã xác minh được lưu`);
+
+  // V4: kích hoạt ‖ hủy đăng ký → nhất quán.
+  const SNZ = `VZ${DAU.toUpperCase()}`.slice(0, 20);
+  const mayZ = await voi(TA, ktvA, (nc) => taoMay(nc, { soSeri: SNZ, ten: "Máy Z", diaDiemId: null, ipChoPhep: [] }, BAY2));
+  await adms2("POST", `SN=${SNZ}&table=ATTLOG&Stamp=1`, dongLog("51", "2026-11-04 08:00:00"));
+  const kqZ = await Promise.allSettled([adms2("POST", `SN=${SNZ}&table=ATTLOG&Stamp=2`, dongLog(mayZ.maXacMinh!, "2026-11-05 08:30:00")), voi(TA, ktvA, (nc) => huyDangKyMay(nc, mayZ.id))]);
+  const zCon = await chu.attendanceDevice.findUnique({ where: { id: mayZ.id } });
+  const zPunch = await chu.attendancePunch.count({ where: { tenantId: TA, pin: "51" } });
+  const zCachLy = await chu.attendanceQuarantineLog.count({ where: { deviceId: mayZ.id } });
+  dat("V4: kích hoạt ‖ hủy đăng ký → hoặc máy bị xóa (0 lần chấm, cách ly trống) hoặc đã xác minh (hủy bị 409)",
+    (!zCon && zPunch === 0 && zCachLy === 0) || (zCon?.verifyStatus === "da-xac-minh" && zPunch === 1 && kqZ[1].status === "rejected"),
+    `${zCon?.verifyStatus ?? "đã xóa"} punch=${zPunch} cachLy=${zCachLy} ${kqZ.map((k) => k.status === "fulfilled" ? JSON.stringify(k.value).slice(0, 60) : String((k.reason as Error).message).slice(0, 80)).join(" | ")}`);
+
+  // V5: hàm SECURITY DEFINER mới — search_path có pg_temp cuối, PUBLIC không EXECUTE.
+  const ham = await chu.$queryRaw<{ proname: string; cfg: string | null; acl: string | null }[]>`
+    SELECT proname, array_to_string(proconfig, ',') AS cfg, proacl::text AS acl FROM pg_proc
+     WHERE proname IN ('ghi_log_cach_ly', 'lay_log_cach_ly', 'dem_log_cach_ly', 'giai_phong_sn_cho_xac_minh') AND pronamespace = 'public'::regnamespace`;
+  dat("V5: 4 hàm khu cách ly: SECURITY DEFINER với search_path=public, pg_temp; PUBLIC không có EXECUTE; cowork_app có",
+    ham.length === 4 && ham.every((h) => h.cfg === "search_path=public, pg_temp" && !/(^|[{,])=X/.test(h.acl ?? "") && /cowork_app=X/.test(h.acl ?? "")), JSON.stringify(ham));
+
+  // V6: người phụ thuộc "chưa ghi tên" — số giấy tờ rác có gỡ được cờ không giảm trừ?
+  const nvNpt = await nguoi("nv-npt", "sales", { t: TA });
+  await voi(TA, hrA, (nc) => taoHoSoLuong(nc, hs({ nguoiId: nvNpt })));
+  await voi(TA, hrA, (nc) => nhapCsvHoSoLuong(nc, `Email,Lương cơ bản,Số người phụ thuộc\nnv-npt.${DAU}@qa.test,10000000,1\n`, true, "2026-05-01"));
+  const npt0 = await chu.salaryDependent.findFirstOrThrow({ where: { tenantId: TA, userId: nvNpt } });
+  const sua = await voi(TA, hrA, (nc) => suaNguoiPhuThuoc(nc, npt0.id, { hoTen: "Nguyễn Văn Con", quanHe: "con", soGiayTo: "x" }));
+  tonDong("V6 (QĐ-182): số giấy tờ một ký tự (“x”) đủ để gỡ cờ “chưa ghi tên” → được giảm trừ", !sua.chuaDuThongTin);
+
+  // V7: lịch mặc định — ngày không hợp lệ phải báo lỗi nghiệp vụ (không 500).
+  const lichA2 = await chu.workSchedule.create({ data: { tenantId: TA, code: `md-${DAU}`, name: "Lịch A", shiftId: (await chu.workShift.create({ data: { tenantId: TA, code: `ca-${DAU}`, name: "Ca", startMinute: 480, endMinute: 1020 } })).id, days: ["ca", "ca", "ca", "ca", "ca", "nghi", "nghi"] } });
+  await nemLoi("V7: đặt lịch mặc định với ngày không tồn tại (2026-02-30) → lỗi định dạng, không ghi lịch sử", "bat-ky",
+    () => voi(TA, hrA, (nc) => datLichMacDinh(nc, lichA2.id, "2026-02-30")));
+  dat("…không có dòng lịch sử lịch mặc định nào bị ghi với ngày sai", (await chu.defaultScheduleChange.count({ where: { tenantId: TA } })) === 0);
+  let loi7 = "";
+  try { await voi(TA, hrA, (nc) => datLichMacDinh(nc, lichA2.id, "2026-13-45")); } catch (e) { loi7 = e instanceof LoiNghiepVu || e instanceof LoiDinhDang ? "nghiep-vu" : String((e as Error).message).slice(0, 80); }
+  dat("…tháng 13 → lỗi nghiệp vụ / định dạng (không phải lỗi CSDL → 500)", loi7 === "nghiep-vu", loi7);
+
+  // V8: đặt lịch mặc định ‖ khóa bảng công cùng tháng → không được cả hai cùng thành công (hồi tố vào tháng đã khóa).
+  let caHaiThanhCong = 0;
+  for (const thang of [1, 2, 3, 4, 5]) {
+    const bc = await chu.timesheet.create({ data: { tenantId: TA, year: 2027, month: thang, generatedAt: BAY2, generatedBy: hrA, feedbackDeadline: new Date("2026-01-01T00:00:00Z") } });
+    const r = await Promise.allSettled([
+      voi(TA, hrA, (nc) => khoaBangCong(nc, bc.id)),
+      voi(TA, hrA, (nc) => datLichMacDinh(nc, lichA2.id, `2027-${String(thang).padStart(2, "0")}-10`)),
+    ]);
+    if (r.every((x) => x.status === "fulfilled")) caHaiThanhCong++;
+  }
+  dat("V8: đặt lịch mặc định ‖ khóa bảng công cùng tháng (5 lần) → không lần nào cả hai cùng thành công", caHaiThanhCong === 0, `${caHaiThanhCong}/5 lần lịch mặc định lọt vào tháng vừa khóa`);
 
   void LoiDinhDang;
   await chu.$disconnect();
