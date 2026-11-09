@@ -96,9 +96,13 @@ Nhiều công ty có thể dùng chung một mạng / IP (tòa nhà văn phòng)
 3. Chờ khoảng 1 phút (máy gửi lần chấm về), bấm **Kiểm tra kết nối**: máy chuyển **Đã xác minh**; Cowork nhận toàn bộ lần chấm đang cách ly vào công ty. Kỹ thuật nhận thông báo.
 4. **Xóa người dùng tạm** mang mã xác minh trên máy (lần chấm xác minh không tính công cho ai).
 
+- **Ghim IP**: Cowork chỉ nhận lần chấm xác minh (và giữ lần chấm cách ly) từ **IP mà máy đã gọi về trước khi đăng ký** — hoặc, nếu đăng ký bằng cách tự gõ SN trước khi máy gọi về, từ IP của **lần gọi đầu tiên** sau khi đăng ký. Màn hình ghi rõ IP đó. Máy đổi mạng giữa chừng thì *Hủy đăng ký* rồi đăng ký lại từ danh sách máy lạ.
+- **Giới hạn cần biết**: máy chấm công không có mật khẩu với máy chủ — người ở **cùng mạng** (cùng IP công khai, ví dụ chung tòa nhà) và biết SN vẫn có thể giả lần chấm. Vì vậy: **đặt máy trong mạng nội bộ riêng của công ty**, không dán SN ở chỗ người ngoài đọc được, và **sau khi kích hoạt hãy mở danh sách lần chấm đầu tiên** (Bảng chấm công trực tiếp / PIN chưa khớp) xem có lần chấm lạ không.
+- Khu cách ly giữ tối đa 50.000 lần chấm cho mỗi máy — đầy thì Kỹ thuật nhận cảnh báo; xác minh ngay (Cowork không tự xóa).
 - Mã **hết hạn sau 24 giờ** → bấm **Tạo lại mã** rồi làm lại bước 1–2 với mã mới.
 - **Hủy đăng ký** (khi chưa xác minh): xóa máy và toàn bộ lần chấm đang cách ly — dùng khi đăng ký nhầm SN.
-- SN báo "đã được đăng ký trên hệ thống" mà máy đúng là của công ty: có thể công ty khác đăng ký nhầm. Nếu đăng ký đó chưa xác minh quá 24 giờ, đăng ký lại sẽ được (đăng ký cũ bị gỡ, lần chấm cách ly của họ bị xóa).
+- SN báo "đã được đăng ký trên hệ thống" mà máy đúng là của công ty: có thể công ty khác đăng ký nhầm. Nếu đăng ký đó chưa xác minh quá 24 giờ, đăng ký lại sẽ được (đăng ký cũ bị gỡ, lần chấm cách ly của họ bị xóa). Trường hợp khác (đã bị xác minh nhầm): nhờ **quản trị máy chủ** giải phóng SN (`DEPLOYMENT.md` — "Giải phóng SN máy chấm công bị chiếm"), kèm căn cứ.
+- Danh sách máy lạ chỉ hiện SN đã che (3 ký tự cuối) — đọc SN trên máy rồi gõ vào ô *Tìm đúng SN* để hiện đủ và đăng ký.
 - Máy đã đăng ký trước bản 0.22.0 coi như đã xác minh. Quản trị có thể tắt xác minh ở *Cấu hình → Chấm công → Xác minh sở hữu máy chấm công* (chỉ nên làm khi máy chủ chỉ phục vụ một công ty).
 
 ### 3.1b. Máy đang gọi nhưng chưa đăng ký (máy lạ)

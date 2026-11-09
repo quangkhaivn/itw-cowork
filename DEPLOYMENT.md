@@ -230,6 +230,20 @@ Rồi `nginx -t && systemctl reload nginx`. Kiểm từ ngoài: `curl -i "http:/
 
 ### Nâng cấp lên 0.22.0 (Mở dần — bổ sung sau)
 
+- (Trước phát hành) Migration `20261109090006_ghim_ip_doi_chieu_giay_to`: ghim IP khi xác minh máy, bảng đối chiếu công, **gắn cờ "chưa đủ giấy tờ" cho người phụ thuộc hiện có mà giấy tờ không đạt định dạng** (MST 10 / 10-3 số, CCCD 12 số, giấy tờ khác ≥ 6 ký tự) — báo kế toán bổ sung trước kỳ lương kế tiếp (Thiết lập ban đầu đếm số người). Chạy lại `prisma/rls.sql` (thu hồi bản `ghi_log_cach_ly` cũ, cấp `ip_may_la_truoc_dang_ky`).
+
+#### Giải phóng SN máy chấm công bị chiếm (quản trị máy chủ)
+
+Khi một công ty báo SN máy của họ đã bị doanh nghiệp khác đăng ký (có căn cứ — phiếu yêu cầu, ảnh tem SN):
+
+```bash
+set -a; . ./.env; set +a
+SO_SERI=<SN> LY_DO="<căn cứ, ≥ 10 ký tự>" npm run may:giai-phong-sn            # chạy thử: chỉ in sẽ làm gì
+SO_SERI=<SN> LY_DO="<căn cứ>" XAC_NHAN=1 npm run may:giai-phong-sn              # thực hiện
+```
+
+Máy chờ xác minh → xóa đăng ký + log cách ly. Máy đã xác minh → đổi SN thành `<SN>-GP<ngày>` và chuyển Ngừng (lần chấm đã nhận chỉ ghi thêm, nằm lại doanh nghiệp kia — xử lý theo căn cứ). Mỗi lần ghi nhật ký kiểm toán `giai-phong-sn` (người thực hiện `quan-tri-may-chu`) trong doanh nghiệp đang giữ SN. Sau đó công ty chủ máy đăng ký lại và xác minh như thường.
+
 - (Chính sách sau QA) Thêm migration `20261109090005_xac_minh_may_chinh_sach`: máy chấm công đang có được coi là **đã xác minh**; máy đăng ký MỚI phải xác minh sở hữu bằng mã PIN 6 số (Cấu hình `may_cham_cong.xac_minh_so_huu`). Chạy lại `prisma/rls.sql` để cấp EXECUTE các hàm khu cách ly cho `cowork_app`. Lịch mặc định đang có áp từ 01/01/2000 (chỉ có ở bản 0.22 thử); `db:seed` cho doanh nghiệp mới áp từ đầu tháng hiện tại.
 
 - Bốn migration: `20261109090001_mo_dan` (chỉ thêm: cột `is_default` lịch, `payment_method` / `pay_method`, `location_id` máy cho phép trống, bảng `payroll_manual_inputs`, `attendance_manual_days`, `attendance_unknown_devices` + 3 hàm SECURITY DEFINER) → `20261109090002_may_cham_cong_cap_quyen` (khối DO idempotent: quyền `may_cham_cong.*` cho Kỹ thuật / Trưởng kỹ thuật / Nhân sự / Giám đốc / Quản trị của **mọi** doanh nghiệp, gỡ khỏi Trợ lý AI) → `20261109090003_may_la_tran_ghi` (thay thân hàm `ghi_may_la`) → `20261109090004_qa_mo_dan` (QA: nới CHECK `payroll_runs_buoc_check` để khóa kỳ lương không có bảng công; `search_path = public, pg_temp` cho 4 hàm SECURITY DEFINER máy chấm công; thay thân `ghi_may_la` với trần cứng). Sau đó **bắt buộc** chạy lại `prisma/rls.sql` (cấp EXECUTE ba hàm máy lạ cho `cowork_app`, REVOKE bảng máy lạ, bảng chỉ ghi thêm `attendance_manual_days`), `npm run db:seed`, khởi động lại app + worker.

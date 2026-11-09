@@ -28,6 +28,13 @@ Giám đốc: *"phần mềm mở, để kế toán, nhân sự và kỹ thuật
 - Mới: `thu/thu-mo-dan.ts` (`npm run thu:mo-dan`, nối cuối `thu:tich-hop`), `thu/don-vi/mo-dan.test.ts` (16 bài).
 - Bài cũ đổi kỳ vọng theo luật mới: `thu-luong` (chưa có bảng công / bảng công nháp / ngày thiếu giờ chờ quyết → vẫn tính + cảnh báo; tham số chưa xác nhận → cảnh báo vàng), `thu-luong-chinh-sach` (thiếu tài khoản → dự kiến trả tay, không chặn khóa), `thu-cham-cong` (máy từng gọi khi chưa đăng ký → bắt tay `ATTLOGStamp=0`), `thu-qa-cham-cong` và `don-vi/cham-cong.test.ts` (so quyền QĐ-117 bỏ qua mã `may_cham_cong.*` cấp ở migration 0.22.0).
 
+### Trước phát hành (09/11/2026, QĐ-190 → QĐ-192)
+Migration `20261109090006_ghim_ip_doi_chieu_giay_to` (chạy lại `prisma/rls.sql`).
+- **Ghim IP khi xác minh máy**: mã xác minh và khu cách ly chỉ nhận từ IP máy đã gọi trước khi đăng ký (hoặc IP lần gọi đầu sau khi đăng ký); khu cách ly tối đa 50.000 dòng / máy, vượt thì cảnh báo, không tự xóa. Lệnh quản trị máy chủ `npm run may:giai-phong-sn` giải phóng SN bị chiếm (có kiểm toán). Giới hạn đã ghi: kẻ cùng IP biết SN vẫn giả được. Che SN máy lạ của QA vòng 2 giữ nguyên.
+- **Đối chiếu công sau khi khóa bảng công**: lương đã khóa bằng công tạm → khoản "Điều chỉnh kỳ trước" nháp ở kỳ kế tiếp (hoặc danh sách chờ), báo kế toán, không sinh trùng.
+- **Giấy tờ người phụ thuộc**: MST 10 / 10-3 số, CCCD 12 số, giấy tờ khác ≥ 6 ký tự; thiếu → "chưa đủ giấy tờ", không giảm trừ (thêm tay, sửa, CSV như nhau); migration gắn cờ dữ liệu cũ.
+- Bài cũ đổi kỳ vọng: `thu-luong`, `thu-luong-chinh-sach`, `thu-qa-luong` thêm số giấy tờ hợp lệ cho người phụ thuộc được giảm trừ; `thu-qa-mo-dan` V1c: trường hợp KHÁC IP chuyển thành đạt, trường hợp CÙNG IP giữ là giới hạn đã chấp nhận; V5 kiểm 5 hàm + bản `ghi_log_cach_ly` cũ không còn quyền.
+
 ### Chính sách sau QA (09/11/2026, QĐ-181 → QĐ-189)
 Migration `20261109090005_xac_minh_may_chinh_sach` (chạy lại `prisma/rls.sql`).
 - **Xác minh sở hữu máy chấm công** (Cấu hình `may_cham_cong.xac_minh_so_huu`, mặc định bật): máy mới đăng ký chờ xác minh bằng **mã PIN 6 số** (hạn 24 giờ, tạo lại được) — Kỹ thuật tạo người dùng mang mã trên máy, chấm 1 lần → máy kích hoạt, nhận log tồn. Trước đó lần chấm ở **khu cách ly** (không hiện, không tính công); hủy đăng ký xóa log cách ly; SN bị doanh nghiệp khác chiếm chưa xác minh quá 24 giờ được giải phóng. Máy đã đăng ký trước đó coi như đã xác minh.
