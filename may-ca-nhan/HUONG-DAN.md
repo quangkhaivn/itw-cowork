@@ -83,7 +83,7 @@ Từ 0.22.0 **không cần đủ mọi thứ mới dùng được**: thiếu ph�
 |---|---|---|---|
 | Lịch làm việc mặc định | Nhân sự | **Nhân sự → Thiết lập chấm công → Đặt làm mặc định** | Bản cài mới có sẵn "Hành chính T2–T6 08:00–17:00"; người chưa gán lịch dùng lịch này |
 | Công của người không có máy / GPS | Nhân sự | **Bảng công tháng → Đặt công tay** (kỳ chưa khóa, có lý do) | Vắng mặt trên bảng công; lương tạm tính đủ công (cảnh báo) |
-| Máy chấm công | Kỹ thuật | **Kỹ thuật → Máy chấm công** — có hướng dẫn kết nối, *Kiểm tra kết nối*, *Máy đang gọi nhưng chưa đăng ký → Đăng ký máy này* | Chấm GPS hoặc đặt công tay |
+| Máy chấm công | Kỹ thuật | **Kỹ thuật → Máy chấm công** — có hướng dẫn kết nối, *Kiểm tra kết nối*, *Máy đang gọi nhưng chưa đăng ký → Đăng ký máy này*, rồi **xác minh** bằng mã PIN 6 số (tạo người dùng mang mã trên máy, chấm 1 lần) | Chấm GPS hoặc đặt công tay |
 | Mã chấm công (PIN) | Kỹ thuật / Nhân sự | Máy chấm công → *Gán cho…* hoặc **Nhập CSV ánh xạ PIN ↔ email** | Lần chấm vẫn lưu, chờ gán |
 | Bảng công đã khóa | Nhân sự | Bảng công tháng → Khóa | Kế toán vẫn tính lương (công nhập tay / mặc định), *Lấy lại công từ bảng công* sau |
 | Tham số lương | Kế toán | Tính lương → Tham số lương → Xác nhận | Cảnh báo vàng, vẫn gửi duyệt / duyệt được (có nhật ký) |
