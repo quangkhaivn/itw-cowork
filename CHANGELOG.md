@@ -57,7 +57,7 @@ Luật nghiệp vụ: `BUSINESS_RULES.md` mục 32 (LU-01 → LU-63). Quyết đ
 - **Tham số lương dễ đọc**: mỗi bộ hiện theo nhóm có nhãn + đơn vị, biểu thuế thành bảng bậc; nhập bộ mới bằng biểu mẫu từng ô (giữ chế độ JSON nâng cao).
 - Sửa câu mô tả cũ "kỳ lương dùng phiên bản hiệu lực ngày cuối tháng" (Hồ sơ lương, Tham số lương, hướng dẫn).
 - Phụ cấp tháng chia theo công không vượt mức tháng (cảnh báo phần do công điều chỉnh tháng trước); nợ tăng ca âm lấy từ kỳ đã khóa gần nhất có dòng của người đó, cảnh báo khi tháng trước chưa khóa.
-- `db:seed:mau`: dữ liệu mẫu DEMO cho Nhân sự (lịch, chấm công, bảng công đã khóa, việc giao, báo cáo, KPI + đánh giá đã chốt, thực tập, kỳ lương đã tính).
+- `db:seed:mau`: dữ liệu mẫu DEMO cho Nhân sự ở doanh nghiệp `demo` (`prisma/seed/mau-nhan-su.ts`, tạo qua service, chạy lại không nhân đôi): địa điểm / ca / lịch / máy chấm công `DEMO0001` / ngày lễ, lần chấm tháng trước và hôm nay (đúng giờ, muộn, về sớm, quên chấm có giải trình, hiện trường theo phiếu hỗ trợ, ngoài vùng chờ xem xét), nghỉ phép + tăng ca đã duyệt, bảng công tháng trước đã khóa, 9 việc giao + mẫu việc + việc định kỳ, báo cáo ngày / tuần có nhận xét, bộ KPI Kinh doanh + kỳ đánh giá tháng trước (3 phiếu đã chốt A / B / C), thực tập sinh `thuctap@demo.test` (2 nhật ký, phiếu đánh giá nháp), kỳ lương tháng trước nháp đã tính (tham số lương vẫn chờ kế toán xác nhận).
 
 ## 0.20.0 — 03/11/2026 — Nhân sự, giai đoạn 2: giao việc, báo cáo, duyệt, đánh giá; KPI; sinh viên thực tập
 

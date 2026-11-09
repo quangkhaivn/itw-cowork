@@ -119,6 +119,7 @@ Mở: http://127.0.0.1:3000   (chạy bằng CHAY.bat, dừng bằng DUNG.bat)
    tp.kinhdoanh@demo.test (TP KD)      kd1@demo.test, kd2@demo.test (Kinh doanh)
    marketing@demo.test (Marketing)     ketoan@demo.test (Kế toán)
    tp.kythuat@demo.test, ktv1@demo.test (Kỹ thuật)   cskh@demo.test   kho@demo.test
+   thuctap@demo.test (Thực tập sinh) – có sẵn dữ liệu mẫu Nhân sự (chấm công, việc, đánh giá, lương)
 
 2) Doanh nghiệp itw (trống, để thử khai báo từ đầu) – mã doanh nghiệp: itw
    $($Env['SEED_ADMIN_EMAIL'])  /  $($Env['SEED_ADMIN_PASSWORD'])   (lần đầu bắt đổi mật khẩu)

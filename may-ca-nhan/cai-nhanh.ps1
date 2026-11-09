@@ -272,6 +272,7 @@ Phần lương bắt buộc xác thực 2 lớp: Tài khoản của tôi → B�
    tp.kinhdoanh@demo.test (TP KD)      kd1@demo.test, kd2@demo.test (Kinh doanh)
    marketing@demo.test (Marketing)     ketoan@demo.test (Kế toán)
    tp.kythuat@demo.test, ktv1@demo.test (Kỹ thuật)   cskh@demo.test   kho@demo.test
+   thuctap@demo.test (Thực tập sinh) – có sẵn dữ liệu mẫu Nhân sự (chấm công, việc, đánh giá, lương)
 
 2) Doanh nghiệp itw (trống) – ô "Mã doanh nghiệp": itw
    $($E['SEED_ADMIN_EMAIL'])  /  $($E['SEED_ADMIN_PASSWORD'])   (lần đầu bắt đổi mật khẩu)
