@@ -25,7 +25,7 @@ Giám đốc: *"phần mềm mở, để kế toán, nhân sự và kỹ thuật
 - `/nhan-su/may-cham-cong` chuyển sang `/may-cham-cong`.
 
 ### Kiểm thử
-- Mới: `thu/thu-mo-dan.ts` (`npm run thu:mo-dan`, nối cuối `thu:tich-hop`), `thu/don-vi/mo-dan.test.ts` (15 bài).
+- Mới: `thu/thu-mo-dan.ts` (`npm run thu:mo-dan`, nối cuối `thu:tich-hop`), `thu/don-vi/mo-dan.test.ts` (16 bài).
 - Bài cũ đổi kỳ vọng theo luật mới: `thu-luong` (chưa có bảng công / bảng công nháp / ngày thiếu giờ chờ quyết → vẫn tính + cảnh báo; tham số chưa xác nhận → cảnh báo vàng), `thu-luong-chinh-sach` (thiếu tài khoản → dự kiến trả tay, không chặn khóa), `thu-cham-cong` (máy từng gọi khi chưa đăng ký → bắt tay `ATTLOGStamp=0`), `thu-qa-cham-cong` và `don-vi/cham-cong.test.ts` (so quyền QĐ-117 bỏ qua mã `may_cham_cong.*` cấp ở migration 0.22.0).
 
 ## 0.21.1 — 09/11/2026 — Dữ liệu mẫu Nhân sự, sao lưu bị ngắt
