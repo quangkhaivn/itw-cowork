@@ -968,3 +968,23 @@ export const PHU_CAP_MAC_DINH: { ma: string; ten: string; chiuThue: boolean; tin
   { ma: "xang-xe", ten: "Xăng xe", chiuThue: true, tinhBH: false, theo: "thang", thuTu: 20 },
   { ma: "dien-thoai", ten: "Điện thoại", chiuThue: false, tinhBH: false, theo: "thang", thuTu: 30 },
 ];
+
+// ---------------------------------------------------------------------------
+// 0.22.0 (QĐ-192): giấy tờ người phụ thuộc
+// ---------------------------------------------------------------------------
+
+/**
+ * Số giấy tờ người phụ thuộc hợp lệ: MST (10 số, hoặc 10 số-3 số), CCCD / số định danh (12 số), giấy tờ khác (hộ chiếu,
+ * giấy khai sinh…) ít nhất 6 ký tự chữ-số. Bỏ khoảng trắng trước khi kiểm.
+ */
+export function giayToNguoiPhuThuocHopLe(so: string | null | undefined): boolean {
+  if (!so) return false;
+  const s = so.replace(/\s/g, "");
+  return /^\d{10}$/.test(s) || /^\d{10}-\d{3}$/.test(s) || /^\d{12}$/.test(s) || /^[A-Za-z0-9]{6,30}$/.test(s);
+}
+
+/** Đủ thông tin để được giảm trừ: họ tên thật (≥ 2 ký tự, không phải tên giữ chỗ của nhập CSV) + giấy tờ hợp lệ. */
+export function nguoiPhuThuocDuGiayTo(hoTen: string | null | undefined, soGiayTo: string | null | undefined): boolean {
+  const ten = (hoTen ?? "").trim();
+  return ten.length >= 2 && !/\(nhập CSV — bổ sung họ tên\)/.test(ten) && giayToNguoiPhuThuocHopLe(soGiayTo);
+}

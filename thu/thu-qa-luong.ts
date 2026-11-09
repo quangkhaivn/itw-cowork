@@ -266,7 +266,7 @@ async function main() {
   // Đang chờ duyệt: Nhân sự đổi lương A (hiệu lực từ đầu tháng 3), Kế toán nhập biểu thuế mới, thêm người phụ thuộc cho A.
   await voi(T, hr, (nc) => taoHoSoLuong(nc, hs({ nguoiId: nvA, hieuLucTu: "2026-03-01", luongCoBan: 99_000_000, luongDongBH: 17_345_678, huongHoaHong: true, soTaiKhoan: "0011001234567", nganHang: "Vietcombank" })));
   await voi(T, kt, (nc) => taoThamSo(nc, LuocDoThamSo.parse({ loai: "giam-tru", hieuLucTu: "2026-03-01", giaTri: { banThan: 1, nguoiPhuThuoc: 1 }, ghiChu: "Đổi giữa lúc chờ duyệt (QA)" })));
-  await voi(T, hr, (nc) => themNguoiPhuThuoc(nc, { nguoiId: nvA, hoTen: "Mẹ của A", quanHe: "Mẹ", soGiayTo: null, tuThang: "2026-03", denThang: null }));
+  await voi(T, hr, (nc) => themNguoiPhuThuoc(nc, { nguoiId: nvA, hoTen: "Mẹ của A", quanHe: "Mẹ", soGiayTo: "079200000003", tuThang: "2026-03", denThang: null }));
   const song = await Promise.allSettled([voi(T, gd, (nc) => duyetKyLuong(nc, k3.id)), voi(T, gd, (nc) => duyetKyLuong(nc, k3.id))]);
   dat("Duyệt hai lần cùng lúc: một thành công, một 409", song.filter((s) => s.status === "fulfilled").length === 1 && song.some((s) => s.status === "rejected" && s.reason instanceof LoiNghiepVu && s.reason.status === 409));
   const khoa2 = await Promise.allSettled([voi(T, gd, (nc) => khoaKyLuong(nc, k3.id)), voi(T, gd, (nc) => traLaiKyLuong(nc, k3.id, { lyDo: "Trả lại cùng lúc với khóa" }))]);

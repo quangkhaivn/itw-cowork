@@ -496,7 +496,7 @@ export async function tinhKyLuong(nc: NguCanh, id: string) {
     }
     // QĐ-182: người phụ thuộc "chưa ghi tên" không được giảm trừ — nhắc bổ sung.
     if (nptChuaDu.get(u.id)) {
-      canhBaoCong.push({ ma: "npt-chua-ghi-ten", muc: "canh-bao", noiDung: `${nptChuaDu.get(u.id)} người phụ thuộc chưa có họ tên + MST / số giấy tờ — CHƯA được giảm trừ. Bổ sung ở Hồ sơ lương rồi tính lại.` });
+      canhBaoCong.push({ ma: "npt-chua-ghi-ten", muc: "canh-bao", noiDung: `${nptChuaDu.get(u.id)} người phụ thuộc chưa đủ giấy tờ (họ tên + MST 10 / 10-3 số, CCCD 12 số hoặc giấy tờ khác ≥ 6 ký tự) — CHƯA được giảm trừ. Bổ sung ở Hồ sơ lương rồi tính lại.` });
     }
     if (h.taxMethod === "luy-tien" && !h.taxCode) {
       canhBaoCong.push({ ma: "thieu-ma-so-thue", muc: "canh-bao", noiDung: "Chưa có mã số thuế cá nhân — vẫn khấu trừ thuế bình thường; bổ sung ở Hồ sơ lương để quyết toán." });

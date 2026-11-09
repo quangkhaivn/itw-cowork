@@ -75,7 +75,7 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
                   truong={[
                     { ten: "hoTen", nhan: "Họ tên", kieu: "text", batBuoc: true },
                     { ten: "quanHe", nhan: "Quan hệ", kieu: "text", batBuoc: true },
-                    { ten: "soGiayTo", nhan: "Số CCCD / mã số thuế", kieu: "text" },
+                    { ten: "soGiayTo", nhan: "MST (10 / 10-3 số), CCCD (12 số) hoặc giấy tờ khác (≥ 6 ký tự) — thiếu thì chưa được giảm trừ", kieu: "text" },
                     { ten: "tuThang", nhan: "Giảm trừ từ tháng (NĂM-THÁNG)", kieu: "text", batBuoc: true, goiY: "Ví dụ 2026-01" },
                     { ten: "denThang", nhan: "Đến tháng (trống = chưa kết thúc)", kieu: "text" },
                   ]}
@@ -98,9 +98,9 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
           {ls.nguoiPhuThuoc.length === 0 ? <TrongRong tieuDe="Chưa đăng ký người phụ thuộc" /> : (
             <table className="bang"><tbody>{ls.nguoiPhuThuoc.map((p) => (
               <tr key={p.id}>
-                <td>{p.hoTen}{p.chuaDuThongTin && <span className="huy-hieu canh-bao" title="Chưa có họ tên + MST / số giấy tờ — chưa được giảm trừ"> Chưa giảm trừ</span>}</td><td>{p.quanHe}</td><td>{p.soGiayTo ?? ""}</td><td>từ {p.tuThang}{p.denThang ? ` đến ${p.denThang}` : ""}</td>
+                <td>{p.hoTen}{p.chuaDuThongTin && <span className="huy-hieu canh-bao" title="Thiếu họ tên hoặc giấy tờ hợp lệ — chưa được giảm trừ"> Chưa đủ giấy tờ</span>}</td><td>{p.quanHe}</td><td>{p.soGiayTo ?? ""}</td><td>từ {p.tuThang}{p.denThang ? ` đến ${p.denThang}` : ""}</td>
                 <td style={{ display: "flex", gap: 6 }}>{sua && <FormNhanh nhanNut={p.chuaDuThongTin ? "Bổ sung" : "Sửa"} tieuDe="Thông tin người phụ thuộc" url={`/api/v1/luong/nguoi-phu-thuoc/${p.id}`} phuongThuc="PUT" lopNut="nut nho"
-                  truong={[{ ten: "hoTen", nhan: "Họ tên", kieu: "text", batBuoc: true }, { ten: "quanHe", nhan: "Quan hệ", kieu: "text", batBuoc: true }, { ten: "soGiayTo", nhan: "MST / số giấy tờ (bắt buộc để được giảm trừ nếu đang “chưa giảm trừ”)", kieu: "text" }]}
+                  truong={[{ ten: "hoTen", nhan: "Họ tên", kieu: "text", batBuoc: true }, { ten: "quanHe", nhan: "Quan hệ", kieu: "text", batBuoc: true }, { ten: "soGiayTo", nhan: "MST (10 / 10-3 số), CCCD (12 số) hoặc giấy tờ khác (≥ 6 ký tự chữ-số) — bắt buộc để được giảm trừ", kieu: "text" }]}
                   giaTriDau={{ hoTen: p.chuaDuThongTin ? "" : p.hoTen, quanHe: p.chuaDuThongTin ? "" : p.quanHe, soGiayTo: p.soGiayTo ?? "" }} />}{sua && !p.denThang && <FormNhanh nhanNut="Kết thúc" tieuDe="Kết thúc giảm trừ" url={`/api/v1/luong/nguoi-phu-thuoc/${p.id}`} phuongThuc="PATCH" truong={[{ ten: "denThang", nhan: "Tháng cuối còn giảm trừ (NĂM-THÁNG)", kieu: "text", batBuoc: true }]} giaTriDau={{ denThang: hn.slice(0, 7) }} />}</td>
               </tr>
             ))}</tbody></table>

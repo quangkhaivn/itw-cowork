@@ -98,7 +98,7 @@ export async function viecThietLap(nc: NguCanh, homNay = homNayVN()): Promise<{ 
         viec("tham-so-luong", "Xác nhận tham số lương", chuaXacNhan, "/luong/tham-so", "Chưa xác nhận vẫn gửi duyệt / duyệt được (có cảnh báo, kiểm toán ghi lại)."),
         viec("ho-so-luong", "Hồ sơ lương", idsHoatDong.length - hs.size, "/luong/ho-so", "Người chưa có hồ sơ không vào bảng lương; bảng lương liệt kê riêng kèm nút tạo hồ sơ. Có thể nhập CSV."),
         viec("tai-khoan", "Tài khoản ngân hàng", thieuTk, "/luong/ho-so", "Chưa có tài khoản thì trả tay / tiền mặt — không chặn khóa kỳ, không vào file ngân hàng."),
-        viec("nguoi-phu-thuoc", "Người phụ thuộc chưa ghi tên", nptChuaDu, "/luong/ho-so", "Chưa có họ tên + MST / số giấy tờ thì CHƯA được giảm trừ gia cảnh — bổ sung ở Hồ sơ lương."),
+        viec("nguoi-phu-thuoc", "Người phụ thuộc chưa đủ giấy tờ", nptChuaDu, "/luong/ho-so", "Thiếu họ tên hoặc giấy tờ hợp lệ (MST 10 / 10-3 số, CCCD 12 số, giấy tờ khác ≥ 6 ký tự chữ-số) thì CHƯA được giảm trừ gia cảnh — bổ sung ở Hồ sơ lương."),
       ],
     });
   }

@@ -9,7 +9,7 @@ import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { batBuocQuyenLuong, ghiXem, locNguoiLuong, trongPhamViLuong } from "./chung";
 import { LuocDoHoSoLuong, type LuocDoKetThucNguoiPhuThuoc, type LuocDoLoaiPhuCap, type LuocDoNguoiPhuThuoc, type LuocDoSuaNguoiPhuThuoc } from "./luoc-do";
 import { phanTichCsvHoSoLuong } from "./nhap-csv";
-import { chonBoHieuLuc, NHAN_CACH_TRA, NHAN_LOAI_HOP_DONG, NHAN_PHUONG_PHAP_THUE, THUE_GOI_Y, type CachTra, type LoaiHopDong, type PhuongPhapThue } from "./tinh-toan";
+import { chonBoHieuLuc, NHAN_CACH_TRA, NHAN_LOAI_HOP_DONG, NHAN_PHUONG_PHAP_THUE, nguoiPhuThuocDuGiayTo, THUE_GOI_Y, type CachTra, type LoaiHopDong, type PhuongPhapThue } from "./tinh-toan";
 
 /**
  * Hồ sơ lương (LU-01 → LU-05): phiên bản theo ngày hiệu lực (chỉ ghi thêm), danh mục phụ cấp, người phụ thuộc.
@@ -258,11 +258,13 @@ export async function themNguoiPhuThuoc(nc: NguCanh, d: z.infer<typeof LuocDoNgu
     data: {
       tenantId: nc.tenantId, userId: d.nguoiId, fullName: d.hoTen, relationship: d.quanHe, idNumber: d.soGiayTo,
       fromMonth: ngayVeDate(`${d.tuThang}-01`), toMonth: d.denThang ? ngayVeDate(`${d.denThang}-01`) : null, createdBy: nc.hoSo.userId,
+      // QĐ-192: thiếu họ tên hoặc giấy tờ hợp lệ (MST / CCCD / giấy tờ khác) → "chưa đủ giấy tờ", không giảm trừ.
+      infoPending: !nguoiPhuThuocDuGiayTo(d.hoTen, d.soGiayTo),
     },
   });
-  await nc.kiemToan({ action: "tao", objectType: "salary_dependent", objectId: x.id, after: { nguoi: d.nguoiId, tuThang: d.tuThang, denThang: d.denThang } });
+  await nc.kiemToan({ action: "tao", objectType: "salary_dependent", objectId: x.id, after: { nguoi: d.nguoiId, tuThang: d.tuThang, denThang: d.denThang, chuaDuGiayTo: !nguoiPhuThuocDuGiayTo(d.hoTen, d.soGiayTo) } });
   await nc.suKien({ eventType: SU_KIEN.SALARY_PROFILE_CHANGED, objectType: "salary_dependent", objectId: x.id, payload: { nguoi: d.nguoiId } });
-  return { id: x.id };
+  return { id: x.id, chuaDuGiayTo: !nguoiPhuThuocDuGiayTo(d.hoTen, d.soGiayTo) };
 }
 
 /** Kết thúc giảm trừ một người phụ thuộc từ sau tháng `denThang` (không xóa — kỳ đã tính giữ ảnh chụp số người). */
@@ -376,8 +378,8 @@ export async function suaNguoiPhuThuoc(nc: NguCanh, id: string, d: z.infer<typeo
   const x = await nc.tx.salaryDependent.findFirst({ where: { id } });
   if (!x) throw new LoiKhongTimThay("Người phụ thuộc");
   chanTuSua(nc, x.userId);
-  const thieu = laTenGiuCho(d.hoTen) || !d.soGiayTo;
-  const conThieu = x.infoPending && thieu;
+  // QĐ-192: đủ giấy tờ = họ tên thật + MST (10 / 10-3 số), CCCD (12 số) hoặc giấy tờ khác ≥ 6 ký tự chữ-số.
+  const conThieu = !nguoiPhuThuocDuGiayTo(d.hoTen, d.soGiayTo);
   await nc.tx.salaryDependent.update({ where: { id }, data: { fullName: d.hoTen, relationship: d.quanHe, idNumber: d.soGiayTo, infoPending: conThieu } });
   await nc.kiemToan({
     action: "sua-nguoi-phu-thuoc", objectType: "salary_dependent", objectId: id,

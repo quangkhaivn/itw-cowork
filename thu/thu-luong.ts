@@ -136,7 +136,7 @@ async function main() {
   await voi(T, hr, (nc) => taoHoSoLuong(nc, hs({ nguoiId: nvB, luongCoBan: 20_000_000, luongDongBH: 20_000_000, thuongKpi: 2_000_000, soTaiKhoan: "1903", nganHang: "Techcombank" })));
   await voi(T, hr, (nc) => taoHoSoLuong(nc, hs({ nguoiId: tt, loaiHopDong: "thuc-tap", luongCoBan: 4_000_000, phuongPhapThue: "khau-tru-10", soTaiKhoan: "7777", nganHang: "MB" })));
   await voi(T, hr, (nc) => taoHoSoLuong(nc, hs({ nguoiId: ad, luongCoBan: 30_000_000, luongDongBH: 30_000_000, soTaiKhoan: "8888", nganHang: "ACB" })));
-  await voi(T, hr, (nc) => themNguoiPhuThuoc(nc, { nguoiId: nvB, hoTen: "Con của B", quanHe: "Con", soGiayTo: null, tuThang: "2026-01", denThang: null }));
+  await voi(T, hr, (nc) => themNguoiPhuThuoc(nc, { nguoiId: nvB, hoTen: "Con của B", quanHe: "Con", soGiayTo: "079200000001", tuThang: "2026-01", denThang: null }));
   const nkHs = await chu.auditLog.findFirstOrThrow({ where: { tenantId: T, action: "tao-ho-so-luong", objectId: hsA.id } });
   dat("QĐ-148: nhật ký tạo hồ sơ KHÔNG chứa số tiền", !JSON.stringify(nkHs.after).includes("15000000"));
   await csdlChan("LU-02: phiên bản hồ sơ lương chỉ ghi thêm (chủ sở hữu cũng không sửa được)", () => chu.salaryProfile.update({ where: { id: hsA.id }, data: { baseSalary: 99n } }));

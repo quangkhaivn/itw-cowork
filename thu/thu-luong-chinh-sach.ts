@@ -106,7 +106,7 @@ async function main() {
   await nemLoi("Giám đốc (toàn quyền) cũng không tự lập hồ sơ cho mình", "nghiep-vu", () => voi(T, gd, (nc) => taoHoSoLuong(nc, hs({ nguoiId: gd, luongCoBan: 1_000_000 }))), "tu-sua-ho-so");
   await nemLoi("Quản trị không tự lập hồ sơ cho mình", "nghiep-vu", () => voi(T, ad, (nc) => taoHoSoLuong(nc, hs({ nguoiId: ad, luongCoBan: 1_000_000 }))), "tu-sua-ho-so");
   await nemLoi("Nhân sự không tự thêm người phụ thuộc cho mình", "nghiep-vu", () => voi(T, hr, (nc) => themNguoiPhuThuoc(nc, { nguoiId: hr, hoTen: "Con H", quanHe: "Con", soGiayTo: null, tuThang: "2026-01", denThang: null })), "tu-sua-ho-so");
-  const nptGd = await voi(T, hr, (nc) => themNguoiPhuThuoc(nc, { nguoiId: gd, hoTen: "Con GĐ", quanHe: "Con", soGiayTo: null, tuThang: "2026-01", denThang: null }));
+  const nptGd = await voi(T, hr, (nc) => themNguoiPhuThuoc(nc, { nguoiId: gd, hoTen: "Con GĐ", quanHe: "Con", soGiayTo: "079200000002", tuThang: "2026-01", denThang: null }));
   await nemLoi("Giám đốc không tự kết thúc người phụ thuộc của mình", "nghiep-vu", () => voi(T, gd, (nc) => ketThucNguoiPhuThuoc(nc, nptGd.id, { denThang: "2026-02" })), "tu-sua-ho-so");
 
   await voi(T, hr, (nc) => taoHoSoLuong(nc, hs({ nguoiId: gd, luongCoBan: 50_000_000, luongDongBH: 40_000_000, soTaiKhoan: "1111", nganHang: "VCB" })));
