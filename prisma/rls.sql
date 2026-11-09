@@ -150,7 +150,12 @@ REVOKE ALL ON FUNCTION public.ghi_log_cach_ly(uuid, jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.lay_log_cach_ly(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.dem_log_cach_ly(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.giai_phong_sn_cho_xac_minh(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.ghi_log_cach_ly(uuid, jsonb) TO cowork_app;
+-- 0.22.0 (QĐ-190): bản 2 tham số không kiểm IP thôi dùng — thu hồi; ứng dụng dùng bản có IP (ghim IP khi xác minh).
+REVOKE ALL ON FUNCTION public.ghi_log_cach_ly(uuid, jsonb) FROM cowork_app;
+REVOKE ALL ON FUNCTION public.ghi_log_cach_ly(uuid, jsonb, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ghi_log_cach_ly(uuid, jsonb, text) TO cowork_app;
+REVOKE ALL ON FUNCTION public.ip_may_la_truoc_dang_ky(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ip_may_la_truoc_dang_ky(text) TO cowork_app;
 GRANT EXECUTE ON FUNCTION public.lay_log_cach_ly(uuid) TO cowork_app;
 GRANT EXECUTE ON FUNCTION public.dem_log_cach_ly(uuid) TO cowork_app;
 GRANT EXECUTE ON FUNCTION public.giai_phong_sn_cho_xac_minh(text) TO cowork_app;

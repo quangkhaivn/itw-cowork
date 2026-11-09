@@ -194,6 +194,7 @@ model Tenant {
   payrollItems           PayrollItem[]
   payrollCommissionItems PayrollCommissionItem[]
   payrollManualInputs    PayrollManualInput[]
+  payrollReconciliations PayrollAttendanceReconciliation[]
   attendanceManualDays   AttendanceManualDay[]
   defaultScheduleChanges DefaultScheduleChange[]
 
@@ -3852,6 +3853,10 @@ model AttendanceDevice {
   verifyPin        String?   @map("verify_pin") @db.VarChar(6)
   verifyExpiresAt  DateTime? @map("verify_expires_at") @db.Timestamptz(6)
   verifiedAt       DateTime? @map("verified_at") @db.Timestamptz(6)
+  /// QĐ-190: IP được tin khi xác minh (IP trước đăng ký + lần gọi đầu sau đăng ký nếu chưa có).
+  verifyIps        String[]  @default([]) @map("verify_ips") @db.VarChar(45)
+  /// QĐ-190: lúc đã báo khu cách ly đầy (50.000 dòng) — báo một lần.
+  quarantineFullAt DateTime? @map("quarantine_full_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy        String?   @map("created_by") @db.Uuid
@@ -4882,6 +4887,8 @@ model PayrollLine {
 /// Khoản cộng / trừ nhập tay (tạm ứng, phạt, thưởng đột xuất) và DÒNG ĐIỀU CHỈNH kỳ trước (LU-25, LU-31).
 model PayrollItem {
   id           String    @id @default(uuid()) @db.Uuid
+  /// QĐ-191: khoản sinh tự động từ đối chiếu công sau khi khóa bảng công.
+  reconciliationId String? @map("reconciliation_id") @db.Uuid
   tenantId     String    @map("tenant_id") @db.Uuid
   runId        String    @map("run_id") @db.Uuid
   userId       String    @map("user_id") @db.Uuid
@@ -4990,6 +4997,8 @@ model AttendanceUnknownDevice {
   lastSeenAt   DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
   hitCount     Int      @default(1) @map("hit_count")
   model        String?  @db.VarChar(100)
+  /// QĐ-190: tối đa 20 IP công khai đã gọi trước khi đăng ký.
+  ips          String[] @default([]) @db.VarChar(45)
 
   @@map("attendance_unknown_devices")
 }
@@ -5025,4 +5034,29 @@ model AttendanceQuarantineLog {
 
   @@unique([deviceId, pin, punchedAt])
   @@map("attendance_quarantine_logs")
+}
+
+/// 0.22.0 (QĐ-191): đối chiếu công sau khi khóa bảng công — kỳ lương đã khóa bằng công TẠM (nhập tay / nháp / mặc định).
+/// Một dòng mỗi (kỳ gốc, người) — chống trùng. cho-ky = chờ kỳ lương kế tiếp; da-tao-khoan = đã tạo khoản điều chỉnh nháp.
+model PayrollAttendanceReconciliation {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  sourceRunId  String    @map("source_run_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  timesheetId  String    @map("timesheet_id") @db.Uuid
+  oldSource    String    @map("old_source") @db.VarChar(20)
+  oldWorkDays  Decimal   @map("old_work_days") @db.Decimal(6, 2)
+  newWorkDays  Decimal   @map("new_work_days") @db.Decimal(6, 2)
+  grossDelta   BigInt    @map("gross_delta")
+  taxableDelta BigInt    @map("taxable_delta")
+  status       String    @db.VarChar(20)
+  targetRunId  String?   @map("target_run_id") @db.Uuid
+  appliedAt    DateTime? @map("applied_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceRunId, userId])
+  @@index([tenantId, status])
+  @@map("payroll_attendance_reconciliations")
 }
