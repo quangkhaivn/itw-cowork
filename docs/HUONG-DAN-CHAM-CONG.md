@@ -41,7 +41,7 @@ Chọn ca và đánh dấu từng ngày: Cả ca / Sáng / Chiều / Nghỉ. Ví
 
 Bấm **Gán lịch cho nhân viên**, chọn lịch, ngày bắt đầu áp dụng, chọn nhiều người (giữ Ctrl / ⌘). Đổi lịch từ một ngày thì gán lịch mới với ngày đó — những ngày trước vẫn giữ lịch cũ.
 
-> **0.22.0 — Lịch mặc định.** Ở bảng *Lịch tuần*, bấm **Đặt làm mặc định** cho lịch dùng chung của công ty (ví dụ "Hành chính T2–T6 08:00–17:00" — bản cài mới có sẵn lịch này làm mặc định). **Người chưa được gán lịch nào dùng lịch mặc định** từ ngày vào làm: có ngày công dự kiến, vào bảng công, bảng trực tiếp ghi "theo lịch mặc định". Người đã gán lịch riêng giữ lịch của mình. Chưa chọn lịch mặc định thì người chưa gán lịch không có ngày công dự kiến (lương tạm tính T2–T6, có cảnh báo).
+> **0.22.0 — Lịch mặc định.** Ở bảng *Lịch tuần*, bấm **Đặt làm mặc định** cho lịch dùng chung của công ty (ví dụ "Hành chính T2–T6 08:00–17:00" — bản cài mới có sẵn lịch này làm mặc định). **Người chưa được gán lịch nào dùng lịch mặc định** từ ngày vào làm: có ngày công dự kiến, vào bảng công, bảng trực tiếp ghi "theo lịch mặc định". Người đã gán lịch riêng giữ lịch của mình. Đặt / đổi lịch mặc định chọn **ngày áp dụng** (mặc định hôm nay): chỉ áp từ ngày đó trở đi, không chọn được ngày trong tháng đã khóa bảng công (tháng đã khóa không đổi, không sinh dòng điều chỉnh). Chưa chọn lịch mặc định thì người chưa gán lịch không có ngày công dự kiến (lương tạm tính T2–T6, có cảnh báo).
 
 ### 1.5. Ngày lễ
 
@@ -87,9 +87,23 @@ Tài khoản, phòng ban, **quản lý trực tiếp** sửa ở *Quản trị �
 - **Đặt tại** (không bắt buộc): địa điểm của máy — Kỹ thuật có thể để trống, Nhân sự chọn sau (cần để kiểm tốc độ di chuyển bất thường).
 - **Chỉ nhận từ IP** (nên khai): IP công cộng của mạng văn phòng (hỏi bộ phận IT hoặc xem cột "IP cuối" sau khi máy gọi về lần đầu).
 
+### 3.1a. Xác minh máy (bắt buộc — làm ngay sau khi đăng ký)
+
+Nhiều công ty có thể dùng chung một mạng / IP (tòa nhà văn phòng), nên Cowork phải chắc máy đúng là của công ty mình. Đăng ký xong, máy ở trạng thái **Chờ xác minh** và màn hình hiện **mã PIN xác minh 6 số** (hạn 24 giờ). Trong lúc chờ, lần chấm của máy được giữ ở **khu cách ly**: không hiện ở đâu, không tính công cho ai.
+
+1. Trên máy chấm công: *Menu → Người dùng (User Mgt) → Thêm người dùng*. **Mã người dùng (ID / PIN) = mã xác minh 6 số** trên màn hình Cowork. Đặt **mật khẩu hoặc vân tay — loại nào cũng được**.
+2. **Chấm công 1 lần** bằng người dùng đó (nhập mật khẩu hoặc đặt vân tay).
+3. Chờ khoảng 1 phút (máy gửi lần chấm về), bấm **Kiểm tra kết nối**: máy chuyển **Đã xác minh**; Cowork nhận toàn bộ lần chấm đang cách ly vào công ty. Kỹ thuật nhận thông báo.
+4. **Xóa người dùng tạm** mang mã xác minh trên máy (lần chấm xác minh không tính công cho ai).
+
+- Mã **hết hạn sau 24 giờ** → bấm **Tạo lại mã** rồi làm lại bước 1–2 với mã mới.
+- **Hủy đăng ký** (khi chưa xác minh): xóa máy và toàn bộ lần chấm đang cách ly — dùng khi đăng ký nhầm SN.
+- SN báo "đã được đăng ký trên hệ thống" mà máy đúng là của công ty: có thể công ty khác đăng ký nhầm. Nếu đăng ký đó chưa xác minh quá 24 giờ, đăng ký lại sẽ được (đăng ký cũ bị gỡ, lần chấm cách ly của họ bị xóa).
+- Máy đã đăng ký trước bản 0.22.0 coi như đã xác minh. Quản trị có thể tắt xác minh ở *Cấu hình → Chấm công → Xác minh sở hữu máy chấm công* (chỉ nên làm khi máy chủ chỉ phục vụ một công ty).
+
 ### 3.1b. Máy đang gọi nhưng chưa đăng ký (máy lạ)
 
-Khai địa chỉ máy chủ trên máy **trước** cũng được: máy gọi về, Cowork ghi lại SN, IP, mẫu máy, số lần gọi (không lưu lần chấm). Mục **Máy đang gọi nhưng chưa đăng ký** chỉ hiện máy **cùng mạng với bạn** (cùng IP công khai) hoặc cùng mạng với một máy công ty đã đăng ký — doanh nghiệp khác trên cùng máy chủ không thấy máy của mình. Không thấy thì gõ đúng SN vào ô **Tìm đúng SN**. Bấm **Đăng ký máy này** → ở lần gọi kế tiếp Cowork yêu cầu máy **gửi lại toàn bộ nhật ký chấm công** đang lưu trong máy.
+Khai địa chỉ máy chủ trên máy **trước** cũng được: máy gọi về, Cowork ghi lại SN, IP, mẫu máy, số lần gọi (không lưu lần chấm). Mục **Máy đang gọi nhưng chưa đăng ký** chỉ hiện máy **cùng mạng với bạn** (cùng IP công khai) hoặc cùng mạng với một máy công ty đã đăng ký — doanh nghiệp khác trên cùng máy chủ không thấy máy của mình. Không thấy thì gõ đúng SN vào ô **Tìm đúng SN**. Thấy máy trong danh sách **không** chứng minh máy là của công ty mình (công ty khác có thể dùng chung IP) — vì vậy luôn phải **xác minh** (mục 3.1a). Bấm **Đăng ký máy này** → ở lần gọi kế tiếp Cowork yêu cầu máy **gửi lại toàn bộ nhật ký chấm công** đang lưu trong máy (vào khu cách ly cho tới khi **xác minh** — mục 3.1a).
 
 ### 3.2. Khai địa chỉ máy chủ trên máy
 
@@ -118,6 +132,8 @@ Người mới được thêm vân tay trên máy nhưng chưa khai mã chấm c
 
 - **chỉ từ ngày vào làm** trong hồ sơ (nhớ nhập ngày vào làm — PIN trên máy hay được dùng lại cho người mới; lần chấm trước ngày vào làm là của người cũ, không bao giờ được áp);
 - **chỉ trong tháng chưa khóa bảng công**. Lần chấm thuộc tháng đã khóa còn nằm lại ở danh sách, cột *Đã gán cho* ghi tên người. Nếu đúng là của người này, người có **quyền duyệt chấm công** (không phải chính người đó) bấm **Áp cả kỳ đã khóa…**, tích xác nhận → bảng công tháng sau tự thêm dòng điều chỉnh (chỉ dò 3 tháng đã khóa gần nhất). Mọi lần áp đều ghi nhật ký kiểm toán.
+
+Không ai tự gán cho **chính mình** một mã chấm công đang có lần chấm chưa khớp (kể cả Nhân sự, Kỹ thuật) — nhờ người khác gán.
 
 **Nhập CSV ánh xạ PIN ↔ email** (0.22.0): tệp hai cột `Mã chấm công`, `Email` (email đăng nhập Cowork) → *Xem trước* (lỗi từng dòng: email không có, PIN đã gán người khác, người đã có mã khác, ô bắt đầu bằng `= + - @`) → *Gán mã chấm công*. Lần chấm chưa khớp của PIN đó được áp như *Gán cho…*.
 

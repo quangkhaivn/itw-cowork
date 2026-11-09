@@ -28,6 +28,18 @@ Giám đốc: *"phần mềm mở, để kế toán, nhân sự và kỹ thuật
 - Mới: `thu/thu-mo-dan.ts` (`npm run thu:mo-dan`, nối cuối `thu:tich-hop`), `thu/don-vi/mo-dan.test.ts` (16 bài).
 - Bài cũ đổi kỳ vọng theo luật mới: `thu-luong` (chưa có bảng công / bảng công nháp / ngày thiếu giờ chờ quyết → vẫn tính + cảnh báo; tham số chưa xác nhận → cảnh báo vàng), `thu-luong-chinh-sach` (thiếu tài khoản → dự kiến trả tay, không chặn khóa), `thu-cham-cong` (máy từng gọi khi chưa đăng ký → bắt tay `ATTLOGStamp=0`), `thu-qa-cham-cong` và `don-vi/cham-cong.test.ts` (so quyền QĐ-117 bỏ qua mã `may_cham_cong.*` cấp ở migration 0.22.0).
 
+### Chính sách sau QA (09/11/2026, QĐ-181 → QĐ-189)
+Migration `20261109090005_xac_minh_may_chinh_sach` (chạy lại `prisma/rls.sql`).
+- **Xác minh sở hữu máy chấm công** (Cấu hình `may_cham_cong.xac_minh_so_huu`, mặc định bật): máy mới đăng ký chờ xác minh bằng **mã PIN 6 số** (hạn 24 giờ, tạo lại được) — Kỹ thuật tạo người dùng mang mã trên máy, chấm 1 lần → máy kích hoạt, nhận log tồn. Trước đó lần chấm ở **khu cách ly** (không hiện, không tính công); hủy đăng ký xóa log cách ly; SN bị doanh nghiệp khác chiếm chưa xác minh quá 24 giờ được giải phóng. Máy đã đăng ký trước đó coi như đã xác minh.
+- Người phụ thuộc "chưa ghi tên" **không được giảm trừ** tới khi có họ tên + MST / số giấy tờ (bổ sung ở Hồ sơ lương); cảnh báo trên dòng lương và Thiết lập ban đầu.
+- **Bảng công nháp** là nguồn công tạm (nguồn "Bảng công nháp (tạm)") thay cho "mặc định đủ công" — cảnh báo `cong-mac-dinh-lech-bang-nhap` của QA thay bằng `cong-bang-nhap`.
+- Giờ tăng ca nhập tay vượt `luong.tang_ca_canh_bao_gio_thang` (40) → cảnh báo, không chặn.
+- **Lịch mặc định áp từ ngày chọn** (mặc định hôm nay), không hồi tố tháng đã khóa, không sinh dòng điều chỉnh.
+- **Khóa kỳ lương** kiểm lại Cấu hình chặn tham số chưa xác nhận.
+- Card Kỹ thuật trên Bảng điều hành đếm máy lạ giống trang Thiết lập ban đầu (theo IP người xem).
+- Ghi thành quyết định: không ai tự gán PIN cho chính mình (QĐ-185); tắt bắt buộc 2 lớp thì người chưa có 2 lớp vẫn duyệt / khóa được (QĐ-186).
+- Bài cũ đổi kỳ vọng: `thu-luong` (bảng công nháp → nguồn `bang-cong-nhap`), `thu-qa-mo-dan` L3 (nguồn bảng nháp thay cảnh báo lệch); `thu-cham-cong`, `thu-qa-cham-cong`, `thu-qa-mo-dan` tắt xác minh sở hữu cho doanh nghiệp thử (bài của máy đã được tin); `thu-mo-dan` phần máy chấm công viết lại theo luồng xác minh.
+
 ### QA độc lập (09/11/2026)
 Nới lỏng chặn → cảnh báo không được mở lỗ hổng toàn vẹn / bảo mật. Bài tái hiện: `thu/thu-qa-mo-dan.ts` (`npm run thu:qa-mo-dan`, nối cuối `thu:tich-hop`). Migration `20261109090004_qa_mo_dan`.
 - **[Cao] Khóa kỳ lương tính KHÔNG có bảng công lỗi 500**: CHECK `payroll_runs_buoc_check` (0.21.0) còn bắt buộc `timesheet_id` khi đã khóa — đúng trường hợp 0.22.0 hứa hỗ trợ (công nhập tay / mặc định) không khóa được. Migration bỏ riêng điều kiện đó.

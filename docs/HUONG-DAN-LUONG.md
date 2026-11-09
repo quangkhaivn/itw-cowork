@@ -16,7 +16,7 @@ Một tháng lương đi đúng một đường:
 
 ### 0.1. Bật xác thực 2 lớp
 
-Người xem hoặc tính lương của người khác (Kế toán, Nhân sự, Giám đốc, Quản trị) **bắt buộc** bật xác thực 2 lớp. Chưa bật thì trang lương hiện hướng dẫn **từng bước** và nút **Đi tới trang bật 2 lớp**. (0.22.0: Cấu hình → Tính lương → *Bắt buộc xác thực 2 lớp khi xem / tính lương người khác*, mặc định bật; chỉ Giám đốc / Quản trị đổi được, mỗi lần đổi có nhật ký — chỉ nên tạm tắt trong tuần đầu triển khai.)
+Người xem hoặc tính lương của người khác (Kế toán, Nhân sự, Giám đốc, Quản trị) **bắt buộc** bật xác thực 2 lớp. Chưa bật thì trang lương hiện hướng dẫn **từng bước** và nút **Đi tới trang bật 2 lớp**. (0.22.0: Cấu hình → Tính lương → *Bắt buộc xác thực 2 lớp khi xem / tính lương người khác*, mặc định bật; chỉ Giám đốc / Quản trị đổi được, mỗi lần đổi có nhật ký — chỉ nên tạm tắt trong tuần đầu triển khai.) **Lưu ý khi tắt:** người chưa bật 2 lớp làm được **mọi** thao tác lương theo quyền của mình — kể cả **duyệt và khóa** bảng lương (luật không tự duyệt, người tính không duyệt vẫn áp). Bật lại ngay khi mọi người đã cài xong.
 
 1. Cài ứng dụng xác thực trên điện thoại (Google Authenticator hoặc Microsoft Authenticator).
 2. Vào **Tài khoản của tôi → Xác thực 2 lớp → Bật**, **nhập lại mật khẩu đăng nhập hiện tại**, quét mã QR, nhập mã 6 số đang hiện.
@@ -35,7 +35,7 @@ Vào **Tính lương → Tham số lương**. Phần mềm đã nạp sẵn các
 - **Đúng** → bấm **Xác nhận** ở dòng đó. Hệ thống ghi tên bạn và thời điểm xác nhận.
 - **Sai** → bấm **Nhập bộ mới** ở loại đó, sửa con số, chọn **ngày hiệu lực** (có thể trùng ngày của bộ sai — bộ nhập sau sẽ thay), ghi **căn cứ** (số văn bản, ngày ban hành). Bộ bạn nhập được coi là đã xác nhận.
 
-Bảng lương dùng bộ **chưa xác nhận**: 0.22.0 — **vẫn gửi duyệt / duyệt được**, bảng lương và màn hình duyệt có băng cảnh báo vàng, nhật ký kiểm toán ghi "duyệt khi tham số chưa xác nhận". Muốn chặt như 0.21: Cấu hình → *Chặn gửi duyệt khi tham số lương chưa xác nhận* = 1.
+Bảng lương dùng bộ **chưa xác nhận**: 0.22.0 — **vẫn gửi duyệt / duyệt được**, bảng lương và màn hình duyệt có băng cảnh báo vàng, nhật ký kiểm toán ghi "duyệt khi tham số chưa xác nhận". Muốn chặt như 0.21: Cấu hình → *Chặn gửi duyệt khi tham số lương chưa xác nhận* = 1 — chặn cả gửi duyệt và **khóa kỳ** (bật sau khi đã duyệt thì khóa cũng bị chặn tới khi xác nhận).
 
 Các bộ cần xem kỹ:
 
@@ -62,7 +62,7 @@ Cuối trang **Tham số lương**: chọn cột (STT, số tài khoản, tên c
 
 ## 1. Nhân sự — hồ sơ lương
 
-> **0.22.0:** hồ sơ có **Hình thức trả** (Chuyển khoản / Tiền mặt – trả tay); số tài khoản không bắt buộc. **Nhập CSV hồ sơ lương** ở cuối trang Hồ sơ lương: cột `Email, Loại hợp đồng, Lương cơ bản, Lương đóng BH, Số tài khoản, Ngân hàng, Mã số thuế, Số người phụ thuộc` (tùy chọn `% lương thử việc`, `Hình thức trả`) → *Xem trước* (lỗi từng dòng; ô bắt đầu bằng `= + - @` bị báo lỗi) → *Tạo phiên bản hồ sơ*. Mỗi dòng là một phiên bản mới, hiệu lực từ ngày 1 tháng này; trường không có trong tệp giữ như hồ sơ hiện tại. Không nhập được hồ sơ của chính mình; đổi tài khoản vẫn báo nhân viên. Số người phụ thuộc nhiều hơn số đang đăng ký → thêm người phụ thuộc "chưa ghi tên" để bổ sung họ tên sau.
+> **0.22.0:** hồ sơ có **Hình thức trả** (Chuyển khoản / Tiền mặt – trả tay); số tài khoản không bắt buộc. **Nhập CSV hồ sơ lương** ở cuối trang Hồ sơ lương: cột `Email, Loại hợp đồng, Lương cơ bản, Lương đóng BH, Số tài khoản, Ngân hàng, Mã số thuế, Số người phụ thuộc` (tùy chọn `% lương thử việc`, `Hình thức trả`) → *Xem trước* (lỗi từng dòng; ô bắt đầu bằng `= + - @` bị báo lỗi) → *Tạo phiên bản hồ sơ*. Mỗi dòng là một phiên bản mới, hiệu lực từ ngày 1 tháng này; trường không có trong tệp giữ như hồ sơ hiện tại. Không nhập được hồ sơ của chính mình; đổi tài khoản vẫn báo nhân viên. Số người phụ thuộc nhiều hơn số đang đăng ký → thêm người phụ thuộc "chưa ghi tên" — **chưa được giảm trừ** cho tới khi Nhân sự bấm *Bổ sung* ghi **họ tên** và **MST / số giấy tờ** (dòng lương có cảnh báo, Thiết lập ban đầu đếm số người còn thiếu).
 
 **Tính lương → Hồ sơ lương**:
 
@@ -84,7 +84,9 @@ Mỗi lần mở trang hồ sơ lương đều được ghi nhật ký (ai, lúc
 1. **Nguồn công** (0.22.0 — không phải chờ): mỗi dòng ghi rõ công lấy từ đâu —
    - **Bảng công đã khóa** (nếu Nhân sự đã khóa và người đó có trong bảng);
    - **Công nhập tay**: nút *Nhập công tay* trên kỳ nháp — số ngày công (trống = đủ công chuẩn), giờ tăng ca, ngày nghỉ không lương, lý do. Kế toán hoặc Nhân sự nhập; không ai nhập cho chính mình;
-   - **Mặc định đủ công chuẩn** (cảnh báo vàng) cho người chưa có hai nguồn trên.
+   - **Bảng công nháp** (tạm, cảnh báo vàng) — Nhân sự đã sinh bảng công nhưng chưa khóa;
+   - **Mặc định đủ công chuẩn** (cảnh báo vàng) cho người chưa có các nguồn trên.
+   Thứ tự ưu tiên: bảng công đã khóa → công nhập tay → bảng công nháp → mặc định. Giờ tăng ca nhập tay vượt ngưỡng Cấu hình (40 giờ / tháng) → cảnh báo, không chặn (trần cứng 300 giờ).
    Bảng công khóa sau → bấm **Lấy lại công từ bảng công** (kỳ còn nháp): công nhập tay của người có trong bảng bị bỏ, tính lại theo bảng công. Ngày **“thiếu giờ” chờ quản lý quyết** không còn chặn: tính theo công hiện tại + cảnh báo; quản lý quyết sau thì chênh lệch vào dòng điều chỉnh tháng sau.
 2. **Tính lương → Tạo kỳ lương** (năm, tháng) → mở kỳ → **Tính lương**.
    - Nếu Giám đốc (người duyệt) cũng có lương trong bảng: **Tạo kỳ lương riêng** (đặt tên, ví dụ “Lãnh đạo”, chọn người) — những người này ra khỏi kỳ chung; kỳ riêng do Quản trị hoặc Giám đốc khác duyệt. Khi gửi duyệt mà không còn ai duyệt được, máy báo rõ và chỉ cách tách.

@@ -138,4 +138,16 @@ describe("Mở dần — quyền máy chấm công + Cấu hình (QĐ-176, QĐ-1
     assert.equal(timMuc("luong.bat_buoc_2_lop")?.macDinh, 1);
     assert.equal(timMuc("luong.tk_tien_mat")?.macDinh, 1111);
   });
+  it("khóa Cấu hình chính sách sau QA (QĐ-181, QĐ-184) có mặc định đúng", () => {
+    assert.equal(timMuc("may_cham_cong.xac_minh_so_huu")?.macDinh, 1);
+    assert.equal(timMuc("may_cham_cong.xac_minh_so_huu")?.toiDa, 1);
+    assert.equal(timMuc("luong.tang_ca_canh_bao_gio_thang")?.macDinh, 40);
+    assert.equal(timMuc("luong.tang_ca_canh_bao_gio_thang")?.toiDa, 300);
+  });
+  it("migration 20261109090005: máy đã có coi như đã xác minh, máy mới mặc định chờ xác minh", () => {
+    const sql = readFileSync("prisma/migrations/20261109090005_xac_minh_may_chinh_sach/migration.sql", "utf8");
+    const them = sql.indexOf(`ADD COLUMN "verify_status" varchar(20) NOT NULL DEFAULT 'da-xac-minh'`);
+    const doi = sql.indexOf(`ALTER COLUMN "verify_status" SET DEFAULT 'cho-xac-minh'`);
+    assert.ok(them > 0 && doi > them);
+  });
 });
