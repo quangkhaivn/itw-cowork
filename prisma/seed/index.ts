@@ -341,8 +341,29 @@ export async function seedMoiDoanhNghiep(db: PrismaClient, maChinh: string, tenC
   for (const t of ds) {
     console.log(`\n— Doanh nghiệp: ${t.name} (${t.code}) —`);
     await seedDuLieuDoanhNghiep(db, t, quyen);
+    await seedLichMacDinh(db, t.id);
   }
   return chinh;
+}
+
+/**
+ * 0.22.0 (QĐ-171): doanh nghiệp CHƯA CÓ lịch làm nào → tạo ca + lịch "Hành chính T2–T6 08:00–17:00" (nghỉ trưa 12:00, 60
+ * phút) và chọn làm LỊCH MẶC ĐỊNH — người chưa được gán lịch chấm công / tính công theo lịch này ngay từ đầu. Đã có lịch
+ * (kể cả đã ngừng) thì không đụng tới: Nhân sự tự chọn lịch mặc định ở Thiết lập chấm công.
+ * Chỉ gọi từ `npm run db:seed` (mọi doanh nghiệp); `seedNenMong` của bài thử cũ không gọi để giữ nguyên ngữ cảnh thử.
+ */
+export async function seedLichMacDinh(db: PrismaClient, tenantId: string): Promise<boolean> {
+  if ((await db.workSchedule.count({ where: { tenantId } })) > 0) return false;
+  const ca = await db.workShift.upsert({
+    where: { tenantId_code: { tenantId, code: "hanh-chinh" } },
+    update: {},
+    create: { tenantId, code: "hanh-chinh", name: "Hành chính 08:00–17:00", startMinute: 480, endMinute: 1020, breakStartMinute: 720, breakMinutes: 60 },
+  });
+  await db.workSchedule.create({
+    data: { tenantId, code: "hanh-chinh", name: "Hành chính T2–T6 08:00–17:00", shiftId: ca.id, days: ["ca", "ca", "ca", "ca", "ca", "nghi", "nghi"], isDefault: true },
+  });
+  console.log("✓ Lịch mặc định: Hành chính T2–T6 08:00–17:00");
+  return true;
 }
 
 async function taoQuanTriDauTien(db: PrismaClient, tenantId: string) {

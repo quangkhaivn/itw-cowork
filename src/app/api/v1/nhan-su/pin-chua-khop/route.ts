@@ -4,6 +4,6 @@ import { LuocDoAnhXaPin } from "@/modules/nhan-su/luoc-do";
 
 export const dynamic = "force-dynamic";
 
-export const GET = xuLyApi((nc) => danhSachPinChuaKhop(nc), { quyen: "nhan_su.view" });
+export const GET = xuLyApi((nc) => danhSachPinChuaKhop(nc));
 /** POST { pin, nguoiId } — gán PIN chưa khớp cho một người; các lần chấm cũ được gán lại (NS-15). */
-export const POST = xuLyApi(async (nc, req) => anhXaPin(nc, await docThan(req, LuocDoAnhXaPin)), { quyen: "nhan_su.update" });
+export const POST = xuLyApi(async (nc, req) => anhXaPin(nc, await docThan(req, LuocDoAnhXaPin)));

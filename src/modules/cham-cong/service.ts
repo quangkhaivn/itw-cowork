@@ -32,9 +32,10 @@ import {
 const GPS_TOI_DA_MOI_PHUT = 10;
 const TRANG_THAI_PHIEU_MO = ["MOI", "DANG_XU_LY", "CHO_KHACH"];
 
-export const NHAN_NGUON: Record<string, string> = { "van-tay": "Máy vân tay", gps: "GPS", "bo-sung": "Chấm bù (đã duyệt)", "nhap-csv": "Nhập từ tệp" };
+export const NHAN_NGUON: Record<string, string> = { "van-tay": "Máy vân tay", gps: "GPS", "bo-sung": "Chấm bù (đã duyệt)", "nhap-csv": "Nhập từ tệp", "nhap-tay": "Nhân sự đặt công" };
 export const NHAN_KET_QUA_GPS: Record<string, string> = { "hop-le": "Trong vùng", "hien-truong": "Hiện trường", "ngoai-vung": "Ngoài vùng" };
 export const NHAN_CO: Record<string, string> = {
+  "cong-nhap-tay": "Công do Nhân sự đặt tay",
   [CO.doChinhXacThap]: "Độ chính xác GPS thấp",
   [CO.tocDoBatThuong]: "Tốc độ di chuyển bất thường",
   [CO.thieuQuyenViTri]: "Không lấy được vị trí",

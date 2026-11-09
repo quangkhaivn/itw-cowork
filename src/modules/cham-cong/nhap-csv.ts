@@ -68,3 +68,48 @@ export function phanTichCsvChamCong(noiDung: string): {
   }
   return { dong, loi, thieuCot };
 }
+
+// ---------------------------------------------------------------------------
+// 0.22.0 (QĐ-179): nhập CSV ánh xạ PIN ↔ email — phần THUẦN
+// ---------------------------------------------------------------------------
+
+export interface DongCsvAnhXaPin {
+  soDong: number;
+  pin: string;
+  email: string;
+}
+
+const COT_ANH_XA = [
+  { truong: "pin", ten: ["Mã chấm công", "Ma cham cong", "PIN", "AC-No.", "AC No", "User ID", "Enroll Number"], batBuoc: true },
+  { truong: "email", ten: ["Email", "E-mail", "Thư điện tử"], batBuoc: true },
+];
+
+const EMAIL = /^[^\s@,;"'<>]+@[^\s@,;"'<>]+\.[^\s@,;"'<>]+$/;
+
+/** Đọc CSV (PIN, Email). Ô bắt đầu bằng ký tự công thức (= + - @) bị coi là lỗi dòng — không bao giờ ghi nguyên văn. */
+export function phanTichCsvAnhXaPin(noiDung: string): { dong: DongCsvAnhXaPin[]; loi: { soDong: number; lyDo: string }[]; thieuCot: string[] } {
+  const bang = docBangCsv(noiDung, COT_ANH_XA);
+  const loi: { soDong: number; lyDo: string }[] = [];
+  const dong: DongCsvAnhXaPin[] = [];
+  if (bang.thieuCot.length) return { dong, loi, thieuCot: [...bang.thieuCot] };
+  if (bang.dong.length > SO_DONG_CSV_TOI_DA) return { dong, loi: [{ soDong: 0, lyDo: "Tệp quá dài." }], thieuCot: [] };
+  for (const { soDong, duLieu } of bang.dong) {
+    const pin = (duLieu.pin ?? "").trim();
+    const email = (duLieu.email ?? "").trim().toLowerCase();
+    if (!pin && !email) continue;
+    if (/^[=+\-@\t\r]/.test(pin) || /^[=+\-@\t\r]/.test(email)) {
+      loi.push({ soDong, lyDo: "Ô bắt đầu bằng ký tự công thức (= + - @) — bỏ qua dòng này." });
+      continue;
+    }
+    if (!/^[0-9A-Za-z]{1,20}$/.test(pin)) {
+      loi.push({ soDong, lyDo: "Mã chấm công trống hoặc có ký tự lạ (1–20 chữ / số)." });
+      continue;
+    }
+    if (!EMAIL.test(email) || email.length > 255) {
+      loi.push({ soDong, lyDo: "Email không hợp lệ." });
+      continue;
+    }
+    dong.push({ soDong, pin, email });
+  }
+  return { dong, loi, thieuCot: [] };
+}

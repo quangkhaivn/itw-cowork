@@ -8,7 +8,7 @@ import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { dateVeNgay, ngayVeDate } from "@/modules/crm/chung";
 import { baoChoNguoiCoQuyen, taoThongBao } from "@/modules/thong-bao/service";
-import { banDoTen, docCauHinhChamCong, locNguoiXem, so } from "./chung";
+import { banDoTen, docCauHinhChamCong, lichMacDinh, locNguoiXem, nguoiChuaGanLich, so } from "./chung";
 import { tinhCong } from "./tinh-cong";
 import type { LuocDoGiaiQuyetPhanHoi, LuocDoPhanHoiCong, LuocDoSinhBangCong } from "./luoc-do";
 import { NHAN_CO, NHAN_NGUON } from "./service";
@@ -56,7 +56,11 @@ async function nguoiCuaThang(tx: ClientTenant, tu: string, den: string): Promise
     distinct: ["userId"],
   });
   const cham = coCham.map((x) => x.userId!);
-  const ids = [...new Set([...coLich.map((x) => x.userId), ...cham])];
+  // 0.22.0 (QĐ-171): có lịch mặc định → mọi người đang hoạt động chưa được gán lịch cũng vào bảng (theo lịch mặc định).
+  const theoMacDinh = (await lichMacDinh(tx))
+    ? [...(await nguoiChuaGanLich(tx, (await tx.user.findMany({ where: { isSystem: false, status: "hoat-dong" }, select: { id: true } })).map((u) => u.id)))]
+    : [];
+  const ids = [...new Set([...coLich.map((x) => x.userId), ...cham, ...theoMacDinh])];
   // Người đã ngừng hoạt động chỉ vào bảng khi còn lần chấm trong tháng (nghỉ việc giữa tháng).
   const u = await tx.user.findMany({ where: { id: { in: ids }, isSystem: false, OR: [{ status: "hoat-dong" }, { id: { in: cham } }] }, select: { id: true } });
   return u.map((x) => x.id).sort();

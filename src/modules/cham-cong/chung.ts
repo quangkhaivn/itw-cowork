@@ -143,48 +143,79 @@ export interface LichApDung {
   tenCa: string;
   ca: CaLam;
   ngay: PhanNgay[];
+  /** 0.22.0 (QĐ-171): người chưa được gán lịch nào → lịch mặc định của doanh nghiệp. */
+  macDinh?: boolean;
 }
 
-type DongGanLich = { userId: string; effectiveFrom: Date; schedule: { id: string; name: string; days: unknown; shift: { name: string; startMinute: number; endMinute: number; breakStartMinute: number | null; breakMinutes: number; lateGraceMinutes: number | null; earlyGraceMinutes: number | null } } };
+type LichDb = { id: string; name: string; days: unknown; shift: { name: string; startMinute: number; endMinute: number; breakStartMinute: number | null; breakMinutes: number; lateGraceMinutes: number | null; earlyGraceMinutes: number | null } };
+type DongGanLich = { userId: string; effectiveFrom: Date; schedule: LichDb };
+
+const CHON_LICH = {
+  id: true, name: true, days: true,
+  shift: { select: { name: true, startMinute: true, endMinute: true, breakStartMinute: true, breakMinutes: true, lateGraceMinutes: true, earlyGraceMinutes: true } },
+} as const;
+
+function lichTuDb(s: LichDb, macDinh = false): LichApDung | null {
+  if (!laLichNgay(s.days)) return null;
+  return {
+    scheduleId: s.id,
+    tenLich: s.name,
+    tenCa: s.shift.name,
+    ngay: s.days,
+    ca: {
+      batDauPhut: s.shift.startMinute,
+      ketThucPhut: s.shift.endMinute,
+      nghiBatDauPhut: s.shift.breakStartMinute,
+      nghiPhut: s.shift.breakMinutes,
+      choPhepMuonPhut: s.shift.lateGraceMinutes,
+      choPhepSomPhut: s.shift.earlyGraceMinutes,
+    },
+    ...(macDinh && { macDinh: true }),
+  };
+}
+
+/** Lịch mặc định đang hoạt động của doanh nghiệp (QĐ-171), hoặc null nếu chưa chọn. */
+export async function lichMacDinh(tx: ClientTenant): Promise<LichApDung | null> {
+  const s = (await tx.workSchedule.findFirst({ where: { isDefault: true, status: "hoat-dong" }, select: CHON_LICH })) as LichDb | null;
+  return s ? lichTuDb(s, true) : null;
+}
+
+/** Người CHƯA được gán lịch nào (mọi thời điểm) trong danh sách — áp lịch mặc định (QĐ-171). */
+export async function nguoiChuaGanLich(tx: ClientTenant, userIds: string[]): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+  const co = await tx.scheduleAssignment.findMany({ where: { userId: { in: userIds } }, select: { userId: true }, distinct: ["userId"] });
+  const daGan = new Set(co.map((x) => x.userId));
+  return new Set(userIds.filter((u) => !daGan.has(u)));
+}
 
 /** Lịch áp cho từng người: hàm (ngày) → lịch có hiệu lực ngày đó, hoặc null nếu chưa gán. */
+/**
+ * Lịch áp cho từng người: hàm (ngày) → lịch có hiệu lực ngày đó, hoặc null nếu chưa gán.
+ * 0.22.0 (QĐ-171): người CHƯA được gán lịch nào dùng LỊCH MẶC ĐỊNH của doanh nghiệp (nếu đã chọn), từ ngày vào làm
+ * (chưa khai ngày vào làm → mọi ngày). Người đã có lần gán (kể cả gán từ tháng sau) giữ đúng lịch đã gán.
+ */
 export async function lichCuaNhieuNguoi(tx: ClientTenant, userIds: string[], den: string): Promise<Map<string, (ngay: string) => LichApDung | null>> {
   const ds = (await tx.scheduleAssignment.findMany({
     where: { userId: { in: userIds }, effectiveFrom: { lte: new Date(`${den}T00:00:00.000Z`) } },
     orderBy: { effectiveFrom: "asc" },
-    select: {
-      userId: true,
-      effectiveFrom: true,
-      schedule: {
-        select: {
-          id: true, name: true, days: true,
-          shift: { select: { name: true, startMinute: true, endMinute: true, breakStartMinute: true, breakMinutes: true, lateGraceMinutes: true, earlyGraceMinutes: true } },
-        },
-      },
-    },
+    select: { userId: true, effectiveFrom: true, schedule: { select: CHON_LICH } },
   })) as DongGanLich[];
   const theoNguoi = new Map<string, { tu: string; lich: LichApDung | null }[]>();
   for (const g of ds) {
-    const s = g.schedule;
-    const lich: LichApDung | null = laLichNgay(s.days)
-      ? {
-          scheduleId: s.id,
-          tenLich: s.name,
-          tenCa: s.shift.name,
-          ngay: s.days,
-          ca: {
-            batDauPhut: s.shift.startMinute,
-            ketThucPhut: s.shift.endMinute,
-            nghiBatDauPhut: s.shift.breakStartMinute,
-            nghiPhut: s.shift.breakMinutes,
-            choPhepMuonPhut: s.shift.lateGraceMinutes,
-            choPhepSomPhut: s.shift.earlyGraceMinutes,
-          },
-        }
-      : null;
     const arr = theoNguoi.get(g.userId) ?? [];
-    arr.push({ tu: g.effectiveFrom.toISOString().slice(0, 10), lich });
+    arr.push({ tu: g.effectiveFrom.toISOString().slice(0, 10), lich: lichTuDb(g.schedule) });
     theoNguoi.set(g.userId, arr);
+  }
+  const thieu = userIds.filter((u) => !theoNguoi.has(u));
+  if (thieu.length) {
+    const md = await lichMacDinh(tx);
+    if (md) {
+      const chuaGan = await nguoiChuaGanLich(tx, thieu);
+      const vao = new Map(
+        (await tx.staffProfile.findMany({ where: { userId: { in: [...chuaGan] } }, select: { userId: true, hiredAt: true } })).map((h) => [h.userId, h.hiredAt]),
+      );
+      for (const u of chuaGan) theoNguoi.set(u, [{ tu: vao.get(u)?.toISOString().slice(0, 10) ?? "0000-01-01", lich: md }]);
+    }
   }
   const kq = new Map<string, (ngay: string) => LichApDung | null>();
   for (const id of userIds) {

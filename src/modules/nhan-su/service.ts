@@ -156,9 +156,29 @@ export async function danhSachLich(nc: NguCanh) {
   batBuocQuyen(nc.hoSo, "nhan_su.view");
   const ds = await nc.tx.workSchedule.findMany({
     orderBy: [{ status: "asc" }, { code: "asc" }],
-    select: { id: true, code: true, name: true, days: true, status: true, shift: { select: { id: true, name: true, code: true } }, _count: { select: { assignments: true } } },
+    select: { id: true, code: true, name: true, days: true, status: true, isDefault: true, shift: { select: { id: true, name: true, code: true } }, _count: { select: { assignments: true } } },
   });
-  return ds.map((l) => ({ id: l.id, ma: l.code, ten: l.name, ngay: laLichNgay(l.days) ? l.days : [], trangThai: l.status, ca: l.shift, soLanGan: l._count.assignments }));
+  return ds.map((l) => ({ id: l.id, ma: l.code, ten: l.name, ngay: laLichNgay(l.days) ? l.days : [], trangThai: l.status, macDinh: l.isDefault, ca: l.shift, soLanGan: l._count.assignments }));
+}
+
+/**
+ * 0.22.0 (QĐ-171): chọn lịch MẶC ĐỊNH của doanh nghiệp — áp cho mọi người chưa được gán lịch (bảng trực tiếp ghi "theo
+ * lịch mặc định"). Một lịch mặc định mỗi doanh nghiệp (chỉ mục duy nhất riêng phần). Khóa tư vấn theo doanh nghiệp để hai
+ * lần chọn cùng lúc không đụng chỉ mục.
+ */
+export async function datLichMacDinh(nc: NguCanh, id: string) {
+  batBuocQuyen(nc.hoSo, "nhan_su.update", { objectType: "work_schedule", objectId: id });
+  await nc.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`lich-mac-dinh:${nc.tenantId}`}))`;
+  const l = await nc.tx.workSchedule.findFirst({ where: { id }, select: { id: true, name: true, status: true, isDefault: true } });
+  if (!l) throw new LoiKhongTimThay("Lịch làm");
+  if (l.status !== "hoat-dong") throw new LoiNghiepVu("Lịch đã ngừng — bật lại trước khi chọn làm mặc định.", 422, "lich-ngung");
+  const cu = await nc.tx.workSchedule.findFirst({ where: { isDefault: true }, select: { id: true } });
+  if (cu?.id === id) return { id, macDinh: true };
+  if (cu) await nc.tx.workSchedule.update({ where: { id: cu.id }, data: { isDefault: false, updatedBy: nc.hoSo.userId } });
+  await nc.tx.workSchedule.update({ where: { id }, data: { isDefault: true, updatedBy: nc.hoSo.userId } });
+  await nc.kiemToan({ action: "dat-lich-mac-dinh", objectType: "work_schedule", objectId: id, before: { lichMacDinh: cu?.id ?? null }, after: { lichMacDinh: id, ten: l.name } });
+  await suKien(nc, "work_schedule", id, "dat-mac-dinh");
+  return { id, macDinh: true };
 }
 
 async function kiemCa(nc: NguCanh, caId: string) {

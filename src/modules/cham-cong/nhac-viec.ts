@@ -30,18 +30,21 @@ export async function quetChamCong(tenantId: string, bayGio = new Date()) {
       select: { id: true, name: true, lastSeenAt: true, location: { select: { name: true } } },
     });
     for (const m of may) {
-      const dem = await baoChoNguoiCoQuyen(tx, tenantId, "nhan_su.update", {
+      const tb = {
         loai: "may-cham-cong-mat-ket-noi",
-        mucDo: "canh-bao",
+        mucDo: "canh-bao" as const,
         tieuDe: `Máy chấm công "${m.name}" (${m.location?.name ?? "chưa chọn địa điểm"}) mất kết nối`,
         noiDung: m.lastSeenAt
           ? `Lần cuối máy gọi về lúc ${m.lastSeenAt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false })}. Kiểm tra nguồn điện, mạng và địa chỉ máy chủ trên máy.`
           : "Máy đã đăng ký nhưng chưa từng gọi về. Kiểm tra địa chỉ máy chủ / cổng khai trên máy (docs/HUONG-DAN-CHAM-CONG.md).",
-        duongDan: "/nhan-su/may-cham-cong",
+        duongDan: "/may-cham-cong",
         doiTuong: "attendance_device",
         doiTuongId: m.id,
         khoaChongTrung: `may-mat-ket-noi:${m.id}:${m.lastSeenAt?.toISOString() ?? "chua-goi"}`,
-      });
+      };
+      // 0.22.0 (QĐ-176): báo cả Kỹ thuật (may_cham_cong.update); chống trùng theo từng người nhận nên người có cả hai quyền
+      // chỉ nhận một thông báo.
+      const dem = (await baoChoNguoiCoQuyen(tx, tenantId, "nhan_su.update", tb)) + (await baoChoNguoiCoQuyen(tx, tenantId, "may_cham_cong.update", tb));
       await tx.attendanceDevice.update({ where: { id: m.id }, data: { offlineAlertedAt: bayGio } });
       if (dem > 0) ketQua.soMayMatKetNoi += 1;
     }

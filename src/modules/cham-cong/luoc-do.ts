@@ -84,3 +84,15 @@ export const LuocDoNhapCsv = z.object({
   noiDung: z.string().min(1, "Chọn tệp CSV.").max(5_000_000, "Tệp quá lớn (tối đa 5 MB)."),
   ghi: z.boolean().default(false),
 });
+
+/** 0.22.0 (QĐ-174): Nhân sự đặt công một ngày (hoặc một khoảng ngày) cho người không có máy / GPS. */
+export const LuocDoDatCongTay = z
+  .object({
+    nguoiId: z.uuid("Chọn nhân viên."),
+    ngay,
+    /** Đặt cho cả khoảng [ngay, denNgay] — chỉ những ngày PHẢI LÀM theo lịch. Bỏ trống = đúng một ngày. */
+    denNgay: z.union([ngay, z.literal(""), z.null()]).optional().transform((x) => x || null),
+    cong: z.coerce.number().refine((n) => n === 0 || n === 0.5 || n === 1, "Công là 0, 0,5 hoặc 1."),
+    lyDo: z.string().trim().min(5, "Ghi lý do ít nhất 5 ký tự.").max(500),
+  })
+  .refine((d) => !d.denNgay || d.denNgay >= d.ngay, { path: ["denNgay"], message: "Đến ngày phải từ ngày bắt đầu trở đi." });

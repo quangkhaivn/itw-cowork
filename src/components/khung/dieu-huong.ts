@@ -113,6 +113,14 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
         bieuTuong: "viec-hom-nay",
         tuKhoa: "nhac viec today action can lam hom nay",
       },
+      {
+        // 0.22.0 (QĐ-180): việc cần bổ sung theo người phụ trách — không bắt buộc, phần mềm vẫn chạy.
+        nhan: "Thiết lập ban đầu",
+        href: "/thiet-lap-ban-dau",
+        quyen: ["nhan_su.update", "luong.create", "luong.update", "may_cham_cong.view", "setting.update"],
+        bieuTuong: "thiet-lap",
+        tuKhoa: "thiet lap ban dau bo sung sau con thieu onboarding cai dat",
+      },
     ],
   },
   {
@@ -198,6 +206,13 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     muc: [{ nhan: "Dự án triển khai", href: "/du-an", quyen: "project.view", bieuTuong: "du-an", tuKhoa: "project du an lap dat nghiem thu hang muc" }],
   },
   {
+    // 0.22.0 (QĐ-176): menu riêng cho Kỹ thuật — kết nối máy chấm công, không thấy hồ sơ / lương.
+    nhan: "Kỹ thuật",
+    muc: [
+      { nhan: "Máy chấm công", href: "/may-cham-cong", quyen: ["may_cham_cong.view", "nhan_su.view"], bieuTuong: "may-cham-cong", tuKhoa: "zkteco van tay adms iclock sn pin chua khop may la dang ky ket noi nhap csv anh xa email" },
+    ],
+  },
+  {
     nhan: "Tài chính",
     muc: [
       { nhan: "Hóa đơn", href: "/tai-chinh/hoa-don", quyen: "finance.view", bieuTuong: "hoa-don", tuKhoa: "invoice hoa don phat hanh vat" },
@@ -227,7 +242,6 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Đơn từ (phép, tăng ca, giải trình)", href: "/cham-cong/don-tu", quyen: "cham_cong.view", bieuTuong: "don-tu", tuKhoa: "nghi phep tang ca giai trinh cham bu duyet don lich nghi so du phep" },
       { nhan: "Bảng công tháng", href: "/cham-cong/bang-cong", quyen: "cham_cong.view", bieuTuong: "bang-cong", tuKhoa: "bang cong thang tinh luong khoa xuat csv phan hoi" },
       { nhan: "Hồ sơ nhân sự", href: "/nhan-su/ho-so", quyen: "nhan_su.view", bieuTuong: "nhan-su", tuKhoa: "ho so nhan vien thuc tap hop dong lao dong ma cham cong pin" },
-      { nhan: "Máy chấm công", href: "/nhan-su/may-cham-cong", quyen: "nhan_su.view", bieuTuong: "may-cham-cong", tuKhoa: "zkteco van tay adms iclock sn pin chua khop nhap csv" },
       { nhan: "Thiết lập chấm công", href: "/nhan-su/thiet-lap", quyen: "nhan_su.view", bieuTuong: "thiet-lap", tuKhoa: "dia diem ban kinh ca lam lich tuan ngay le loai nghi" },
       // 0.20.0 — đánh giá, KPI, thực tập.
       { nhan: "Đánh giá nhân viên", href: "/danh-gia", quyen: "danh_gia.view", bieuTuong: "cham-diem", tuKhoa: "danh gia thang quy kpi xep loai he so thuong chot" },

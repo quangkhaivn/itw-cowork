@@ -150,14 +150,15 @@ export const LuocDoMayChamCong = z.object({
     .trim()
     .regex(/^[A-Za-z0-9_-]{4,64}$/, "Số sê-ri (SN) 4–64 ký tự chữ / số — xem trên máy: Menu → Thông tin hệ thống."),
   ten,
-  diaDiemId: z.uuid("Chọn địa điểm đặt máy."),
+  /** 0.22.0: không bắt buộc — Kỹ thuật đăng ký máy trước, Nhân sự chọn địa điểm sau. */
+  diaDiemId: z.union([z.uuid("Địa điểm không hợp lệ."), z.literal(""), z.null()]).optional().transform((x) => x || null),
   ipChoPhep: dsIp.default([]),
   trangThai,
 });
 
 export const LuocDoSuaMayChamCong = z.object({
   ten: ten.optional(),
-  diaDiemId: z.uuid().optional(),
+  diaDiemId: z.union([z.uuid(), z.literal("")]).optional().transform((x) => x || undefined),
   ipChoPhep: dsIp.optional(),
   trangThai,
 });

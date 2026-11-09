@@ -553,6 +553,19 @@ export function apXetThieuGio(cong: CongNgay, quyetDinh: QuyetDinhThieuGio | und
   return { ...cong, giaTriCong, co };
 }
 
+/** 0.22.0 (QĐ-174): cờ ngày có công do Nhân sự đặt tay. */
+export const CO_CONG_TAY = "cong-nhap-tay";
+
+/**
+ * Áp CÔNG ĐẶT TAY của Nhân sự cho một ngày (QĐ-174): người không có máy / GPS. Công = giá trị đặt (0 / 0,5 / 1), bỏ cờ
+ * vắng / thiếu chấm / thiếu giờ (Nhân sự đã xác nhận), phút muộn / sớm về 0, giữ phần nghỉ phép và giờ vào / ra (nếu có).
+ * Không có giá trị đặt tay → không đổi gì.
+ */
+export function apCongTay(cong: CongNgay, giaTri: number | undefined): CongNgay {
+  if (giaTri === undefined) return cong;
+  return { ...cong, giaTriCong: giaTri, phutMuon: 0, phutSom: 0, co: [CO_CONG_TAY] };
+}
+
 // ---------------------------------------------------------------------------
 // Tăng ca (NS-40 → NS-43)
 // ---------------------------------------------------------------------------

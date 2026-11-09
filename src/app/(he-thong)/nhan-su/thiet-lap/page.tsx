@@ -3,6 +3,7 @@ import DauTrang from "@/components/ui/DauTrang";
 import TrangThai from "@/components/ui/TrangThai";
 import TrongRong from "@/components/ui/TrongRong";
 import FormNhanh, { type TruongForm } from "@/components/nhan-su/FormNhanh";
+import NutGoi from "@/components/luong/NutGoi";
 import { taoNguCanh } from "@/lib/api";
 import { coQuyen } from "@/lib/phan-quyen";
 import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
@@ -132,15 +133,19 @@ export default async function TrangThietLap({ searchParams }: { searchParams: Th
               giaTriDau={{ lichId: d.lich.find((l) => l.trangThai === "hoat-dong")?.id ?? "", tuNgay: homNayVN(), nguoiIds: [] }} />}
           </span>
         </div>
+        {d.lich.length > 0 && !d.lich.some((l) => l.macDinh && l.trangThai === "hoat-dong") && (
+          <div className="hop-thong-bao canh-bao">Chưa chọn <strong>lịch mặc định</strong> — người chưa được gán lịch sẽ không có ngày công dự kiến. Bấm “Đặt làm mặc định” ở lịch dùng chung của công ty (không bắt buộc — phần mềm vẫn chạy).</div>
+        )}
         {d.lich.length === 0 ? <TrongRong tieuDe="Chưa có lịch tuần">Tạo ca trước, rồi tạo lịch tuần và gán cho nhân viên.</TrongRong> : (
           <div className="cuon-ngang"><table className="bang">
             <thead><tr><th>Mã</th><th>Tên</th><th>Ca</th>{NGAY.map((n) => <th key={n}>{n}</th>)}<th className="so">Lần gán</th>{sua && <th />}</tr></thead>
             <tbody>{d.lich.map((l) => (
               <tr key={l.id}>
-                <td><code>{l.ma}</code></td><td>{l.ten}</td><td>{l.ca.name}</td>
+                <td><code>{l.ma}</code></td><td>{l.ten}{l.macDinh && <span className="huy-hieu tot"> Mặc định</span>}</td><td>{l.ca.name}</td>
                 {(l.ngay as PhanNgay[]).map((p, i) => <td key={i} className={p === "nghi" ? "phu" : undefined}>{NHAN_PHAN_NGAY[p]}</td>)}
                 <td className="so">{l.soLanGan}</td>
-                {sua && <td><FormNhanh nhanNut="Sửa" tieuDe={`Sửa lịch ${l.ma}`} url={`/api/v1/nhan-su/lich-lam/${l.id}`} phuongThuc="PUT" lopNut="nut nho" rong={640}
+                {sua && <td style={{ display: "flex", gap: 6 }}>{!l.macDinh && l.trangThai === "hoat-dong" && <NutGoi url={`/api/v1/nhan-su/lich-lam/${l.id}/mac-dinh`} nhan="Đặt làm mặc định" lopNut="nut nho"
+                  xacNhan={`Dùng lịch “${l.ten}” cho mọi người CHƯA được gán lịch? (Người đã gán lịch giữ nguyên lịch của mình.)`} />}<FormNhanh nhanNut="Sửa" tieuDe={`Sửa lịch ${l.ma}`} url={`/api/v1/nhan-su/lich-lam/${l.id}`} phuongThuc="PUT" lopNut="nut nho" rong={640}
                   truong={[...tLich, { ten: "trangThai", nhan: "Trạng thái", kieu: "select", luaChon: TRANG_THAI }]}
                   giaTriDau={{ ma: l.ma, ten: l.ten, caId: l.ca.id, ngay: l.ngay as string[], trangThai: l.trangThai }} /></td>}
               </tr>

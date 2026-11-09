@@ -117,7 +117,18 @@ export type HanhDong =
   // 0.21.0 chính sách lương (QĐ-159, QĐ-162, QĐ-163)
   | "doi-tai-khoan-luong"
   | "gui-lai-phieu-luong"
-  | "doi-thiet-bi-2-lop";
+  | "doi-thiet-bi-2-lop"
+  // 0.22.0 — mở dần (QĐ-170 → QĐ-180)
+  | "dat-lich-mac-dinh"
+  | "dat-cong-tay"
+  | "nhap-cong-luong"
+  | "xoa-cong-luong"
+  | "lay-lai-cong-bang-cong"
+  | "gui-duyet-khi-tham-so-chua-xac-nhan"
+  | "duyet-khi-tham-so-chua-xac-nhan"
+  | "dang-ky-may-la"
+  | "nhap-anh-xa-pin"
+  | "nhap-ho-so-luong";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

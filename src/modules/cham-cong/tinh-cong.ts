@@ -3,6 +3,7 @@ import { dateVeNgay, ngayVeDate } from "@/modules/crm/chung";
 import { lichCuaNhieuNguoi, ngayLeTrongKhoang, nghiDaDuyet, so, type CauHinhChamCong } from "./chung";
 import { duocTinhCong, quyetDinhMoiNhat } from "./service";
 import {
+  apCongTay,
   apXetThieuGio,
   congDuKien,
   congNgay,
@@ -51,6 +52,7 @@ export async function tinhCong(tx: ClientTenant, ch: CauHinhChamCong, userIds: s
   const gioTc = new Map(tangCa.map((t) => [`${t.userId}|${dateVeNgay(t.workDate)}`, Number(t.approvedHours ?? 0)]));
   const macDinh = { choPhepMuonPhut: so(ch.choPhepMuonPhut, 5), choPhepSomPhut: so(ch.choPhepSomPhut, 5), coMatToiThieuPhanTram: so(ch.coMatToiThieuPhanTram, 50) };
   const xetNgay = await quyetDinhNgayMoiNhat(tx, userIds, tu, den);
+  const congTay = await congTayMoiNhat(tx, userIds, tu, den);
   const dem = { batDauGio: so(ch.gioDemBatDau, 22), ketThucGio: so(ch.gioDemKetThuc, 6) };
 
   const kq: DongTinh[] = [];
@@ -72,8 +74,9 @@ export async function tinhCong(tx: ClientTenant, ch: CauHinhChamCong, userIds: s
       const dk = duKien.get(ngay)!;
       const ds = nhom.get(ngay) ?? [];
       const ng = nghi.get(userId)?.get(ngay) ?? null;
-      if (dk.giaTri === 0 && ds.length === 0 && !ng) continue;
-      const cong = apXetThieuGio(tinhCongNgay(dk, ds, ng, macDinh), xetNgay.get(`${userId}|${ngay}`));
+      const tay = congTay.get(`${userId}|${ngay}`);
+      if (dk.giaTri === 0 && ds.length === 0 && !ng && tay === undefined) continue;
+      const cong = apCongTay(apXetThieuGio(tinhCongNgay(dk, ds, ng, macDinh), xetNgay.get(`${userId}|${ngay}`)), tay);
       const tc = tinhTangCa(dk, cong.vaoDau, cong.raCuoi, gioTc.get(`${userId}|${ngay}`) ?? null, dem);
       const co = [...cong.co];
       if (ds.some((t) => choXemXet.has(t.getTime()))) co.push("cho-xem-xet");
@@ -81,7 +84,7 @@ export async function tinhCong(tx: ClientTenant, ch: CauHinhChamCong, userIds: s
         userId, ngay, laDieuChinh: false, loaiNgay: dk.loaiNgay, congDuKien: dk.giaTri, congThucTe: cong.giaTriCong,
         phutMuon: cong.phutMuon, phutSom: cong.phutSom, nghiNgay: cong.nghiNgay, nghiCoLuong: ng?.coLuong ?? false,
         phutTangCa: tc.phut, phutTangCaDem: tc.phutDem, co, vaoDau: cong.vaoDau, raCuoi: cong.raCuoi,
-        nguon: [...new Set(ds.map((t) => theoLuc.get(t.getTime())?.source).filter((x): x is string => Boolean(x)))],
+        nguon: [...new Set([...ds.map((t) => theoLuc.get(t.getTime())?.source), ...(tay !== undefined ? ["nhap-tay"] : [])].filter((x): x is string => Boolean(x)))],
         maLoaiNghi: ng?.maLoai ?? null,
         phutCoMat: cong.phutCoMat ?? null,
         phutPhaiCoMat: cong.phutPhaiCoMat ?? null,
@@ -102,5 +105,18 @@ export async function quyetDinhNgayMoiNhat(tx: ClientTenant, userIds: string[], 
   });
   const kq = new Map<string, QuyetDinhThieuGio>();
   for (const r of ds) kq.set(`${r.userId}|${dateVeNgay(r.workDate)}`, r.decision as QuyetDinhThieuGio);
+  return kq;
+}
+
+/** 0.22.0 (QĐ-174): công ĐẶT TAY mới nhất theo (người|ngày) trong khoảng — bản ghi sau thắng (bảng chỉ ghi thêm). */
+export async function congTayMoiNhat(tx: ClientTenant, userIds: string[], tu: string, den: string): Promise<Map<string, number>> {
+  if (userIds.length === 0) return new Map();
+  const ds = await tx.attendanceManualDay.findMany({
+    where: { userId: { in: userIds }, workDate: { gte: ngayVeDate(tu), lte: ngayVeDate(den) } },
+    orderBy: { createdAt: "asc" },
+    select: { userId: true, workDate: true, workValue: true },
+  });
+  const kq = new Map<string, number>();
+  for (const r of ds) kq.set(`${r.userId}|${dateVeNgay(r.workDate)}`, Number(r.workValue));
   return kq;
 }

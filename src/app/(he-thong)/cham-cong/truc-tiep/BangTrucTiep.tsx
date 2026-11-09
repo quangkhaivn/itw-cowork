@@ -6,10 +6,10 @@ import { useGoiApi } from "@/components/ui/goi-api";
 
 type Dong = {
   id: string; hoTen: string; loaiNhanSu: string; phongBan: { name: string } | null; diaDiem: { ten: string } | null; trangThai: string; nhanTrangThai: string;
-  gioVaoCa: string | null; vaoLuc: string | null; phutMuon: number; soLanCham: number; choXemXet: number;
+  gioVaoCa: string | null; vaoLuc: string | null; phutMuon: number; soLanCham: number; choXemXet: number; theoLichMacDinh?: boolean; tenLich?: string | null;
   lanCuoi: { luc: string; nguon: string; huong: string | null; ketQuaGps: string | null; noi: string | null; banDo: string | null; phieuId: string | null } | null;
 };
-type May = { id: string; ten: string; diaDiem: { ten: string }; lanCuoi: string | null; trucTuyen: boolean };
+type May = { id: string; ten: string; diaDiem: { ten: string } | null; lanCuoi: string | null; trucTuyen: boolean };
 type XemXet = { id: string; nguoi: { hoTen: string }; luc: string; nguon: string; may: string | null; chuaTinh: boolean; huong: string | null; ketQuaGps: string | null; co: string[]; khoangCachM: number | null; phieu: { id: string; so: string } | null; banDo: string | null };
 type DuLieu = { ngay: string; capNhatLuc: string; tomTat: Record<string, number>; dong: Dong[]; may: { nguongPhut: number; dong: May[] } | null; canXemXet: XemXet[] };
 
@@ -172,7 +172,7 @@ export default function BangTrucTiep({ phongBan, diaDiem }: { phongBan: { id: st
                     <span className={`huy-hieu ${LOP[d.trangThai] ?? ""}`}>{d.nhanTrangThai}{d.phutMuon > 0 ? ` ${d.phutMuon} phút` : ""}</span>
                     {d.choXemXet > 0 && <span className="huy-hieu canh-bao"> {d.choXemXet} chờ xem xét</span>}
                   </td>
-                  <td>{gio(d.gioVaoCa)}</td>
+                  <td>{gio(d.gioVaoCa)}{d.theoLichMacDinh && <div className="phu nho" title={d.tenLich ?? undefined}>theo lịch mặc định</div>}</td>
                   <td>{gio(d.vaoLuc)}</td>
                   <td>{d.lanCuoi ? `${gio(d.lanCuoi.luc)}${d.lanCuoi.huong ? (d.lanCuoi.huong === "vao" ? " (vào)" : " (ra)") : ""}` : "—"}</td>
                   <td>{d.lanCuoi ? `${NHAN_NGUON[d.lanCuoi.nguon] ?? d.lanCuoi.nguon}${d.lanCuoi.noi ? ` · ${d.lanCuoi.noi}` : ""}` : "—"}</td>
@@ -193,7 +193,7 @@ export default function BangTrucTiep({ phongBan, diaDiem }: { phongBan: { id: st
             <ul className="ds-lan-cham">
               {duLieu.may.dong.map((m) => (
                 <li key={m.id}>
-                  <span><strong>{m.ten}</strong> <span className="phu">· {m.diaDiem.ten}</span></span>
+                  <span><strong>{m.ten}</strong> <span className="phu">· {m.diaDiem?.ten ?? "chưa chọn địa điểm"}</span></span>
                   <span>
                     <span className={`huy-hieu ${m.trucTuyen ? "tot" : "loi"}`}>{m.trucTuyen ? "Trực tuyến" : "Mất kết nối"}</span>{" "}
                     <span className="phu nho">lần cuối {ngayGio(m.lanCuoi)}</span>

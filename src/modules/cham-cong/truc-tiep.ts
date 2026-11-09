@@ -118,6 +118,9 @@ export async function bangTrucTiep(nc: NguCanh, loc: { phongBanId: string | null
         : null,
       soLanCham: homNay.length,
       choXemXet,
+      /** 0.22.0 (QĐ-171): người chưa được gán lịch → đang theo lịch mặc định của doanh nghiệp. */
+      theoLichMacDinh: Boolean(lichNguoi(ngay)?.macDinh),
+      tenLich: lichNguoi(ngay)?.tenLich ?? null,
     };
   });
 
