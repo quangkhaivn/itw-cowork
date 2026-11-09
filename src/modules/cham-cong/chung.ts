@@ -174,10 +174,16 @@ function lichTuDb(s: LichDb, macDinh = false): LichApDung | null {
   };
 }
 
-/** Lịch mặc định đang hoạt động của doanh nghiệp (QĐ-171), hoặc null nếu chưa chọn. */
-export async function lichMacDinh(tx: ClientTenant): Promise<LichApDung | null> {
-  const s = (await tx.workSchedule.findFirst({ where: { isDefault: true, status: "hoat-dong" }, select: CHON_LICH })) as LichDb | null;
-  return s ? lichTuDb(s, true) : null;
+/**
+ * Lịch mặc định theo THỜI GIAN (QĐ-171, QĐ-187): mỗi lần đặt / đổi áp từ ngày chọn trở đi (`default_schedule_changes`, chỉ
+ * ghi thêm). Trả các đoạn đã sắp theo (ngày áp dụng, thời điểm tạo) — ngày D dùng đoạn cuối có `tu` ≤ D. Rỗng = chưa chọn.
+ */
+export async function lichMacDinh(tx: ClientTenant): Promise<{ tu: string; lich: LichApDung | null }[]> {
+  const ds = await tx.defaultScheduleChange.findMany({ orderBy: [{ effectiveFrom: "asc" }, { createdAt: "asc" }], select: { effectiveFrom: true, scheduleId: true } });
+  if (ds.length === 0) return [];
+  const lich = (await tx.workSchedule.findMany({ where: { id: { in: [...new Set(ds.map((d) => d.scheduleId))] } }, select: CHON_LICH })) as LichDb[];
+  const theoId = new Map(lich.map((l) => [l.id, lichTuDb(l, true)]));
+  return ds.map((d) => ({ tu: d.effectiveFrom.toISOString().slice(0, 10), lich: theoId.get(d.scheduleId) ?? null }));
 }
 
 /** Người CHƯA được gán lịch nào (mọi thời điểm) trong danh sách — áp lịch mặc định (QĐ-171). */
@@ -209,12 +215,16 @@ export async function lichCuaNhieuNguoi(tx: ClientTenant, userIds: string[], den
   const thieu = userIds.filter((u) => !theoNguoi.has(u));
   if (thieu.length) {
     const md = await lichMacDinh(tx);
-    if (md) {
+    if (md.length) {
       const chuaGan = await nguoiChuaGanLich(tx, thieu);
       const vao = new Map(
         (await tx.staffProfile.findMany({ where: { userId: { in: [...chuaGan] } }, select: { userId: true, hiredAt: true } })).map((h) => [h.userId, h.hiredAt]),
       );
-      for (const u of chuaGan) theoNguoi.set(u, [{ tu: vao.get(u)?.toISOString().slice(0, 10) ?? "0000-01-01", lich: md }]);
+      // Từ ngày vào làm: đoạn áp dụng trước ngày vào làm dời về ngày vào làm (thứ tự giữ nguyên → đoạn sau cùng thắng).
+      for (const u of chuaGan) {
+        const hd = vao.get(u)?.toISOString().slice(0, 10) ?? "0000-01-01";
+        theoNguoi.set(u, md.map((x) => ({ tu: x.tu > hd ? x.tu : hd, lich: x.lich })));
+      }
     }
   }
   const kq = new Map<string, (ngay: string) => LichApDung | null>();

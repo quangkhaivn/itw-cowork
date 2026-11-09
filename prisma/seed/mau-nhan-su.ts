@@ -162,7 +162,9 @@ export async function seedNhanSuMau(db: Db, tenantId: string, idTheoEmail: Map<s
     if (await db.attendanceDevice.findFirst({ where: { serialNumber: SN_MAY }, select: { id: true } })) {
       console.log(`  (bỏ qua máy chấm công mẫu: SN ${SN_MAY} đã được đăng ký ở doanh nghiệp khác)`);
     } else {
-      await voi(QT, (nc) => taoMay(nc, { soSeri: SN_MAY, ten: "Máy chấm công DEMO – cửa chính", diaDiemId: diaDiem!.id, ipChoPhep: [] }));
+      const mayDemo = await voi(QT, (nc) => taoMay(nc, { soSeri: SN_MAY, ten: "Máy chấm công DEMO – cửa chính", diaDiemId: diaDiem!.id, ipChoPhep: [] }));
+      // Máy GIẢ của dữ liệu mẫu: coi như đã xác minh sở hữu (QĐ-181) để lần chấm DEMO hiện như máy thật.
+      await db.attendanceDevice.update({ where: { id: mayDemo.id }, data: { verifyStatus: "da-xac-minh", verifyPin: null, verifyExpiresAt: null, verifiedAt: new Date() } });
     }
   }
   const coMay = Boolean(await db.attendanceDevice.findFirst({ where: { tenantId, serialNumber: SN_MAY }, select: { id: true } }));

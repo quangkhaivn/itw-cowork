@@ -195,6 +195,7 @@ model Tenant {
   payrollCommissionItems PayrollCommissionItem[]
   payrollManualInputs    PayrollManualInput[]
   attendanceManualDays   AttendanceManualDay[]
+  defaultScheduleChanges DefaultScheduleChange[]
 
   @@map("tenants")
 }
@@ -3845,6 +3846,12 @@ model AttendanceDevice {
   operlogStamp     String?   @map("operlog_stamp") @db.VarChar(30)
   /// Mốc đã báo "mất kết nối" cho lần im lặng hiện tại (chống báo lặp).
   offlineAlertedAt DateTime? @map("offline_alerted_at") @db.Timestamptz(6)
+  /// 0.22.0 (QĐ-181): da-xac-minh | cho-xac-minh. Chờ xác minh → lần chấm vào khu cách ly, không tính công.
+  verifyStatus     String    @default("cho-xac-minh") @map("verify_status") @db.VarChar(20)
+  /// Mã PIN xác minh 6 số (chỉ khi chờ xác minh) + hạn 24 giờ.
+  verifyPin        String?   @map("verify_pin") @db.VarChar(6)
+  verifyExpiresAt  DateTime? @map("verify_expires_at") @db.Timestamptz(6)
+  verifiedAt       DateTime? @map("verified_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy        String?   @map("created_by") @db.Uuid
@@ -4759,6 +4766,8 @@ model SalaryDependent {
   fullName     String    @map("full_name") @db.VarChar(255)
   relationship String    @db.VarChar(50)
   idNumber     String?   @map("id_number") @db.VarChar(30)
+  /// 0.22.0 (QĐ-182): người phụ thuộc "chưa ghi tên" (nhập CSV) — KHÔNG giảm trừ tới khi có họ tên + MST / số giấy tờ.
+  infoPending  Boolean   @default(false) @map("info_pending")
   /// Ngày đầu tháng bắt đầu giảm trừ.
   fromMonth    DateTime  @map("from_month") @db.Date
   /// Ngày đầu tháng cuối cùng còn giảm trừ (trống = chưa kết thúc).
@@ -4983,4 +4992,37 @@ model AttendanceUnknownDevice {
   model        String?  @db.VarChar(100)
 
   @@map("attendance_unknown_devices")
+}
+
+/// 0.22.0 (QĐ-187): lịch sử chọn LỊCH MẶC ĐỊNH — mỗi lần đặt / đổi áp từ `effective_from` trở đi (không hồi tố vào tháng
+/// đã khóa). Chỉ ghi thêm; ngày D dùng dòng có effective_from lớn nhất ≤ D (cùng ngày → dòng tạo sau).
+model DefaultScheduleChange {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  scheduleId    String   @map("schedule_id") @db.Uuid
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  createdBy     String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, effectiveFrom])
+  @@map("default_schedule_changes")
+}
+
+/// 0.22.0 (QĐ-181): KHU CÁCH LY lần chấm của máy CHỜ XÁC MINH sở hữu. Không có tenant_id: ứng dụng không có quyền trên
+/// bảng, chỉ qua hàm SECURITY DEFINER (ghi_log_cach_ly, lay_log_cach_ly). Xóa máy → xóa theo (cascade).
+model AttendanceQuarantineLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  deviceId   String   @map("device_id") @db.Uuid
+  pin        String   @db.VarChar(20)
+  punchedAt  DateTime @map("punched_at") @db.Timestamptz(6)
+  status     Int?
+  verifyCode Int?     @map("verify_code")
+  workCode   String?  @map("work_code") @db.VarChar(20)
+  rawLine    String?  @map("raw_line") @db.VarChar(500)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([deviceId, pin, punchedAt])
+  @@map("attendance_quarantine_logs")
 }

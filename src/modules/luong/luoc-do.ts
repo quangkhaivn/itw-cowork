@@ -268,3 +268,16 @@ export const LuocDoCongTayLuong = z.object({
   nghiKhongLuong: z.coerce.number().min(0).max(31, "Tối đa 31 ngày.").default(0),
   lyDo: z.string().trim().min(5, "Ghi lý do ít nhất 5 ký tự.").max(500),
 });
+
+/** 0.22.0 (QĐ-182): bổ sung họ tên / quan hệ / MST hoặc số giấy tờ cho người phụ thuộc (kể cả người "chưa ghi tên"). */
+export const LuocDoSuaNguoiPhuThuoc = z.object({
+  hoTen: z.string().trim().min(2, "Họ tên ít nhất 2 ký tự.").max(255),
+  quanHe: z.string().trim().min(2, "Ghi quan hệ (con, cha, mẹ…).").max(50),
+  soGiayTo: z
+    .string()
+    .trim()
+    .max(30)
+    .optional()
+    .nullable()
+    .transform((s) => (s ? s : null)),
+});

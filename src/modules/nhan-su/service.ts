@@ -166,18 +166,33 @@ export async function danhSachLich(nc: NguCanh) {
  * lịch mặc định"). Một lịch mặc định mỗi doanh nghiệp (chỉ mục duy nhất riêng phần). Khóa tư vấn theo doanh nghiệp để hai
  * lần chọn cùng lúc không đụng chỉ mục.
  */
-export async function datLichMacDinh(nc: NguCanh, id: string) {
+export async function datLichMacDinh(nc: NguCanh, id: string, tuNgay: string = homNayVN()) {
   batBuocQuyen(nc.hoSo, "nhan_su.update", { objectType: "work_schedule", objectId: id });
   await nc.tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`lich-mac-dinh:${nc.tenantId}`}))`;
   const l = await nc.tx.workSchedule.findFirst({ where: { id }, select: { id: true, name: true, status: true, isDefault: true } });
   if (!l) throw new LoiKhongTimThay("Lịch làm");
   if (l.status !== "hoat-dong") throw new LoiNghiepVu("Lịch đã ngừng — bật lại trước khi chọn làm mặc định.", 422, "lich-ngung");
+  // QĐ-187: chỉ áp từ ngày chọn trở đi; không hồi tố vào tháng đã khóa bảng công (không sinh dòng điều chỉnh).
+  const nam = Number(tuNgay.slice(0, 4));
+  const thang = Number(tuNgay.slice(5, 7));
+  const khoa = await nc.tx.timesheet.findFirst({
+    where: { status: "da-khoa", OR: [{ year: { gt: nam } }, { year: nam, month: { gte: thang } }] },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+    select: { year: true, month: true },
+  });
+  if (khoa) {
+    throw new LoiNghiepVu(
+      `Bảng công tháng ${String(khoa.month).padStart(2, "0")}/${khoa.year} đã khóa — lịch mặc định chỉ áp từ tháng chưa khóa (chọn ngày từ ${khoa.month === 12 ? `01/01/${khoa.year + 1}` : `01/${String(khoa.month + 1).padStart(2, "0")}/${khoa.year}`}).`,
+      409,
+      "thang-da-khoa",
+    );
+  }
   const cu = await nc.tx.workSchedule.findFirst({ where: { isDefault: true }, select: { id: true } });
-  if (cu?.id === id) return { id, macDinh: true };
-  if (cu) await nc.tx.workSchedule.update({ where: { id: cu.id }, data: { isDefault: false, updatedBy: nc.hoSo.userId } });
-  await nc.tx.workSchedule.update({ where: { id }, data: { isDefault: true, updatedBy: nc.hoSo.userId } });
-  await nc.kiemToan({ action: "dat-lich-mac-dinh", objectType: "work_schedule", objectId: id, before: { lichMacDinh: cu?.id ?? null }, after: { lichMacDinh: id, ten: l.name } });
-  await suKien(nc, "work_schedule", id, "dat-mac-dinh");
+  if (cu && cu.id !== id) await nc.tx.workSchedule.update({ where: { id: cu.id }, data: { isDefault: false, updatedBy: nc.hoSo.userId } });
+  if (!l.isDefault) await nc.tx.workSchedule.update({ where: { id }, data: { isDefault: true, updatedBy: nc.hoSo.userId } });
+  await nc.tx.defaultScheduleChange.create({ data: { tenantId: nc.tenantId, scheduleId: id, effectiveFrom: ngayVeDate(tuNgay), createdBy: nc.hoSo.userId } });
+  await nc.kiemToan({ action: "dat-lich-mac-dinh", objectType: "work_schedule", objectId: id, before: { lichMacDinh: cu?.id ?? null }, after: { lichMacDinh: id, ten: l.name, tuNgay } });
+  await suKien(nc, "work_schedule", id, "dat-mac-dinh", { tuNgay });
   return { id, macDinh: true };
 }
 

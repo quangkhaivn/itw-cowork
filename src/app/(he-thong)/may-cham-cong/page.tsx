@@ -11,6 +11,7 @@ import { coQuyen } from "@/lib/phan-quyen";
 import { docDuLieu, layMot, yeuCauMotTrongCacQuyen, type ThamSoTrang } from "@/lib/trang";
 import { layIpKhach } from "@/lib/yeu-cau";
 import { coQuyenMay, danhSachMay, danhSachMayLa, danhSachPinChuaKhop, nhanVienChoAnhXa } from "@/modules/cham-cong/may-cham-cong";
+import NutGoi from "@/components/luong/NutGoi";
 import NhapCsv from "../nhan-su/may-cham-cong/NhapCsv";
 import KiemTraKetNoi from "./KiemTraKetNoi";
 
@@ -133,6 +134,28 @@ export default async function TrangMayChamCong({ searchParams }: { searchParams:
         </section>
       )}
 
+      {d.may.dong.some((m) => m.choXacMinh && m.maXacMinh) && (
+        <section className="the">
+          <div className="dau"><h2>Xác minh máy (bắt buộc trước khi nhận lần chấm)</h2></div>
+          <div className="than" style={{ padding: 16 }}>
+            <p style={{ marginTop: 0 }}>Để chắc máy đúng là của công ty (nhiều công ty có thể dùng chung mạng / IP), máy mới đăng ký ở trạng thái <strong>chờ xác minh</strong>: lần chấm của máy vào <strong>khu cách ly</strong> — không hiện ở đâu, không tính công.</p>
+            {d.may.dong.filter((m) => m.choXacMinh && m.maXacMinh).map((m) => (
+              <div key={m.id} className={`hop-thong-bao ${m.maConHan ? "thong-tin" : "canh-bao"}`}>
+                <strong>{m.ten}</strong> (SN <code>{m.soSeri}</code>) — mã PIN xác minh: <strong style={{ fontSize: 20, letterSpacing: 2 }}>{m.maXacMinh}</strong>
+                {m.hetHanMa && <> · {m.maConHan ? `hết hạn ${dinhDangNgayGio(m.hetHanMa)}` : "ĐÃ HẾT HẠN — bấm “Tạo lại mã”"}</>}
+              </div>
+            ))}
+            <ol>
+              <li>Trên máy: <strong>Menu → Người dùng → Thêm người dùng</strong>. Mã người dùng (PIN / ID) = <strong>mã xác minh 6 số</strong> ở trên. Đặt <strong>mật khẩu hoặc vân tay đều được</strong>.</li>
+              <li>Chấm công <strong>1 lần</strong> bằng người dùng đó (nhập mật khẩu hoặc đặt vân tay).</li>
+              <li>Máy gửi lần chấm về (thường trong 1 phút): máy chuyển <strong>Đã xác minh</strong>, Cowork nhận toàn bộ lần chấm đang cách ly vào công ty. Bấm <em>Kiểm tra kết nối</em> để xem.</li>
+              <li><strong>Xóa người dùng tạm</strong> mang mã xác minh trên máy (lần chấm xác minh không tính công cho ai).</li>
+            </ol>
+            <p className="phu nho">Mã hết hạn sau 24 giờ — bấm “Tạo lại mã”. “Hủy đăng ký” xóa máy và toàn bộ lần chấm đang cách ly.</p>
+          </div>
+        </section>
+      )}
+
       <section className="the">
         <div className="dau"><h2>Máy đã đăng ký</h2><span className="phu nho">Mất kết nối khi im lặng quá {d.may.nguongPhut} phút (Cấu hình)</span></div>
         {d.may.dong.length === 0 ? <TrongRong tieuDe="Chưa có máy nào">Đăng ký máy bằng SN, hoặc chờ máy gọi về rồi bấm “Đăng ký máy này”.</TrongRong> : (
@@ -147,9 +170,14 @@ export default async function TrangMayChamCong({ searchParams }: { searchParams:
                   <td><span className={`huy-hieu ${m.trucTuyen ? "tot" : "loi"}`}>{m.trucTuyen ? "Trực tuyến" : "Mất kết nối"}</span></td>
                   <td>{m.lanCuoi ? dinhDangNgayGio(m.lanCuoi) : "Chưa từng gọi về"}</td><td>{m.ipCuoi ?? "—"}</td>
                   <td className="nho">{[tt.phienBan, tt.soNguoi && `${tt.soNguoi} người`, tt.soBanGhi && `${tt.soBanGhi} bản ghi`].filter(Boolean).join(" · ") || "—"}</td>
-                  <td><TrangThai giaTri={m.trangThai} /></td>
+                  <td>
+                    <TrangThai giaTri={m.trangThai} />
+                    {m.choXacMinh && <div><span className="huy-hieu canh-bao">Chờ xác minh</span></div>}
+                  </td>
                   <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <KiemTraKetNoi id={m.id} />
+                    {m.choXacMinh && d.tao && <NutGoi url={`/api/v1/may-cham-cong/${m.id}/ma-xac-minh`} nhan="Tạo lại mã" lopNut="nut nho" />}
+                    {m.choXacMinh && d.tao && <NutGoi url={`/api/v1/may-cham-cong/${m.id}`} phuongThuc="DELETE" nhan="Hủy đăng ký" lopNut="nut nho" xacNhan="Hủy đăng ký máy chưa xác minh? Lần chấm đang cách ly của máy sẽ bị xóa." />}
                     {d.sua && <FormNhanh nhanNut="Sửa" tieuDe={`Sửa ${m.ten}`} url={`/api/v1/nhan-su/may-cham-cong/${m.id}`} phuongThuc="PUT" lopNut="nut nho"
                       truong={[...tMay, { ten: "trangThai", nhan: "Trạng thái", kieu: "select", luaChon: TRANG_THAI }]}
                       giaTriDau={{ ten: m.ten, diaDiemId: m.diaDiem?.id ?? "", ipChoPhep: m.ipChoPhep, trangThai: m.trangThai }} />}

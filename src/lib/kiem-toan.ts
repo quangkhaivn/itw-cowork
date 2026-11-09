@@ -128,7 +128,10 @@ export type HanhDong =
   | "duyet-khi-tham-so-chua-xac-nhan"
   | "dang-ky-may-la"
   | "nhap-anh-xa-pin"
-  | "nhap-ho-so-luong";
+  | "nhap-ho-so-luong"
+  | "tao-lai-ma-xac-minh-may"
+  | "huy-dang-ky-may"
+  | "sua-nguoi-phu-thuoc";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

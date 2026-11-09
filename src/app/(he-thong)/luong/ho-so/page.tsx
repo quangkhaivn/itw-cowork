@@ -98,8 +98,10 @@ export default async function TrangHoSoLuong({ searchParams }: { searchParams: T
           {ls.nguoiPhuThuoc.length === 0 ? <TrongRong tieuDe="Chưa đăng ký người phụ thuộc" /> : (
             <table className="bang"><tbody>{ls.nguoiPhuThuoc.map((p) => (
               <tr key={p.id}>
-                <td>{p.hoTen}</td><td>{p.quanHe}</td><td>{p.soGiayTo ?? ""}</td><td>từ {p.tuThang}{p.denThang ? ` đến ${p.denThang}` : ""}</td>
-                <td>{sua && !p.denThang && <FormNhanh nhanNut="Kết thúc" tieuDe="Kết thúc giảm trừ" url={`/api/v1/luong/nguoi-phu-thuoc/${p.id}`} phuongThuc="PATCH" truong={[{ ten: "denThang", nhan: "Tháng cuối còn giảm trừ (NĂM-THÁNG)", kieu: "text", batBuoc: true }]} giaTriDau={{ denThang: hn.slice(0, 7) }} />}</td>
+                <td>{p.hoTen}{p.chuaDuThongTin && <span className="huy-hieu canh-bao" title="Chưa có họ tên + MST / số giấy tờ — chưa được giảm trừ"> Chưa giảm trừ</span>}</td><td>{p.quanHe}</td><td>{p.soGiayTo ?? ""}</td><td>từ {p.tuThang}{p.denThang ? ` đến ${p.denThang}` : ""}</td>
+                <td style={{ display: "flex", gap: 6 }}>{sua && <FormNhanh nhanNut={p.chuaDuThongTin ? "Bổ sung" : "Sửa"} tieuDe="Thông tin người phụ thuộc" url={`/api/v1/luong/nguoi-phu-thuoc/${p.id}`} phuongThuc="PUT" lopNut="nut nho"
+                  truong={[{ ten: "hoTen", nhan: "Họ tên", kieu: "text", batBuoc: true }, { ten: "quanHe", nhan: "Quan hệ", kieu: "text", batBuoc: true }, { ten: "soGiayTo", nhan: "MST / số giấy tờ (bắt buộc để được giảm trừ nếu đang “chưa giảm trừ”)", kieu: "text" }]}
+                  giaTriDau={{ hoTen: p.chuaDuThongTin ? "" : p.hoTen, quanHe: p.chuaDuThongTin ? "" : p.quanHe, soGiayTo: p.soGiayTo ?? "" }} />}{sua && !p.denThang && <FormNhanh nhanNut="Kết thúc" tieuDe="Kết thúc giảm trừ" url={`/api/v1/luong/nguoi-phu-thuoc/${p.id}`} phuongThuc="PATCH" truong={[{ ten: "denThang", nhan: "Tháng cuối còn giảm trừ (NĂM-THÁNG)", kieu: "text", batBuoc: true }]} giaTriDau={{ denThang: hn.slice(0, 7) }} />}</td>
               </tr>
             ))}</tbody></table>
           )}

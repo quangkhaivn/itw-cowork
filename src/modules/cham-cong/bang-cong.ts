@@ -57,7 +57,7 @@ async function nguoiCuaThang(tx: ClientTenant, tu: string, den: string): Promise
   });
   const cham = coCham.map((x) => x.userId!);
   // 0.22.0 (QĐ-171): có lịch mặc định → mọi người đang hoạt động chưa được gán lịch cũng vào bảng (theo lịch mặc định).
-  const theoMacDinh = (await lichMacDinh(tx))
+  const theoMacDinh = (await lichMacDinh(tx)).some((x) => x.tu <= den)
     ? [...(await nguoiChuaGanLich(tx, (await tx.user.findMany({ where: { isSystem: false, status: "hoat-dong" }, select: { id: true } })).map((u) => u.id)))]
     : [];
   const ids = [...new Set([...coLich.map((x) => x.userId), ...cham, ...theoMacDinh])];

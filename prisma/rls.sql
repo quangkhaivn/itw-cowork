@@ -50,7 +50,7 @@ BEGIN
                                    'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                                    'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
                                    'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
-                                   'salary_profiles', 'approval_transfers', 'attendance_manual_days')
+                                   'salary_profiles', 'approval_transfers', 'attendance_manual_days', 'default_schedule_changes')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -93,7 +93,7 @@ DECLARE
                             'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                             'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
                             'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
-                            'salary_profiles', 'approval_transfers', 'attendance_manual_days'];
+                            'salary_profiles', 'approval_transfers', 'attendance_manual_days', 'default_schedule_changes'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -141,6 +141,19 @@ REVOKE ALL ON FUNCTION public.xoa_may_la(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.ghi_may_la(text, text, text, integer) TO cowork_app;
 GRANT EXECUTE ON FUNCTION public.ds_may_la(text, text) TO cowork_app;
 GRANT EXECUTE ON FUNCTION public.xoa_may_la(text) TO cowork_app;
+-- 0.22.0 (QĐ-181): KHU CÁCH LY lần chấm của máy chờ xác minh — không tenant_id, ứng dụng không có quyền trên bảng; chỉ qua
+-- ghi_log_cach_ly (máy chờ xác minh của doanh nghiệp phiên), lay_log_cach_ly (máy đã xác minh của doanh nghiệp phiên),
+-- dem_log_cach_ly (chỉ con số), giai_phong_sn_cho_xac_minh (SN doanh nghiệp khác chiếm > 24 giờ chưa xác minh).
+REVOKE ALL ON public.attendance_quarantine_logs FROM cowork_app;
+ALTER TABLE public.attendance_quarantine_logs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON FUNCTION public.ghi_log_cach_ly(uuid, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.lay_log_cach_ly(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.dem_log_cach_ly(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.giai_phong_sn_cho_xac_minh(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ghi_log_cach_ly(uuid, jsonb) TO cowork_app;
+GRANT EXECUTE ON FUNCTION public.lay_log_cach_ly(uuid) TO cowork_app;
+GRANT EXECUTE ON FUNCTION public.dem_log_cach_ly(uuid) TO cowork_app;
+GRANT EXECUTE ON FUNCTION public.giai_phong_sn_cho_xac_minh(text) TO cowork_app;
 
 -- --------------------------------------------------------------------------
 -- 4. Bảng `tenants`: sổ đăng ký doanh nghiệp.

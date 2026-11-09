@@ -100,6 +100,7 @@ const KHOA = {
   tien: "luong.tk_tien",
   tienMat: "luong.tk_tien_mat",
   chanThamSoChuaXacNhan: "luong.chan_khi_tham_so_chua_xac_nhan",
+  tangCaCanhBaoGio: "luong.tang_ca_canh_bao_gio_thang",
 } as const;
 
 export type CauHinhLuong = { -readonly [K in keyof typeof KHOA]: number };

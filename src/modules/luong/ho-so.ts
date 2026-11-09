@@ -7,7 +7,7 @@ import { taoThongBao } from "@/modules/thong-bao/service";
 import { banDoTen } from "@/modules/cham-cong/chung";
 import { dateVeNgay, homNayVN, ngayVeDate } from "@/modules/crm/chung";
 import { batBuocQuyenLuong, ghiXem, locNguoiLuong, trongPhamViLuong } from "./chung";
-import { LuocDoHoSoLuong, type LuocDoKetThucNguoiPhuThuoc, type LuocDoLoaiPhuCap, type LuocDoNguoiPhuThuoc } from "./luoc-do";
+import { LuocDoHoSoLuong, type LuocDoKetThucNguoiPhuThuoc, type LuocDoLoaiPhuCap, type LuocDoNguoiPhuThuoc, type LuocDoSuaNguoiPhuThuoc } from "./luoc-do";
 import { phanTichCsvHoSoLuong } from "./nhap-csv";
 import { chonBoHieuLuc, NHAN_CACH_TRA, NHAN_LOAI_HOP_DONG, NHAN_PHUONG_PHAP_THUE, THUE_GOI_Y, type CachTra, type LoaiHopDong, type PhuongPhapThue } from "./tinh-toan";
 
@@ -38,7 +38,8 @@ export async function hoSoApDung(tx: ClientTenant, userIds: string[] | null, nga
 export async function soNguoiPhuThuoc(tx: ClientTenant, userIds: string[], dauThang: string): Promise<Map<string, number>> {
   const d = ngayVeDate(dauThang);
   const ds = await tx.salaryDependent.findMany({
-    where: { userId: { in: userIds }, fromMonth: { lte: d }, OR: [{ toMonth: null }, { toMonth: { gte: d } }] },
+    // QĐ-182: người phụ thuộc "chưa ghi tên" (thiếu họ tên / MST / số giấy tờ) KHÔNG được giảm trừ.
+    where: { userId: { in: userIds }, infoPending: false, fromMonth: { lte: d }, OR: [{ toMonth: null }, { toMonth: { gte: d } }] },
     select: { userId: true },
   });
   const kq = new Map<string, number>();
@@ -117,7 +118,7 @@ export async function lichSuHoSo(nc: NguCanh, userId: string) {
   return {
     nguoi: { id: u.id, hoTen: u.fullName, maNv: u.staffProfile?.employeeCode ?? null, ngayVaoLam: u.staffProfile?.hiredAt ? dateVeNgay(u.staffProfile.hiredAt) : null },
     phienBan: ds.map((d) => ({ ...moTaHoSo(d, tenPc), nguoiTao: d.createdBy ? (ten.get(d.createdBy) ?? "—") : "—" })),
-    nguoiPhuThuoc: npt.map((p) => ({ id: p.id, hoTen: p.fullName, quanHe: p.relationship, soGiayTo: p.idNumber, tuThang: dateVeNgay(p.fromMonth).slice(0, 7), denThang: p.toMonth ? dateVeNgay(p.toMonth).slice(0, 7) : null })),
+    nguoiPhuThuoc: npt.map((p) => ({ id: p.id, hoTen: p.fullName, quanHe: p.relationship, soGiayTo: p.idNumber, chuaDuThongTin: p.infoPending, tuThang: dateVeNgay(p.fromMonth).slice(0, 7), denThang: p.toMonth ? dateVeNgay(p.toMonth).slice(0, 7) : null })),
   };
 }
 
@@ -349,9 +350,11 @@ export async function nhapCsvHoSoLuong(nc: NguCanh, noiDung: string, ghi: boolea
     daGhi++;
     if (h.soNguoiPhuThuoc !== null && h.soNguoiPhuThuoc > h.nptHienTai) {
       for (let i = h.nptHienTai; i < h.soNguoiPhuThuoc; i++) {
-        await themNguoiPhuThuoc(nc, { nguoiId: h.nguoiId, hoTen: `Người phụ thuộc ${i + 1} (nhập CSV — bổ sung họ tên)`, quanHe: "chưa ghi", soGiayTo: null, tuThang: hieuLucTu.slice(0, 7), denThang: null });
+        const npt0 = await themNguoiPhuThuoc(nc, { nguoiId: h.nguoiId, hoTen: `Người phụ thuộc ${i + 1} (nhập CSV — bổ sung họ tên)`, quanHe: "chưa ghi", soGiayTo: null, tuThang: hieuLucTu.slice(0, 7), denThang: null });
+        // QĐ-182: chưa có họ tên + MST / số giấy tờ → KHÔNG giảm trừ cho tới khi bổ sung.
+        await nc.tx.salaryDependent.update({ where: { id: npt0.id }, data: { infoPending: true } });
       }
-      canhBao.push(`${h.hoTen}: thêm ${h.soNguoiPhuThuoc - h.nptHienTai} người phụ thuộc chưa ghi tên — bổ sung họ tên, quan hệ ở Hồ sơ lương.`);
+      canhBao.push(`${h.hoTen}: thêm ${h.soNguoiPhuThuoc - h.nptHienTai} người phụ thuộc chưa ghi tên — CHƯA được giảm trừ cho tới khi bổ sung họ tên và mã số thuế / số giấy tờ ở Hồ sơ lương.`);
     } else if (h.soNguoiPhuThuoc !== null && h.soNguoiPhuThuoc < h.nptHienTai) {
       canhBao.push(`${h.hoTen}: tệp ghi ${h.soNguoiPhuThuoc} người phụ thuộc, đang đăng ký ${h.nptHienTai} — kết thúc người phụ thuộc ở Hồ sơ lương (có tháng kết thúc), không tự xóa.`);
     }
@@ -359,4 +362,39 @@ export async function nhapCsvHoSoLuong(nc: NguCanh, noiDung: string, ghi: boolea
   // Nhật ký tổng: không ghi số tiền (QĐ-148). Từng phiên bản đã có nhật ký riêng "tao-ho-so-luong".
   await nc.kiemToan({ action: "nhap-ho-so-luong", objectType: "salary_profile", after: { soDong: xemTruoc.soDong, daGhi, soLoi: loiDong.length, hieuLucTu } });
   return { ...xemTruoc, daGhi, canhBao };
+}
+
+/** Họ tên "giữ chỗ" do nhập CSV tạo (QĐ-182). */
+export const laTenGiuCho = (ten: string) => /\(nhập CSV — bổ sung họ tên\)/.test(ten);
+
+/**
+ * QĐ-182: bổ sung / sửa họ tên, quan hệ, MST hoặc số giấy tờ của người phụ thuộc. Người "chưa ghi tên" chỉ được giảm trừ
+ * khi đã có họ tên thật VÀ MST / số giấy tờ. Không tự sửa người phụ thuộc của chính mình (QĐ-159).
+ */
+export async function suaNguoiPhuThuoc(nc: NguCanh, id: string, d: z.infer<typeof LuocDoSuaNguoiPhuThuoc>) {
+  batBuocQuyenLuong(nc, "luong.update", { objectType: "salary_dependent", objectId: id });
+  const x = await nc.tx.salaryDependent.findFirst({ where: { id } });
+  if (!x) throw new LoiKhongTimThay("Người phụ thuộc");
+  chanTuSua(nc, x.userId);
+  const thieu = laTenGiuCho(d.hoTen) || !d.soGiayTo;
+  const conThieu = x.infoPending && thieu;
+  await nc.tx.salaryDependent.update({ where: { id }, data: { fullName: d.hoTen, relationship: d.quanHe, idNumber: d.soGiayTo, infoPending: conThieu } });
+  await nc.kiemToan({
+    action: "sua-nguoi-phu-thuoc", objectType: "salary_dependent", objectId: id,
+    before: { nguoi: x.userId, chuaDuThongTin: x.infoPending, coSoGiayTo: Boolean(x.idNumber) }, after: { nguoi: x.userId, chuaDuThongTin: conThieu, coSoGiayTo: Boolean(d.soGiayTo) },
+  });
+  await nc.suKien({ eventType: SU_KIEN.SALARY_PROFILE_CHANGED, objectType: "salary_dependent", objectId: id, payload: { nguoi: x.userId } });
+  return { id, chuaDuThongTin: conThieu };
+}
+
+/** Số người phụ thuộc "chưa ghi tên" đang trong thời gian giảm trừ của tháng (để cảnh báo). */
+export async function soNguoiPhuThuocChuaDu(tx: ClientTenant, userIds: string[] | null, dauThang: string): Promise<Map<string, number>> {
+  const d = ngayVeDate(dauThang);
+  const ds = await tx.salaryDependent.findMany({
+    where: { ...(userIds ? { userId: { in: userIds } } : {}), infoPending: true, fromMonth: { lte: d }, OR: [{ toMonth: null }, { toMonth: { gte: d } }] },
+    select: { userId: true },
+  });
+  const kq = new Map<string, number>();
+  for (const x of ds) kq.set(x.userId, (kq.get(x.userId) ?? 0) + 1);
+  return kq;
 }

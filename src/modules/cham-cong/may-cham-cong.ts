@@ -8,6 +8,9 @@ import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi
 import { batBuocQuyen, coQuyen, LoiThieuQuyen } from "@/lib/phan-quyen";
 import { ghiSuKien, SU_KIEN } from "@/lib/su-kien";
 import { LuocDoAnhXaPin, LuocDoMayChamCong, LuocDoSuaMayChamCong } from "@/modules/nhan-su/luoc-do";
+import { randomInt } from "node:crypto";
+import { docCauHinh } from "@/modules/cau-hinh/service";
+import { baoChoNguoiCoQuyen } from "@/modules/thong-bao/service";
 import { BO_DOC_ZKTECO, laSoSeriHopLe, type BoDocAdms } from "./adms";
 import { docCauHinhChamCong, kiemDuocDuyet, so } from "./chung";
 import { phanTichCsvAnhXaPin, phanTichCsvChamCong } from "./nhap-csv";
@@ -112,7 +115,10 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
   return voiTenant(may.tenantId, async (tx) => {
     const tb = await tx.attendanceDevice.findFirst({
       where: { id: may.deviceId },
-      select: { id: true, serialNumber: true, locationId: true, ipAllowlist: true, lastSeenAt: true, attlogStamp: true, operlogStamp: true, info: true },
+      select: {
+        id: true, serialNumber: true, name: true, locationId: true, ipAllowlist: true, lastSeenAt: true, attlogStamp: true, operlogStamp: true, info: true,
+        verifyStatus: true, verifyPin: true, verifyExpiresAt: true,
+      },
     });
     if (!tb) return { status: 401, than: "ERROR: UNKNOWN DEVICE" };
     if (tb.ipAllowlist.length > 0 && (!y.ip || !tb.ipAllowlist.includes(y.ip))) {
@@ -136,6 +142,44 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
     if (yc.phuongThuc !== "POST") return { status: 200, than: boDoc.phanHoiOk() };
 
     const than = y.than ?? "";
+    // QĐ-181: máy CHỜ XÁC MINH sở hữu — lần chấm vào khu cách ly (không hiện, không tính công) cho tới khi máy gửi một lần
+    // chấm mang đúng mã PIN xác minh còn hạn → kích hoạt, nhận log tồn vào doanh nghiệp.
+    if (yc.bang === "ATTLOG" && tb.verifyStatus !== "da-xac-minh") {
+      const { dong, loi } = boDoc.phanTichAttlog(than);
+      const khop = Boolean(tb.verifyPin && tb.verifyExpiresAt && tb.verifyExpiresAt > luc && dong.some((d) => d.pin === tb.verifyPin));
+      if (!khop) {
+        const soCachLy = dong.length
+          ? Number((await tx.$queryRaw<{ n: number }[]>`SELECT public.ghi_log_cach_ly(${tb.id}::uuid, ${JSON.stringify(dong.map((d) => ({ pin: d.pin, luc: d.luc.toISOString(), trang_thai: d.trangThai, xac_thuc: d.xacThuc, ma_cong_viec: d.maCongViec, dong_goc: d.dongGoc })))}::jsonb) AS n`)[0]?.n ?? 0)
+          : 0;
+        if (yc.stamp) await tx.attendanceDevice.update({ where: { id: tb.id }, data: { attlogStamp: yc.stamp } });
+        await ghiSuKien(tx, {
+          eventType: SU_KIEN.ATTENDANCE_DEVICE_UPLOADED, actorType: "system", objectType: "attendance_device", objectId: tb.id,
+          payload: { choXacMinh: true, soDong: dong.length, soCachLy, soLoi: loi.length },
+        });
+        return { status: 200, than: boDoc.phanHoiOk(dong.length + loi.length) };
+      }
+      const maXacMinh = tb.verifyPin!;
+      await tx.attendanceDevice.update({ where: { id: tb.id }, data: { verifyStatus: "da-xac-minh", verifyPin: null, verifyExpiresAt: null, verifiedAt: luc } });
+      const ton = await tx.$queryRaw<{ pin: string; punched_at: Date; status: number | null; verify_code: number | null; work_code: string | null; raw_line: string | null }[]>`
+        SELECT * FROM public.lay_log_cach_ly(${tb.id}::uuid)`;
+      const tatCa = [
+        ...ton.map((r) => ({ pin: r.pin, luc: r.punched_at, trangThai: r.status, xacThuc: r.verify_code, maCongViec: r.work_code, dongGoc: r.raw_line ?? "" })),
+        ...dong,
+      ].filter((d) => d.pin !== maXacMinh);
+      const soMoi = await ghiAttlog(tx, may.tenantId, tb, tatCa, luc);
+      if (yc.stamp) await tx.attendanceDevice.update({ where: { id: tb.id }, data: { attlogStamp: yc.stamp } });
+      await ghiSuKien(tx, {
+        eventType: SU_KIEN.HR_SETUP_CHANGED, actorType: "system", objectType: "attendance_device", objectId: tb.id,
+        payload: { hanhDong: "xac-minh-may", soSeri: tb.serialNumber, soLogTon: ton.length, soMoi },
+      });
+      await baoChoNguoiCoQuyen(tx, may.tenantId, "may_cham_cong.create", {
+        loai: "may-cham-cong-da-xac-minh", mucDo: "thong-tin",
+        tieuDe: `Máy chấm công "${tb.name}" đã xác minh và hoạt động`,
+        noiDung: `Đã nhận ${soMoi} lần chấm (gồm ${ton.length} lần chờ trong khu cách ly). Nhớ XÓA người dùng tạm mang mã ${maXacMinh} trên máy.`,
+        duongDan: "/may-cham-cong", doiTuong: "attendance_device", doiTuongId: tb.id, khoaChongTrung: `may-xac-minh:${tb.id}`,
+      });
+      return { status: 200, than: boDoc.phanHoiOk(dong.length + loi.length) };
+    }
     if (yc.bang === "ATTLOG") {
       const { dong, loi } = boDoc.phanTichAttlog(than);
       const soMoi = await ghiAttlog(tx, may.tenantId, tb, dong, luc);
@@ -188,7 +232,7 @@ async function ghiAttlog(
   tx: ClientTenant,
   tenantId: string,
   may: { id: string; locationId: string | null },
-  dong: { pin: string; luc: Date; trangThai: number | null; xacThuc: number | null; maCongViec: string | null; dongGoc: string }[],
+  dong: { pin: string; luc: Date; trangThai: number | null; xacThuc: number | null; maCongViec: string | null; dongGoc: string | null }[],
   bayGio: Date,
 ): Promise<number> {
   if (dong.length === 0) return 0;
@@ -253,6 +297,7 @@ export async function danhSachMay(nc: NguCanh, bayGio = new Date()) {
     orderBy: [{ status: "asc" }, { name: "asc" }],
     select: {
       id: true, serialNumber: true, name: true, status: true, lastSeenAt: true, lastIp: true, ipAllowlist: true, info: true, createdAt: true,
+      verifyStatus: true, verifyPin: true, verifyExpiresAt: true,
       location: { select: { id: true, name: true } },
     },
   });
@@ -271,35 +316,87 @@ export async function danhSachMay(nc: NguCanh, bayGio = new Date()) {
       ipChoPhep: xemChiTiet ? m.ipAllowlist : [],
       thongTin: xemChiTiet ? m.info : null,
       trucTuyen: m.status === "hoat-dong" && m.lastSeenAt !== null && bayGio.getTime() - m.lastSeenAt.getTime() <= nguongMs,
+      // QĐ-181: chờ xác minh sở hữu — mã chỉ cho người đăng ký được máy.
+      choXacMinh: m.verifyStatus !== "da-xac-minh",
+      maXacMinh: m.verifyStatus !== "da-xac-minh" && coQuyenMay(nc, "create") ? m.verifyPin : null,
+      hetHanMa: m.verifyStatus !== "da-xac-minh" && coQuyenMay(nc, "create") ? m.verifyExpiresAt : null,
+      maConHan: Boolean(m.verifyExpiresAt && m.verifyExpiresAt > bayGio),
     })),
   };
 }
 
-export async function taoMay(nc: NguCanh, d: z.infer<typeof LuocDoMayChamCong>) {
+/** Mã PIN xác minh 6 số (100000–999999, không bắt đầu bằng 0 — một số máy bỏ số 0 đầu), khác mọi mã chấm công đang dùng. */
+async function sinhMaXacMinh(tx: ClientTenant): Promise<string> {
+  for (let i = 0; i < 20; i++) {
+    const ma = String(randomInt(100000, 1000000));
+    if (!(await tx.staffProfile.findFirst({ where: { attendancePin: ma }, select: { userId: true } }))) return ma;
+  }
+  return String(randomInt(100000, 1000000));
+}
+
+/** Mã xác minh hết hạn sau 24 giờ (QĐ-181). */
+export const HAN_MA_XAC_MINH_MS = 24 * 3_600_000;
+
+export async function taoMay(nc: NguCanh, d: z.infer<typeof LuocDoMayChamCong>, bayGio = new Date()) {
   batBuocQuyenMay(nc, "create");
   if (d.diaDiemId) {
     const dd = await nc.tx.workLocation.findFirst({ where: { id: d.diaDiemId, status: "hoat-dong" }, select: { id: true } });
     if (!dd) throw new LoiDinhDang("diaDiemId", "Địa điểm không tồn tại hoặc đã ngừng.");
   }
+  // QĐ-181: xác minh sở hữu (Cấu hình, mặc định bật) — áp cho MỌI lần đăng ký (từ danh sách máy lạ hay tự gõ SN).
+  const xacMinh = (await docCauHinh(nc.tx, "may_cham_cong.xac_minh_so_huu")) !== 0;
+  // SN bị doanh nghiệp khác đăng ký mà chưa xác minh quá 24 giờ → giải phóng (chống chiếm chỗ).
+  await nc.tx.$queryRaw`SELECT public.giai_phong_sn_cho_xac_minh(${d.soSeri}) AS n`;
+  const ma = xacMinh ? await sinhMaXacMinh(nc.tx) : null;
   try {
     const m = await nc.tx.attendanceDevice.create({
       data: {
         tenantId: nc.tenantId, serialNumber: d.soSeri, name: d.ten, locationId: d.diaDiemId, ipAllowlist: d.ipChoPhep,
         createdBy: nc.hoSo.userId, updatedBy: nc.hoSo.userId,
+        verifyStatus: xacMinh ? "cho-xac-minh" : "da-xac-minh", verifyPin: ma, verifyExpiresAt: ma ? new Date(bayGio.getTime() + HAN_MA_XAC_MINH_MS) : null,
+        verifiedAt: xacMinh ? null : bayGio,
       },
     });
-    // QĐ-175: SN này đang nằm trong danh sách máy lạ → xóa dòng máy lạ và đặt ATTLOGStamp=0: lần bắt tay kế tiếp bảo máy
-    // gửi lại TOÀN BỘ nhật ký chấm công đã có (máy lạ chưa được lưu lần chấm nào).
+    // QĐ-175: SN này đang nằm trong danh sách máy lạ → xóa dòng máy lạ. ATTLOGStamp=0 (máy từ danh sách máy lạ, hoặc máy
+    // chờ xác minh): lần bắt tay kế tiếp bảo máy gửi lại TOÀN BỘ nhật ký — chờ xác minh thì vào khu cách ly, xác minh xong
+    // mới nhận vào doanh nghiệp.
     const tuMayLa = Number((await nc.tx.$queryRaw<{ n: number }[]>`SELECT public.xoa_may_la(${d.soSeri}) AS n`)[0]?.n ?? 0) > 0;
-    if (tuMayLa) await nc.tx.attendanceDevice.update({ where: { id: m.id }, data: { attlogStamp: "0", operlogStamp: "0" } });
-    await nc.kiemToan({ action: tuMayLa ? "dang-ky-may-la" : "tao", objectType: "attendance_device", objectId: m.id, after: { ...d, tuMayLa } });
-    await nc.suKien({ eventType: SU_KIEN.HR_SETUP_CHANGED, objectType: "attendance_device", objectId: m.id, payload: { hanhDong: "dang-ky-may", soSeri: d.soSeri, tuMayLa } });
-    return { id: m.id, tuMayLa, chuaCoDiaDiem: !d.diaDiemId };
+    if (tuMayLa || xacMinh) await nc.tx.attendanceDevice.update({ where: { id: m.id }, data: { attlogStamp: "0", operlogStamp: "0" } });
+    await nc.kiemToan({ action: tuMayLa ? "dang-ky-may-la" : "tao", objectType: "attendance_device", objectId: m.id, after: { ...d, tuMayLa, choXacMinh: xacMinh } });
+    await nc.suKien({ eventType: SU_KIEN.HR_SETUP_CHANGED, objectType: "attendance_device", objectId: m.id, payload: { hanhDong: "dang-ky-may", soSeri: d.soSeri, tuMayLa, choXacMinh: xacMinh } });
+    return { id: m.id, tuMayLa, chuaCoDiaDiem: !d.diaDiemId, choXacMinh: xacMinh, maXacMinh: ma, hetHan: ma ? new Date(bayGio.getTime() + HAN_MA_XAC_MINH_MS) : null };
   } catch (e) {
     // SN duy nhất TOÀN HỆ THỐNG (NS-14). Không nói máy thuộc doanh nghiệp nào.
     if (laLoiTrung(e)) throw new LoiDinhDang("soSeri", "Số sê-ri này đã được đăng ký trên hệ thống. Kiểm lại SN trên máy.");
     throw e;
   }
+}
+
+/** QĐ-181: tạo lại mã xác minh (mã cũ hết hạn / lộ) — chỉ máy CHỜ XÁC MINH. */
+export async function taoLaiMaXacMinh(nc: NguCanh, id: string, bayGio = new Date()) {
+  batBuocQuyenMay(nc, "create", { objectType: "attendance_device", objectId: id });
+  await khoaChungTu(nc.tx, "attendance_devices", id);
+  const m = await nc.tx.attendanceDevice.findFirst({ where: { id }, select: { id: true, verifyStatus: true } });
+  if (!m) throw new LoiKhongTimThay("Máy chấm công");
+  if (m.verifyStatus === "da-xac-minh") throw new LoiNghiepVu("Máy đã xác minh — không cần mã.", 409, "da-xac-minh");
+  const ma = await sinhMaXacMinh(nc.tx);
+  const hetHan = new Date(bayGio.getTime() + HAN_MA_XAC_MINH_MS);
+  await nc.tx.attendanceDevice.update({ where: { id }, data: { verifyPin: ma, verifyExpiresAt: hetHan, updatedBy: nc.hoSo.userId } });
+  await nc.kiemToan({ action: "tao-lai-ma-xac-minh-may", objectType: "attendance_device", objectId: id, after: { hetHan } });
+  return { id, maXacMinh: ma, hetHan };
+}
+
+/** QĐ-181: hủy đăng ký máy CHƯA XÁC MINH — xóa máy và toàn bộ log cách ly (cascade). Máy đã xác minh thì chuyển "Ngừng". */
+export async function huyDangKyMay(nc: NguCanh, id: string) {
+  batBuocQuyenMay(nc, "create", { objectType: "attendance_device", objectId: id });
+  await khoaChungTu(nc.tx, "attendance_devices", id);
+  const m = await nc.tx.attendanceDevice.findFirst({ where: { id }, select: { id: true, serialNumber: true, verifyStatus: true } });
+  if (!m) throw new LoiKhongTimThay("Máy chấm công");
+  if (m.verifyStatus === "da-xac-minh") throw new LoiNghiepVu("Máy đã xác minh và có dữ liệu — không xóa được; chuyển trạng thái Ngừng nếu không dùng nữa.", 409, "da-xac-minh");
+  const soCachLy = Number((await nc.tx.$queryRaw<{ n: number }[]>`SELECT public.dem_log_cach_ly(${id}::uuid) AS n`)[0]?.n ?? 0);
+  await nc.tx.attendanceDevice.delete({ where: { id } });
+  await nc.kiemToan({ action: "huy-dang-ky-may", objectType: "attendance_device", objectId: id, before: { soSeri: m.serialNumber, soLogCachLy: soCachLy } });
+  return { id, soLogCachLyDaXoa: soCachLy };
 }
 
 export async function suaMay(nc: NguCanh, id: string, vao: z.input<typeof LuocDoSuaMayChamCong>) {
@@ -516,7 +613,7 @@ export async function danhSachMayLa(nc: NguCanh, sn: string | null = null): Prom
 /** "Kiểm tra kết nối" một máy (QĐ-178): lần gọi cuối, IP nguồn, trực tuyến hay chưa, thông tin máy tự báo. */
 export async function kiemTraKetNoiMay(nc: NguCanh, id: string, bayGio = new Date()) {
   batBuocQuyenMay(nc, "view", { objectType: "attendance_device", objectId: id });
-  const m = await nc.tx.attendanceDevice.findFirst({ where: { id }, select: { id: true, name: true, serialNumber: true, status: true, lastSeenAt: true, lastIp: true, info: true, ipAllowlist: true } });
+  const m = await nc.tx.attendanceDevice.findFirst({ where: { id }, select: { id: true, name: true, serialNumber: true, status: true, lastSeenAt: true, lastIp: true, info: true, ipAllowlist: true, verifyStatus: true, verifyExpiresAt: true } });
   if (!m) throw new LoiKhongTimThay("Máy chấm công");
   const ch = await docCauHinhChamCong(nc.tx);
   const nguongPhut = so(ch.mayMatKetNoiPhut, 10);
@@ -525,9 +622,11 @@ export async function kiemTraKetNoiMay(nc: NguCanh, id: string, bayGio = new Dat
   let goiY: string;
   if (m.status !== "hoat-dong") goiY = "Máy đang ở trạng thái Ngừng — Cowork từ chối dữ liệu của máy. Bật lại nếu máy vẫn dùng.";
   else if (giay === null) goiY = "Cowork CHƯA nhận được lần gọi nào từ máy này. Kiểm lại trên máy: địa chỉ máy chủ, cổng, HTTPS bật / tắt đúng như hướng dẫn; máy có mạng; SN gõ đúng (SN sai thì máy hiện trong danh sách “Máy đang gọi nhưng chưa đăng ký”).";
+  else if (m.verifyStatus !== "da-xac-minh") goiY = `Máy ĐÃ gọi về nhưng CHƯA XÁC MINH sở hữu: lần chấm đang ở khu cách ly (không tính công). Trên máy, tạo người dùng mang mã PIN xác minh${m.verifyExpiresAt && m.verifyExpiresAt > bayGio ? "" : " (mã đã hết hạn — bấm Tạo lại mã)"}, chấm 1 lần bằng mật khẩu hoặc vân tay.`;
   else if (trucTuyen) goiY = "Máy đang kết nối bình thường.";
   else goiY = `Máy im lặng quá ${nguongPhut} phút — kiểm mạng / nguồn điện của máy.`;
-  return { id: m.id, ten: m.name, soSeri: m.serialNumber, lanCuoi: m.lastSeenAt, ipCuoi: m.lastIp, giayTruoc: giay, trucTuyen, nguongPhut, thongTin: m.info, ipChoPhep: m.ipAllowlist, goiY };
+  const soLogCachLy = m.verifyStatus !== "da-xac-minh" ? Number((await nc.tx.$queryRaw<{ n: number }[]>`SELECT public.dem_log_cach_ly(${id}::uuid) AS n`)[0]?.n ?? 0) : 0;
+  return { id: m.id, ten: m.name, soSeri: m.serialNumber, lanCuoi: m.lastSeenAt, ipCuoi: m.lastIp, giayTruoc: giay, trucTuyen, nguongPhut, thongTin: m.info, ipChoPhep: m.ipAllowlist, goiY, choXacMinh: m.verifyStatus !== "da-xac-minh", soLogCachLy };
 }
 
 /**

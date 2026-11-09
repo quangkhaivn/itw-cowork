@@ -1283,6 +1283,32 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     dungTuPhase: 8,
   },
   {
+    // 0.22.0 (QĐ-184): công nhập tay có giờ tăng ca vượt ngưỡng → cảnh báo (trần cứng 300 giờ chống gõ nhầm giữ nguyên).
+    khoa: "luong.tang_ca_canh_bao_gio_thang",
+    nhom: "Tính lương",
+    nhan: "Cảnh báo giờ tăng ca nhập tay trong tháng",
+    moTa: "Công nhập tay trên kỳ lương có giờ tăng ca lớn hơn số này → cảnh báo vàng trên dòng lương (không chặn). Trần cứng 300 giờ / tháng chống gõ nhầm vẫn giữ. Mặc định 40.",
+    donVi: "giờ",
+    toiThieu: 0,
+    toiDa: 300,
+    soNguyen: false,
+    macDinh: 40,
+    dungTuPhase: 8,
+  },
+  {
+    // 0.22.0 (QĐ-181): xác minh sở hữu máy chấm công trước khi nhận lần chấm.
+    khoa: "may_cham_cong.xac_minh_so_huu",
+    nhom: "Chấm công",
+    nhan: "Xác minh sở hữu máy chấm công khi đăng ký",
+    moTa: "1 = máy mới đăng ký ở trạng thái “chờ xác minh”: Kỹ thuật tạo trên máy một người dùng mang mã PIN xác minh 6 số hiện trên màn hình và chấm 1 lần; trước đó lần chấm của máy vào khu cách ly, không hiện, không tính công. 0 = tin ngay khi đăng ký (chỉ nên dùng khi chỉ một doanh nghiệp dùng máy chủ). Chỉ người có quyền sửa Cấu hình đổi được. Mặc định 1.",
+    donVi: "bật / tắt",
+    toiThieu: 0,
+    toiDa: 1,
+    soNguyen: true,
+    macDinh: 1,
+    dungTuPhase: 8,
+  },
+  {
     // QĐ-133 (0.20.0): chốt phiếu đánh giá mặc định chỉ Giám đốc.
     khoa: "danh_gia.truong_phong_duoc_chot",
     nhom: "Đánh giá nhân sự",
