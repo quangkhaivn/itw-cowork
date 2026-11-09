@@ -56,6 +56,8 @@ export const MAY_LA_TOI_DA = 500;
 /** QA 0.22.0 v2: số lần tra đúng SN máy lạ / doanh nghiệp / phút. */
 export const MAY_LA_TIM_SN_MOI_PHUT = 30;
 const MAY_LA_GHI_MOI_GIAY = 30;
+/** QĐ-190: trần khu cách ly mỗi máy (khớp hàm ghi_log_cach_ly). */
+export const KHU_CACH_LY_TOI_DA = 50_000;
 
 /**
  * Ghi máy lạ (SN chưa đăng ký ở doanh nghiệp nào) qua hàm SECURITY DEFINER `ghi_may_la` — KHÔNG lưu lần chấm. Trần: một
@@ -119,7 +121,7 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
       where: { id: may.deviceId },
       select: {
         id: true, serialNumber: true, name: true, locationId: true, ipAllowlist: true, lastSeenAt: true, attlogStamp: true, operlogStamp: true, info: true,
-        verifyStatus: true, verifyPin: true, verifyExpiresAt: true,
+        verifyStatus: true, verifyPin: true, verifyExpiresAt: true, verifyIps: true, quarantineFullAt: true,
       },
     });
     if (!tb) return { status: 401, than: "ERROR: UNKNOWN DEVICE" };
@@ -139,6 +141,14 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
       });
     }
 
+    // QĐ-190: máy CHỜ XÁC MINH chưa có IP được tin (đăng ký bằng tự gõ SN, chưa từng là máy lạ) → ghim IP của lần gọi ĐẦU TIÊN
+    // sau khi đăng ký. Đã có IP (từ danh sách máy lạ) thì KHÔNG thêm — kẻ đăng ký trước không tự ghim được IP của mình.
+    if (tb.verifyStatus !== "da-xac-minh" && tb.verifyIps.length === 0 && y.ip) {
+      await tx.attendanceDevice.update({ where: { id: tb.id }, data: { verifyIps: [y.ip.slice(0, 45)] } });
+      tb.verifyIps = [y.ip.slice(0, 45)];
+    }
+    const ipDuocTin = Boolean(y.ip && tb.verifyIps.includes(y.ip.slice(0, 45)));
+
     if (yc.diemCuoi === "getrequest" || yc.diemCuoi === "devicecmd") return { status: 200, than: boDoc.phanHoiOk() };
     if (yc.batTay) return { status: 200, than: boDoc.phanHoiBatTay(tb.serialNumber, { attlogStamp: tb.attlogStamp, operlogStamp: tb.operlogStamp }) };
     if (yc.phuongThuc !== "POST") return { status: 200, than: boDoc.phanHoiOk() };
@@ -148,16 +158,38 @@ export async function xuLyAdms(y: YeuCauHttpAdms, tuyChon: { boDoc?: BoDocAdms; 
     // chấm mang đúng mã PIN xác minh còn hạn → kích hoạt, nhận log tồn vào doanh nghiệp.
     if (yc.bang === "ATTLOG" && tb.verifyStatus !== "da-xac-minh") {
       const { dong, loi } = boDoc.phanTichAttlog(than);
-      const khop = Boolean(tb.verifyPin && tb.verifyExpiresAt && tb.verifyExpiresAt > luc && dong.some((d) => d.pin === tb.verifyPin));
+      // QĐ-190: mã xác minh chỉ có hiệu lực khi đến từ IP được tin; khu cách ly chỉ nhận từ các IP đó.
+      const khop = ipDuocTin && Boolean(tb.verifyPin && tb.verifyExpiresAt && tb.verifyExpiresAt > luc && dong.some((d) => d.pin === tb.verifyPin));
       if (!khop) {
+        if (!ipDuocTin) {
+          console.warn(`[cham-cong/adms] Máy chờ xác minh SN=${tb.serialNumber} gửi lần chấm từ IP ${y.ip ?? "?"} không được tin — bỏ qua (QĐ-190).`);
+          await ghiSuKien(tx, {
+            eventType: SU_KIEN.ATTENDANCE_DEVICE_UPLOADED, actorType: "system", objectType: "attendance_device", objectId: tb.id,
+            payload: { choXacMinh: true, ipKhongDuocTin: y.ip, soDong: dong.length, boQua: dong.length },
+          });
+          return { status: 200, than: boDoc.phanHoiOk(dong.length + loi.length) };
+        }
         const soCachLy = dong.length
-          ? Number((await tx.$queryRaw<{ n: number }[]>`SELECT public.ghi_log_cach_ly(${tb.id}::uuid, ${JSON.stringify(dong.map((d) => ({ pin: d.pin, luc: d.luc.toISOString(), trang_thai: d.trangThai, xac_thuc: d.xacThuc, ma_cong_viec: d.maCongViec, dong_goc: d.dongGoc })))}::jsonb) AS n`)[0]?.n ?? 0)
+          ? Number((await tx.$queryRaw<{ n: number }[]>`SELECT public.ghi_log_cach_ly(${tb.id}::uuid, ${JSON.stringify(dong.map((d) => ({ pin: d.pin, luc: d.luc.toISOString(), trang_thai: d.trangThai, xac_thuc: d.xacThuc, ma_cong_viec: d.maCongViec, dong_goc: d.dongGoc })))}::jsonb, ${y.ip}) AS n`)[0]?.n ?? 0)
           : 0;
         if (yc.stamp) await tx.attendanceDevice.update({ where: { id: tb.id }, data: { attlogStamp: yc.stamp } });
         await ghiSuKien(tx, {
           eventType: SU_KIEN.ATTENDANCE_DEVICE_UPLOADED, actorType: "system", objectType: "attendance_device", objectId: tb.id,
           payload: { choXacMinh: true, soDong: dong.length, soCachLy, soLoi: loi.length },
         });
+        // QĐ-190: khu cách ly đầy (50.000 dòng / máy) → cảnh báo một lần, KHÔNG tự xóa.
+        if (soCachLy < dong.length && !tb.quarantineFullAt) {
+          const dem = Number((await tx.$queryRaw<{ n: number }[]>`SELECT public.dem_log_cach_ly(${tb.id}::uuid) AS n`)[0]?.n ?? 0);
+          if (dem >= KHU_CACH_LY_TOI_DA) {
+            await tx.attendanceDevice.update({ where: { id: tb.id }, data: { quarantineFullAt: luc } });
+            await baoChoNguoiCoQuyen(tx, may.tenantId, "may_cham_cong.create", {
+              loai: "may-cham-cong-cach-ly-day", mucDo: "canh-bao",
+              tieuDe: `Khu cách ly của máy "${tb.name}" đã đầy (${KHU_CACH_LY_TOI_DA.toLocaleString("vi-VN")} lần chấm)`,
+              noiDung: "Máy chưa xác minh nên lần chấm mới không được giữ thêm. Xác minh máy ngay (tạo người dùng mang mã PIN xác minh, chấm 1 lần); sau khi xác minh máy sẽ gửi lại nhật ký.",
+              duongDan: "/may-cham-cong", doiTuong: "attendance_device", doiTuongId: tb.id, khoaChongTrung: `may-cach-ly-day:${tb.id}`,
+            });
+          }
+        }
         return { status: 200, than: boDoc.phanHoiOk(dong.length + loi.length) };
       }
       const maXacMinh = tb.verifyPin!;
@@ -304,7 +336,7 @@ export async function danhSachMay(nc: NguCanh, bayGio = new Date()) {
     orderBy: [{ status: "asc" }, { name: "asc" }],
     select: {
       id: true, serialNumber: true, name: true, status: true, lastSeenAt: true, lastIp: true, ipAllowlist: true, info: true, createdAt: true,
-      verifyStatus: true, verifyPin: true, verifyExpiresAt: true,
+      verifyStatus: true, verifyPin: true, verifyExpiresAt: true, verifyIps: true, quarantineFullAt: true,
       location: { select: { id: true, name: true } },
     },
   });
@@ -328,6 +360,9 @@ export async function danhSachMay(nc: NguCanh, bayGio = new Date()) {
       maXacMinh: m.verifyStatus !== "da-xac-minh" && coQuyenMay(nc, "create") ? m.verifyPin : null,
       hetHanMa: m.verifyStatus !== "da-xac-minh" && coQuyenMay(nc, "create") ? m.verifyExpiresAt : null,
       maConHan: Boolean(m.verifyExpiresAt && m.verifyExpiresAt > bayGio),
+      // QĐ-190: IP được tin khi xác minh + khu cách ly đầy.
+      ipDuocTin: m.verifyStatus !== "da-xac-minh" && coQuyenMay(nc, "create") ? m.verifyIps : [],
+      cachLyDay: Boolean(m.quarantineFullAt),
     })),
   };
 }
@@ -367,11 +402,14 @@ export async function taoMay(nc: NguCanh, d: z.infer<typeof LuocDoMayChamCong>, 
     // QĐ-175: SN này đang nằm trong danh sách máy lạ → xóa dòng máy lạ. ATTLOGStamp=0 (máy từ danh sách máy lạ, hoặc máy
     // chờ xác minh): lần bắt tay kế tiếp bảo máy gửi lại TOÀN BỘ nhật ký — chờ xác minh thì vào khu cách ly, xác minh xong
     // mới nhận vào doanh nghiệp.
+    // QĐ-190: GHIM các IP công khai SN này đã gọi TRƯỚC khi đăng ký (từ danh sách máy lạ) — chỉ khi đang chờ xác minh.
+    const ipTruoc = xacMinh ? ((await nc.tx.$queryRaw<{ ips: string[] | null }[]>`SELECT public.ip_may_la_truoc_dang_ky(${d.soSeri}) AS ips`)[0]?.ips ?? []) : [];
+    if (ipTruoc.length) await nc.tx.attendanceDevice.update({ where: { id: m.id }, data: { verifyIps: ipTruoc } });
     const tuMayLa = Number((await nc.tx.$queryRaw<{ n: number }[]>`SELECT public.xoa_may_la(${d.soSeri}) AS n`)[0]?.n ?? 0) > 0;
     if (tuMayLa || xacMinh) await nc.tx.attendanceDevice.update({ where: { id: m.id }, data: { attlogStamp: "0", operlogStamp: "0" } });
     await nc.kiemToan({ action: tuMayLa ? "dang-ky-may-la" : "tao", objectType: "attendance_device", objectId: m.id, after: { ...d, tuMayLa, choXacMinh: xacMinh } });
     await nc.suKien({ eventType: SU_KIEN.HR_SETUP_CHANGED, objectType: "attendance_device", objectId: m.id, payload: { hanhDong: "dang-ky-may", soSeri: d.soSeri, tuMayLa, choXacMinh: xacMinh } });
-    return { id: m.id, tuMayLa, chuaCoDiaDiem: !d.diaDiemId, choXacMinh: xacMinh, maXacMinh: ma, hetHan: ma ? new Date(bayGio.getTime() + HAN_MA_XAC_MINH_MS) : null };
+    return { id: m.id, tuMayLa, chuaCoDiaDiem: !d.diaDiemId, choXacMinh: xacMinh, ipDuocTin: ipTruoc, maXacMinh: ma, hetHan: ma ? new Date(bayGio.getTime() + HAN_MA_XAC_MINH_MS) : null };
   } catch (e) {
     // SN duy nhất TOÀN HỆ THỐNG (NS-14). Không nói máy thuộc doanh nghiệp nào.
     if (laLoiTrung(e)) throw new LoiDinhDang("soSeri", "Số sê-ri này đã được đăng ký trên hệ thống. Kiểm lại SN trên máy.");

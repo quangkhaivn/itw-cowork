@@ -144,6 +144,7 @@ export default async function TrangMayChamCong({ searchParams }: { searchParams:
               <div key={m.id} className={`hop-thong-bao ${m.maConHan ? "thong-tin" : "canh-bao"}`}>
                 <strong>{m.ten}</strong> (SN <code>{m.soSeri}</code>) — mã PIN xác minh: <strong style={{ fontSize: 20, letterSpacing: 2 }}>{m.maXacMinh}</strong>
                 {m.hetHanMa && <> · {m.maConHan ? `hết hạn ${dinhDangNgayGio(m.hetHanMa)}` : "ĐÃ HẾT HẠN — bấm “Tạo lại mã”"}</>}
+                <div className="nho">Chỉ nhận lần chấm xác minh từ IP: {m.ipDuocTin.length ? m.ipDuocTin.join(", ") : "IP của lần gọi đầu tiên sau khi đăng ký"}{m.cachLyDay && " · KHU CÁCH LY ĐÃ ĐẦY — xác minh ngay"}</div>
               </div>
             ))}
             <ol>
@@ -152,7 +153,7 @@ export default async function TrangMayChamCong({ searchParams }: { searchParams:
               <li>Máy gửi lần chấm về (thường trong 1 phút): máy chuyển <strong>Đã xác minh</strong>, Cowork nhận toàn bộ lần chấm đang cách ly vào công ty. Bấm <em>Kiểm tra kết nối</em> để xem.</li>
               <li><strong>Xóa người dùng tạm</strong> mang mã xác minh trên máy (lần chấm xác minh không tính công cho ai).</li>
             </ol>
-            <p className="phu nho">Mã hết hạn sau 24 giờ — bấm “Tạo lại mã”. “Hủy đăng ký” xóa máy và toàn bộ lần chấm đang cách ly.</p>
+            <p className="phu nho">Mã hết hạn sau 24 giờ — bấm “Tạo lại mã”. “Hủy đăng ký” xóa máy và toàn bộ lần chấm đang cách ly. Lần chấm xác minh và khu cách ly chỉ nhận từ IP mà máy đã gọi trước khi đăng ký (hoặc IP lần gọi đầu tiên sau đăng ký). <strong>Giới hạn:</strong> người ở cùng mạng (cùng IP) và biết SN vẫn có thể giả lần chấm — nên đặt máy trong mạng nội bộ riêng, và sau khi kích hoạt kiểm tra danh sách lần chấm đầu tiên.</p>
           </div>
         </section>
       )}

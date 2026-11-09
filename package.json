@@ -14,6 +14,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx --env-file-if-exists=.env prisma/seed/index.ts",
     "db:seed:mau": "tsx --env-file-if-exists=.env prisma/seed/mau.ts",
+    "may:giai-phong-sn": "tsx --env-file-if-exists=.env prisma/giai-phong-sn.ts",
     "thu:don-vi": "tsx --test thu/don-vi/*.test.ts",
     "thu:cach-ly": "tsx --env-file-if-exists=.env thu/thu-cach-ly-tenant.ts",
     "thu:phan-quyen": "tsx --env-file-if-exists=.env thu/thu-phan-quyen.ts",
