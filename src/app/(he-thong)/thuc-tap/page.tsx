@@ -48,11 +48,11 @@ export default async function TrangThucTap({ searchParams }: { searchParams: Tha
               <FormNhanh nhanNut="Tạo phiếu đánh giá" tieuDe="Tạo phiếu đánh giá thực tập" url="/api/v1/thuc-tap/danh-gia" lopNut="nut chinh"
                 truong={[
                   { ten: "nguoiId", nhan: "Thực tập sinh", kieu: "select", luaChon: d.ds.map((x) => ({ giaTri: x.id, nhan: `${x.hoTen}${x.truong ? ` — ${x.truong}` : ""}` })), caDong: true },
-                  { ten: "mauId", nhan: "Mẫu phiếu", kieu: "select", luaChon: d.mau.map((m) => ({ giaTri: m.id, nhan: `${m.ten}${m.truong ? ` (${m.truong})` : ""}` })), caDong: true },
+                  { ten: "mauId", nhan: "Mẫu phiếu", kieu: "select", luaChon: [{ giaTri: "", nhan: "Tự chọn: mẫu của trường nếu có, không thì mẫu chung" }, ...d.mau.map((m) => ({ giaTri: m.id, nhan: `${m.ten}${m.truong ? ` (${m.truong})` : ""}` }))], caDong: true },
                   { ten: "tuNgay", nhan: "Từ ngày", kieu: "date", goiY: "Trống = theo hồ sơ thực tập." },
                   { ten: "denNgay", nhan: "Đến ngày", kieu: "date" },
                 ]}
-                giaTriDau={{ nguoiId: d.ds[0]?.id ?? "", mauId: d.mau[0]?.id ?? "" }} />
+                giaTriDau={{ nguoiId: d.ds[0]?.id ?? "", mauId: "" }} />
             )}
           </span>
         }

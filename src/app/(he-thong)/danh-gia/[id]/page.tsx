@@ -54,6 +54,12 @@ export default async function TrangPhieuDanhGia({ params }: { params: Promise<{ 
           </span>
         }
       />
+      {p.khongCoBoKpi && (
+        <div className="hop-thong-bao canh-bao">
+          Chức danh / vai trò của người này chưa có bộ KPI — phiếu chỉ có phần <strong>quản lý chấm</strong> (đánh giá chung). Không bắt buộc, phiếu vẫn chấm và chốt bình thường.{" "}
+          <Link href="/danh-gia/kpi">Tạo bộ KPI</Link> để kỳ sau có chỉ tiêu chi tiết.
+        </div>
+      )}
       <div className="luoi-chi-so">
         <div className={`the chi-so ${kq ? "tot" : ""}`}>
           <div className="nhan">{kq ? "Kết quả" : "Tạm tính"}</div>

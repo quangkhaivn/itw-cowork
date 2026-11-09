@@ -404,6 +404,11 @@ export async function chiTietPhieu(nc: NguCanh, id: string) {
       hieuLuc: dc ? { tongDiem: Number(dc.newTotal), xepLoai: dc.newGrade, heSoThuong: Number(dc.newBonusCoef) } : p.status === "da-chot" ? { tongDiem: so(p.totalScore), xepLoai: p.grade, heSoThuong: so(p.bonusCoef) } : null,
       tamTinh: tamTinh.tong !== null ? { tongDiem: tamTinh.tong, ...xepLoai(tamTinh.tong, xepLoaiTu(ch)) } : null,
       thieuDiem: tamTinh.thieu,
+      /**
+       * 0.22.0 (QĐ-180): vai trò / chức danh chưa có bộ KPI → phiếu vẫn tạo, chỉ có phần quản lý chấm ("Đánh giá chung của
+       * quản lý"). Cảnh báo kèm đường dẫn "Tạo bộ KPI" — không chặn.
+       */
+      khongCoBoKpi: !p.kpiSetId,
     },
     chiTieu: p.items.map((c) => ({
       id: c.id, ten: c.name, trongSo: Number(c.weight), nguon: c.source, chiSo: c.metric, donVi: c.metric && c.metric in CHI_SO ? CHI_SO[c.metric as MaChiSo].donVi : "", chieu: c.direction,

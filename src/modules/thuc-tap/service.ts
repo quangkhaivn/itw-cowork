@@ -188,7 +188,8 @@ export async function suaMauPhieu(nc: NguCanh, id: string, d: z.infer<typeof Luo
 
 export const LuocDoTaoPhieuThucTap = z.object({
   nguoiId: z.uuid(),
-  mauId: z.uuid(),
+  /** 0.22.0 (QĐ-180): bỏ trống → mẫu của trường của sinh viên nếu có, không có thì MẪU CHUNG (kèm nhắc thay mẫu). */
+  mauId: z.union([z.uuid(), z.literal(""), z.null()]).optional().transform((x) => x || null),
   tuNgay: z.union([ngayThat, z.literal("")]).optional(),
   denNgay: z.union([ngayThat, z.literal("")]).optional(),
 });
@@ -241,8 +242,15 @@ export async function taoPhieuThucTap(nc: NguCanh, d: z.infer<typeof LuocDoTaoPh
   batBuocQuyen(nc.hoSo, "danh_gia.view", { objectType: "intern_evaluation" });
   await batBuocLaThucTap(nc, d.nguoiId);
   if (!(await duocChamThucTap(nc, d.nguoiId))) throw new LoiNghiepVu("Chỉ người hướng dẫn hoặc Nhân sự tạo được phiếu đánh giá thực tập.", 403, "khong-duoc-cham");
-  const m = await nc.tx.internEvalTemplate.findFirst({ where: { id: d.mauId, status: "hoat-dong" } });
-  if (!m) throw new LoiKhongTimThay("Mẫu phiếu");
+  let m = d.mauId ? await nc.tx.internEvalTemplate.findFirst({ where: { id: d.mauId, status: "hoat-dong" } }) : null;
+  if (d.mauId && !m) throw new LoiKhongTimThay("Mẫu phiếu");
+  if (!m) {
+    // QĐ-180: chưa chọn mẫu → mẫu của đúng trường (khớp tên, không phân biệt hoa thường) → mẫu chung dựng sẵn → mẫu đầu tiên.
+    const truong = (await nc.tx.internProfile.findFirst({ where: { userId: d.nguoiId }, select: { school: true } }))?.school?.trim() ?? "";
+    const ds = await nc.tx.internEvalTemplate.findMany({ where: { status: "hoat-dong" }, orderBy: { createdAt: "asc" } });
+    m = (truong && ds.find((x) => x.school && x.school.trim().toLowerCase() === truong.toLowerCase())) || ds.find((x) => x.code === "mau-chung") || ds[0] || null;
+    if (!m) throw new LoiNghiepVu("Chưa có mẫu phiếu nào đang dùng — bật lại mẫu chung ở Thực tập → Mẫu phiếu.", 422, "khong-co-mau");
+  }
   const mau = LuocDoMauPhieu.parse(m.layout);
   const ip = await nc.tx.internProfile.findFirst({ where: { userId: d.nguoiId }, select: { startDate: true, endDate: true, mentorId: true } });
   if ((d.tuNgay && !laNgayHopLe(d.tuNgay)) || (d.denNgay && !laNgayHopLe(d.denNgay))) throw new LoiNghiepVu("Ngày không có thật.", 400, "ngay-sai");
@@ -268,7 +276,7 @@ function mauCuaPhieu(p: { templateSnapshot: unknown }): MauPhieu {
 export async function chiTietPhieuThucTap(nc: NguCanh, id: string) {
   const p = await docPhieuThucTap(nc, id);
   const mau = mauCuaPhieu(p);
-  const snap = p.templateSnapshot as { _ten?: string; _phienBan?: number };
+  const snap = p.templateSnapshot as { _ten?: string; _phienBan?: number; _ma?: string };
   const ten = await banDoTen(nc.tx, [p.userId, p.mentorId, p.finalizedBy]);
   const tuDong = p.autoValues as Partial<Record<NguonTuDong, number | null>>;
   let ketQua: ReturnType<typeof tinhPhieuThucTap> | null = null;
@@ -281,7 +289,9 @@ export async function chiTietPhieuThucTap(nc: NguCanh, id: string) {
   return {
     phieu: {
       id: p.id, nguoiId: p.userId, hoTen: ten.get(p.userId) ?? "—", nguoiHuongDan: p.mentorId ? (ten.get(p.mentorId) ?? "—") : null,
-      tenMau: snap._ten ?? "", phienBanMau: snap._phienBan ?? 1, tuNgay: dateVeNgay(p.periodFrom), denNgay: dateVeNgay(p.periodTo),
+      tenMau: snap._ten ?? "", phienBanMau: snap._phienBan ?? 1,
+      /** 0.22.0 (QĐ-180): phiếu dùng mẫu chung (chưa có mẫu của trường) → nhắc thay, không chặn. */
+      dungMauChung: (p.templateSnapshot as { _ma?: string })._ma === "mau-chung", tuNgay: dateVeNgay(p.periodFrom), denNgay: dateVeNgay(p.periodTo),
       trangThai: p.status, tongDiem: p.totalScore === null ? null : Number(p.totalScore), tongChu: p.totalLetter,
       nguoiChot: p.finalizedBy ? (ten.get(p.finalizedBy) ?? "—") : null, chotLuc: p.finalizedAt,
     },

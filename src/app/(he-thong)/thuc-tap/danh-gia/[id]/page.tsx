@@ -43,6 +43,11 @@ export default async function TrangPhieuThucTap({ params }: { params: Promise<{ 
           </span>
         }
       />
+      {p.dungMauChung && (
+        <div className="hop-thong-bao thong-tin">
+          Phiếu đang dùng <strong>mẫu chung</strong> (chưa có mẫu phiếu của trường). Thay bằng mẫu của trường ở <Link href="/thuc-tap/mau">Thực tập → Mẫu phiếu</Link> — không bắt buộc, phiếu vẫn chấm và in được.
+        </div>
+      )}
       <div className="luoi-chi-so">
         <div className={`the chi-so ${d.ketQua?.tong !== null && d.ketQua?.tong !== undefined ? "tot" : ""}`}>
           <div className="nhan">Điểm tổng (thang 10)</div>
