@@ -72,6 +72,12 @@ ket_thuc() {
   # Chỉ xóa tệp dở dang CỦA LẦN CHẠY NÀY. Không dùng "$THU_MUC"/*.dang-ghi: một lần chạy chờ khóa
   # quá hạn (hoặc máy không có flock) sẽ xóa mất tệp đang ghi của lần chạy kia (QA 0.16.1).
   rm -f "$TEP.dang-ghi" "$TEP_DK.dang-ghi" "$TEP_ENV_MA.dang-ghi" 2>/dev/null || true
+  # Hỏng / bị ngắt TRƯỚC khi bộ đủ (dump + đính kèm + .env mã hóa): xóa cả các tệp đã ghi xong của LẦN NÀY.
+  # Nếu không, bộ thiếu .env trông như đầy đủ và thu-phuc-hoi.sh (chọn bộ mới nhất) sẽ thử đúng bộ dở dang.
+  # Hỏng ở bước sau (chép ra ngoài, dọn bản cũ) thì giữ: bộ trên máy đã đủ và đọc lại được.
+  if [ "$ma" -ne 0 ] && [ "${BO_DU:-0}" != 1 ]; then
+    rm -f "$TEP" "$TEP_DK" "$TEP_ENV_MA" 2>/dev/null || true
+  fi
   if [ "$ma" -ne 0 ]; then
     local loi="Sao lưu hỏng ở bước: $BUOC (mã $ma)"
     printf '{"luc":"%s","ok":false,"loi":%s}\n' "$LUC" "$(json_chuoi "$loi")" > "$THU_MUC/trang-thai.json" 2>/dev/null || true
@@ -177,6 +183,7 @@ else
   echo "✓ .env đã mã hóa và giải mã thử khớp: $TEP_ENV_MA"
 fi
 unset MAT_KHAU
+BO_DU=1
 
 # ---------------------------------------------------------------------------
 # 4. Chép ra ngoài máy (rclone)

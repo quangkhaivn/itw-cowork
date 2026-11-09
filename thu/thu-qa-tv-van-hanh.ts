@@ -447,13 +447,22 @@ async function thuScript() {
   }
   baoDong.length = 0;
   await ngu(1_100);
+  const demDump = () => readdirSync(thuMuc).filter((t) => /^cowork-\d{8}T\d{6}Z\.dump$/.test(t)).length;
+  const dumpTruocKill = demDump();
   const bi = await chay("./scripts/sao-luu.sh", [], envChay(taoEnv("env-kill"), { PATH: `${binCham}:${process.env.PATH}` }), { ms: 800, tinHieu: "SIGTERM" });
   dat("sao-luu.sh bị TERM: thoát mã 143", bi.ma === 143, `${bi.ma}/${bi.tinHieu} ${bi.ra.slice(-300)}`);
   dat("…ghi trạng thái hỏng (mã 143)", trangThai().ok === false && /143/.test(String(trangThai().loi)), JSON.stringify(trangThai()));
   dat("…gửi báo động", baoDong.some((b) => /SAO LƯU HỎNG/.test(b)));
   dat("…không để lại tệp .dang-ghi", !readdirSync(thuMuc).some((t) => t.endsWith(".dang-ghi")));
+  // Bị ngắt sau khi dump / đóng gói xong nhưng trước .env mã hóa: không để lại bộ "trông như đủ" cho thu-phuc-hoi.sh chọn.
+  dat("…không để lại bộ dở dang (dump của lần bị ngắt đã xóa)", demDump() === dumpTruocKill, `${dumpTruocKill} → ${demDump()}`);
 
   // 6g. Thử phục hồi: thành công, CSDL tạm bị xóa.
+  // Bộ mới nhất phải là một bộ đủ có .env mã hóa. Không dựa vào bước rclone (6d) — máy không có rclone thì
+  // bộ mới nhất là bộ "không mật khẩu" (6b), thiếu .env, và bài thử phụ thuộc máy chạy.
+  await ngu(1_100);
+  const okPh = await chay("./scripts/sao-luu.sh", [], envChay(taoEnv("env-ok-ph")));
+  dat("…sao lưu đủ (có .env mã hóa) trước khi thử phục hồi", okPh.ma === 0 && /da-ma-hoa/.test(okPh.ra), okPh.ra.slice(-300));
   const ph = await chay("./scripts/thu-phuc-hoi.sh", [], envChay(taoEnv("env-ph")));
   const hbPh = await chu.systemHeartbeat.findUnique({ where: { name: "thu-phuc-hoi" } });
   dat("thu-phuc-hoi.sh: đạt, mã 0, giải mã được .env", ph.ma === 0 && /giải mã được/.test(ph.ra), ph.ra.slice(-600));
