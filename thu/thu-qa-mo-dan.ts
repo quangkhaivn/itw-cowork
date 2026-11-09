@@ -4,7 +4,10 @@ import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
 import { LoiKhongTimThay, LoiNghiepVu, LoiDinhDang } from "../src/lib/loi";
 import { seedLichMacDinh, seedNenMong } from "../prisma/seed/index";
 import { apCongTay, cacNgayTrongThang, thuTrongTuan } from "../src/modules/cham-cong/tinh-toan";
-import { anhXaPin, danhSachMayLa, danhSachPinChuaKhop, taoMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
+import { anhXaPin, danhSachMayLa, danhSachPinChuaKhop, nhapCsvAnhXaPin, taoMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
+import { lichCuaNhieuNguoi } from "../src/modules/cham-cong/chung";
+import { datCongTay } from "../src/modules/cham-cong/cong-tay";
+import { LuocDoDatCongTay } from "../src/modules/cham-cong/luoc-do";
 import { nhapCsvHoSoLuong, taoHoSoLuong } from "../src/modules/luong/ho-so";
 import { LuocDoCongTayLuong, LuocDoHoSoLuong } from "../src/modules/luong/luoc-do";
 import {
@@ -155,6 +158,8 @@ async function main() {
   await nemLoi("G1: Nhân sự có dòng trong kỳ không duyệt (không có quyền duyệt)", "quyen", () => voi(T, hr, (nc) => duyetKyLuong(nc, k3.id)));
   await voi(T, gd, (nc) => duyetKyLuong(nc, k3.id));
   await voi(T, gd, (nc) => khoaKyLuong(nc, k3.id));
+  const run3 = await chu.payrollRun.findUniqueOrThrow({ where: { id: k3.id } });
+  dat("L0: khóa được kỳ lương tính KHÔNG có bảng công (trước đây vi phạm CHECK payroll_runs_buoc_check → lỗi 500)", run3.status === "da-khoa" && run3.timesheetId === null);
   const dong3 = await chu.payrollLine.findMany({ where: { runId: k3.id } });
   const tongNet = dong3.reduce((a, d) => a + (d.netPay > 0n ? d.netPay : 0n), 0n);
   const tongCk = dong3.filter((d) => d.payMethod === "chuyen-khoan" && d.netPay > 0n).reduce((a, d) => a + d.netPay, 0n);
@@ -218,6 +223,25 @@ async function main() {
   const ccNua = apCongTay({ vaoDau: null, raCuoi: null, giaTriCong: 0.5, phutMuon: 0, phutSom: 0, nghiNgay: 0.5, co: [] }, 1);
   dat("…nghỉ nửa ngày + đặt 1 → công còn 0,5", ccNua.giaTriCong === 0.5, JSON.stringify(ccNua));
 
+  // C2: lịch mặc định không ghi đè người đã có lần gán (kể cả gán từ tháng sau); người vào làm giữa tháng tính từ ngày vào.
+  const lichRieng = await chu.workSchedule.create({ data: { tenantId: T, code: `rieng-${DAU}`, name: "Lịch riêng", shiftId: (await chu.workShift.findFirstOrThrow({ where: { tenantId: T } })).id, days: ["ca", "ca", "ca", "ca", "ca", "ca", "nghi"] } });
+  await chu.scheduleAssignment.create({ data: { tenantId: T, userId: nvB, scheduleId: lichRieng.id, effectiveFrom: NGAY("2026-12-01"), createdBy: hr } });
+  await chu.staffProfile.update({ where: { userId: nvA }, data: { hiredAt: NGAY("2026-11-16") } });
+  const lich11 = await voiTenant(T, (tx) => lichCuaNhieuNguoi(tx, [nvA, nvB], "2026-12-31"));
+  dat("C2: người đã được gán lịch từ tháng sau KHÔNG bị lịch mặc định ghi đè (tháng này không có lịch)", lich11.get(nvB)!("2026-11-10") === null && lich11.get(nvB)!("2026-12-05")?.scheduleId === lichRieng.id);
+  dat("…người vào làm giữa tháng: lịch mặc định từ ngày vào làm", lich11.get(nvA)!("2026-11-13") === null && lich11.get(nvA)!("2026-11-16")?.macDinh === true);
+  await chu.staffProfile.update({ where: { userId: nvA }, data: { hiredAt: NGAY("2025-01-01") } });
+
+  // C3: đặt công tay — phạm vi (vai trò tự tạo có cham_cong.update phạm vi "team").
+  const vaiTeam = await chu.role.create({ data: { tenantId: T, code: `cc-team-${DAU}`, name: "Chấm công nhóm", isBuiltIn: false } });
+  for (const ma of ["cham_cong.view", "cham_cong.update"]) {
+    const pq = await chu.permission.findUniqueOrThrow({ where: { code: ma } });
+    await chu.rolePermission.create({ data: { tenantId: T, roleId: vaiTeam.id, permissionId: pq.id, dataScope: "team" } });
+  }
+  const tn = await chu.user.create({ data: { tenantId: T, email: `truong-nhom.${DAU}@qa.test`, passwordHash: "x", fullName: "truong-nhom", userRoles: { create: { tenantId: T, roleId: vaiTeam.id } }, staffProfile: { create: { tenantId: T, hiredAt: NGAY("2025-01-01") } } } });
+  await nemLoi("C3: người có cham_cong.update phạm vi nhóm không đặt công tay cho người ngoài nhóm", "khong-thay",
+    () => voi(T, tn.id, (nc) => datCongTay(nc, LuocDoDatCongTay.parse({ nguoiId: nvB, ngay: "2026-11-02", cong: 1, lyDo: "Làm ở công trình" }), "2026-11-09")));
+
   // ==================================================================
   console.log("\n— Q. Quyền máy chấm công (Kỹ thuật) —");
   const SN = `QA${DAU.toUpperCase()}`.slice(0, 20);
@@ -239,6 +263,12 @@ async function main() {
   dat("…lần chấm của PIN 8801 vẫn chưa khớp", (await chu.attendancePunch.count({ where: { tenantId: T, pin: "8801", userId: null } })) === 2);
   const gan = await voi(T, hr, (nc) => anhXaPin(nc, { pin: "8801", nguoiId: ktv }));
   dat("…Nhân sự gán cho Kỹ thuật được", gan.soLanCham === 2);
+  const csvPin = `Mã chấm công,Email\n8805,ky-thuat-vien.${DAU}@qa.test\n8806,nhan-vien-b.${DAU}@qa.test\n8807,nhan-vien-b.${DAU}@qa.test\n`;
+  const xtPin = await voi(T, hr, (nc) => nhapCsvAnhXaPin(nc, csvPin, false));
+  dat("Q2b: CSV ánh xạ PIN — một người hai dòng (hai PIN) báo lỗi ngay ở xem trước, không để lúc ghi hỏng cả lô",
+    xtPin.hopLe.length === 1 && xtPin.loi.some((l) => l.soDong === 4 && /trùng dòng 3/.test(l.lyDo)), JSON.stringify(xtPin));
+  const xtTu = await voi(T, ktv, (nc) => nhapCsvAnhXaPin(nc, csvPin, false));
+  dat("…CSV: Kỹ thuật tự gán PIN cho mình → lỗi dòng", xtTu.loi.some((l) => l.soDong === 2 && /chính mình/.test(l.lyDo)));
   await nemLoi("Q3: Kỹ thuật không đọc thẳng hồ sơ nhân sự qua ánh xạ PIN áp kỳ khóa (cần cham_cong.approve)", "quyen",
     () => voi(T, ktv, (nc) => anhXaPin(nc, { pin: "8803", nguoiId: nvB, apCaKyDaKhoa: true })));
 

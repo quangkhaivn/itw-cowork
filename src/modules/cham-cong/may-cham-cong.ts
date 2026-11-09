@@ -549,13 +549,18 @@ export async function nhapCsvAnhXaPin(nc: NguCanh, noiDung: string, ghi: boolean
   const loiDong = [...loi];
   const hopLe: { soDong: number; pin: string; nguoiId: string; hoTen: string; daCo: boolean }[] = [];
   const pinTrongTep = new Map<string, number>();
+  const nguoiTrongTep = new Map<string, number>();
   for (const d of dong) {
     const u = theoEmail.get(d.email);
     if (!u) { loiDong.push({ soDong: d.soDong, lyDo: `Không có nhân viên với email ${d.email}.` }); continue; }
     if (u.status !== "hoat-dong") { loiDong.push({ soDong: d.soDong, lyDo: `${u.fullName} đã ngừng hoạt động.` }); continue; }
     if (u.id === nc.hoSo.userId) { loiDong.push({ soDong: d.soDong, lyDo: "Không tự gán mã chấm công cho chính mình — nhờ người khác có quyền." }); continue; }
     if (pinTrongTep.has(d.pin)) { loiDong.push({ soDong: d.soDong, lyDo: `PIN ${d.pin} trùng dòng ${pinTrongTep.get(d.pin)}.` }); continue; }
+    // QA 0.22.0: một người hai dòng (hai PIN khác nhau) — xem trước báo hợp lệ cả hai rồi lúc ghi dòng sau lỗi 409 làm
+    // hỏng cả lô. Báo lỗi dòng ngay ở bước xem trước.
+    if (nguoiTrongTep.has(u.id)) { loiDong.push({ soDong: d.soDong, lyDo: `${u.fullName} trùng dòng ${nguoiTrongTep.get(u.id)}.` }); continue; }
     pinTrongTep.set(d.pin, d.soDong);
+    nguoiTrongTep.set(u.id, d.soDong);
     const chu = chuPin.get(d.pin);
     if (chu && chu !== u.id) { loiDong.push({ soDong: d.soDong, lyDo: `PIN ${d.pin} đã gán cho người khác.` }); continue; }
     const pinCu = u.staffProfile?.attendancePin ?? null;
