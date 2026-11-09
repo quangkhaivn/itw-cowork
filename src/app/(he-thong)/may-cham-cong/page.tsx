@@ -21,19 +21,27 @@ const TRANG_THAI = [{ giaTri: "hoat-dong", nhan: "Hoạt động" }, { giaTri: "
 
 /** Thông số khai trên máy (QĐ-178): lấy từ APP_URL, không có thì từ host của yêu cầu hiện tại. */
 function thongSoKetNoi(host: string | null, giaoThuc: string | null) {
-  let url: URL | null = null;
-  try {
-    url = process.env.APP_URL ? new URL(process.env.APP_URL) : host ? new URL(`${giaoThuc ?? "http"}://${host}`) : null;
-  } catch {
-    url = null;
-  }
+  const docUrl = (s: string | null | undefined) => {
+    try {
+      return s ? new URL(s) : null;
+    } catch {
+      return null;
+    }
+  };
+  const laNoiBoMay = (u: URL | null) => !!u && /^(127\.|localhost$|\[?::1\]?$|0\.0\.0\.0$)/.test(u.hostname);
+  const tuAppUrl = docUrl(process.env.APP_URL);
+  const tuHost = host ? docUrl(`${giaoThuc ?? "http"}://${host}`) : null;
+  // APP_URL trỏ 127.0.0.1 (bản chạy thử trên máy cá nhân) thì máy chấm công không gọi tới được: dùng địa chỉ
+  // người dùng đang mở nếu đó là IP / tên trong mạng, không thì nhắc lấy IP mạng nội bộ.
+  const url = laNoiBoMay(tuAppUrl) && tuHost && !laNoiBoMay(tuHost) ? tuHost : (tuAppUrl ?? tuHost);
   const https = url?.protocol === "https:";
   return {
     diaChi: url?.hostname ?? "tên-miền-cowork",
     cong: url?.port ? Number(url.port) : https ? 443 : 80,
     https,
     duong: "/iclock/cdata",
-    nguon: process.env.APP_URL ? "APP_URL" : "địa chỉ bạn đang mở",
+    nguon: url === tuAppUrl && tuAppUrl ? "APP_URL" : "địa chỉ bạn đang mở",
+    chiTrongMayNay: laNoiBoMay(url),
   };
 }
 
@@ -97,8 +105,13 @@ export default async function TrangMayChamCong({ searchParams }: { searchParams:
                   <tr><th>Proxy</th><td>Tắt</td></tr>
                 </tbody>
               </table>
+              {ks.chiTrongMayNay && (
+                <div className="canh-bao" style={{ maxWidth: 720 }}>
+                  <code>{ks.diaChi}</code> chỉ dùng được ngay trên máy chủ này — máy chấm công không gọi tới được. Trên máy chấm công nhập <strong>IP mạng nội bộ</strong> của máy chủ (bản chạy trên máy Windows: mở bằng <code>CHAY-MANG-NOI-BO.bat</code>, cửa sổ hiện IP), cổng <code>{ks.cong}</code>.
+                </div>
+              )}
             </li>
-            <li>Đăng ký máy ở đây bằng <strong>số sê-ri (SN)</strong>. Chưa đăng ký mà máy đã gọi về thì máy hiện ở mục <em>Máy đang gọi nhưng chưa đăng ký</em> — bấm <strong>Đăng ký máy này</strong>; máy sẽ được yêu cầu gửi lại toàn bộ nhật ký chấm công.</li>
+            <li>Đăng ký máy ở đây bằng <strong>số sê-ri (SN)</strong>. Máy mới đăng ký ở trạng thái <em>chờ xác minh</em>: tạo trên máy một người dùng có <strong>mã xác minh 6 số</strong> hiện ở dòng của máy, chấm thử một lần, rồi xóa người dùng tạm. Chưa đăng ký mà máy đã gọi về thì máy hiện ở mục <em>Máy đang gọi nhưng chưa đăng ký</em> — bấm <strong>Đăng ký máy này</strong>; máy sẽ được yêu cầu gửi lại toàn bộ nhật ký chấm công.</li>
             <li>Bấm <strong>Kiểm tra kết nối</strong> ở dòng của máy: thấy lần gọi cuối và IP nguồn là đã thông.</li>
             <li>Gán mã chấm công (PIN trên máy) cho nhân viên: từng người ở mục <em>PIN chưa khớp</em>, hoặc nhập CSV <code>Mã chấm công, Email</code>.</li>
           </ol>
