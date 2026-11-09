@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { voiTenant } from "../src/lib/db";
 import { taoNguCanh, type NguCanh } from "../src/lib/api";
 import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
@@ -7,7 +8,8 @@ import { seedLichMacDinh, seedNenMong } from "../prisma/seed/index";
 import { capNhatCauHinh } from "../src/modules/cau-hinh/service";
 import { lichCuaNhieuNguoi } from "../src/modules/cham-cong/chung";
 import { datCongTay } from "../src/modules/cham-cong/cong-tay";
-import { sinhBangCong } from "../src/modules/cham-cong/bang-cong";
+import { khoaBangCong, sinhBangCong } from "../src/modules/cham-cong/bang-cong";
+import { doiChieuCongSauKhoa } from "../src/modules/luong/doi-chieu";
 import { bangTrucTiep } from "../src/modules/cham-cong/truc-tiep";
 import {
   danhSachMay,
@@ -28,7 +30,7 @@ import { danhSachHoSoNhanSu, datLichMacDinh, suaHoSoNhanSu } from "../src/module
 import { LuocDoHoSoNhanSu } from "../src/modules/nhan-su/luoc-do";
 import { chiTietPhieu, taoKyDanhGia } from "../src/modules/danh-gia/service";
 import { chiTietPhieuThucTap, taoPhieuThucTap } from "../src/modules/thuc-tap/service";
-import { danhSachHoSo, nhapCsvHoSoLuong, suaNguoiPhuThuoc, taoHoSoLuong } from "../src/modules/luong/ho-so";
+import { danhSachHoSo, nhapCsvHoSoLuong, suaNguoiPhuThuoc, taoHoSoLuong, themNguoiPhuThuoc } from "../src/modules/luong/ho-so";
 import { LuocDoCongTayLuong, LuocDoHoSoLuong } from "../src/modules/luong/luoc-do";
 import {
   chiTietKyLuong,
@@ -41,6 +43,7 @@ import {
   nhapCongTayLuong,
   taoKyLuong,
   tinhKyLuong,
+  xoaKhoanLuong,
 } from "../src/modules/luong/service";
 import { danhSachThamSo, xacNhanThamSo } from "../src/modules/luong/tham-so";
 import { xuatButToan, xuatNganHang, xuatTraTay } from "../src/modules/luong/xuat";
@@ -313,6 +316,66 @@ async function main() {
   }, "tu-sua-ho-so");
   await voi(T, kt, (nc) => tinhKyLuong(nc, k7.id));
   dat("…tính lại: 1 người phụ thuộc được giảm trừ", ((await dong(k7.id, nvMoi)).inputs as unknown as DauVaoLuong).soNguoiPhuThuoc === 1 && npt2.infoPending);
+
+  // QĐ-192: định dạng giấy tờ người phụ thuộc — áp đồng nhất cho thêm tay.
+  const nptMa = async (soGiayTo: string | null, hoTen = "Lê Thị Con") => (await voi(T, hr, (nc) => themNguoiPhuThuoc(nc, { nguoiId: nvC, hoTen, quanHe: "con", soGiayTo, tuThang: "2026-09", denThang: null }))).chuaDuGiayTo;
+  dat("3. Thêm tay: MST 10 số / 10-3 số, CCCD 12 số, hộ chiếu ≥ 6 ký tự → đủ giấy tờ",
+    !(await nptMa("0101234567")) && !(await nptMa("0101234567-001")) && !(await nptMa("079123456789")) && !(await nptMa("C1234567")));
+  dat("…số giấy tờ sai định dạng (\"12345\", \"0101234567-01\") hoặc thiếu → “chưa đủ giấy tờ”, không giảm trừ",
+    (await nptMa("12345")) && (await nptMa("0101234567-01")) && (await nptMa(null)));
+  dat("…sửa thành giấy tờ sai định dạng → vẫn chưa đủ", (await voi(T, hr, (nc) => suaNguoiPhuThuoc(nc, npt1.id, { hoTen: "Nguyễn Văn Con", quanHe: "con", soGiayTo: "1" }))).chuaDuThongTin);
+  await voi(T, hr, (nc) => suaNguoiPhuThuoc(nc, npt1.id, { hoTen: "Nguyễn Văn Con", quanHe: "con", soGiayTo: "079123456789" }));
+  // Migration: người phụ thuộc có sẵn không đạt → gắn cờ (chạy lại đúng câu UPDATE của migration trên một dòng cũ giả lập).
+  const nptCu = await chu.salaryDependent.create({ data: { tenantId: T, userId: nvC, fullName: "Con cũ", relationship: "con", idNumber: "999", fromMonth: NGAY("2026-01-01"), createdBy: ad } });
+  const sqlMig = readFileSync("prisma/migrations/20261109090006_ghim_ip_doi_chieu_giay_to/migration.sql", "utf8");
+  await chu.$executeRawUnsafe(sqlMig.slice(sqlMig.lastIndexOf('UPDATE "salary_dependents"')));
+  dat("3. Migration: người phụ thuộc có sẵn với giấy tờ không đạt → gắn cờ chưa đủ giấy tờ; người đạt giữ nguyên",
+    (await chu.salaryDependent.findUniqueOrThrow({ where: { id: nptCu.id } })).infoPending && !(await chu.salaryDependent.findUniqueOrThrow({ where: { id: npt1.id } })).infoPending);
+  dat("…Kế toán thấy ở Thiết lập ban đầu (người phụ thuộc chưa đủ giấy tờ)", ((await voi(T, kt, (nc) => viecThietLap(nc, "2026-09-15"))).nhom[0].viec.find((v) => v.ma === "nguoi-phu-thuoc")?.conThieu ?? 0) >= 3);
+
+  // ==================================================================
+  console.log("\n— Đối chiếu công sau khi khóa bảng công (QĐ-191) —");
+  // Kỳ 06/2026 đã khóa bằng công TẠM (A nhập tay, B / C mặc định đủ công). Bảng công 06 khóa SAU: B vắng nửa tháng.
+  const ngay6 = cacNgayTrongThang(2026, 6).filter((x) => thuTrongTuan(x) < 5);
+  const bc6 = await chu.timesheet.create({ data: { tenantId: T, year: 2026, month: 6, generatedAt: MOC, generatedBy: hr, feedbackDeadline: MOC } });
+  for (const [u, vang] of [[nvA, 0], [nvB, 10]] as const) {
+    for (const [i, d] of ngay6.entries()) {
+      await chu.timesheetRow.create({ data: { tenantId: T, timesheetId: bc6.id, userId: u, workDate: NGAY(d), isAdjustment: false, dayType: "thuong", expectedValue: 1, workValue: i < vang ? 0 : 1 } });
+    }
+  }
+  const kq6 = await voi(T, hr, (nc) => khoaBangCong(nc, bc6.id, new Date("2026-07-05T03:00:00Z")));
+  dat("2. Khóa bảng công 06 → đối chiếu 2 người (A, B có trong bảng; C không có thì bỏ qua), B lệch công", kq6.doiChieu.soDong === 2 && kq6.doiChieu.soChenh >= 1, JSON.stringify(kq6.doiChieu));
+  const dcB = await chu.payrollAttendanceReconciliation.findFirstOrThrow({ where: { tenantId: T, userId: nvB } });
+  dat("…B: công tạm (mặc định) → bảng công ít hơn 10 công, chênh âm, đã tạo khoản ở kỳ 07 (nháp)",
+    dcB.oldSource === "mac-dinh" && Number(dcB.oldWorkDays) - Number(dcB.newWorkDays) === 10 && dcB.grossDelta < 0n && dcB.status === "da-tao-khoan" && dcB.targetRunId === k7.id);
+  const khoanB = await chu.payrollItem.findMany({ where: { runId: k7.id, userId: nvB, reconciliationId: dcB.id } });
+  dat("…khoản “Điều chỉnh kỳ trước” TRỪ, trước thuế, chưa duyệt, kỳ gốc 06, lý do ghi rõ",
+    khoanB.length >= 1 && khoanB.every((k) => k.category === "dieu-chinh" && k.direction === "tru" && k.taxStage === "truoc-thue" && !k.approvedBy && k.adjustsRunId === k6.id && /Đối chiếu công tháng 06\/2026/.test(k.reason)));
+  dat("…kỳ 07 “cần tính lại”; báo kế toán; kiểm toán không ghi số tiền",
+    (await chu.payrollRun.findUniqueOrThrow({ where: { id: k7.id } })).dirty && (await chu.notification.count({ where: { userId: kt, type: "luong-doi-chieu-cong" } })) === 1
+      && (await chu.auditLog.count({ where: { tenantId: T, action: "doi-chieu-cong-sau-khoa" } })) >= 1);
+  dat("2. Chống trùng: đối chiếu lại cùng bảng công không tạo thêm", (await voi(T, hr, (nc) => doiChieuCongSauKhoa(nc, bc6.id))).soDong === 0);
+  await voi(T, kt, (nc) => xoaKhoanLuong(nc, khoanB[0].id));
+  dat("…kế toán xóa khoản → đối chiếu lại vẫn không tạo lại; xóa có kiểm toán",
+    (await voi(T, hr, (nc) => doiChieuCongSauKhoa(nc, bc6.id))).soDong === 0 && (await chu.auditLog.count({ where: { tenantId: T, action: "xoa-khoan-luong", objectId: khoanB[0].id } })) === 1);
+  // Kỳ kế tiếp chưa có → danh sách chờ, áp khi tính kỳ đó.
+  await voi(T, kt, (nc) => tinhKyLuong(nc, k7.id));
+  await voi(T, kt, (nc) => guiDuyetKyLuong(nc, k7.id));
+  await voi(T, gd, (nc) => duyetKyLuong(nc, k7.id));
+  await voi(T, gd, (nc) => khoaKyLuong(nc, k7.id));
+  const bc7 = await chu.timesheet.create({ data: { tenantId: T, year: 2026, month: 7, generatedAt: MOC, generatedBy: hr, feedbackDeadline: MOC } });
+  for (const d of cacNgayTrongThang(2026, 7).filter((x) => thuTrongTuan(x) < 5).slice(0, 5)) {
+    await chu.timesheetRow.create({ data: { tenantId: T, timesheetId: bc7.id, userId: nvMoi, workDate: NGAY(d), isAdjustment: false, dayType: "thuong", expectedValue: 1, workValue: 1 } });
+  }
+  const kq7 = await voi(T, hr, (nc) => khoaBangCong(nc, bc7.id, new Date("2026-08-05T03:00:00Z")));
+  const dcMoi = await chu.payrollAttendanceReconciliation.findFirstOrThrow({ where: { tenantId: T, userId: nvMoi } });
+  dat("2. Chưa có kỳ lương kế tiếp → vào danh sách chờ", kq7.doiChieu.soChoKy === 1 && dcMoi.status === "cho-ky" && dcMoi.targetRunId === null);
+  const k8 = await voi(T, kt, (nc) => taoKyLuong(nc, { nam: 2026, thang: 8 }));
+  await voi(T, kt, (nc) => tinhKyLuong(nc, k8.id));
+  const dcMoi2 = await chu.payrollAttendanceReconciliation.findUniqueOrThrow({ where: { id: dcMoi.id } });
+  dat("…tính kỳ 08 → áp khoản điều chỉnh từ danh sách chờ vào kỳ 08", dcMoi2.status === "da-tao-khoan" && dcMoi2.targetRunId === k8.id && (await chu.payrollItem.count({ where: { runId: k8.id, userId: nvMoi, reconciliationId: dcMoi.id } })) >= 1);
+  const dMoi8 = await dong(k8.id, nvMoi);
+  dat("…dòng 08 của người đó đã trừ phần lương tạm trả thừa tháng 07", (dMoi8.result as unknown as KetQuaLuong).dieuChinhTruocThue !== undefined && ((dMoi8.result as unknown as KetQuaLuong).dieuChinhTruocThue ?? 0) < 0);
   const hsA = await chu.salaryProfile.findFirstOrThrow({ where: { tenantId: T, userId: nvA }, orderBy: { createdAt: "desc" } });
   dat("…A: giữ hình thức / thuế cũ, đổi lương + tài khoản", hsA.baseSalary === 22_000_000n && hsA.bankAccount === "0011223399" && hsA.taxMethod === "luy-tien");
   dat("Đổi tài khoản qua CSV vẫn báo nhân viên (QĐ-159)", (await chu.notification.count({ where: { userId: nvA, type: "doi-tai-khoan-luong" } })) === 1);
@@ -420,6 +483,12 @@ async function main() {
   dat("…máy chưa từng gọi → hướng dẫn kiểm địa chỉ / cổng / HTTPS", !kt1.trucTuyen && kt1.lanCuoi === null && /CHƯA nhận được/.test(kt1.goiY));
   dat("…tự gõ SN (không qua máy lạ) cũng chờ xác minh, Stamp=0", mayMoi.choXacMinh && !mayMoi.tuMayLa && (await chu.attendanceDevice.findUniqueOrThrow({ where: { id: mayMoi.id } })).attlogStamp === "0");
 
+  // QĐ-190: ghim IP — IP máy đã gọi trước khi đăng ký (danh sách máy lạ) thành IP được tin.
+  dat("1. Ghim IP: đăng ký từ danh sách máy lạ → IP được tin = IP máy đã gọi trước khi đăng ký", JSON.stringify(may.ipDuocTin) === JSON.stringify([IP_VP]) && JSON.stringify((await chu.attendanceDevice.findUniqueOrThrow({ where: { id: may.id } })).verifyIps) === JSON.stringify([IP_VP]));
+  await adms("POST", "cdata", `SN=${SN}&table=ATTLOG&Stamp=8`, "7001\t2026-11-03 07:00:00\t0\t1\t0\t0\n", IP_KHAC);
+  dat("…ATTLOG từ IP khác → KHÔNG vào khu cách ly", (await chu.attendanceQuarantineLog.count({ where: { deviceId: may.id } })) === 0);
+  await adms("POST", "cdata", `SN=${SN}&table=ATTLOG&Stamp=8`, `${may.maXacMinh}\t2026-11-03 07:30:00\t0\t15\t0\t0\n`, IP_KHAC);
+  dat("…lần chấm mang ĐÚNG mã xác minh nhưng từ IP khác → KHÔNG kích hoạt", (await chu.attendanceDevice.findUniqueOrThrow({ where: { id: may.id } })).verifyStatus === "cho-xac-minh");
   // 1. Khu cách ly: lần chấm của máy chờ xác minh không hiện, không tính công.
   const NHAT_KY = "7001\t2026-11-03 08:00:00\t0\t1\t0\t0\n7001\t2026-11-03 17:05:00\t1\t1\t0\t0\n";
   await adms("POST", "cdata", `SN=${SN}&table=ATTLOG&Stamp=9`, NHAT_KY);
@@ -481,6 +550,34 @@ async function main() {
   dat("1. Máy đăng ký trước bản này (trước migration 20261109090005) đều coi như đã xác minh",
     moc0005.length === 1 && (await chu.attendanceDevice.count({ where: { createdAt: { lt: moc0005[0].finished_at }, verifyStatus: { not: "da-xac-minh" } } })) === 0);
 
+  // QĐ-190: tự gõ SN (máy chưa từng gọi) → ghim IP lần gọi ĐẦU TIÊN sau khi đăng ký; khu cách ly trần 50.000 dòng / máy.
+  const SN_C = `MC${DAU.toUpperCase()}`.slice(0, 20);
+  const mayC = await voi(T, ktv, (nc) => taoMay(nc, { soSeri: SN_C, ten: "Máy kho 2", diaDiemId: null, ipChoPhep: [] }, BAY));
+  await adms("GET", "cdata", `SN=${SN_C}&options=all`, null, IP_VP);
+  await adms("GET", "cdata", `SN=${SN_C}&options=all`, null, IP_KHAC);
+  dat("1. Tự gõ SN: IP được tin = IP của lần gọi đầu tiên sau đăng ký (lần sau từ IP khác không thêm)", JSON.stringify((await chu.attendanceDevice.findUniqueOrThrow({ where: { id: mayC.id } })).verifyIps) === JSON.stringify([IP_VP]));
+  await chu.$executeRawUnsafe(`INSERT INTO attendance_quarantine_logs (device_id, pin, punched_at) SELECT '${mayC.id}'::uuid, 'P' || g, timestamptz '2026-01-01' + g * interval '1 minute' FROM generate_series(1, 50000) g`);
+  await adms("POST", "cdata", `SN=${SN_C}&table=ATTLOG&Stamp=1`, "7201\t2026-11-03 08:00:00\t0\t1\t0\t0\n", IP_VP);
+  const xC = await chu.attendanceDevice.findUniqueOrThrow({ where: { id: mayC.id } });
+  dat("1. Khu cách ly đủ 50.000 dòng → không nhận thêm, KHÔNG tự xóa, cảnh báo một lần",
+    (await chu.attendanceQuarantineLog.count({ where: { deviceId: mayC.id } })) === 50_000 && Boolean(xC.quarantineFullAt) && (await chu.notification.count({ where: { userId: ktv, type: "may-cham-cong-cach-ly-day" } })) === 1);
+  await adms("POST", "cdata", `SN=${SN_C}&table=ATTLOG&Stamp=2`, "7202\t2026-11-03 08:00:00\t0\t1\t0\t0\n", IP_VP);
+  dat("…không báo lặp", (await chu.notification.count({ where: { userId: ktv, type: "may-cham-cong-cach-ly-day" } })) === 1);
+
+  // QĐ-190: thủ tục quản trị máy chủ giải phóng SN bị chiếm (chạy thử → thật, có kiểm toán ở doanh nghiệp giữ SN).
+  const SN_GP = `MG${DAU.toUpperCase()}`.slice(0, 20);
+  const mayGP = await voi(T2, ktvT2, (nc) => taoMay(nc, { soSeri: SN_GP, ten: "Máy bị chiếm", diaDiemId: null, ipChoPhep: [] }, BAY));
+  const chayGP = (them: Record<string, string>) => execFileSync("npx", ["tsx", "prisma/giai-phong-sn.ts"], { env: { ...process.env, SO_SERI: SN_GP, ...them }, encoding: "utf8" });
+  let loiThieuLyDo = false;
+  try { chayGP({ LY_DO: "" }); } catch { loiThieuLyDo = true; }
+  dat("1. Lệnh giải phóng SN: thiếu căn cứ (LY_DO) → từ chối", loiThieuLyDo);
+  const thu = chayGP({ LY_DO: "Phiếu yêu cầu của công ty chủ máy" });
+  dat("…chạy thử (không XAC_NHAN) → chỉ in, không đổi", /Chạy thử/.test(thu) && Boolean(await chu.attendanceDevice.findUnique({ where: { id: mayGP.id } })));
+  chayGP({ LY_DO: "Phiếu yêu cầu của công ty chủ máy", XAC_NHAN: "1" });
+  const nkGP = await chu.auditLog.findFirst({ where: { tenantId: T2, action: "giai-phong-sn", objectId: mayGP.id } });
+  dat("…XAC_NHAN=1: xóa đăng ký chờ xác minh + ghi kiểm toán giai-phong-sn ở doanh nghiệp giữ SN (người làm: quan-tri-may-chu)",
+    !(await chu.attendanceDevice.findUnique({ where: { id: mayGP.id } })) && nkGP?.actorEmail === "quan-tri-may-chu" && JSON.stringify(nkGP.after).includes("Phiếu yêu cầu"));
+
   // B6: PIN chưa ánh xạ vẫn lưu + nhập CSV ánh xạ PIN ↔ email.
   dat("B6: PIN chưa ánh xạ → lần chấm vẫn lưu, chờ ánh xạ (QĐ-118)", (await voi(T, ktv, (nc) => danhSachPinChuaKhop(nc))).some((p) => p.pin === "7001" && p.soLanCham === 2));
   const csvPin = `Mã chấm công,Email\n7001,${email("nhan-vien-c").toUpperCase()}\n=7002,${email("nhan-vien-a")}\n7003,khong-co.${DAU}@thu.test\n`;
@@ -517,8 +614,8 @@ async function main() {
   dat("Nhân viên không thấy nhóm nào", (await nhom(nvA)) === "");
   const vNs = await voi(T, hr, (nc) => viecThietLap(nc, "2026-11-09"));
   const viecNs = (ma: string) => vNs.nhom.flatMap((n) => n.viec).find((v) => v.ma === ma)!;
-  dat("…địa điểm còn thiếu 1, lịch mặc định xong, máy chưa có địa điểm = 3; mọi việc ghi “không bắt buộc”",
-    viecNs("dia-diem").conThieu === 1 && viecNs("lich-mac-dinh").xong && viecNs("may-dia-diem").conThieu === 3 && vNs.nhom.flatMap((n) => n.viec).every((v) => v.ghiChu.startsWith("Không bắt buộc") && v.duongDan.startsWith("/")));
+  dat("…địa điểm còn thiếu 1, lịch mặc định xong, máy chưa có địa điểm = 4; mọi việc ghi “không bắt buộc”",
+    viecNs("dia-diem").conThieu === 1 && viecNs("lich-mac-dinh").xong && viecNs("may-dia-diem").conThieu === 4 && vNs.nhom.flatMap((n) => n.viec).every((v) => v.ghiChu.startsWith("Không bắt buộc") && v.duongDan.startsWith("/")));
   const vKt = await voi(T, kt, (nc) => viecThietLap(nc, "2026-11-09"));
   const thamSoThieu = vKt.nhom[0].viec.find((v) => v.ma === "tham-so-luong")!.conThieu;
   dat("Kế toán: tham số chưa xác nhận > 0; tài khoản thiếu = 1 (B)", thamSoThieu > 0 && vKt.nhom[0].viec.find((v) => v.ma === "tai-khoan")!.conThieu === 1);

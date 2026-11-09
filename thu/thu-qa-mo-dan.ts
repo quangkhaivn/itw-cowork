@@ -368,10 +368,20 @@ async function main() {
   // Phần còn lại: ai ĐÃ BIẾT SN (đọc nhãn máy, nhà cung cấp…) vẫn giả được lần chấm mang mã của chính mình.
   const mayX = await voi(TB, ktvB, (nc) => taoMay(nc, { soSeri: SNX, ten: "Chiếm", diaDiemId: null, ipChoPhep: [] }, BAY2), IP_CHUNG);
   await adms2("POST", `SN=${SNX}&table=ATTLOG&Stamp=1`, dongLog("31", "2026-11-04 08:00:00") + dongLog("32", "2026-11-04 08:02:00"));
-  await adms2("POST", `SN=${SNX}&table=ATTLOG&Stamp=2`, dongLog(mayX.maXacMinh!, "2026-11-05 08:59:00"));
+  // QĐ-190 (ghim IP): B giả lần chấm mang mã của chính B từ IP CỦA B (khác IP máy của A đã gọi trước khi đăng ký) → bị chặn.
+  const IP_RIENG_B = "203.0.113.99";
+  await adms2("POST", `SN=${SNX}&table=ATTLOG&Stamp=2`, dongLog(mayX.maXacMinh!, "2026-11-05 08:59:00"), IP_RIENG_B);
+  const xX1 = await chu.attendanceDevice.findUniqueOrThrow({ where: { id: mayX.id } });
+  dat("V1c (QĐ-190 — đã đóng cho trường hợp KHÁC IP): B biết SN, giả lần chấm mang mã của B từ IP của B → KHÔNG kích hoạt, B không nhận log của A",
+    xX1.verifyStatus === "cho-xac-minh" && (await chu.attendancePunch.count({ where: { tenantId: TB } })) === 0 && JSON.stringify(xX1.verifyIps) === JSON.stringify([IP_CHUNG]),
+    `trạng thái ${xX1.verifyStatus}, IP được tin ${JSON.stringify(xX1.verifyIps)}`);
+  await adms2("POST", `SN=${SNX}&table=ATTLOG&Stamp=3`, dongLog("33", "2026-11-04 09:00:00"), IP_RIENG_B);
+  dat("…B đẩy log giả từ IP của B → khu cách ly KHÔNG nhận", (await chu.attendanceQuarantineLog.count({ where: { deviceId: mayX.id, pin: "33" } })) === 0);
+  // Giới hạn còn lại (ghi trong QĐ-190, HUONG-DAN-CHAM-CONG): kẻ ở CÙNG mạng (cùng IP) và biết SN vẫn giả được.
+  await adms2("POST", `SN=${SNX}&table=ATTLOG&Stamp=4`, dongLog(mayX.maXacMinh!, "2026-11-05 09:01:00"));
   const xX = await chu.attendanceDevice.findUniqueOrThrow({ where: { id: mayX.id } });
   const nhanCuaA = await chu.attendancePunch.count({ where: { tenantId: TB, deviceId: mayX.id } });
-  tonDong("V1c (QĐ-181): B ĐÃ BIẾT SN của A đăng ký trước rồi GIẢ lần chấm mang mã của chính B qua /iclock (không cần máy) → máy “đã xác minh” cho B, B nhận log tồn của A",
+  tonDong("V1c (giới hạn đã chấp nhận — QĐ-190): kẻ CÙNG IP với máy (cùng NAT / tòa nhà) và biết SN vẫn giả được lần chấm mang mã → khuyến nghị mạng nội bộ riêng + kiểm danh sách lần chấm đầu",
     xX.verifyStatus === "da-xac-minh" && nhanCuaA === 2, `trạng thái ${xX.verifyStatus}, B nhận ${nhanCuaA} lần chấm của A`);
 
   // V2: hai lần kích hoạt đồng thời → không trùng lần chấm, khu cách ly trống, Stamp đúng.
@@ -407,9 +417,13 @@ async function main() {
   // V5: hàm SECURITY DEFINER mới — search_path có pg_temp cuối, PUBLIC không EXECUTE.
   const ham = await chu.$queryRaw<{ proname: string; cfg: string | null; acl: string | null }[]>`
     SELECT proname, array_to_string(proconfig, ',') AS cfg, proacl::text AS acl FROM pg_proc
-     WHERE proname IN ('ghi_log_cach_ly', 'lay_log_cach_ly', 'dem_log_cach_ly', 'giai_phong_sn_cho_xac_minh') AND pronamespace = 'public'::regnamespace`;
-  dat("V5: 4 hàm khu cách ly: SECURITY DEFINER với search_path=public, pg_temp; PUBLIC không có EXECUTE; cowork_app có",
-    ham.length === 4 && ham.every((h) => h.cfg === "search_path=public, pg_temp" && !/(^|[{,])=X/.test(h.acl ?? "") && /cowork_app=X/.test(h.acl ?? "")), JSON.stringify(ham));
+     WHERE proname IN ('ghi_log_cach_ly', 'lay_log_cach_ly', 'dem_log_cach_ly', 'giai_phong_sn_cho_xac_minh', 'ip_may_la_truoc_dang_ky') AND pronamespace = 'public'::regnamespace
+       AND oid <> 'public.ghi_log_cach_ly(uuid, jsonb)'::regprocedure`;
+  // QĐ-190: ghi_log_cach_ly(uuid, jsonb) (không kiểm IP) thôi dùng — luôn trả 0, cowork_app KHÔNG có EXECUTE (kiểm riêng dưới).
+  const hamCu = await chu.$queryRaw<{ acl: string | null }[]>`SELECT proacl::text AS acl FROM pg_proc WHERE oid = 'public.ghi_log_cach_ly(uuid, jsonb)'::regprocedure`;
+  dat("V5b (QĐ-190): bản ghi_log_cach_ly không kiểm IP — ứng dụng không có quyền gọi", hamCu.length === 1 && !/cowork_app=X/.test(hamCu[0].acl ?? "") && !/(^|[{,])=X/.test(hamCu[0].acl ?? ""), JSON.stringify(hamCu));
+  dat("V5: 5 hàm khu cách ly / ghim IP: SECURITY DEFINER với search_path=public, pg_temp; PUBLIC không có EXECUTE; cowork_app có",
+    ham.length === 5 && ham.every((h) => h.cfg === "search_path=public, pg_temp" && !/(^|[{,])=X/.test(h.acl ?? "") && /cowork_app=X/.test(h.acl ?? "")), JSON.stringify(ham));
 
   // V6: người phụ thuộc "chưa ghi tên" — số giấy tờ rác có gỡ được cờ không giảm trừ?
   const nvNpt = await nguoi("nv-npt", "sales", { t: TA });

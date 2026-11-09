@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { apCongTay, CO_CONG_TAY, type CongNgay } from "../../src/modules/cham-cong/tinh-toan";
 import { phanTichCsvAnhXaPin } from "../../src/modules/cham-cong/nhap-csv";
-import { butToanLuong, type DongTongHopButToan, type TaiKhoanLuong } from "../../src/modules/luong/tinh-toan";
+import { butToanLuong, giayToNguoiPhuThuocHopLe, nguoiPhuThuocDuGiayTo, thayCongTuBangCong, type DauVaoLuong, type DongTongHopButToan, type TaiKhoanLuong } from "../../src/modules/luong/tinh-toan";
 import { docLoaiHopDong, docSoTien, phanTichCsvHoSoLuong } from "../../src/modules/luong/nhap-csv";
 import { phamViCuaQuyen, VAI_TRO, kiemTraGioiHanAI } from "../../src/lib/vai-tro";
 import { timMuc } from "../../src/modules/cau-hinh/danh-muc";
@@ -149,5 +149,52 @@ describe("Mở dần — quyền máy chấm công + Cấu hình (QĐ-176, QĐ-1
     const them = sql.indexOf(`ADD COLUMN "verify_status" varchar(20) NOT NULL DEFAULT 'da-xac-minh'`);
     const doi = sql.indexOf(`ALTER COLUMN "verify_status" SET DEFAULT 'cho-xac-minh'`);
     assert.ok(them > 0 && doi > them);
+  });
+});
+
+describe("Trước phát hành — giấy tờ người phụ thuộc (QĐ-192)", () => {
+  it("MST 10 số / 10-3 số, CCCD 12 số, giấy tờ khác ≥ 6 ký tự chữ-số", () => {
+    for (const ok of ["0101234567", "0101234567-001", "079123456789", "C1234567", "KS2015ab", " 0101234567 "]) assert.ok(giayToNguoiPhuThuocHopLe(ok), ok);
+    for (const sai of [null, "", "1", "12345", "0101234567-01", "abc-12", "079/2015", "AB 12"]) assert.ok(!giayToNguoiPhuThuocHopLe(sai), String(sai));
+  });
+  it("đủ giấy tờ = họ tên thật + giấy tờ hợp lệ; tên giữ chỗ của CSV không tính", () => {
+    assert.ok(nguoiPhuThuocDuGiayTo("Nguyễn Văn Con", "079123456789"));
+    assert.ok(!nguoiPhuThuocDuGiayTo("Nguyễn Văn Con", null));
+    assert.ok(!nguoiPhuThuocDuGiayTo("A", "079123456789"));
+    assert.ok(!nguoiPhuThuocDuGiayTo("Người phụ thuộc 1 (nhập CSV — bổ sung họ tên)", "079123456789"));
+  });
+});
+
+describe("Trước phát hành — thay công bằng bảng công đã khóa (QĐ-191)", () => {
+  const dv = {
+    ky: { nam: 2026, thang: 6 },
+    hoSo: { id: "h", hieuLucTu: "2026-01-01", loaiHopDong: "chinh-thuc", tyLeThuViec: null, cachTra: "thang", luongCoBan: 22_000_000, luongDongBH: 0, thuongKpi: 0, huongHoaHong: false, phuongPhapThue: "khong" },
+    phuCap: [],
+    doan: [
+      { hoSoId: "h", tu: "2026-06-01", den: "2026-06-14", loaiHopDong: "chinh-thuc", tyLeThuViec: null, cachTra: "thang", luongCoBan: 22_000_000, phuCap: [], cong: { thucTe: 10, nghiCoLuong: 0, le: 0, tangCaPhut: { thuong: 0, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 } } },
+      { hoSoId: "h2", tu: "2026-06-15", den: "2026-06-30", loaiHopDong: "chinh-thuc", tyLeThuViec: null, cachTra: "thang", luongCoBan: 22_000_000, phuCap: [], cong: { thucTe: 12, nghiCoLuong: 0, le: 1, tangCaPhut: { thuong: 60, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 } } },
+    ],
+    cong: { chuan: 22, thucTe: 22, nghiCoLuong: 0, nghiKhongLuong: 0, le: 1, tangCaPhut: { thuong: 60, thuongDem: 0, nghiTuan: 0, nghiTuanDem: 0, le: 0, leDem: 0 }, phutMuon: 0, phutSom: 0, soDongDieuChinh: 0 },
+    soNguoiPhuThuoc: 0, kpi: { trangThai: "khong-co", heSo: null, xepLoai: null, danhGiaId: null }, hoaHong: { phanBo: [], truyThu: [] }, khoan: [],
+  } as unknown as DauVaoLuong;
+  const dong = (ngay: string, cong: number, o: Partial<{ dieuChinh: boolean; nghi: number; nghiCoLuong: boolean; phutTangCa: number; loaiNgay: string }> = {}) => ({
+    ngay, dieuChinh: false, cong, nghi: 0, nghiCoLuong: false, phutTangCa: 0, phutTangCaDem: 0, loaiNgay: "thuong", phutMuon: 0, phutSom: 0, ...o,
+  });
+  it("công từng đoạn theo ngày, giữ lễ của đoạn, dòng điều chỉnh vào đoạn cuối, tăng ca theo loại ngày", () => {
+    const m = thayCongTuBangCong(dv, [dong("2026-06-02", 1), dong("2026-06-03", 0.5), dong("2026-06-16", 1, { phutTangCa: 90 }), dong("2026-06-17", 0, { nghi: 1, nghiCoLuong: true }), dong("2026-06-18", 0, { nghi: 1 }), dong("2026-05-20", -0.5, { dieuChinh: true })]);
+    assert.equal(m.doan![0].cong.thucTe, 1.5);
+    assert.equal(m.doan![1].cong.thucTe, 0.5);
+    assert.equal(m.doan![1].cong.le, 1);
+    assert.equal(m.doan![1].cong.nghiCoLuong, 1);
+    assert.equal(m.doan![1].cong.tangCaPhut.thuong, 90);
+    assert.equal(m.cong.thucTe, 2);
+    assert.equal(m.cong.nghiKhongLuong, 1);
+    assert.equal(m.cong.soDongDieuChinh, 1);
+    assert.equal(m.cong.chuan, 22, "công chuẩn giữ nguyên");
+    assert.equal(m.hoSo.luongCoBan, 22_000_000);
+  });
+  it("không đổi đầu vào gốc (hàm thuần)", () => {
+    thayCongTuBangCong(dv, [dong("2026-06-02", 1)]);
+    assert.equal(dv.doan![0].cong.thucTe, 10);
   });
 });
