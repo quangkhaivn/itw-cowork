@@ -228,6 +228,14 @@ Rồi `nginx -t && systemctl reload nginx`. Kiểm từ ngoài: `curl -i "http:/
 - Trước khi triển khai migration có sửa dữ liệu: **diễn tập nâng cấp** — dựng CSDL giống hệt bản đang chạy (migration cũ + seed cũ), áp migration mới + seed mới, kiểm kết quả. Bản 19/09 đã diễn tập đúng như vậy.
 - Không bao giờ chạy `prisma db push` hay `migrate dev` trên máy thật.
 
+### Nâng cấp lên 0.22.0 (Mở dần — bổ sung sau)
+
+- Ba migration: `20261109090001_mo_dan` (chỉ thêm: cột `is_default` lịch, `payment_method` / `pay_method`, `location_id` máy cho phép trống, bảng `payroll_manual_inputs`, `attendance_manual_days`, `attendance_unknown_devices` + 3 hàm SECURITY DEFINER) → `20261109090002_may_cham_cong_cap_quyen` (khối DO idempotent: quyền `may_cham_cong.*` cho Kỹ thuật / Trưởng kỹ thuật / Nhân sự / Giám đốc / Quản trị của **mọi** doanh nghiệp, gỡ khỏi Trợ lý AI) → `20261109090003_may_la_tran_ghi` (thay thân hàm `ghi_may_la`). Sau đó **bắt buộc** chạy lại `prisma/rls.sql` (cấp EXECUTE ba hàm máy lạ cho `cowork_app`, REVOKE bảng máy lạ, bảng chỉ ghi thêm `attendance_manual_days`), `npm run db:seed`, khởi động lại app + worker.
+- `db:seed` tạo lịch "Hành chính T2–T6 08:00–17:00" làm **lịch mặc định** cho doanh nghiệp **chưa có lịch nào**. Doanh nghiệp đã có lịch: Nhân sự vào Thiết lập chấm công → *Đặt làm mặc định* (không bắt buộc). Có lịch mặc định thì bảng công tháng sinh sau đó gồm mọi người đang hoạt động chưa được gán lịch.
+- Luật nới (chỉ cảnh báo): tính lương không cần bảng công đã khóa, tham số chưa xác nhận không chặn duyệt, thiếu tài khoản không chặn khóa. Muốn giữ chặn tham số như 0.21: Cấu hình → Tính lương → *Chặn gửi duyệt khi tham số lương chưa xác nhận* = 1. 2 lớp với lương vẫn bắt buộc (`luong.bat_buoc_2_lop` = 1).
+- Đặt `APP_URL` đúng địa chỉ công khai: màn hình Máy chấm công lấy Server Address / Port / HTTPS từ đây để hướng dẫn Kỹ thuật.
+- Đường `/nhan-su/may-cham-cong` chuyển hướng sang `/may-cham-cong`; nginx không cần đổi (`/iclock/` như cũ).
+
 ### Nâng cấp lên 0.21.0 (Nhân sự giai đoạn 3: tính lương)
 
 - Ba migration: `20261104090001_nhan_su_luong` (8 bảng mới, CHECK, trigger bất biến) → `20261104090002_luong_cap_quyen_moi_doanh_nghiep` (một khối DO idempotent: quyền `luong.*` cho vai trò dựng sẵn của **mọi** doanh nghiệp, gỡ khỏi Trợ lý AI; tham số lương nạp sẵn + 3 loại phụ cấp còn thiếu) → `20261104090003_luong_email_phieu_luong` (loại thư `phieu-luong`) → `20261104090004_luong_chinh_sach_giam_doc` (phụ cấp trả đủ, điều chỉnh trước / sau thuế, tài khoản chụp lúc khóa, kỳ lương riêng; điền cách tính cho khoản điều chỉnh đã có, tạm tắt trigger bất biến đúng một câu lệnh). Sau đó chạy lại `prisma/rls.sql`, `npm run db:seed`, khởi động lại worker.

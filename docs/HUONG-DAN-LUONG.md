@@ -1,4 +1,4 @@
-# Hướng dẫn tính lương (0.21.0)
+# Hướng dẫn tính lương (0.21.0, cập nhật 0.22.0)
 
 Tài liệu cho **Kế toán**, có phần cho **Nhân sự** và **Giám đốc**. Viết cho người không chuyên kỹ thuật. Luật đầy đủ: `BUSINESS_RULES.md` mục 32.
 
@@ -8,13 +8,15 @@ Một tháng lương đi đúng một đường:
 
 Đã khóa thì không ai sửa được bảng lương nữa (kể cả quản trị hệ thống). Sai sót phát hiện sau đó sửa bằng **khoản điều chỉnh ở tháng sau**.
 
+> **0.22.0 — không cần đủ dữ liệu mới tính được** (`BUSINESS_RULES.md` mục 33). Bảng công chưa khóa, tham số chưa xác nhận, người chưa có tài khoản ngân hàng / mã số thuế / hồ sơ lương: phần mềm vẫn tính, hiện **cảnh báo vàng** và chỗ bổ sung. Việc còn thiếu xem ở **Tổng quan → Thiết lập ban đầu**. Chỉ chặn khi vi phạm toàn vẹn / bảo mật (tự duyệt, sửa sau khóa, thực lĩnh âm…).
+
 ---
 
 ## 0. Trước khi bắt đầu (làm một lần)
 
 ### 0.1. Bật xác thực 2 lớp
 
-Người xem hoặc tính lương của người khác (Kế toán, Nhân sự, Giám đốc, Quản trị) **bắt buộc** bật xác thực 2 lớp. Chưa bật thì trang lương chỉ hiện hướng dẫn:
+Người xem hoặc tính lương của người khác (Kế toán, Nhân sự, Giám đốc, Quản trị) **bắt buộc** bật xác thực 2 lớp. Chưa bật thì trang lương hiện hướng dẫn **từng bước** và nút **Đi tới trang bật 2 lớp**. (0.22.0: Cấu hình → Tính lương → *Bắt buộc xác thực 2 lớp khi xem / tính lương người khác*, mặc định bật; chỉ Giám đốc / Quản trị đổi được, mỗi lần đổi có nhật ký — chỉ nên tạm tắt trong tuần đầu triển khai.)
 
 1. Cài ứng dụng xác thực trên điện thoại (Google Authenticator hoặc Microsoft Authenticator).
 2. Vào **Tài khoản của tôi → Xác thực 2 lớp → Bật**, **nhập lại mật khẩu đăng nhập hiện tại**, quét mã QR, nhập mã 6 số đang hiện.
@@ -33,7 +35,7 @@ Vào **Tính lương → Tham số lương**. Phần mềm đã nạp sẵn các
 - **Đúng** → bấm **Xác nhận** ở dòng đó. Hệ thống ghi tên bạn và thời điểm xác nhận.
 - **Sai** → bấm **Nhập bộ mới** ở loại đó, sửa con số, chọn **ngày hiệu lực** (có thể trùng ngày của bộ sai — bộ nhập sau sẽ thay), ghi **căn cứ** (số văn bản, ngày ban hành). Bộ bạn nhập được coi là đã xác nhận.
 
-Bảng lương dùng bộ **chưa xác nhận** thì **không gửi duyệt được**.
+Bảng lương dùng bộ **chưa xác nhận**: 0.22.0 — **vẫn gửi duyệt / duyệt được**, bảng lương và màn hình duyệt có băng cảnh báo vàng, nhật ký kiểm toán ghi "duyệt khi tham số chưa xác nhận". Muốn chặt như 0.21: Cấu hình → *Chặn gửi duyệt khi tham số lương chưa xác nhận* = 1.
 
 Các bộ cần xem kỹ:
 
@@ -52,13 +54,15 @@ Khi luật đổi giữa năm (ví dụ lương tối thiểu vùng từ 01/07):
 
 ### 0.3. Cấu hình kế toán
 
-**Quản trị → Cấu hình → nhóm “Tính lương”**: số giờ làm một ngày (mặc định 8 — dùng để ra lương giờ khi tính tăng ca), số tháng dò phiếu thu ghi muộn (3), và **số tài khoản** cho bút toán lương: chi phí lương (6421), phải trả người lao động (334), BHXH 3383, BHYT 3384, BHTN 3386, KPCĐ 3382, thuế TNCN 3335, tạm ứng 141, khấu trừ khác 1388, tiền chi lương 1121. Đổi theo hệ thống tài khoản công ty đang dùng.
+**Quản trị → Cấu hình → nhóm “Tính lương”**: số giờ làm một ngày (mặc định 8 — dùng để ra lương giờ khi tính tăng ca), số tháng dò phiếu thu ghi muộn (3), và **số tài khoản** cho bút toán lương: chi phí lương (6421), phải trả người lao động (334), BHXH 3383, BHYT 3384, BHTN 3386, KPCĐ 3382, thuế TNCN 3335, tạm ứng 141, khấu trừ khác 1388, tiền chi lương 1121, **tiền mặt chi lương trả tay 1111** (0.22.0). Đổi theo hệ thống tài khoản công ty đang dùng.
 
 ### 0.4. Mẫu file chi lương ngân hàng
 
 Cuối trang **Tham số lương**: chọn cột (STT, số tài khoản, tên chủ tài khoản, ngân hàng, số tiền, nội dung, mã nhân viên, họ tên) **theo thứ tự ngân hàng yêu cầu** (thứ tự bấm chọn = thứ tự cột), mẫu nội dung chuyển khoản (ví dụ `Luong {thang}/{nam} {ho_ten}`), bỏ dấu tiếng Việt nếu ngân hàng không nhận dấu.
 
 ## 1. Nhân sự — hồ sơ lương
+
+> **0.22.0:** hồ sơ có **Hình thức trả** (Chuyển khoản / Tiền mặt – trả tay); số tài khoản không bắt buộc. **Nhập CSV hồ sơ lương** ở cuối trang Hồ sơ lương: cột `Email, Loại hợp đồng, Lương cơ bản, Lương đóng BH, Số tài khoản, Ngân hàng, Mã số thuế, Số người phụ thuộc` (tùy chọn `% lương thử việc`, `Hình thức trả`) → *Xem trước* (lỗi từng dòng; ô bắt đầu bằng `= + - @` bị báo lỗi) → *Tạo phiên bản hồ sơ*. Mỗi dòng là một phiên bản mới, hiệu lực từ ngày 1 tháng này; trường không có trong tệp giữ như hồ sơ hiện tại. Không nhập được hồ sơ của chính mình; đổi tài khoản vẫn báo nhân viên. Số người phụ thuộc nhiều hơn số đang đăng ký → thêm người phụ thuộc "chưa ghi tên" để bổ sung họ tên sau.
 
 **Tính lương → Hồ sơ lương**:
 
@@ -77,11 +81,15 @@ Mỗi lần mở trang hồ sơ lương đều được ghi nhật ký (ai, lúc
 
 ## 2. Kế toán — quy trình mỗi tháng
 
-1. **Chờ Nhân sự khóa bảng công** tháng đó (Nhân sự → Bảng công tháng). Bảng công chưa khóa thì không tính được. Nếu còn ngày **“thiếu giờ” chờ quản lý quyết**, máy báo danh sách người + ngày: nhắc quản lý quyết ở Chấm công → Ngày công thiếu giờ.
+1. **Nguồn công** (0.22.0 — không phải chờ): mỗi dòng ghi rõ công lấy từ đâu —
+   - **Bảng công đã khóa** (nếu Nhân sự đã khóa và người đó có trong bảng);
+   - **Công nhập tay**: nút *Nhập công tay* trên kỳ nháp — số ngày công (trống = đủ công chuẩn), giờ tăng ca, ngày nghỉ không lương, lý do. Kế toán hoặc Nhân sự nhập; không ai nhập cho chính mình;
+   - **Mặc định đủ công chuẩn** (cảnh báo vàng) cho người chưa có hai nguồn trên.
+   Bảng công khóa sau → bấm **Lấy lại công từ bảng công** (kỳ còn nháp): công nhập tay của người có trong bảng bị bỏ, tính lại theo bảng công. Ngày **“thiếu giờ” chờ quản lý quyết** không còn chặn: tính theo công hiện tại + cảnh báo; quản lý quyết sau thì chênh lệch vào dòng điều chỉnh tháng sau.
 2. **Tính lương → Tạo kỳ lương** (năm, tháng) → mở kỳ → **Tính lương**.
    - Nếu Giám đốc (người duyệt) cũng có lương trong bảng: **Tạo kỳ lương riêng** (đặt tên, ví dụ “Lãnh đạo”, chọn người) — những người này ra khỏi kỳ chung; kỳ riêng do Quản trị hoặc Giám đốc khác duyệt. Khi gửi duyệt mà không còn ai duyệt được, máy báo rõ và chỉ cách tách.
 3. **Kiểm**:
-   - Băng đỏ = lỗi phải sửa trước khi gửi duyệt (tham số chưa xác nhận; thực lĩnh âm; nhân viên chưa có lịch làm việc; lương thử việc dưới mức). Băng vàng = cảnh báo nên xem (phiếu đánh giá chưa chốt → thưởng KPI = 0; nghỉ không lương ≥ 14 ngày → tháng đó không đóng bảo hiểm; truy thu hoa hồng…).
+   - Băng đỏ = lỗi phải sửa trước khi gửi duyệt (thực lĩnh âm; lương thử việc dưới mức; tham số chưa xác nhận **chỉ khi** Cấu hình bật chặn). Vàng (0.22.0): bảng công chưa khóa, công mặc định / nhập tay, tham số chưa xác nhận, chưa có lịch (công chuẩn tạm tính T2–T6), thiếu mã số thuế. Mục **Chưa có hồ sơ lương** liệt kê người đang làm mà chưa có hồ sơ, kèm nút *Tạo hồ sơ*. Băng vàng = cảnh báo nên xem (phiếu đánh giá chưa chốt → thưởng KPI = 0; nghỉ không lương ≥ 14 ngày → tháng đó không đóng bảo hiểm; truy thu hoa hồng…).
    - Bấm tên từng người để xem phiếu chi tiết: công chuẩn / thực tế / nghỉ có lương / lễ, từng khoản thu nhập, bảo hiểm, giảm trừ, thuế.
    - Tải **Bảng lương Excel (nháp)** để đối chiếu.
 4. **Khoản cộng / trừ** (chỉ khi kỳ còn nháp): *Thêm khoản* — thưởng đột xuất, phụ cấp khác (chọn chịu thuế hay không), tạm ứng, phạt, khác; bắt buộc lý do. Thêm / xóa khoản xong phải bấm **Tính lại**. Khoản **Điều chỉnh kỳ trước**: xem mục 3.
@@ -89,11 +97,11 @@ Mỗi lần mở trang hồ sơ lương đều được ghi nhật ký (ai, lúc
 5. **Gửi duyệt**. Giám đốc nhận thông báo.
 6. Giám đốc **Duyệt** rồi **Khóa** (hoặc **Trả lại** kèm lý do → kỳ về nháp, sửa rồi tính lại).
 7. Sau khi khóa:
-   - **File chi lương ngân hàng — dùng bản Excel** (mặc định) → nộp lên ngân hàng điện tử. Số tài khoản trong file là tài khoản **chụp lúc khóa kỳ**: Nhân sự đổi tài khoản sau đó không làm đổi file của kỳ đã khóa. Người được trả lương mà chưa có tài khoản thì **không khóa được** — máy báo tên, Nhân sự bổ sung trước khi khóa.
+   - **File chi lương ngân hàng — dùng bản Excel** (mặc định) → nộp lên ngân hàng điện tử. Số tài khoản trong file là tài khoản **chụp lúc khóa kỳ**: Nhân sự đổi tài khoản sau đó không làm đổi file của kỳ đã khóa. Người **chưa có tài khoản** hoặc hồ sơ chọn **Tiền mặt / trả tay**: 0.22.0 — **không chặn khóa**; dòng đó không vào file ngân hàng mà vào mục **Trả tay / tiền mặt** (có tổng tiền) — tải *Danh sách trả tay (Excel)* có cột ký nhận.
    - ⚠ **Không mở bản CSV bằng Excel rồi lưu lại**: Excel tự đổi số tài khoản dài thành dạng số (mất số 0 đầu, thành 1,1E+12). Bản CSV đã ghi số tài khoản trong ngoặc kép cho phần mềm ngân hàng đọc; cần xem / sửa thì dùng bản Excel.
    - **Bút toán lương (CSV)** → nhập vào phần mềm kế toán (MISA: chứng từ nghiệp vụ khác).
    - **Gửi email phiếu lương** → mỗi người nhận một thư (gửi một lần; bấm lại không gửi trùng). Ai báo không nhận được: bấm **Gửi lại phiếu** cạnh tên người đó (mỗi lần gửi lại là một thư mới, có ghi nhật ký).
-   - Chuyển tiền xong bấm **Đánh dấu đã chi** (bút toán xuất sau đó có thêm dòng Nợ 334 / Có 1121).
+   - Chuyển tiền xong bấm **Đánh dấu đã chi** (bút toán xuất sau đó có thêm dòng Nợ 334 / Có 1121 cho phần chuyển khoản và Nợ 334 / Có 1111 cho phần trả tay).
    - Nhân viên xem phiếu của mình ở **Tính lương → Phiếu lương của tôi** và in / lưu PDF.
 
 ### Cách máy tính (để đối chiếu tay)

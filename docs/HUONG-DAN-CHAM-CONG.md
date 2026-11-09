@@ -1,6 +1,6 @@
 # Hướng dẫn chấm công — dành cho bộ phận Nhân sự
 
-Phiên bản 0.19.0. Luật chi tiết: `BUSINESS_RULES.md` mục 30. Tài liệu này viết cho người làm Nhân sự, không cần biết kỹ thuật.
+Phiên bản 0.19.0, cập nhật 0.22.0 (mở dần — bổ sung sau). Luật chi tiết: `BUSINESS_RULES.md` mục 30 và 33. Tài liệu này viết cho người làm Nhân sự, không cần biết kỹ thuật.
 
 Cowork chấm công bằng **hai cách**:
 
@@ -8,6 +8,8 @@ Cowork chấm công bằng **hai cách**:
 2. **Điện thoại**: nhân viên mở Cowork, bấm **Vào ca** / **Ra ca**; Cowork lấy vị trí GPS đúng lúc bấm.
 
 Hai cách dùng song song; bảng công gộp cả hai (lần chấm sớm nhất là giờ vào, muộn nhất là giờ ra).
+
+> **0.22.0 — không cần đủ mọi thứ mới dùng được.** Thiếu địa điểm, chưa gán lịch, chưa có máy… phần mềm vẫn chạy và báo việc còn thiếu ở **Tổng quan → Thiết lập ban đầu** (mỗi người chỉ thấy phần mình phụ trách). Người không có máy / GPS: Nhân sự **đặt công tay** (mục 7.1). Máy chấm công do **Kỹ thuật** kết nối ở menu **Kỹ thuật → Máy chấm công** (mục 3).
 
 ---
 
@@ -39,7 +41,7 @@ Chọn ca và đánh dấu từng ngày: Cả ca / Sáng / Chiều / Nghỉ. Ví
 
 Bấm **Gán lịch cho nhân viên**, chọn lịch, ngày bắt đầu áp dụng, chọn nhiều người (giữ Ctrl / ⌘). Đổi lịch từ một ngày thì gán lịch mới với ngày đó — những ngày trước vẫn giữ lịch cũ.
 
-> **Người chưa được gán lịch thì không tính công và không được nhắc chấm công.** Trang *Hồ sơ nhân sự* báo số người chưa gán.
+> **0.22.0 — Lịch mặc định.** Ở bảng *Lịch tuần*, bấm **Đặt làm mặc định** cho lịch dùng chung của công ty (ví dụ "Hành chính T2–T6 08:00–17:00" — bản cài mới có sẵn lịch này làm mặc định). **Người chưa được gán lịch nào dùng lịch mặc định** từ ngày vào làm: có ngày công dự kiến, vào bảng công, bảng trực tiếp ghi "theo lịch mặc định". Người đã gán lịch riêng giữ lịch của mình. Chưa chọn lịch mặc định thì người chưa gán lịch không có ngày công dự kiến (lương tạm tính T2–T6, có cảnh báo).
 
 ### 1.5. Ngày lễ
 
@@ -75,13 +77,19 @@ Tài khoản, phòng ban, **quản lý trực tiếp** sửa ở *Quản trị �
 
 ## 3. Máy chấm công vân tay
 
+> **0.22.0:** màn hình chuyển sang menu **Kỹ thuật → Máy chấm công**. Kỹ thuật viên, Trưởng phòng Kỹ thuật, Nhân sự, Giám đốc, Quản trị đều làm được (quyền `may_cham_cong.*`) — Kỹ thuật **không** thấy hồ sơ nhân sự hay lương, khi gán PIN chỉ thấy tên nhân viên. Đầu màn hình có **hướng dẫn kết nối từng bước** với đúng địa chỉ máy chủ, cổng, HTTPS của công ty.
+
 ### 3.1. Đăng ký máy trên Cowork
 
-**Nhân sự → Máy chấm công → Đăng ký máy**:
+**Kỹ thuật → Máy chấm công → Đăng ký máy**:
 
-- **Số sê-ri (SN)**: xem trên máy, thường ở *Menu → Thông tin hệ thống → Thông tin thiết bị* (hoặc tem dán sau máy). Máy chưa đăng ký gọi vào sẽ bị từ chối.
-- **Đặt tại**: địa điểm của máy.
+- **Số sê-ri (SN)**: xem trên máy, thường ở *Menu → Thông tin hệ thống → Thông tin thiết bị* (hoặc tem dán sau máy). Máy chưa đăng ký gọi vào bị từ chối (lần chấm **không được lưu**) nhưng hiện ở mục **Máy đang gọi nhưng chưa đăng ký** (mục 3.1b).
+- **Đặt tại** (không bắt buộc): địa điểm của máy — Kỹ thuật có thể để trống, Nhân sự chọn sau (cần để kiểm tốc độ di chuyển bất thường).
 - **Chỉ nhận từ IP** (nên khai): IP công cộng của mạng văn phòng (hỏi bộ phận IT hoặc xem cột "IP cuối" sau khi máy gọi về lần đầu).
+
+### 3.1b. Máy đang gọi nhưng chưa đăng ký (máy lạ)
+
+Khai địa chỉ máy chủ trên máy **trước** cũng được: máy gọi về, Cowork ghi lại SN, IP, mẫu máy, số lần gọi (không lưu lần chấm). Mục **Máy đang gọi nhưng chưa đăng ký** chỉ hiện máy **cùng mạng với bạn** (cùng IP công khai) hoặc cùng mạng với một máy công ty đã đăng ký — doanh nghiệp khác trên cùng máy chủ không thấy máy của mình. Không thấy thì gõ đúng SN vào ô **Tìm đúng SN**. Bấm **Đăng ký máy này** → ở lần gọi kế tiếp Cowork yêu cầu máy **gửi lại toàn bộ nhật ký chấm công** đang lưu trong máy.
 
 ### 3.2. Khai địa chỉ máy chủ trên máy
 
@@ -96,7 +104,7 @@ Trên máy (đăng nhập quyền quản trị máy):
 5. Lưu, khởi động lại máy nếu được yêu cầu.
 6. Kiểm tra mạng của máy (IP, cổng mặc định, DNS) ở *Menu → Kết nối → Ethernet*.
 
-Trong vòng một phút, trang *Máy chấm công* hiện **Trực tuyến**, cột "Lần cuối" cập nhật, kèm phiên bản firmware và số người trên máy.
+Trong vòng một phút, trang *Máy chấm công* hiện **Trực tuyến**, cột "Lần cuối" cập nhật, kèm phiên bản firmware và số người trên máy. Bấm **Kiểm tra kết nối** ở dòng của máy để xem lần gọi cuối và **IP nguồn**; chưa thấy lần gọi nào thì màn hình gợi ý kiểm địa chỉ / cổng / HTTPS.
 
 Máy cần nhận biết đúng **giờ Việt Nam**: máy gửi giờ theo đồng hồ của máy. Kiểm tra *Menu → Ngày giờ* đúng giờ. Giờ máy đi trước giờ máy chủ quá 60 phút (Cấu hình) → lần chấm bị gắn cờ **giờ máy lệch**; đi trước quá 1 ngày hoặc năm trước 2020 (máy mất pin đồng hồ hay về 01/01/2000) → cờ **giờ máy vô lý**. Cả hai loại **chưa được tính công**: chúng vào hàng chờ xem xét ở *Bảng chấm công trực tiếp*, quản lý chấp nhận (đã kiểm — ví dụ máy đặt sai giờ nhưng người đó có làm thật) thì mới tính; giờ sai hẳn thì không chấp nhận và nhân viên làm **giải trình / chấm bù** với giờ đúng. Sửa giờ trên máy ngay khi thấy cờ.
 
@@ -111,9 +119,11 @@ Người mới được thêm vân tay trên máy nhưng chưa khai mã chấm c
 - **chỉ từ ngày vào làm** trong hồ sơ (nhớ nhập ngày vào làm — PIN trên máy hay được dùng lại cho người mới; lần chấm trước ngày vào làm là của người cũ, không bao giờ được áp);
 - **chỉ trong tháng chưa khóa bảng công**. Lần chấm thuộc tháng đã khóa còn nằm lại ở danh sách, cột *Đã gán cho* ghi tên người. Nếu đúng là của người này, người có **quyền duyệt chấm công** (không phải chính người đó) bấm **Áp cả kỳ đã khóa…**, tích xác nhận → bảng công tháng sau tự thêm dòng điều chỉnh (chỉ dò 3 tháng đã khóa gần nhất). Mọi lần áp đều ghi nhật ký kiểm toán.
 
+**Nhập CSV ánh xạ PIN ↔ email** (0.22.0): tệp hai cột `Mã chấm công`, `Email` (email đăng nhập Cowork) → *Xem trước* (lỗi từng dòng: email không có, PIN đã gán người khác, người đã có mã khác, ô bắt đầu bằng `= + - @`) → *Gán mã chấm công*. Lần chấm chưa khớp của PIN đó được áp như *Gán cho…*.
+
 ### 3.4. Máy mất kết nối / nhập từ tệp
 
-- Máy im lặng quá 10 phút: người làm Nhân sự nhận thông báo (một lần cho mỗi lần mất kết nối). Kiểm tra điện, dây mạng, địa chỉ máy chủ trên máy. Khi mạng có lại, máy tự gửi bù những lần chấm còn lưu trong máy (không bị nhân đôi).
+- Máy im lặng quá 10 phút: người làm Nhân sự và Kỹ thuật nhận thông báo (một lần cho mỗi lần mất kết nối). Kiểm tra điện, dây mạng, địa chỉ máy chủ trên máy. Khi mạng có lại, máy tự gửi bù những lần chấm còn lưu trong máy (không bị nhân đôi).
 - Máy hỏng mạng lâu hoặc không có ADMS: xuất dữ liệu chấm công từ phần mềm của máy ra Excel → *Lưu thành CSV UTF-8* → mục **Nhập lần chấm từ tệp** → *Xem trước* → *Ghi*. Cột cần có: `Mã chấm công` (hoặc PIN / AC-No.) và `Thời gian` (hoặc hai cột `Ngày`, `Giờ`). Nhập lại cùng tệp không bị nhân đôi.
 
 ---
@@ -176,6 +186,12 @@ Ai thấy gì: nhân viên thấy chính mình; trưởng phòng thấy nhóm / 
 
 Cờ trên bảng công: *Thiếu giờ — chờ quản lý quyết* (công vẫn tính đủ cho tới khi có quyết định), *Thiếu giờ — quản lý tính đủ / nửa / không công*; *Có lần chấm chờ quản lý xem xét*. Trước khi khóa, xử lý hết hàng chờ ở *Bảng chấm công trực tiếp* rồi **Sinh lại**.
 
+### 7.1. Đặt công tay (0.22.0) — người không có máy / GPS
+
+**Bảng công tháng → Đặt công tay**: chọn nhân viên, ngày (hoặc khoảng ngày — chỉ áp ngày phải làm theo lịch), công 1 / 0,5 / 0, **lý do** (bắt buộc). Chỉ làm được khi bảng công tháng đó **chưa khóa**; mỗi lần đặt ghi nhật ký kiểm toán; không ai tự đặt công cho mình. Đặt xong bấm **Sinh lại** bảng công nháp — ngày đó có cờ *Công do Nhân sự đặt tay*. Vẫn dùng song song: chấm bù có duyệt (nhân viên xin), nhập CSV lần chấm theo PIN.
+
+Bảng công chưa khóa **không làm chậm lương**: kế toán vẫn tính lương bằng công nhập tay / mặc định đủ công, rồi bấm *Lấy lại công từ bảng công* khi bảng đã khóa (`docs/HUONG-DAN-LUONG.md`).
+
 Sai sót phát hiện sau khi khóa (ví dụ chấm bù được duyệt muộn, ngày thiếu giờ được quyết muộn, áp PIN cả kỳ đã khóa): khi sinh bảng tháng sau, hệ thống tự thêm **dòng điều chỉnh** cho ngày của tháng đã khóa (chênh lệch), cộng vào tổng tháng sau.
 
 ---
@@ -183,7 +199,7 @@ Sai sót phát hiện sau khi khóa (ví dụ chấm bù được duyệt muộn
 ## 8. Câu hỏi thường gặp
 
 - **Nhân viên báo không bấm được Vào ca**: kiểm tra mở bằng https://, đã cho quyền vị trí cho trình duyệt (Cài đặt điện thoại → Quyền riêng tư → Vị trí), đã xác nhận thông báo vị trí.
-- **Máy vân tay không lên Trực tuyến**: SN đăng ký đúng chưa (chữ hoa / thường đúng như trên máy), IP văn phòng có trùng "Chỉ nhận từ IP" không, máy có ra Internet được không, địa chỉ / cổng máy chủ trên máy. Nhờ IT xem nhật ký máy chủ: dòng `Máy chưa đăng ký gọi vào: SN=…` nghĩa là SN chưa khớp.
+- **Máy vân tay không lên Trực tuyến**: bấm *Kiểm tra kết nối*; xem mục *Máy đang gọi nhưng chưa đăng ký* — máy hiện ở đó nghĩa là SN đăng ký sai / chưa đăng ký. SN đăng ký đúng chưa (chữ hoa / thường đúng như trên máy), IP văn phòng có trùng "Chỉ nhận từ IP" không, máy có ra Internet được không, địa chỉ / cổng máy chủ trên máy. Nhờ IT xem nhật ký máy chủ: dòng `Máy chưa đăng ký gọi vào: SN=…` nghĩa là SN chưa khớp.
 - **Nhân viên có vân tay trên máy nhưng bảng không có công**: chưa khai mã chấm công → xem mục *PIN chưa khớp người*; hoặc lần chấm mang cờ giờ máy lệch / vô lý đang chờ xem xét.
 - **Doanh nghiệp khác trên cùng máy chủ** (không phải doanh nghiệp chính): sau nâng cấp đã có sẵn vai trò Nhân sự (HR), Thực tập sinh, 4 loại nghỉ và quyền chấm công cho Giám đốc / Quản trị — không cần làm gì thêm.
 - **Đổi giờ làm của một nhóm từ tuần sau**: tạo lịch mới, gán từ ngày thứ Hai tuần sau.

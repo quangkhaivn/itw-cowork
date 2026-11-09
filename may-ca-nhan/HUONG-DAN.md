@@ -65,7 +65,7 @@ Mở thư mục `TGTH-Cowork\may-ca-nhan`:
 - **Hôm nay** (theo ngày nạp): bảng trực tiếp có người đã vào ca, đi muộn, đang ở hiện trường, chưa đến, và một lần chấm GPS ngoài vùng chờ xem xét. Nạp trước 08:00 thì chỉ có các lần chấm tới giờ nạp.
 - **Công việc** ở đủ trạng thái (chờ nhận, đang làm, chờ duyệt, đã duyệt có điểm, bị trả lại), một mẫu việc, một việc định kỳ; **báo cáo ngày** tuần này và một **báo cáo tuần** có nhận xét.
 - **Bộ KPI Kinh doanh** và kỳ đánh giá tháng trước với 3 phiếu đã chốt (loại A, B, C); thực tập sinh `thuctap@demo.test` có hồ sơ, 2 nhật ký tuần, phiếu đánh giá đang nháp.
-- **Kỳ lương tháng trước** đã tính, còn ở **nháp**: tham số lương nạp sẵn chưa được kế toán xác nhận nên chưa gửi duyệt được (xác nhận ở *Tính lương → Tham số lương* rồi tính lại). Xem kỳ lương phải bật xác thực 2 lớp (dưới đây).
+- **Kỳ lương tháng trước** đã tính, còn ở **nháp**: tham số lương nạp sẵn chưa được kế toán xác nhận — bảng lương có băng cảnh báo vàng nhưng vẫn gửi duyệt được (0.22.0); nên xác nhận ở *Tính lương → Tham số lương* rồi tính lại. Xem kỳ lương phải bật xác thực 2 lớp (dưới đây).
 
 Các chức năng:
 
@@ -75,14 +75,32 @@ Các chức năng:
 - **Thực tập**: nhật ký tuần, phiếu đánh giá theo mẫu của trường, in A4.
 - **Tính lương**: bắt buộc **xác thực 2 lớp** — vào *Tài khoản của tôi → Bật xác thực 2 lớp* (cài Google Authenticator / Microsoft Authenticator trên điện thoại, quét mã). Sau đó: Hồ sơ lương, Tham số lương, Kỳ lương, Phiếu lương của tôi.
 
-### Thay bằng dữ liệu của mình — ngay trong phần mềm khi đang chạy
+### Thay bằng dữ liệu của mình — ngay trong phần mềm khi đang chạy ("bổ sung sau")
+
+Từ 0.22.0 **không cần đủ mọi thứ mới dùng được**: thiếu phần nào phần mềm vẫn chạy và báo ở **Tổng quan → Thiết lập ban đầu** (mỗi người thấy phần mình phụ trách). Bảng dưới là chỗ bổ sung từng phần, ai làm, và nếu chưa bổ sung thì phần mềm làm gì:
+
+| Phần | Ai bổ sung | Bổ sung ở đâu | Chưa có thì sao (0.22.0) |
+|---|---|---|---|
+| Lịch làm việc mặc định | Nhân sự | **Nhân sự → Thiết lập chấm công → Đặt làm mặc định** | Bản cài mới có sẵn "Hành chính T2–T6 08:00–17:00"; người chưa gán lịch dùng lịch này |
+| Công của người không có máy / GPS | Nhân sự | **Bảng công tháng → Đặt công tay** (kỳ chưa khóa, có lý do) | Vắng mặt trên bảng công; lương tạm tính đủ công (cảnh báo) |
+| Máy chấm công | Kỹ thuật | **Kỹ thuật → Máy chấm công** — có hướng dẫn kết nối, *Kiểm tra kết nối*, *Máy đang gọi nhưng chưa đăng ký → Đăng ký máy này* | Chấm GPS hoặc đặt công tay |
+| Mã chấm công (PIN) | Kỹ thuật / Nhân sự | Máy chấm công → *Gán cho…* hoặc **Nhập CSV ánh xạ PIN ↔ email** | Lần chấm vẫn lưu, chờ gán |
+| Bảng công đã khóa | Nhân sự | Bảng công tháng → Khóa | Kế toán vẫn tính lương (công nhập tay / mặc định), *Lấy lại công từ bảng công* sau |
+| Tham số lương | Kế toán | Tính lương → Tham số lương → Xác nhận | Cảnh báo vàng, vẫn gửi duyệt / duyệt được (có nhật ký) |
+| Hồ sơ lương | Nhân sự | Tính lương → Hồ sơ lương (từng người hoặc **Nhập CSV**) | Người đó chưa vào bảng lương; kỳ lương liệt kê riêng kèm nút tạo |
+| Tài khoản ngân hàng | Nhân sự | Hồ sơ lương | Trả tay / tiền mặt, không chặn khóa kỳ |
+| Bộ KPI | Nhân sự | Đánh giá → Bộ KPI | Phiếu chỉ có phần quản lý chấm (cảnh báo) |
+| Mẫu phiếu thực tập của trường | Giám đốc / Nhân sự | Thực tập → Mẫu phiếu | Dùng mẫu chung (có nhắc) |
+| Xác thực 2 lớp | Người làm lương | Tài khoản của tôi → Xác thực 2 lớp | Trang lương hiện hướng dẫn từng bước (vẫn bắt buộc) |
+
+Chi tiết từng phần:
 
 | Phần | Bổ sung ở đâu |
 |---|---|
-| **Máy chấm công vân tay** (ZKTeco) | Mở bằng **`CHAY-MANG-NOI-BO.bat`** (thay cho CHAY.bat) — cửa sổ hiện IP của máy tính. Trên máy chấm công: *Comm. → Cloud Server Setting (ADMS)*: Server Address = IP đó, Port = 3000, tắt HTTPS. Trong Cowork: **Nhân sự → Máy chấm công → Đăng ký máy** (nhập số serial SN; máy mẫu `DEMO0001` chuyển *Ngừng hoạt động*). Gán mã chấm công (PIN) cho nhân viên ở **Nhân sự → Hồ sơ nhân sự**. Khoảng 1 phút sau máy hiện *Trực tuyến*. |
+| **Máy chấm công vân tay** (ZKTeco) | Mở bằng **`CHAY-MANG-NOI-BO.bat`** (thay cho CHAY.bat) — cửa sổ hiện IP của máy tính. Trên máy chấm công: *Comm. → Cloud Server Setting (ADMS)*: Server Address = IP đó, Port = 3000, tắt HTTPS. Trong Cowork: **Kỹ thuật → Máy chấm công → Đăng ký máy** (hoặc chờ máy gọi về rồi bấm *Đăng ký máy này*) (nhập số serial SN; máy mẫu `DEMO0001` chuyển *Ngừng hoạt động*). Gán mã chấm công (PIN) cho nhân viên ở **Nhân sự → Hồ sơ nhân sự**. Khoảng 1 phút sau máy hiện *Trực tuyến*. |
 | **Mẫu phiếu đánh giá sinh viên của trường** | **Thực tập → Mẫu phiếu → Thêm mẫu (từ mẫu chung)** → soạn bằng biểu mẫu (ô thông tin, phần, tiêu chí, thang điểm), bấm *Xem trước bản in* để so với mẫu giấy. |
 | **Địa điểm làm việc / bán kính GPS, ca, lịch làm việc, ngày lễ** (sửa toạ độ *Văn phòng DEMO*, thêm lễ âm lịch) | **Nhân sự → Thiết lập chấm công**. |
-| **Tham số lương** (bảo hiểm, lương tối thiểu vùng, giảm trừ, biểu thuế) | **Tính lương → Tham số lương**: đúng thì bấm *Xác nhận*, sai thì *Nhập bộ mới* cùng ngày hiệu lực. Bảng lương dùng tham số chưa xác nhận sẽ không gửi duyệt được. |
+| **Tham số lương** (bảo hiểm, lương tối thiểu vùng, giảm trừ, biểu thuế) | **Tính lương → Tham số lương**: đúng thì bấm *Xác nhận*, sai thì *Nhập bộ mới* cùng ngày hiệu lực. Bảng lương dùng tham số chưa xác nhận vẫn gửi duyệt được nhưng có cảnh báo (0.22.0). |
 | **Hồ sơ lương, phụ cấp, người phụ thuộc, tài khoản ngân hàng** | **Tính lương → Hồ sơ lương** (một người không tự sửa hồ sơ của chính mình). |
 | **Logo công ty** (in phiếu, báo giá) | **Quản trị → Hồ sơ công ty**. |
 

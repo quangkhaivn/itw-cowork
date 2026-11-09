@@ -2,6 +2,32 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.22.0 (chưa phát hành) — Mở dần, bổ sung sau
+
+**Chưa triển khai lên máy thật.** Ba migration mới (`20261109090001_mo_dan`, `20261109090002_may_cham_cong_cap_quyen`, `20261109090003_may_la_tran_ghi`), chạy lại `prisma/rls.sql` (bảng chỉ ghi thêm `attendance_manual_days`, hàm máy lạ) và `npm run db:seed` (lịch mặc định cho doanh nghiệp chưa có lịch, quyền `may_cham_cong.*`). Khởi động lại worker. `version` trong package.json giữ nguyên.
+
+Giám đốc: *"phần mềm mở, để kế toán, nhân sự và kỹ thuật có thể thêm thông tin và kết nối máy chấm công sau. Đừng đòi hỏi có đầy đủ ngay từ ban đầu."* Luật: `BUSINESS_RULES.md` mục 33 (MD-01 → MD-22). Quyết định QĐ-170 → QĐ-180.
+
+### Thêm
+- **Thiết lập ban đầu** (Tổng quan → Thiết lập ban đầu) + card nhắc trên Bảng điều hành: việc còn thiếu theo người phụ trách (Nhân sự, Kế toán, Kỹ thuật, Giám đốc / Quản trị), mỗi việc có trạng thái, nút bổ sung, ghi chú "không bắt buộc".
+- **Tính lương không đòi đủ dữ liệu**: nguồn công từng dòng (bảng công đã khóa / **công nhập tay** / mặc định đủ công chuẩn), nút **Lấy lại công từ bảng công**; hình thức trả **Tiền mặt / trả tay** + danh sách "Trả tay" có tổng (Excel); danh sách người chưa có hồ sơ lương kèm nút tạo; **nhập CSV hồ sơ lương** có xem trước.
+- **Chấm công**: **lịch mặc định** của doanh nghiệp (seed tạo "Hành chính T2–T6 08:00–17:00" nếu chưa có lịch); **Đặt công tay** cho người không có máy / GPS (kỳ chưa khóa, có lý do, kiểm toán).
+- **Kỹ thuật → Máy chấm công**: quyền mới `may_cham_cong.*` (Kỹ thuật, Trưởng kỹ thuật, Nhân sự), hướng dẫn kết nối từng bước, **Kiểm tra kết nối**, **máy đang gọi nhưng chưa đăng ký** + **Đăng ký máy này** (máy gửi lại toàn bộ log), nhập CSV ánh xạ PIN ↔ email, đăng ký máy không bắt buộc địa điểm.
+- Đánh giá: cảnh báo + đường dẫn "Tạo bộ KPI" khi vai trò chưa có bộ KPI. Thực tập: tự chọn mẫu của trường / mẫu chung, nhắc thay mẫu.
+- Khóa Cấu hình mới: `luong.chan_khi_tham_so_chua_xac_nhan` (0), `luong.bat_buoc_2_lop` (1), `luong.tk_tien_mat` (1111).
+
+### Thay đổi đáng lưu ý (luật cũ được nới — chỉ cảnh báo, không chặn)
+- Tính lương **không còn bắt buộc bảng công đã khóa** (LU-21) và **không còn chặn ngày thiếu giờ chờ quyết** (LU-22).
+- **Tham số lương chưa xác nhận không chặn gửi duyệt / duyệt** (LU-11, QĐ-143) — cảnh báo + kiểm toán; bật lại chặn bằng Cấu hình.
+- **Thiếu tài khoản ngân hàng không chặn khóa kỳ** (LU-51, QĐ-160) — dòng đó trả tay; bút toán đã chi tách 1121 / 1111.
+- Không có lịch nào → công chuẩn tạm tính T2–T6 + cảnh báo (trước: lỗi "thiếu lịch").
+- 2 lớp với thao tác lương vẫn bắt buộc mặc định; trang lương có hướng dẫn từng bước + nút đi tới trang bật.
+- `/nhan-su/may-cham-cong` chuyển sang `/may-cham-cong`.
+
+### Kiểm thử
+- Mới: `thu/thu-mo-dan.ts` (`npm run thu:mo-dan`, nối cuối `thu:tich-hop`), `thu/don-vi/mo-dan.test.ts` (15 bài).
+- Bài cũ đổi kỳ vọng theo luật mới: `thu-luong` (chưa có bảng công / bảng công nháp / ngày thiếu giờ chờ quyết → vẫn tính + cảnh báo; tham số chưa xác nhận → cảnh báo vàng), `thu-luong-chinh-sach` (thiếu tài khoản → dự kiến trả tay, không chặn khóa), `thu-cham-cong` (máy từng gọi khi chưa đăng ký → bắt tay `ATTLOGStamp=0`), `thu-qa-cham-cong` và `don-vi/cham-cong.test.ts` (so quyền QĐ-117 bỏ qua mã `may_cham_cong.*` cấp ở migration 0.22.0).
+
 ## 0.21.1 — 09/11/2026 — Dữ liệu mẫu Nhân sự, sao lưu bị ngắt
 
 - **Dữ liệu mẫu DEMO cho Nhân sự** trong `npm run db:seed:mau` (doanh nghiệp `demo`), chạy lại không nhân đôi: địa điểm + ca + lịch, 10 mã chấm công, máy chấm công giả `DEMO0001`, lần chấm tháng trước (bảng công đã khóa) và hôm nay, đơn nghỉ / tăng ca, 9 việc giao ở đủ trạng thái, báo cáo ngày / tuần, bộ KPI và 3 phiếu đánh giá đã chốt, thực tập sinh `thuctap@demo.test` có nhật ký và phiếu nháp, kỳ lương 10/2026 nháp đã tính. Tham số lương nạp sẵn vẫn chờ kế toán xác nhận.
