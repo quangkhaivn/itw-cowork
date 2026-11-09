@@ -87,8 +87,11 @@ async function main() {
   await seedDichVuMau(tenant.id, idTheoEmail);
   await seedTaiChinhMau(tenant.id, idTheoEmail);
   await seedLuongMau(tenant.id, idTheoEmail);
+  // Nhân sự (chấm công, việc giao, báo cáo, đánh giá, thực tập, kỳ lương) — tệp riêng, nạp động như các phần trên.
+  const { seedNhanSuMau } = await import("./mau-nhan-su");
+  await seedNhanSuMau(db, tenant.id, idTheoEmail, bam);
 
-  console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
+  console.log(`\n✓ ${NHAN_SU.length} tài khoản mẫu + thực tập sinh thuctap@demo.test, mã doanh nghiệp "demo", mật khẩu = DEMO_MAT_KHAU.`);
   console.log("  Thử phạm vi dữ liệu: đăng nhập tp.kinhdoanh@demo.test (thấy nhóm), kd1@demo.test (chỉ thấy mình).");
 }
 
@@ -715,6 +718,10 @@ async function seedLuongMau(tenantId: string, id: Map<string, string>) {
 main()
   .catch((e) => {
     console.error("Nạp dữ liệu mẫu HỎNG:", e);
-    process.exit(1);
+    process.exitCode = 1;
   })
-  .finally(() => db.$disconnect());
+  .finally(async () => {
+    await db.$disconnect();
+    // Service dùng kết nối Redis / CSDL chung của ứng dụng (giới hạn tốc độ, voiTenant), không tự đóng → thoát tường minh.
+    process.exit(process.exitCode ?? 0);
+  });
