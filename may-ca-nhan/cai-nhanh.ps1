@@ -10,7 +10,7 @@
 #
 # Chạy lại tệp này bất cứ lúc nào để cập nhật mã mới nhất: dữ liệu và .env được giữ.
 
-param([string]$ThuMuc = '')
+param([string]$ThuMuc = '', [string]$NguonMa = '')
 
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'   # thanh tiến trình của Invoke-WebRequest làm tải chậm gấp nhiều lần trên PowerShell 5.1
@@ -82,6 +82,22 @@ $env:Path = $DirNodeBin + [IO.Path]::PathSeparator + $env:Path
 Write-Host ("Node.js " + (& $NodeExe -v | Out-String).Trim())
 
 # ---------------------------------------------------------------------------
+if ($NguonMa) {
+  # Mã nguồn đã tải sẵn về máy (ví dụ GitHub → Code → Download ZIP rồi giải nén): CHÉP từ thư mục đó, không tải lại.
+  Buoc 3 "Mã nguồn TGTH Cowork (lấy từ máy: $NguonMa)"
+  $dirMa = (Resolve-Path $NguonMa -ErrorAction SilentlyContinue).Path
+  if (-not $dirMa -or -not (Test-Path (Join-Path $dirMa 'package.json'))) { Dung "Thư mục mã nguồn không đúng (thiếu package.json): $NguonMa" }
+  $ver = (Get-Content -Raw (Join-Path $dirMa 'package.json') | ConvertFrom-Json).version
+  Write-Host "Phiên bản trong thư mục: $ver"
+  $dichDayDu = [IO.Path]::GetFullPath($DirApp).TrimEnd('\', '/')
+  if ($dichDayDu -eq $dirMa.TrimEnd('\', '/')) { Dung 'Thư mục mã nguồn trùng thư mục cài (app\) — giải nén mã nguồn ra chỗ khác rồi chạy lại.' }
+  if (Test-Path $DirApp) {
+    Get-ChildItem $DirApp -Force | Where-Object { $_.Name -notin @('.env', 'node_modules') } | Remove-Item -Recurse -Force
+  } else { New-Item -ItemType Directory -Path $DirApp | Out-Null }
+  # Không chép node_modules / .next / .env của thư mục nguồn: cài lại gói đúng cho máy này, giữ .env đã có.
+  Get-ChildItem $dirMa -Force | Where-Object { $_.Name -notin @('node_modules', '.next', '.env', '.git') } | ForEach-Object { Copy-Item $_.FullName $DirApp -Recurse -Force }
+  Write-Host "Đã chép mã nguồn $ver vào $DirApp"
+} else {
 Buoc 3 "Mã nguồn TGTH Cowork (nhánh $NHANH)"
 $tepZip = Join-Path $DirTam 'cowork.zip'
 Tai "https://codeload.github.com/quangkhaivn/itw-cowork/zip/refs/heads/$NHANH" $tepZip
@@ -97,6 +113,7 @@ if (Test-Path $DirApp) {
 Get-ChildItem $dirMa -Force | ForEach-Object { Move-Item $_.FullName $DirApp -Force }
 Remove-Item -Recurse -Force $dirGiai; Remove-Item -Force $tepZip
 Write-Host "Mã nguồn ở $DirApp"
+}
 
 # ---------------------------------------------------------------------------
 Buoc 4 'PostgreSQL 16 bản gọn'

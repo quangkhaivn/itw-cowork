@@ -7,6 +7,12 @@ Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.22`) chạy riêng t
 - **Cơ sở dữ liệu**: PostgreSQL 16 và Redis 7 chạy trong Docker Desktop. Chỉ máy này truy cập được, qua cổng 55432 và 56379.
 - **Phần mềm**: ứng dụng Next.js và worker chạy bằng Node.js. Mở trong trình duyệt tại **http://127.0.0.1:3000**.
 
+## 0. Đã tải mã nguồn về máy rồi (không tải lại)
+
+Đã tải mã nguồn từ GitHub (nhánh `release/0.22` → **Code → Download ZIP**) và giải nén: mở thư mục `may-ca-nhan` trong đó, bấm đúp **`CAI-TU-MA-NGUON-DA-TAI.bat`**. Bộ cài chép mã từ chính thư mục này (không tải lại mã nguồn), hiện phiên bản đọc từ `package.json`, rồi cài như bình thường — vẫn cần Internet lần đầu để tải Node.js, PostgreSQL và gói npm. Bản cũ đã cài thì được cập nhật, dữ liệu thử và `.env` giữ nguyên.
+
+Chưa tải mã nguồn: dùng **`CAI-TGTH-COWORK-0.22.bat`** (tự tải bản 0.22 mới nhất, báo phiên bản trước khi cài).
+
 ## 1. Cài 3 phần mềm (một lần)
 
 | Phần mềm | Tải ở đâu | Ghi chú |
