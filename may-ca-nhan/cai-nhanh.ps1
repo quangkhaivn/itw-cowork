@@ -58,6 +58,19 @@ if ($LaWindows) {
   if ($o -and $o.Free -and $o.Free -lt 4GB) { Dung ("Ổ {0}: còn trống {1:N1} GB — cần ít nhất 4 GB." -f $ThuMuc.Substring(0, 1), ($o.Free / 1GB)) }
 }
 
+# Bản cũ đang chạy (2 cửa sổ "TGTH Cowork - ung dung / worker") giữ khóa node.exe, esbuild.exe… trong thư mục cài:
+# npm ci / thay mã nguồn sẽ hỏng EPERM. Tắt mọi tiến trình chạy TỪ thư mục cài này (không đụng Node.js của Windows).
+function TatBanDangChay {
+  if (-not $LaWindows) { return }
+  $ds = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -like "$DirNode\*" -or $_.Path -like "$DirApp\*") })
+  if ($ds.Count -gt 0) {
+    Write-Host ("Tắt bản TGTH Cowork đang chạy ({0} tiến trình)..." -f $ds.Count) -ForegroundColor Yellow
+    $ds | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 3
+  }
+}
+TatBanDangChay
+
 # ---------------------------------------------------------------------------
 Buoc 2 "Node.js $NODE_PHIEN_BAN (bản chạy ngay, không cài vào Windows)"
 if ($LaWindows) { $NodeExe = Join-Path $DirNode 'node.exe'; $NpmCmd = Join-Path $DirNode 'npm.cmd'; $NpxCmd = Join-Path $DirNode 'npx.cmd'; $DirNodeBin = $DirNode }
@@ -192,7 +205,17 @@ Write-Host "PostgreSQL chạy ở 127.0.0.1:$CONG_PG"
 # ---------------------------------------------------------------------------
 Buoc 7 'Cài gói npm (lần đầu 5–15 phút)'
 Set-Location $DirApp
-& $NpmCmd ci --no-audit --no-fund; Kiem $LASTEXITCODE 'npm ci'
+& $NpmCmd ci --no-audit --no-fund; $ma = $LASTEXITCODE
+if ($ma -ne 0) {
+  # Thường do tệp bị khóa (phần mềm cũ còn chạy, phần mềm diệt virus đang quét): tắt bản đang chạy, xóa node_modules, thử lại một lần.
+  Write-Host 'npm ci hỏng — tắt bản đang chạy, xóa node_modules rồi thử lại một lần...' -ForegroundColor Yellow
+  TatBanDangChay
+  Remove-Item -Recurse -Force (Join-Path $DirApp 'node_modules') -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 3
+  & $NpmCmd ci --no-audit --no-fund; $ma = $LASTEXITCODE
+  if ($ma -ne 0) { Write-Host 'Vẫn hỏng: đóng mọi cửa sổ "TGTH Cowork", tạm tắt quét của phần mềm diệt virus cho thư mục cài, rồi chạy lại bộ cài.' -ForegroundColor Yellow }
+}
+Kiem $ma 'npm ci'
 & $NpxCmd prisma generate; Kiem $LASTEXITCODE 'prisma generate'
 
 # ---------------------------------------------------------------------------
