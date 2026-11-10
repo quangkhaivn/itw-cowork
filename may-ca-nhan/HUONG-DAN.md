@@ -9,7 +9,10 @@ Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.22`) chạy riêng t
 
 ## 0. Đã tải mã nguồn về máy rồi (không tải lại)
 
-Đã tải mã nguồn từ GitHub (nhánh `release/0.22` → **Code → Download ZIP**) và giải nén: mở thư mục `may-ca-nhan` trong đó, bấm đúp **`CAI-TU-MA-NGUON-DA-TAI.bat`**. Bộ cài chép mã từ chính thư mục này (không tải lại mã nguồn), hiện phiên bản đọc từ `package.json`, rồi cài như bình thường — vẫn cần Internet lần đầu để tải Node.js, PostgreSQL và gói npm. Bản cũ đã cài thì được cập nhật, dữ liệu thử và `.env` giữ nguyên.
+Mã nguồn đã tải từ GitHub (nhánh `release/0.22` → **Code → Download ZIP**) và giải nén — chọn một trong hai:
+
+- **Máy đã có Node.js 22 và Docker Desktop** (nhanh nhất): mở Docker Desktop, đợi *Engine running*, rồi trong thư mục `may-ca-nhan` của mã nguồn bấm đúp **`CAI-DAT.bat`**. Cài ngay trong thư mục mã nguồn đó (không tải lại mã, không tải Node.js / PostgreSQL); CSDL chạy trong Docker. Xong thì mở bằng **`CHAY.bat`**, hoặc **`CHAY-MANG-NOI-BO.bat`** khi cần nối máy chấm công vân tay (cửa sổ hiện IP để nhập vào máy). Tắt bằng `DUNG.bat`.
+- **Máy chưa có Node.js / Docker**: bấm đúp **`CAI-TU-MA-NGUON-DA-TAI.bat`** — chép mã từ thư mục này vào `L:\TGTH-Cowork` (hoặc thư mục người dùng), tự tải Node.js + PostgreSQL bản gọn.
 
 Chưa tải mã nguồn: dùng **`CAI-TGTH-COWORK-0.22.bat`** (tự tải bản 0.22 mới nhất, báo phiên bản trước khi cài).
 

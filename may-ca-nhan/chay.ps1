@@ -1,5 +1,6 @@
 ﻿# Mở TGTH Cowork trên máy cá nhân: bật CSDL (Docker), mở 2 cửa sổ (ứng dụng + worker), rồi mở trình duyệt.
 # Chạy bằng CHAY.bat. Đóng 2 cửa sổ đó là dừng phần mềm; DUNG.bat tắt luôn CSDL trong Docker.
+param([switch]$MangNoiBo)
 $ErrorActionPreference = 'Continue'
 $Goc = Split-Path -Parent $PSScriptRoot
 Set-Location $Goc
@@ -26,7 +27,7 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 
 Write-Host 'Mở cửa sổ ứng dụng và cửa sổ worker (đừng đóng khi đang dùng)...'
-$lenhApp = "`$Host.UI.RawUI.WindowTitle = 'TGTH Cowork - ung dung (dong cua so nay = dung)'; Set-Location '$Goc'; npx next start -p 3000 -H 127.0.0.1"
+$lenhApp = "`$Host.UI.RawUI.WindowTitle = 'TGTH Cowork - ung dung (dong cua so nay = dung)'; Set-Location '$Goc'; npx next start -p 3000 -H $(if ($MangNoiBo) { '0.0.0.0' } else { '127.0.0.1' })"
 $lenhWorker = "`$Host.UI.RawUI.WindowTitle = 'TGTH Cowork - worker (gui email, nhac viec)'; Set-Location '$Goc'; npm run worker"
 Start-Process powershell -ArgumentList '-NoExit', '-NoProfile', '-Command', $lenhApp
 Start-Process powershell -ArgumentList '-NoExit', '-NoProfile', '-Command', $lenhWorker
@@ -44,3 +45,12 @@ if (-not $len) { Dung "Ứng dụng chưa trả lời sau 2 phút. Xem lỗi tro
 Start-Process $Url
 Write-Host ""
 Write-Host "Đã mở $Url — thông tin đăng nhập ở THONG-TIN-DANG-NHAP.txt" -ForegroundColor Green
+if ($MangNoiBo) {
+  Write-Host ""
+  Write-Host '=== MỞ CHO MẠNG NỘI BỘ (máy chấm công vân tay, máy khác trong văn phòng) ===' -ForegroundColor Cyan
+  Write-Host 'Địa chỉ IP của máy này:'
+  Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | ForEach-Object { Write-Host ('   ' + $_.IPAddress) }
+  Write-Host 'Trên máy chấm công ZKTeco: Comm. → Cloud Server (ADMS): Server Address = một IP ở trên, Port = 3000, tắt HTTPS, tắt Proxy.'
+  Write-Host 'Trong Cowork: menu Kỹ thuật → Máy chấm công → Đăng ký máy (số sê-ri SN), rồi làm bước mã xác minh 6 số.'
+  Write-Host 'Windows hỏi cho Node.js qua tường lửa: chọn "Private networks" rồi Allow.'
+}

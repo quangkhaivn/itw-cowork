@@ -5,7 +5,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 ## 0.22.1 — 09/11/2026 — Hướng dẫn kết nối máy chấm công
 
 - Màn hình **Máy chấm công**: khi `APP_URL` là `127.0.0.1` (bản chạy thử trên máy cá nhân), hướng dẫn lấy địa chỉ đang mở nếu đó là IP trong mạng, không thì nhắc nhập IP mạng nội bộ của máy chủ (`CHAY-MANG-NOI-BO.bat` hiện IP). Bước đăng ký nói rõ mã xác minh 6 số.
-- Bộ cài Windows: thêm `CAI-TU-MA-NGUON-DA-TAI.bat` (cài từ mã nguồn đã tải về máy, không tải lại — `cai-nhanh.ps1 -NguonMa <thư mục>`) và `CAI-TGTH-COWORK-0.22.bat` (tải bản 0.22, kiểm phiên bản trước khi cài, luôn lấy bộ cài mới nhất thay vì bản `.ps1` cũ nằm cạnh).
+- Bộ cài Windows: `CHAY-MANG-NOI-BO.bat` cho đường Docker (`chay.ps1 -MangNoiBo`); thêm `CAI-TU-MA-NGUON-DA-TAI.bat` (cài từ mã nguồn đã tải về máy, không tải lại — `cai-nhanh.ps1 -NguonMa <thư mục>`) và `CAI-TGTH-COWORK-0.22.bat` (tải bản 0.22, kiểm phiên bản trước khi cài, luôn lấy bộ cài mới nhất thay vì bản `.ps1` cũ nằm cạnh).
 - Không có migration mới.
 
 ## 0.22.0 — 09/11/2026 — Mở dần, bổ sung sau
