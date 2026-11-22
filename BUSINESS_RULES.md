@@ -1025,6 +1025,7 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 | MXH-17 | **Hủy lịch** chỉ khi chưa kênh nào bắt đầu đăng | [SV] khóa dòng kênh · [TH] |
 | MXH-18 | **Đăng lại** chỉ các kênh Lỗi (lượt mới), kênh đã đăng không bị đụng; kênh cần nhập lại phải nhập lại trước | [SV] · [TH] |
 | MXH-19 | Xóa bài: chỉ Nháp / Đã hủy, xóa mềm | [SV] |
+| MXH-19a | **Chuyển về nháp** để sửa: bài Đã hủy, hoặc bài Lỗi mà chưa kênh nào có mã bài trên nền tảng. Kênh đã từng gửi giữ loại lỗi và khóa đối soát cũ → lần đăng sau đối soát trước khi gửi. Bài đã lên một phần: tạo bài mới cho kênh lỗi | [SV] · [TH] |
 
 ### Duyệt (SEC-09)
 

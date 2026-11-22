@@ -40,6 +40,12 @@ async function layBai(nc: NguCanh, id: string, khoa = false) {
 }
 type Bai = Awaited<ReturnType<typeof layBai>>;
 
+/** Về nháp để sửa: bài đã hủy, hoặc bài lỗi mà không kênh nào có mã bài nền tảng (không thể sinh bài trùng). */
+function veNhapDuoc(b: { status: string; targets: { externalPostId: string | null; status: string }[] }): boolean {
+  if (b.status === "CANCELED") return true;
+  return b.status === "FAILED" && b.targets.every((t) => !t.externalPostId && ["FAILED", "CANCELED", "SKIPPED"].includes(t.status));
+}
+
 function batBuocChuyen(b: { status: string }, sang: TrangThaiBai, viec: string) {
   if (!duocChuyenBai(b.status as TrangThaiBai, sang)) {
     throw new LoiNghiepVu(`Bài đang “${b.status}” — không ${viec} được.`, 409, "sai-trang-thai");
@@ -171,7 +177,7 @@ export async function chiTietBai(nc: NguCanh, id: string) {
       dang: update && (st === "DRAFT" || st === "APPROVED") && (!phaiDuyet || st === "APPROVED"),
       huyLich: update && st === "SCHEDULED",
       dangLai: update && (st === "FAILED" || st === "PARTIALLY_FAILED"),
-      veNhap: soan && st === "CANCELED",
+      veNhap: soan && veNhapDuoc(b),
       xoa: (coQuyen(nc.hoSo, "mxh.delete") || (b.createdBy === nc.hoSo.userId && coQuyen(nc.hoSo, "mxh.create"))) && (st === "DRAFT" || st === "CANCELED"),
       dinhKem: soan && (st === "DRAFT" || st === "CANCELED"),
     },
@@ -197,14 +203,15 @@ async function kiemKenh(nc: NguCanh, kenhIds: string[]) {
 
 async function datKenh(nc: NguCanh, postId: string, tieuDe: string | null, kenhIds: string[]) {
   await kiemKenh(nc, kenhIds);
-  const cu = await nc.tx.socialPostTarget.findMany({ where: { postId }, select: { id: true, connectionId: true, status: true } });
+  const cu = await nc.tx.socialPostTarget.findMany({ where: { postId }, select: { id: true, connectionId: true, status: true, errorClass: true } });
   const bo = cu.filter((t) => !kenhIds.includes(t.connectionId));
   if (bo.some((t) => !["PENDING", "CANCELED"].includes(t.status))) throw new LoiNghiepVu("Kênh đã vào lượt đăng không bỏ được.", 409, "sai-trang-thai");
   if (bo.length) await nc.tx.socialPostTarget.deleteMany({ where: { id: { in: bo.map((t) => t.id) } } });
   for (const kenhId of kenhIds) {
     const da = cu.find((t) => t.connectionId === kenhId);
     if (da) {
-      await nc.tx.socialPostTarget.update({ where: { id: da.id }, data: { status: "PENDING", reconcileKey: khoaDoiSoat(tieuDe, da.id), errorClass: null, errorCode: null, errorMessage: null, nextAttemptAt: null } });
+      await nc.tx.socialPostTarget.update({ where: { id: da.id }, // Kênh đã từng gửi (có lỗi cũ): giữ khóa đối soát cũ để lần sau còn tìm được bài lượt trước (nếu đã lên).
+      data: { status: "PENDING", ...(da.errorClass ? {} : { reconcileKey: khoaDoiSoat(tieuDe, da.id) }), errorMessage: null, nextAttemptAt: null } });
     } else {
       const id = crypto.randomUUID();
       await nc.tx.socialPostTarget.create({ data: { id, tenantId: nc.tenantId, postId, connectionId: kenhId, status: "PENDING", reconcileKey: khoaDoiSoat(tieuDe, id) } });
@@ -327,7 +334,8 @@ async function xepHang(nc: NguCanh, b: Bai, luc: Date, bayGio: Date) {
   await chupAnh(nc, b.id);
   await nc.tx.socialPostTarget.updateMany({
     where: { postId: b.id, status: { in: ["PENDING", "CANCELED"] } },
-    data: { status: "QUEUED", nextAttemptAt: luc, attemptCount: 0, errorClass: null, errorCode: null, errorMessage: null, lockedBy: null, lockedAt: null },
+    // Giữ errorClass của lượt trước (nếu có): worker đối soát trước khi gửi (QĐ-200).
+    data: { status: "QUEUED", nextAttemptAt: luc, attemptCount: 0, errorMessage: null, lockedBy: null, lockedAt: null },
   });
   await nc.tx.socialPost.update({ where: { id: b.id }, data: { status: sang, scheduledAt: luc, updatedBy: nc.hoSo.userId } });
   return sang;
@@ -413,8 +421,11 @@ export async function veNhap(nc: NguCanh, id: string) {
   const b = await layBai(nc, id, true);
   if (!duocSoan(nc, b)) throw new LoiThieuQuyen("mxh.update", { objectType: "social_post", objectId: id });
   batBuocChuyen(b, "DRAFT", "chuyển về nháp");
-  if (b.status !== "CANCELED") throw new LoiNghiepVu("Chỉ bài đã hủy mới chuyển về nháp.", 409, "sai-trang-thai");
-  await nc.tx.socialPostTarget.updateMany({ where: { postId: id, status: "CANCELED" }, data: { status: "PENDING" } });
+  if (!veNhapDuoc(b)) {
+    throw new LoiNghiepVu("Chỉ bài đã hủy, hoặc bài lỗi mà chưa kênh nào nhận bài (không có mã bài trên nền tảng), mới chuyển về nháp để sửa. Bài đã lên một phần: tạo bài mới cho kênh lỗi.", 409, "sai-trang-thai");
+  }
+  // Giữ loại lỗi cũ trên kênh: lần đăng sau sẽ đối soát trước khi gửi (QĐ-200).
+  await nc.tx.socialPostTarget.updateMany({ where: { postId: id, status: { in: ["CANCELED", "FAILED"] } }, data: { status: "PENDING", nextAttemptAt: null } });
   await nc.tx.socialPost.update({ where: { id }, data: { status: "DRAFT", approvedBy: null, approvedAt: null, scheduledAt: null, updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "ve-nhap-bai-mxh", objectType: "social_post", objectId: id });
   return chiTietBai(nc, id);

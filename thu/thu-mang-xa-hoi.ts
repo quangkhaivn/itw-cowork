@@ -26,7 +26,7 @@ import { aadApp, aadKenh, docKhoaChu, trangThaiKhoaChu } from "../src/modules/ma
 import { niemPhong } from "../src/modules/mang-xa-hoi/bao-mat/niem-phong";
 import { danhSachKenh, doiMatKhauKenh, ketNoiWordPress, kiemTraThongTinWordPress, ngatKenh, yeuCauKiemTraKenh } from "../src/modules/mang-xa-hoi/kenh";
 import {
-  chiTietBai, dangLai, dangNgay, danhSachBai, danhSachChoDuyet, duyetBai, guiDuyet, henGio, huyLich, nhatKyDang, suaBai, taoBai, traLaiBai,
+  chiTietBai, dangLai, dangNgay, danhSachBai, danhSachChoDuyet, duyetBai, guiDuyet, henGio, huyLich, nhatKyDang, suaBai, taoBai, traLaiBai, veNhap,
 } from "../src/modules/mang-xa-hoi/bai";
 import { docMediaCongKhai, kiemMaMedia, kyMaMedia, taoLinkMedia } from "../src/modules/mang-xa-hoi/media-ky";
 import { danhSachThongTinApp, datGocGraphChoBaiThu, kiemTraThongTinApp, luuThongTinApp, xoaBiMatApp } from "../src/modules/mang-xa-hoi/nen-tang-app";
@@ -406,9 +406,15 @@ async function main() {
   const ct6 = await voi(T, mk, (nc) => chiTietBai(nc, b6.id));
   dat("Giao diện có hướng dẫn sửa + nút đăng lại", !!ct6.kenh[0].huongDan && ct6.quyen.dangLai);
   dat("…worker không tự thử lại", (await dangBaiMotVong(T, "w-thu-1", sau(9999))).filter((k) => k.targetId === x.id).length === 0);
-  await voi(T, mk, (nc) => dangLai(nc, b6.id, sau(600)));
+  dat("Bài lỗi chưa kênh nào nhận → được chuyển về nháp để sửa", ct6.quyen.veNhap);
+  await voi(T, mk, (nc) => veNhap(nc, b6.id));
+  await voi(T, mk, (nc) => suaBai(nc, b6.id, { tieuDe: "Bài bị từ chối DEMO (đã sửa)", noiDung: "Nội dung đã sửa", kenhIds: [kenh.id] }));
+  await voi(T, mk, (nc) => dangNgay(nc, b6.id, sau(600)));
   await dangBaiMotVong(T, "w-thu-1", sau(600));
-  dat("Đăng lại → PUBLISHED", (await trangThaiKenhBai(b6.kenh[0].id)).status === "PUBLISHED");
+  x = await trangThaiKenhBai(b6.kenh[0].id);
+  dat("Sửa rồi đăng lại → đối soát trước (lỗi cũ còn ghi) → PUBLISHED", x.status === "PUBLISHED" && (await chu.socialPublishAttempt.count({ where: { targetId: x.id, kind: "reconcile" } })) === 1);
+  const ct6b = await voi(T, mk, (nc) => chiTietBai(nc, b3.id));
+  dat("Bài đã lên (có mã bài) không chuyển về nháp được", !ct6b.quyen.veNhap);
 
   // ==================================================================
   console.log("\n— 10. Đồng thời: hai worker cùng nhận một kênh-bài —");

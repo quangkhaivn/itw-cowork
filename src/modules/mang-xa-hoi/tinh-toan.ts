@@ -18,7 +18,7 @@ export const CHUYEN_BAI: Record<TrangThaiBai, readonly TrangThaiBai[]> = {
   PUBLISHING: ["PUBLISHED", "PARTIALLY_FAILED", "FAILED"],
   PUBLISHED: [],
   PARTIALLY_FAILED: ["PUBLISHING"],
-  FAILED: ["PUBLISHING"],
+  FAILED: ["PUBLISHING", "DRAFT"],
   CANCELED: ["DRAFT"],
 };
 
@@ -33,7 +33,7 @@ export const CHUYEN_KENH: Record<TrangThaiKenhBai, readonly TrangThaiKenhBai[]> 
   PUBLISHING: ["VERIFYING", "PUBLISHED", "QUEUED", "FAILED"],
   VERIFYING: ["PUBLISHED", "QUEUED", "FAILED", "VERIFYING"],
   PUBLISHED: [],
-  FAILED: ["QUEUED"],
+  FAILED: ["QUEUED", "PENDING"],
   SKIPPED: [],
   CANCELED: ["PENDING"],
 };
