@@ -610,7 +610,8 @@ async function main() {
   dat("Nhân sự thấy: Nhân sự, Kế toán (hồ sơ lương), Kỹ thuật (máy)", (await nhom(hr)) === "nhan-su,ke-toan,ky-thuat");
   dat("Kế toán chỉ thấy phần Kế toán", (await nhom(kt)) === "ke-toan");
   dat("Kỹ thuật chỉ thấy phần Kỹ thuật", (await nhom(ktv)) === "ky-thuat");
-  dat("Quản trị thấy đủ 4 nhóm", (await nhom(ad)) === "nhan-su,ke-toan,ky-thuat,quan-tri");
+  // 0.23.0: thêm nhóm Marketing ("Kết nối kênh mạng xã hội") cho người có mxh.update — Quản trị có toàn quyền nên thấy 5 nhóm.
+  dat("Quản trị thấy đủ 5 nhóm", (await nhom(ad)) === "nhan-su,ke-toan,ky-thuat,marketing,quan-tri");
   dat("Nhân viên không thấy nhóm nào", (await nhom(nvA)) === "");
   const vNs = await voi(T, hr, (nc) => viecThietLap(nc, "2026-11-09"));
   const viecNs = (ma: string) => vNs.nhom.flatMap((n) => n.viec).find((v) => v.ma === ma)!;
