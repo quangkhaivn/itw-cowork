@@ -6,7 +6,7 @@ import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi, LoiThieuQuyen } from "@/lib/
 import { SU_KIEN } from "@/lib/su-kien";
 import { napBanDoCapTren } from "@/modules/danh-gia/cap-tren";
 import { nguoiGiuQuyen, taoThongBao } from "@/modules/thong-bao/service";
-import { capNhatTrangThaiBai, dieuKienXemBai, docCauHinhMxh } from "./chung";
+import { dieuKienXemBai, docCauHinhMxh } from "./chung";
 import { layConnector } from "./connectors/danh-muc";
 import { HUONG_DAN_LOI, TEN_NEN_TANG, type LoaiLoi, type TrangThaiBai } from "./hang-so";
 import type { LuocDoBai, LuocDoGuiDuyet, LuocDoLocBai } from "./luoc-do";

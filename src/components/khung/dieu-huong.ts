@@ -74,7 +74,13 @@ export type BieuTuong =
   | "bang-cong"
   | "nhan-su"
   | "may-cham-cong"
-  | "thiet-lap";
+  | "thiet-lap"
+  // 0.23.0 — Mạng xã hội
+  | "mxh-bai"
+  | "mxh-soan"
+  | "mxh-duyet"
+  | "mxh-kenh"
+  | "ket-noi-api";
 
 export interface MucDieuHuong {
   nhan: string;
@@ -146,6 +152,16 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Đợt gửi email", href: "/marketing/email/chien-dich", quyen: "marketing.view", bieuTuong: "email", tuKhoa: "email marketing chien dich email dot gui thu newsletter" },
       { nhan: "Mẫu email", href: "/marketing/email/mau", quyen: "marketing.view", bieuTuong: "mau-email", tuKhoa: "mau thu email template noi dung" },
       { nhan: "Sổ đồng ý email", href: "/marketing/email/dong-y", quyen: "marketing.view", bieuTuong: "so-dong-y", tuKhoa: "dong y nhan thu quang cao consent rut tu choi nd 91 nhap csv" },
+    ],
+  },
+  {
+    // 0.23.0 — Mạng xã hội (BUSINESS_RULES mục 34).
+    nhan: "Mạng xã hội",
+    muc: [
+      { nhan: "Bài và lịch đăng", href: "/mang-xa-hoi", quyen: "mxh.view", bieuTuong: "mxh-bai", tuKhoa: "mang xa hoi social bai dang lich hen gio wordpress facebook trang thai" },
+      { nhan: "Soạn bài", href: "/mang-xa-hoi/soan", quyen: "mxh.create", bieuTuong: "mxh-soan", tuKhoa: "soan bai viet dang bai mang xa hoi social post" },
+      { nhan: "Chờ duyệt", href: "/mang-xa-hoi/cho-duyet", quyen: "mxh.approve", bieuTuong: "mxh-duyet", tuKhoa: "duyet bai mang xa hoi cho toi duyet approve" },
+      { nhan: "Kênh", href: "/mang-xa-hoi/kenh", quyen: "mxh.view", bieuTuong: "mxh-kenh", tuKhoa: "kenh ket noi wordpress application password mat khau ung dung" },
     ],
   },
   {
@@ -273,6 +289,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Dữ liệu gốc", href: "/quan-tri/du-lieu-goc", quyen: "master_data.view", bieuTuong: "du-lieu-goc", tuKhoa: "master data danh muc nguon lead don vi tinh" },
       { nhan: "Cấu hình hệ thống", href: "/quan-tri/cau-hinh", quyen: "setting.view", bieuTuong: "cau-hinh", tuKhoa: "settings nguong bien loi nhuan" },
       { nhan: "Hồ sơ công ty", href: "/quan-tri/ho-so-cong-ty", quyen: "setting.view", bieuTuong: "ho-so-cong-ty", tuKhoa: "company profile dia chi ma so thue tai khoan nguoi ky ban in" },
+      { nhan: "Kết nối nền tảng (API)", href: "/quan-tri/ket-noi-nen-tang", quyen: ["setting.view", "mxh.view", "technical.view"], bieuTuong: "ket-noi-api", tuKhoa: "api meta facebook google youtube zalo app id app secret client id redirect uri oauth" },
       { nhan: "Kết nối email", href: "/quan-tri/ket-noi-email", quyen: "integration.view", bieuTuong: "ket-noi-email", tuKhoa: "smtp gmail microsoft 365 sendgrid hop thu gui email" },
       { nhan: "Xác thực 2 lớp", href: "/quan-tri/xac-thuc-2-lop", quyen: "user.view", bieuTuong: "bao-mat", tuKhoa: "2fa totp bao mat authenticator ma xac thuc" },
       { nhan: "Tự động hóa", href: "/quan-tri/tu-dong-hoa", quyen: "setting.view", bieuTuong: "tu-dong-hoa", tuKhoa: "automation quy tac nhac viec lich chay nen job" },

@@ -1,7 +1,7 @@
 import { goiAnToan, LoiGoiMang, type PhanHoiAnToan } from "../mang/goi-an-toan";
 import { cauLoiGon, phanLoaiHttp, vanBanSangHtml } from "../tinh-toan";
 import type {
-  BoiCanhGoi, BuocGoi, KenhGoi, KetQuaDang, KetQuaDoiSoat, KetQuaKiemTra, KetQuaXacMinh, LoiPhanLoai, NoiDungDang,
+  BoiCanhGoi, BuocGoi, KenhGoi, KetQuaDang, KetQuaDoiSoat, KetQuaKiemTra, KetQuaXacMinh, LoiPhanLoai,
   SocialConnector, ThongTinXacThuc, ViPham,
 } from "./kieu";
 
