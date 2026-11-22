@@ -41,6 +41,8 @@ const KHONG_KIEM_NGUON = [
   // Xác thực bằng MÃ KÝ trong đường dẫn, không dùng cookie phiên — không có gì để giả mạo liên trang.
   "/api/cong-khai/huy-nhan-tin/",
   "/api/cong-khai/email/",
+  // 0.23.0 — ảnh bài mạng xã hội qua link ký (QĐ-198): nền tảng (máy chủ Meta…) kéo ảnh, không có Origin / cookie. Chỉ GET.
+  "/api/cong-khai/mxh/media/",
 ];
 
 export async function proxy(req: NextRequest) {
