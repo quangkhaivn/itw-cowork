@@ -52,6 +52,13 @@ services:
       # 0.23.0: khóa chủ mạng xã hội — app chỉ NIÊM PHONG (mật khẩu ứng dụng WordPress, App Secret); worker mới mở.
       SOCIAL_MASTER_KEY: ${SOCIAL_MASTER_KEY:-}
       SOCIAL_MASTER_KEY_VERSION: ${SOCIAL_MASTER_KEY_VERSION:-1}
+      # Dự phòng thông tin app nền tảng — app chỉ đọc để hiện "đang dùng giá trị từ máy chủ" (worker mới dùng giá trị).
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      ZALO_APP_ID: ${ZALO_APP_ID:-}
+      ZALO_SECRET_KEY: ${ZALO_SECRET_KEY:-}
       # Trợ lý AI (Phase 9). Trước 0.16.1 ba biến này không được chuyển vào container nên trợ lý
       # trên máy thật luôn báo "chưa cấu hình" dù .env đã có khóa. Để trống = trợ lý báo chưa cấu hình.
       AI_PROVIDER: ${AI_PROVIDER:-anthropic}
