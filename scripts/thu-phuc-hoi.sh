@@ -185,6 +185,9 @@ if [ -f "$TEP_ENV_MA" ]; then
     grep -q '^APP_ENC_KEY=' "$TAM/env" || { echo "❌ Bản .env giải mã ra không có dòng APP_ENC_KEY="; exit 1; }
     ENV_KQ="giai-ma-duoc"
     echo "✓ bản .env giải mã được và có APP_ENC_KEY"
+    # 0.23.0: chỉ cảnh báo (bản sao lưu cũ trước 0.23.0 chưa có khóa này).
+    grep -q '^SOCIAL_MASTER_KEY=.\+' "$TAM/env" && echo "✓ …và có SOCIAL_MASTER_KEY" \
+      || echo "⚠ Bản .env sao lưu chưa có SOCIAL_MASTER_KEY — bí mật mạng xã hội lưu sau bản này không khôi phục được từ nó."
   fi
   unset MAT_KHAU
 else

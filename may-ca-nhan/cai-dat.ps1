@@ -55,6 +55,7 @@ REDIS_URL=redis://:$mkRedis@127.0.0.1:56379
 AUTH_SECRET=$(NgauNhien 48 base64)
 APP_URL=http://127.0.0.1:3000
 APP_ENC_KEY=$(NgauNhien 32 base64)
+SOCIAL_MASTER_KEY=$(NgauNhien 32 base64)
 SEED_ADMIN_EMAIL=admin@thegioitinhoc.vn
 SEED_ADMIN_PASSWORD=$mkAdmin
 AI_PROVIDER=anthropic
@@ -63,6 +64,12 @@ ANTHROPIC_API_KEY=
 "@
   [System.IO.File]::WriteAllText($TepEnv, $noiDung.Replace("`r`n", "`n"), $Utf8KhongBom)
   Write-Host 'Đã tạo .env với mật khẩu và khoá ngẫu nhiên.'
+}
+# 0.23.0 (QĐ-201): .env cũ chưa có SOCIAL_MASTER_KEY thì thêm khóa ngẫu nhiên; KHÔNG BAO GIỜ đè khóa đã có.
+if (-not (Select-String -Path $TepEnv -Pattern '^SOCIAL_MASTER_KEY=.+' -Quiet)) {
+  $cu = (Get-Content $TepEnv | Where-Object { $_ -notmatch '^SOCIAL_MASTER_KEY=\s*$' }) -join "`n"
+  [System.IO.File]::WriteAllText($TepEnv, $cu.TrimEnd() + "`n# 0.23.0 — khóa chủ mã hóa bí mật mạng xã hội (tự sinh). Sao lưu cùng .env.`nSOCIAL_MASTER_KEY=$(NgauNhien 32 base64)`n", $Utf8KhongBom)
+  Write-Host 'Đã thêm SOCIAL_MASTER_KEY vào .env (khóa mới, ngẫu nhiên).'
 }
 $Env = @{}
 Get-Content $TepEnv | ForEach-Object { if ($_ -match '^\s*([A-Z0-9_]+)=(.*)$') { $Env[$Matches[1]] = $Matches[2] } }

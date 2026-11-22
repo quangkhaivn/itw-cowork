@@ -157,13 +157,15 @@ tar -tzf "$TEP_DK" > "$TAM/dk.txt"
 echo "✓ tệp đính kèm đọc lại được: $(du -h "$TEP_DK" | cut -f1), $(grep -c '[^/]$' "$TAM/dk.txt" || true) tệp"
 
 # ---------------------------------------------------------------------------
-# 3. Bản mã hóa của .env (APP_ENC_KEY, AUTH_SECRET, mật khẩu CSDL)
+# 3. Bản mã hóa của .env (APP_ENC_KEY, SOCIAL_MASTER_KEY, AUTH_SECRET, mật khẩu CSDL) — CẢ tệp .env, nên mọi khóa
+#    trong .env (kể cả SOCIAL_MASTER_KEY của 0.23.0) đều nằm trong bản sao lưu.
 # ---------------------------------------------------------------------------
 BUOC="mã hóa .env"
 MAT_KHAU="$(doc_mat_khau_sao_luu)"
 if [ -z "$MAT_KHAU" ]; then
   echo "⚠ CHƯA ĐẶT MẬT KHẨU SAO LƯU (BACKUP_PASSPHRASE hoặc /root/.cowork-sao-luu-mat-khau) — KHÔNG sao lưu .env."
   echo "⚠ Mất máy chủ mà không có .env thì mất APP_ENC_KEY: mật khẩu SMTP và 2 lớp đã lưu không giải mã được."
+  echo "⚠ …và mất SOCIAL_MASTER_KEY: mật khẩu ứng dụng WordPress / App Secret đã lưu phải nhập lại."
 elif ! command -v gpg >/dev/null 2>&1; then
   echo "❌ Đã đặt mật khẩu sao lưu nhưng máy chủ không có gpg (dnf install gnupg2)"
   exit 1

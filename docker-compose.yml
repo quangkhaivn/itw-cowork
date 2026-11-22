@@ -49,6 +49,9 @@ services:
       APP_URL: ${APP_URL}
       # 0.16.0: khóa mã hóa mật khẩu SMTP + khóa TOTP, và ký liên kết huỷ nhận tin.
       APP_ENC_KEY: ${APP_ENC_KEY}
+      # 0.23.0: khóa chủ mạng xã hội — app chỉ NIÊM PHONG (mật khẩu ứng dụng WordPress, App Secret); worker mới mở.
+      SOCIAL_MASTER_KEY: ${SOCIAL_MASTER_KEY:-}
+      SOCIAL_MASTER_KEY_VERSION: ${SOCIAL_MASTER_KEY_VERSION:-1}
       # Trợ lý AI (Phase 9). Trước 0.16.1 ba biến này không được chuyển vào container nên trợ lý
       # trên máy thật luôn báo "chưa cấu hình" dù .env đã có khóa. Để trống = trợ lý báo chưa cấu hình.
       AI_PROVIDER: ${AI_PROVIDER:-anthropic}
@@ -79,9 +82,23 @@ services:
       # 0.16.0: worker gửi chiến dịch email — cần giải mã mật khẩu SMTP và dựng liên kết trong thư.
       APP_ENC_KEY: ${APP_ENC_KEY}
       APP_URL: ${APP_URL}
+      # 0.23.0: worker đăng bài mạng xã hội — nơi duy nhất mở niêm phong (SEC-06). Xoay khóa: thêm SOCIAL_MASTER_KEY_V<n>.
+      SOCIAL_MASTER_KEY: ${SOCIAL_MASTER_KEY:-}
+      SOCIAL_MASTER_KEY_VERSION: ${SOCIAL_MASTER_KEY_VERSION:-1}
+      SOCIAL_MASTER_KEY_V1: ${SOCIAL_MASTER_KEY_V1:-}
+      # Dự phòng thông tin app nền tảng (màn hình Quản trị → Kết nối nền tảng ưu tiên hơn). Để trống = không dùng.
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      ZALO_APP_ID: ${ZALO_APP_ID:-}
+      ZALO_SECRET_KEY: ${ZALO_SECRET_KEY:-}
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
+    # 0.23.0: worker đọc ảnh của bài mạng xã hội (tệp đính kèm) để tải lên nền tảng — chỉ đọc.
+    volumes:
+      - ./data/dinh-kem:/app/data/dinh-kem:ro
     # 0.16.1 (QĐ-87): worker ghi nhịp vào bảng system_heartbeats mỗi phút; quá 5 phút không có nhịp
     # (vòng lặp treo, mất CSDL) thì container chuyển "unhealthy" — xem bằng `docker compose ps`.
     # Docker KHÔNG tự khởi động lại container unhealthy; màn hình Quản trị → Tự động hóa báo đỏ.

@@ -16,6 +16,9 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+# 0.23.0 (QĐ-201): .env chưa có SOCIAL_MASTER_KEY thì tự sinh (không bao giờ đè khóa đã có).
+bash scripts/sinh-social-master-key.sh .env
+
 # shellcheck disable=SC1091
 set -a; source .env; set +a
 
