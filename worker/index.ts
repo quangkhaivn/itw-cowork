@@ -9,6 +9,8 @@ import { quetChamCong } from "../src/modules/cham-cong/nhac-viec";
 import { quetCongViec } from "../src/modules/cong-viec/nhac-viec";
 import { sinhViecDinhKy } from "../src/modules/cong-viec/mau-lap";
 import { quetBaoCao } from "../src/modules/bao-cao-cong-viec/service";
+import { NHIP_MXH_MS, vongMangXaHoi } from "./mang-xa-hoi/vong";
+import { trangThaiKhoaChu } from "../src/modules/mang-xa-hoi/bao-mat/khoa-chu";
 
 /**
  * Tiến trình nền — Phase 8.
@@ -155,8 +157,27 @@ async function motNhip() {
   }
 }
 
+/**
+ * 0.23.0 — vòng Mạng xã hội chạy song song với nhịp chính, mỗi 15 giây (bài hẹn giờ lệch ≤ 60 giây). Nhịp chính có thể
+ * mất vài chục giây (quét nhắc việc, gửi email) — không để bài hẹn giờ phải chờ.
+ */
+async function vongMxh() {
+  const workerId = `worker-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  const k = trangThaiKhoaChu();
+  if (!k.coKhoa) console.warn(`[worker] Mạng xã hội: ${k.loi} — chưa đăng bài được tới khi đặt khóa.`);
+  while (dangChay) {
+    try {
+      await vongMangXaHoi(prisma, workerId, new Date());
+    } catch (loi) {
+      console.error("[worker] vòng mạng xã hội hỏng:", loi instanceof Error ? loi.message : loi);
+    }
+    await new Promise((r) => setTimeout(r, NHIP_MXH_MS));
+  }
+}
+
 async function main() {
   console.log("[worker] Khởi động. Phase 8: quét nhắc việc hằng ngày theo giờ trong Cấu hình. 0.16.0: gửi chiến dịch email theo lô. 0.16.1: nhịp sống vào PostgreSQL, quét hỏng thì thử lại có giãn cách.");
+  void vongMxh();
   await motNhip();
   while (dangChay) {
     await new Promise((r) => setTimeout(r, NHIP_MS));

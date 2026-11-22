@@ -6,6 +6,7 @@ import { dieuKienXemPhieu } from "@/modules/ho-tro/service";
 import { dieuKienXemViec } from "@/modules/cong-viec/service";
 import { dieuKienXemHopDong } from "@/modules/nhan-su/service";
 import { dieuKienXemTraHangBan, dieuKienXemTraHangMua } from "@/modules/tra-hang/service";
+import { dieuKienXemBai } from "@/modules/mang-xa-hoi/chung";
 import type { LoaiDoiTuong } from "./tinh-toan";
 
 /**
@@ -62,6 +63,11 @@ async function coTrongPhamVi(nc: NguCanh, loai: LoaiDoiTuong, id: string): Promi
       const n = await nc.tx.employmentContract.count({ where: { AND: [{ id }, await dieuKienXemHopDong(nc)] } });
       return n > 0;
     }
+    case "social_post": {
+      // 0.23.0 (MXH): ảnh của bài mạng xã hội — theo phạm vi mxh.view (thực tập sinh: bài của mình).
+      const n = await nc.tx.socialPost.count({ where: { AND: [{ id, deletedAt: null }, await dieuKienXemBai(nc)] } });
+      return n > 0;
+    }
     case "stock_transfer": {
       // Kho là tài sản dùng chung, không chia phạm vi theo người (QĐ-18).
       const n = await nc.tx.stockTransfer.count({ where: { id } });
@@ -81,6 +87,7 @@ const QUYEN_XEM: Record<LoaiDoiTuong, string[]> = {
   task: ["task.view"],
   employment_contract: ["nhan_su.view"],
   task_progress: ["task.view"],
+  social_post: ["mxh.view"],
 };
 
 /** Mã quyền cần có để **đính kèm hoặc gỡ** tệp của từng loại. */
@@ -94,6 +101,7 @@ const QUYEN_SUA: Record<LoaiDoiTuong, string[]> = {
   task: ["task.update"],
   employment_contract: ["nhan_su.update"],
   task_progress: ["task.update"],
+  social_post: ["mxh.create", "mxh.update"],
 };
 
 export async function duocXemChungTu(nc: NguCanh, loai: LoaiDoiTuong, id: string): Promise<boolean> {
@@ -104,6 +112,13 @@ export async function duocXemChungTu(nc: NguCanh, loai: LoaiDoiTuong, id: string
 
 export async function duocSuaChungTu(nc: NguCanh, loai: LoaiDoiTuong, id: string): Promise<boolean> {
   if (!QUYEN_SUA[loai] || !coMotTrongCacQuyen(nc.hoSo, QUYEN_SUA[loai])) return false;
+  if (loai === "social_post") {
+    // Ảnh chỉ thêm / gỡ khi bài còn nháp / đã hủy (đã gửi duyệt / hẹn giờ thì ảnh đã chụp — thứ đã duyệt là thứ được
+    // đăng). Người chỉ có mxh.create (thực tập sinh) chỉ sửa bài của mình.
+    const b = await nc.tx.socialPost.findFirst({ where: { id, deletedAt: null }, select: { status: true, createdBy: true } });
+    if (!b || !["DRAFT", "CANCELED"].includes(b.status)) return false;
+    if (!nc.hoSo.quyen.has("mxh.update") && b.createdBy !== nc.hoSo.userId) return false;
+  }
   // Sửa được thì đương nhiên phải xem được. Kiểm phạm vi một lần ở đây là đủ.
   return coTrongPhamVi(nc, loai, id);
 }

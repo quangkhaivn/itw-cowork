@@ -124,7 +124,6 @@ export const wordpress: SocialConnector = {
     if ((nd.tieuDe ?? "").length > 300) v.push({ truong: "tieuDe", thongBao: "Tiêu đề tối đa 300 ký tự." });
     if (!nd.noiDung.trim()) v.push({ truong: "noiDung", thongBao: "Nội dung trống." });
     if (nd.noiDung.length > 100_000) v.push({ truong: "noiDung", thongBao: "Nội dung tối đa 100.000 ký tự." });
-    if (nd.soAnh > 1) v.push({ truong: "anh", thongBao: "WordPress dùng 1 ảnh làm ảnh đại diện — các ảnh sau bị bỏ qua." });
     return v;
   },
 
