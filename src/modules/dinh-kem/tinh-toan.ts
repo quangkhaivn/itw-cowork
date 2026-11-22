@@ -21,6 +21,8 @@ export const LOAI_DOI_TUONG = [
   "employment_contract",
   // 0.20.0 (DG-13): ảnh / tệp kèm một dòng tiến độ công việc — quyền mượn từ công việc chứa dòng đó.
   "task_progress",
+  // 0.23.0 (MXH): ảnh của bài mạng xã hội — quyền mxh.view / mxh.create|update, phạm vi theo bài; chỉ sửa khi bài còn nháp.
+  "social_post",
 ] as const;
 export type LoaiDoiTuong = (typeof LOAI_DOI_TUONG)[number];
 
@@ -34,6 +36,7 @@ export const NHAN_LOAI_DOI_TUONG: Record<string, string> = {
   task: "Công việc",
   employment_contract: "Hợp đồng lao động",
   task_progress: "Tiến độ công việc",
+  social_post: "Bài mạng xã hội",
 };
 
 /**

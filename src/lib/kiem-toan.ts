@@ -133,7 +133,27 @@ export type HanhDong =
   | "huy-dang-ky-may"
   | "sua-nguoi-phu-thuoc"
   | "giai-phong-sn"
-  | "doi-chieu-cong-sau-khoa";
+  | "doi-chieu-cong-sau-khoa"
+  // 0.23.0 — mạng xã hội (QĐ-193 →). KHÔNG ghi mật khẩu ứng dụng / token / App Secret vào nhật ký.
+  | "ket-noi-kenh-mxh"
+  | "doi-mat-khau-kenh-mxh"
+  | "ngat-kenh-mxh"
+  | "kiem-tra-kenh-mxh"
+  | "gui-duyet-bai-mxh"
+  | "rut-duyet-bai-mxh"
+  | "duyet-bai-mxh"
+  | "tra-lai-bai-mxh"
+  | "dang-ngay-bai-mxh"
+  | "hen-gio-bai-mxh"
+  | "huy-lich-bai-mxh"
+  | "dang-lai-bai-mxh"
+  | "ve-nhap-bai-mxh"
+  | "tao-link-media-mxh"
+  | "phat-media-mxh"
+  | "luu-thong-tin-app-mxh"
+  | "doi-bi-mat-app-mxh"
+  | "xoa-bi-mat-app-mxh"
+  | "kiem-tra-app-mxh";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;
@@ -167,6 +187,16 @@ const KHOA_NHAY_CAM = new Set([
   "totpSecretEnc",
   "khoaBiMat",
   "maKhoiPhuc",
+  // 0.23.0 — mạng xã hội: mật khẩu ứng dụng WordPress, bí mật app nền tảng, bản niêm phong.
+  "matKhauUngDung",
+  "appSecret",
+  "clientSecret",
+  "secretKey",
+  "biMat",
+  "ciphertext",
+  "wrappedKey",
+  "accessToken",
+  "access_token",
 ]);
 
 /** Che giá trị nhạy cảm trước khi ghi. Không đưa mật khẩu hay khóa API vào nhật ký. */

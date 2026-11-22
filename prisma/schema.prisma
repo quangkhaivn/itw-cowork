@@ -197,6 +197,17 @@ model Tenant {
   payrollReconciliations PayrollAttendanceReconciliation[]
   attendanceManualDays   AttendanceManualDay[]
   defaultScheduleChanges DefaultScheduleChange[]
+  // 0.23.0 — Mạng xã hội
+  socialConnections      SocialConnection[]
+  socialCredentials      SocialCredential[]
+  socialAppConfigs       SocialAppConfig[]
+  socialPosts            SocialPost[]
+  socialPostVariants     SocialPostVariant[]
+  socialPostMedia        SocialPostMedia[]
+  socialPostTargets      SocialPostTarget[]
+  socialPublishAttempts  SocialPublishAttempt[]
+  socialPostReviews      SocialPostReview[]
+  brandProfiles          BrandProfile[]
 
   @@map("tenants")
 }
@@ -2891,6 +2902,7 @@ model Attachment {
 
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   uploader User   @relation("TepDinhKemNguoiTai", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  socialPostMedia SocialPostMedia[]
 
   @@index([tenantId, objectType, objectId])
   @@index([tenantId, sha256])
@@ -5059,4 +5071,287 @@ model PayrollAttendanceReconciliation {
   @@unique([sourceRunId, userId])
   @@index([tenantId, status])
   @@map("payroll_attendance_reconciliations")
+}
+
+// ---------------------------------------------------------------------------
+// 0.23.0 — Mạng xã hội: nền tảng + WordPress. Luật: BUSINESS_RULES.md mục 34 (MXH). QĐ-193 →.
+// Trạng thái đăng nằm ở TỪNG kênh (social_post_targets); chỉ "Đã đăng" khi có mã bài nền tảng trả về VÀ đã đọc lại
+// khớp (ADR-05, trigger kiem_target_da_dang). Bí mật (mật khẩu ứng dụng WordPress, App Secret) mã hóa envelope bằng
+// SOCIAL_MASTER_KEY; chỉ worker giải mã (SEC-06).
+// ---------------------------------------------------------------------------
+
+/// Danh mục nền tảng toàn hệ thống (ADR-04) — KHÔNG tenant. Ứng dụng chỉ đọc; đổi trạng thái bằng migration / quản trị máy chủ.
+model SocialConnectorSetting {
+  platform     String   @id @db.VarChar(30)
+  name         String   @db.VarChar(100)
+  /// AVAILABLE | PENDING_APPROVAL | DISABLED
+  availability String   @default("DISABLED") @db.VarChar(20)
+  enabled      Boolean  @default(false)
+  note         String?  @db.Text
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("social_connector_settings")
+}
+
+/// Kênh đã nối của doanh nghiệp (site WordPress, Page…). Ngắt kênh = đặt disconnected_at + hủy bản niêm phong.
+model SocialConnection {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  platform         String    @db.VarChar(30)
+  name             String    @db.VarChar(200)
+  /// WordPress: địa chỉ site đã chuẩn hóa (https://…, không có / cuối).
+  externalId       String    @map("external_id") @db.VarChar(500)
+  /// Tên đăng nhập WordPress (không phải bí mật).
+  accountName      String?   @map("account_name") @db.VarChar(200)
+  /// ACTIVE | NEEDS_REAUTH | ERROR | DISCONNECTED
+  status           String    @default("ACTIVE") @db.VarChar(20)
+  meta             Json      @default("{}")
+  lastCheckedAt    DateTime? @map("last_checked_at") @db.Timestamptz(6)
+  lastCheckOk      Boolean?  @map("last_check_ok")
+  lastCheckMessage String?   @map("last_check_message") @db.Text
+  /// Người dùng bấm "Kiểm tra lại" — worker (nơi duy nhất giải mã được) xử lý rồi xóa mốc.
+  checkRequestedAt DateTime? @map("check_requested_at") @db.Timestamptz(6)
+  disconnectedAt   DateTime? @map("disconnected_at") @db.Timestamptz(6)
+  createdBy        String    @map("created_by") @db.Uuid
+  updatedBy        String?   @map("updated_by") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  credential SocialCredential?
+  targets    SocialPostTarget[]
+
+  @@index([tenantId, status])
+  @@map("social_connections")
+}
+
+/// Bí mật của kênh, niêm phong envelope (SEC-05): data key AES-256-GCM riêng, bọc bằng khóa chủ SOCIAL_MASTER_KEY
+/// phiên bản key_version; AAD = doanh nghiệp + kênh. Ứng dụng web chỉ NIÊM PHONG; chỉ worker mở (SEC-06).
+model SocialCredential {
+  connectionId String   @id @map("connection_id") @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  ciphertext   Bytes
+  iv           Bytes
+  authTag      Bytes    @map("auth_tag")
+  /// iv(12) | tag(16) | data key đã mã hóa (32) — 60 byte.
+  wrappedKey   Bytes    @map("wrapped_key")
+  keyVersion   Int      @map("key_version")
+  updatedBy    String?  @map("updated_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connection SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("social_credentials")
+}
+
+/// Thông tin app của nền tảng (Meta App ID + App Secret, Google OAuth client, Zalo app) theo doanh nghiệp — Giám đốc /
+/// Quản trị nhập trên màn hình "Kết nối nền tảng (API)". Bí mật niêm phong như social_credentials, AAD = doanh nghiệp + nền tảng.
+model SocialAppConfig {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  /// META | GOOGLE | ZALO
+  provider         String    @db.VarChar(20)
+  /// Phần không bí mật: appId, graphVersion, clientId.
+  publicConfig     Json      @default("{}") @map("public_config")
+  ciphertext       Bytes?
+  iv               Bytes?
+  authTag          Bytes?    @map("auth_tag")
+  wrappedKey       Bytes?    @map("wrapped_key")
+  keyVersion       Int?      @map("key_version")
+  secretLast4      String?   @map("secret_last4") @db.VarChar(4)
+  secretUpdatedAt  DateTime? @map("secret_updated_at") @db.Timestamptz(6)
+  secretUpdatedBy  String?   @map("secret_updated_by") @db.Uuid
+  /// ok | loi | chi-dinh-dang
+  checkStatus      String?   @map("check_status") @db.VarChar(20)
+  checkMessage     String?   @map("check_message") @db.Text
+  checkedAt        DateTime? @map("checked_at") @db.Timestamptz(6)
+  checkRequestedAt DateTime? @map("check_requested_at") @db.Timestamptz(6)
+  updatedBy        String?   @map("updated_by") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@map("social_app_configs")
+}
+
+/// Bài mạng xã hội. Trạng thái bài là tổng hợp; trạng thái thật nằm ở từng kênh (social_post_targets).
+model SocialPost {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  title            String?   @db.VarChar(300)
+  body             String    @db.Text
+  /// DRAFT | PENDING_APPROVAL | APPROVED | SCHEDULED | PUBLISHING | PUBLISHED | PARTIALLY_FAILED | FAILED | CANCELED
+  status           String    @default("DRAFT") @db.VarChar(20)
+  scheduledAt      DateTime? @map("scheduled_at") @db.Timestamptz(6)
+  /// Người gửi duyệt muốn: ngay | hen-gio (để duyệt xong chạy tiếp đúng ý).
+  publishMode      String?   @map("publish_mode") @db.VarChar(10)
+  /// user | ai — bài do AI tạo phải duyệt khi Cấu hình mxh.ai_phai_duyet = 1 (SEC-09).
+  createdByType    String    @default("user") @map("created_by_type") @db.VarChar(10)
+  submittedBy      String?   @map("submitted_by") @db.Uuid
+  submittedAt      DateTime? @map("submitted_at") @db.Timestamptz(6)
+  approvedBy       String?   @map("approved_by") @db.Uuid
+  approvedAt       DateTime? @map("approved_at") @db.Timestamptz(6)
+  reviewNote       String?   @map("review_note") @db.Text
+  idempotencyKey   String?   @map("idempotency_key") @db.VarChar(100)
+  revision         Int       @default(1)
+  createdBy        String    @map("created_by") @db.Uuid
+  updatedBy        String?   @map("updated_by") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedBy        String?   @map("deleted_by") @db.Uuid
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants SocialPostVariant[]
+  media    SocialPostMedia[]
+  targets  SocialPostTarget[]
+  reviews  SocialPostReview[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, scheduledAt])
+  @@index([tenantId, createdBy])
+  @@map("social_posts")
+}
+
+/// Nội dung riêng theo nền tảng (để sẵn; 0.23.0 WordPress dùng nội dung chung nếu không có biến thể).
+model SocialPostVariant {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  platform  String   @db.VarChar(30)
+  title     String?  @db.VarChar(300)
+  body      String   @db.Text
+  options   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  post   SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, platform])
+  @@index([tenantId])
+  @@map("social_post_variants")
+}
+
+/// Ảnh của bài — trỏ vào tệp đính kèm (attachments, loại social_post). Chụp lại lúc gửi duyệt / hẹn giờ / đăng.
+model SocialPostMedia {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  postId       String   @map("post_id") @db.Uuid
+  attachmentId String   @map("attachment_id") @db.Uuid
+  position     Int      @default(0)
+  /// featured (ảnh đại diện) | inline
+  role         String   @default("featured") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  post       SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  attachment Attachment @relation(fields: [attachmentId], references: [id], onDelete: Restrict)
+
+  @@unique([postId, attachmentId])
+  @@index([tenantId, attachmentId])
+  @@map("social_post_media")
+}
+
+/// Bài × kênh — trạng thái THẬT của việc đăng.
+model SocialPostTarget {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  postId         String    @map("post_id") @db.Uuid
+  connectionId   String    @map("connection_id") @db.Uuid
+  /// PENDING | QUEUED | PUBLISHING | VERIFYING | PUBLISHED | FAILED | SKIPPED | CANCELED
+  status         String    @default("PENDING") @db.VarChar(20)
+  externalPostId String?   @map("external_post_id") @db.VarChar(200)
+  externalUrl    String?   @map("external_url") @db.Text
+  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz(6)
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(6)
+  /// RETRYABLE | PERMANENT | NEEDS_REAUTH | UNKNOWN
+  errorClass     String?   @map("error_class") @db.VarChar(20)
+  errorCode      String?   @map("error_code") @db.VarChar(100)
+  errorMessage   String?   @map("error_message") @db.Text
+  attemptCount   Int       @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime? @map("next_attempt_at") @db.Timestamptz(6)
+  lockedBy       String?   @map("locked_by") @db.VarChar(100)
+  lockedAt       DateTime? @map("locked_at") @db.Timestamptz(6)
+  /// Khóa đối soát gửi kèm bài (WordPress: slug) — tìm lại bài khi kết quả chưa rõ, không đăng trùng.
+  reconcileKey   String    @map("reconcile_key") @db.VarChar(200)
+  /// attachmentId → mã media trên nền tảng đã tải lên (đăng lại không tải lại).
+  mediaExternal  Json      @default("{}") @map("media_external")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  post       SocialPost             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  connection SocialConnection       @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  attempts   SocialPublishAttempt[]
+
+  @@unique([postId, connectionId])
+  @@index([status, nextAttemptAt])
+  @@index([tenantId, status, nextAttemptAt])
+  @@map("social_post_targets")
+}
+
+/// Bằng chứng mỗi lần gọi nền tảng — CHỈ GHI THÊM (trigger chan_sua_xoa). Không chứa token / mật khẩu.
+model SocialPublishAttempt {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  targetId        String    @map("target_id") @db.Uuid
+  attemptNo       Int       @map("attempt_no")
+  /// media | publish | verify | reconcile
+  kind            String    @db.VarChar(20)
+  /// success | retryable | permanent | needs_reauth | unknown | found | not_found
+  outcome         String    @db.VarChar(20)
+  errorClass      String?   @map("error_class") @db.VarChar(20)
+  httpStatus      Int?      @map("http_status")
+  message         String?   @db.Text
+  responseExcerpt Json?     @map("response_excerpt")
+  workerId        String?   @map("worker_id") @db.VarChar(100)
+  startedAt       DateTime  @map("started_at") @db.Timestamptz(6)
+  finishedAt      DateTime? @map("finished_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  target SocialPostTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, targetId, startedAt])
+  @@map("social_publish_attempts")
+}
+
+/// Lịch sử duyệt bài — CHỈ GHI THÊM. gui-duyet | rut | duyet | tra-lai
+model SocialPostReview {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  action    String   @db.VarChar(20)
+  actorId   String   @map("actor_id") @db.Uuid
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  post   SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, postId, createdAt])
+  @@map("social_post_reviews")
+}
+
+/// Hồ sơ thương hiệu (giọng văn, từ cấm, hashtag) — để sẵn cho trợ lý AI viết bài ở 0.25.
+model BrandProfile {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @unique @map("tenant_id") @db.Uuid
+  voice           String?  @db.Text
+  bannedWords     String[] @default([]) @map("banned_words")
+  defaultHashtags String[] @default([]) @map("default_hashtags")
+  ctaTemplates    Json     @default("[]") @map("cta_templates")
+  updatedBy       String?  @map("updated_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("brand_profiles")
 }

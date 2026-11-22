@@ -51,6 +51,10 @@ export const PHAN_HE = [
   // 0.22.0 — máy chấm công (QĐ-176): Kỹ thuật đăng ký / sửa / xem máy, máy lạ, ánh xạ PIN ↔ nhân viên (chỉ thấy tên)
   // mà KHÔNG cần quyền hồ sơ nhân sự hay lương.
   "may_cham_cong",
+  // 0.23.0 — Mạng xã hội (QĐ-193): kênh đã nối, soạn / duyệt / đăng bài. view = xem kênh, bài; create = soạn nháp, gửi duyệt;
+  // update = đăng ngay / hẹn giờ / hủy lịch / đăng lại, kết nối kênh; approve = duyệt bài người khác soạn; delete = xóa nháp,
+  // ngắt kênh; export = xuất danh sách bài. Trợ lý AI chưa có quyền nào (0.25 cân nhắc).
+  "mxh",
 ] as const;
 
 // Thêm phân hệ mới: thêm vào CUỐI mảng trên + MO_TA_PHAN_HE, rồi khai quyền cho
@@ -116,6 +120,7 @@ export const MO_TA_PHAN_HE: Record<PhanHe, string> = {
   danh_gia: "Đánh giá nhân sự",
   luong: "Tính lương",
   may_cham_cong: "Máy chấm công",
+  mxh: "Mạng xã hội",
 };
 
 export const MO_TA_HANH_DONG: Record<HanhDongQuyen, string> = {
@@ -180,6 +185,14 @@ const DANH_GIA_QUAN_LY = [...DANH_GIA_CA_NHAN, maQuyen("danh_gia", "update"), ma
 const LUONG_CUA_TOI = maQuyen("luong", "view");
 /** 0.22.0 (QĐ-176): kết nối máy chấm công — Kỹ thuật, Trưởng kỹ thuật, Nhân sự; Giám đốc / Quản trị có sẵn ("*"). */
 const MAY_CHAM_CONG = [maQuyen("may_cham_cong", "view"), maQuyen("may_cham_cong", "create"), maQuyen("may_cham_cong", "update")];
+/**
+ * 0.23.0 — Mạng xã hội (QĐ-193). Nhân viên Marketing: soạn, đăng, kết nối kênh, xóa nháp, xuất (không duyệt). Trưởng phòng
+ * Marketing: thêm duyệt. Thực tập sinh Marketing: chỉ xem + soạn nháp / gửi duyệt bài của mình (`own`). Giám đốc / Quản trị
+ * có sẵn ("*"). Trợ lý AI: không có (`kiemTraGioiHanAI`).
+ */
+const MXH_NHAN_VIEN = ["view", "create", "update", "delete", "export"].map((h) => `mxh.${h}`);
+const MXH_TRUONG_PHONG = [...MXH_NHAN_VIEN, "mxh.approve"];
+const MXH_THUC_TAP = ["mxh.view", "mxh.create"];
 function rieng(ds: string[], pv: PhamVi): Record<string, PhamVi> {
   return Object.fromEntries(ds.map((m) => [m, pv]));
 }
@@ -268,6 +281,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...CHAM_CONG_QUAN_LY,
       ...DANH_GIA_QUAN_LY,
       LUONG_CUA_TOI,
+      // 0.23.0: mạng xã hội — QĐ-193.
+      ...MXH_TRUONG_PHONG,
     ],
     phamViRieng: { ...rieng(CHAM_CONG_QUAN_LY, "team"), ...rieng(DANH_GIA_QUAN_LY, "team"), [LUONG_CUA_TOI]: "own" },
   },
@@ -284,6 +299,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
       LUONG_CUA_TOI,
+      // 0.23.0: mạng xã hội — QĐ-193.
+      ...MXH_NHAN_VIEN,
     ],
     phamViRieng: { ...rieng([...CHAM_CONG_CA_NHAN, ...DANH_GIA_CA_NHAN], "own"), [LUONG_CUA_TOI]: "own" },
   },
@@ -432,6 +449,8 @@ export const VAI_TRO: DinhNghiaVaiTro[] = [
       ...CHAM_CONG_CA_NHAN,
       ...DANH_GIA_CA_NHAN,
       LUONG_CUA_TOI,
+      // 0.23.0: mạng xã hội — chỉ nháp của mình (QĐ-193).
+      ...MXH_THUC_TAP,
     ],
     phamViRieng: { [LUONG_CUA_TOI]: "own" },
   },
@@ -501,6 +520,6 @@ export function kiemTraGioiHanAI(): { dat: boolean; viPham: string[] } {
   const ai = VAI_TRO.find((v) => v.code === "ai-assistant");
   if (!ai || ai.quyen === "*") return { dat: false, viPham: ["Vai trò AI đang có toàn quyền"] };
   // 0.20.0 (DG-80): AI không có bất kỳ quyền đánh giá nhân sự nào. 0.21.0 (LU-60): không có quyền lương nào.
-  const viPham = ai.quyen.filter((q) => q.endsWith(".approve") || q.endsWith(".delete") || q.startsWith("danh_gia.") || q.startsWith("luong."));
+  const viPham = ai.quyen.filter((q) => q.endsWith(".approve") || q.endsWith(".delete") || q.startsWith("danh_gia.") || q.startsWith("luong.") || q.startsWith("mxh."));
   return { dat: viPham.length === 0, viPham };
 }
