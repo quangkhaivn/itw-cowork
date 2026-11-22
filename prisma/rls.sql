@@ -50,7 +50,8 @@ BEGIN
                                    'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                                    'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
                                    'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
-                                   'salary_profiles', 'approval_transfers', 'attendance_manual_days', 'default_schedule_changes')
+                                   'salary_profiles', 'approval_transfers', 'attendance_manual_days', 'default_schedule_changes',
+                                   'social_publish_attempts', 'social_post_reviews')
         ORDER BY c.table_name
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -75,7 +76,8 @@ END $$;
 --    và (QA 0.19.0) xét ngày công thiếu giờ attendance_day_reviews (QĐ-116), và (0.21.0) phiên bản
 --    hồ sơ lương salary_profiles (LU-02 — sửa = phiên bản mới),
 --    (0.20.0 chính sách) lịch sử chuyển bước duyệt approval_transfers (QĐ-135),
---    (0.22.0) đặt công một ngày attendance_manual_days (QĐ-174 — bản ghi sau thắng)
+--    (0.22.0) đặt công một ngày attendance_manual_days (QĐ-174 — bản ghi sau thắng),
+--    (0.23.0) bằng chứng gọi nền tảng social_publish_attempts + lịch sử duyệt bài social_post_reviews (MXH)
 --    Không cấp UPDATE/DELETE cho ứng dụng, và chặn thêm bằng trigger để kể cả
 --    chủ sở hữu cũng không lỡ tay sửa lịch sử.
 -- --------------------------------------------------------------------------
@@ -93,7 +95,8 @@ DECLARE
                             'attendance_consents', 'attendance_punch_reviews', 'leave_adjustments',
                             'task_approval_logs', 'task_score_adjustments', 'task_progress_logs',
                             'work_report_comments', 'evaluation_adjustments', 'intern_journal_comments', 'attendance_day_reviews',
-                            'salary_profiles', 'approval_transfers', 'attendance_manual_days', 'default_schedule_changes'];
+                            'salary_profiles', 'approval_transfers', 'attendance_manual_days', 'default_schedule_changes',
+                            'social_publish_attempts', 'social_post_reviews'];
 BEGIN
     FOREACH ten_bang IN ARRAY ds_bang LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', ten_bang);
@@ -181,6 +184,19 @@ CREATE POLICY doc_danh_muc_quyen ON public.permissions
     FOR SELECT
     USING (true);
 GRANT SELECT ON public.permissions TO cowork_app;
+
+-- --------------------------------------------------------------------------
+-- 5a. (0.23.0) `social_connector_settings`: danh mục nền tảng mạng xã hội toàn hệ thống (ADR-04), không tenant, không
+--     bí mật. Ứng dụng CHỈ ĐỌC — bật / tắt nền tảng là việc của quản trị máy chủ (migration / vai chủ sở hữu).
+--     `social_credentials`: ứng dụng không bao giờ được XÓA vật lý bản niêm phong qua đường khác ngoài ngắt kênh
+--     (service ghi đè rồi xóa) — giữ quyền như bảng tenant thường; cách ly bằng RLS ở mục 2.
+-- --------------------------------------------------------------------------
+ALTER TABLE public.social_connector_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS doc_danh_muc_nen_tang ON public.social_connector_settings;
+CREATE POLICY doc_danh_muc_nen_tang ON public.social_connector_settings
+    FOR SELECT
+    USING (true);
+GRANT SELECT ON public.social_connector_settings TO cowork_app;
 
 -- --------------------------------------------------------------------------
 -- 5b. Bảng `system_heartbeats` (0.16.1): nhịp sống worker và sao lưu — toàn hệ
