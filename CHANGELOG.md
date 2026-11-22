@@ -29,7 +29,7 @@ Phân hệ mới **Mạng xã hội** (BUSINESS_RULES mục 34, QĐ-193 → QĐ-
 
 ### Kiểm thử
 - Bộ mới `npm run thu:mang-xa-hoi` (nối cuối `thu:tich-hop`): máy chủ WordPress + Meta Graph GIẢ cục bộ — đăng + đọc lại, 5xx → thử lại, 401 → NEEDS_REAUTH, hết giờ sau khi gửi → đối soát không trùng, 400 → PERMANENT, trigger PUBLISHED, RLS / IDOR, quyền, không tự duyệt, link ký (hết hạn, sửa chữ ký), SSRF, bí mật không lộ, route không import hàm giải mã, hai worker cùng nhận, tự sinh khóa. `thu/don-vi/mang-xa-hoi.test.ts` (38 bài).
-- Sửa bài thử `thu:qa-danh-gia` DG-43 phụ thuộc thứ trong tuần (hỏng vào Chủ nhật) — QĐ-202.
+- Sửa lỗi có sẵn DG-43 (QĐ-202): người vào làm Chủ nhật bị tính "thiếu" báo cáo tuần có hạn nộp thứ Bảy — trước ngày vào làm. `thu:qa-danh-gia` hỏng đúng vào Chủ nhật.
 
 ## 0.22.1 — 09/11/2026 — Hướng dẫn kết nối máy chấm công
 

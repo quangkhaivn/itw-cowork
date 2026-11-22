@@ -362,7 +362,8 @@ export async function thongKeBaoCaoTuan(tx: ClientTenant, userId: string, tu: st
   for (let dau = kyBaoCao("tuan", tu).tu; dau <= den; dau = congNgay(dau, 7)) {
     const han = hanBaoCao("tuan", dau, ch);
     const ngayHan = new Date(han.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
-    if (ngayHan < tu || ngayHan > den || han > bayGio || !batBuocTrongKy(phai, congNgay(dau, 6))) continue;
+    // QĐ-202: hạn nộp rơi TRƯỚC ngày vào làm (người vào làm Chủ nhật, hạn báo cáo tuần là thứ Bảy) thì không phải nộp tuần đó.
+    if (ngayHan < tu || ngayHan > den || han > bayGio || !batBuocTrongKy(phai, congNgay(dau, 6)) || (phai.vaoLam && ngayHan < phai.vaoLam)) continue;
     kq.soTuan += 1;
     const r = ds.find((x) => dateVeNgay(x.periodStart) === dau);
     const tt = tinhTrangBaoCao(han, r?.submittedAt ?? null, bayGio);

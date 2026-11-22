@@ -426,9 +426,7 @@ async function main() {
   const homNay = homNayVN();
   const moiVao = await nguoi("Người mới vào QA", "sales", { quanLy: tp, phong: pbKD });
   await chu.staffProfile.update({ where: { userId: moiVao }, data: { hiredAt: new Date(`${homNay}T00:00:00Z`) } });
-  // Chỉ xét các tuần TRƯỚC ngày vào làm (đến hôm qua). Bản cũ lấy đến hôm nay nên hỏng vào Chủ nhật sau hạn nộp: tuần kết thúc
-  // đúng ngày vào làm là tuần phải nộp (batBuocTrongKy theo ngày cuối tuần) — bài thử phụ thuộc thứ trong tuần (0.23.0).
-  const tkMoi = await voiTenant(T, (tx) => thongKeBaoCaoTuan(tx, moiVao, congNgay(homNay, -30), congNgay(homNay, -1)));
+  const tkMoi = await voiTenant(T, (tx) => thongKeBaoCaoTuan(tx, moiVao, congNgay(homNay, -30), homNay));
   dat("DG-43: thống kê báo cáo tuần không đếm 'thiếu' các tuần trước ngày vào làm", tkMoi.thieu === 0 && tkMoi.soTuan === 0, JSON.stringify(tkMoi));
   const bangTuanTruoc = await voi(T, tp, (nc) => bangBaoCaoNhom(nc, "tuan", congNgay(homNay, -7)));
   dat("DG-45: trang nhóm tuần trước không ghi người mới vào là thiếu", !bangTuanTruoc.dong.some((d) => d.nguoiId === moiVao), bangTuanTruoc.dong.find((d) => d.nguoiId === moiVao)?.tinhTrang ?? "");
