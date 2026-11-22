@@ -59,7 +59,7 @@ export interface PhanHoiAnToan {
 type DiaChiDaKiem = { address: string; family: 4 | 6 };
 
 function laTenLocalhost(host: string): boolean {
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  return host === "localhost" || host === "127.0.0.1";
 }
 
 /** Kiểm URL + phân giải + kiểm địa chỉ. Xuất ra để bài thử kiểm từng nhánh mà không cần nối mạng. */

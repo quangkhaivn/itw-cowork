@@ -110,8 +110,8 @@ export async function danhSachBai(nc: NguCanh, loc: z.infer<typeof LuocDoLocBai>
   batBuocQuyen(nc.hoSo, "mxh.view");
   const KICH = 30;
   const where = { AND: [{ deletedAt: null }, await dieuKienXemBai(nc), loc.trangThai ? { status: loc.trangThai } : {}] };
-  const [tong, ds] = await Promise.all([
-    nc.tx.socialPost.count({ where }),
+  const tong = await nc.tx.socialPost.count({ where });
+  const [ds] = await Promise.all([
     nc.tx.socialPost.findMany({
       where,
       include: {
@@ -147,11 +147,9 @@ async function tenNguoi(nc: NguCanh, ids: (string | null)[]) {
 export async function chiTietBai(nc: NguCanh, id: string) {
   batBuocQuyen(nc.hoSo, "mxh.view");
   const b = await layBai(nc, id);
-  const [ten, lichSu, duyet] = await Promise.all([
-    tenNguoi(nc, [b.createdBy, b.submittedBy, b.approvedBy]),
-    nc.tx.socialPostReview.findMany({ where: { postId: id }, orderBy: { createdAt: "asc" } }),
-    nguoiDuyetHopLe(nc, b).catch(() => ({ ok: false as const, lyDo: "" })),
-  ]);
+  const ten = await tenNguoi(nc, [b.createdBy, b.submittedBy, b.approvedBy]);
+  const lichSu = await nc.tx.socialPostReview.findMany({ where: { postId: id }, orderBy: { createdAt: "asc" } });
+  const duyet = b.status === "PENDING_APPROVAL" ? await nguoiDuyetHopLe(nc, b) : { ok: false as const, lyDo: "" };
   const tenLs = await tenNguoi(nc, lichSu.map((l) => l.actorId));
   const st = b.status as TrangThaiBai;
   const soan = duocSoan(nc, b);

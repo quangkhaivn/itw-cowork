@@ -18,14 +18,13 @@ export interface CauHinhMxh {
 
 /** Đọc mọi khóa Cấu hình của phân hệ trong ngữ cảnh doanh nghiệp. */
 export async function docCauHinhMxh(tx: ClientTenant): Promise<CauHinhMxh> {
-  const [ai, link, lan, han, cho, ket] = await Promise.all([
-    docCauHinh(tx, "mxh.ai_phai_duyet"),
-    docCauHinh(tx, "mxh.han_link_media_phut"),
-    docCauHinh(tx, "mxh.so_lan_thu_toi_da"),
-    docCauHinh(tx, "mxh.han_goi_giay"),
-    docCauHinh(tx, "mxh.cho_doi_soat_giay"),
-    docCauHinh(tx, "mxh.phut_ket_dang"),
-  ]);
+  // Tuần tự: một giao dịch là một kết nối — truy vấn song song trên cùng kết nối chỉ xếp hàng (và pg cảnh báo).
+  const ai = await docCauHinh(tx, "mxh.ai_phai_duyet");
+  const link = await docCauHinh(tx, "mxh.han_link_media_phut");
+  const lan = await docCauHinh(tx, "mxh.so_lan_thu_toi_da");
+  const han = await docCauHinh(tx, "mxh.han_goi_giay");
+  const cho = await docCauHinh(tx, "mxh.cho_doi_soat_giay");
+  const ket = await docCauHinh(tx, "mxh.phut_ket_dang");
   return {
     // Chỉ đúng 0 mới tắt (mặc định an toàn: phải duyệt).
     aiPhaiDuyet: ai !== 0,

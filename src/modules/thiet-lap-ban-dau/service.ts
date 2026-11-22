@@ -8,6 +8,7 @@ import { nguoiGiuQuyen } from "@/modules/thong-bao/service";
 import { hoSoApDung, soNguoiPhuThuocChuaDu } from "@/modules/luong/ho-so";
 import { LOAI_THAM_SO, chonBoHieuLuc } from "@/modules/luong/tinh-toan";
 import { dateVeNgay } from "@/modules/crm/chung";
+import { coGiaTriMayChu } from "@/modules/mang-xa-hoi/nen-tang-app";
 
 /**
  * 0.22.0 (QĐ-180) — "Thiết lập ban đầu": việc cần BỔ SUNG theo người phụ trách. Không việc nào bắt buộc — phần mềm vẫn
@@ -15,7 +16,7 @@ import { dateVeNgay } from "@/modules/crm/chung";
  * / distinct), chạy trong ngữ cảnh doanh nghiệp (RLS). Không trả số tiền, không trả tên người — chỉ con số còn thiếu.
  */
 
-export type MaNhomThietLap = "nhan-su" | "ke-toan" | "ky-thuat" | "quan-tri";
+export type MaNhomThietLap = "nhan-su" | "ke-toan" | "ky-thuat" | "marketing" | "quan-tri";
 
 export interface ViecThietLap {
   ma: string;
@@ -45,6 +46,8 @@ export function nhomDuocThay(nc: NguCanh): MaNhomThietLap[] {
   if (coQuyen(nc.hoSo, "nhan_su.update")) ds.push("nhan-su");
   if (coQuyen(nc.hoSo, "luong.create") || coQuyen(nc.hoSo, "luong.update")) ds.push("ke-toan");
   if (coQuyenMay(nc, "view")) ds.push("ky-thuat");
+  // 0.23.0 — người phụ trách nối kênh mạng xã hội: Marketing (mxh.update).
+  if (coQuyen(nc.hoSo, "mxh.update")) ds.push("marketing");
   if (coQuyen(nc.hoSo, "setting.update")) ds.push("quan-tri");
   return ds;
 }
@@ -116,7 +119,20 @@ export async function viecThietLap(nc: NguCanh, homNay = homNayVN()): Promise<{ 
     });
   }
 
+  if (thay.includes("marketing")) {
+    const kenh = await tx.socialConnection.count({ where: { disconnectedAt: null, status: "ACTIVE" } });
+    nhom.push({
+      ma: "marketing",
+      ten: "Marketing",
+      viec: [
+        viec("ket-noi-kenh-mxh", "Kết nối kênh mạng xã hội", kenh > 0 ? 0 : 1, "/mang-xa-hoi/kenh", "Nối site WordPress bằng mật khẩu ứng dụng (hướng dẫn: docs/HUONG-DAN-MANG-XA-HOI.md). Facebook, Instagram, YouTube, Zalo OA mở ở bản sau."),
+      ],
+    });
+  }
+
   if (thay.includes("quan-tri")) {
+    const appDaNhap = await tx.socialAppConfig.findMany({ where: { provider: { in: ["META", "GOOGLE"] }, ciphertext: { not: null } }, select: { provider: true } });
+    const thieuApp = (["META", "GOOGLE"] as const).filter((p) => !appDaNhap.some((a) => a.provider === p) && !coGiaTriMayChu(p)).length;
     const [ten, logo, mauTruong, giuQuyen] = await Promise.all([
       tx.tenantSetting.count({ where: { key: { in: ["cong_ty.ten", "cong_ty.dia_chi", "cong_ty.ma_so_thue"] }, status: "hoat-dong" } }),
       tx.tenantSetting.count({ where: { key: KHOA_LOGO, status: "hoat-dong" } }),
@@ -133,6 +149,7 @@ export async function viecThietLap(nc: NguCanh, homNay = homNayVN()): Promise<{ 
         viec("logo", "Logo công ty", logo > 0 ? 0 : 1, "/quan-tri/ho-so-cong-ty", "Chưa có logo thì bản in chỉ có chữ."),
         viec("mau-phieu-thuc-tap", "Mẫu phiếu đánh giá thực tập của trường", mauTruong > 0 ? 0 : 1, "/thuc-tap/mau", "Chưa có mẫu của trường thì dùng mẫu chung."),
         viec("bat-2-lop", "Bật xác thực 2 lớp (người quản lý lương / cấu hình)", chua2Lop, "/tai-khoan#xac-thuc-2-lop", "Xem / tính lương người khác cần 2 lớp (Cấu hình luong.bat_buoc_2_lop)."),
+        viec("thong-tin-app-mxh", "Nhập thông tin app Meta / Google", thieuApp, "/quan-tri/ket-noi-nen-tang", "Cần khi nối Facebook / Instagram / YouTube / Google Drive (từ 0.24). WordPress không cần."),
       ],
     });
   }

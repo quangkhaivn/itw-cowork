@@ -117,7 +117,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
         // 0.22.0 (QĐ-180): việc cần bổ sung theo người phụ trách — không bắt buộc, phần mềm vẫn chạy.
         nhan: "Thiết lập ban đầu",
         href: "/thiet-lap-ban-dau",
-        quyen: ["nhan_su.update", "luong.create", "luong.update", "may_cham_cong.view", "setting.update"],
+        quyen: ["nhan_su.update", "luong.create", "luong.update", "may_cham_cong.view", "setting.update", "mxh.update"],
         bieuTuong: "thiet-lap",
         tuKhoa: "thiet lap ban dau bo sung sau con thieu onboarding cai dat",
       },
