@@ -2,6 +2,35 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.23.0 (chưa phát hành) — Mạng xã hội: nền tảng + WordPress
+
+Phân hệ mới **Mạng xã hội** (BUSINESS_RULES mục 34, QĐ-193 → QĐ-202), theo thiết kế ITW SOCIAL MCP đã duyệt nhưng đặt trong Cowork. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md`.
+
+### Thêm
+- **Kênh WordPress chạy thật**: nối bằng địa chỉ HTTPS + tên đăng nhập + mật khẩu ứng dụng, nút **Kiểm tra kết nối** (kiểm quyền đăng bài / tải ảnh), nhập lại mật khẩu, kiểm tra lại (worker), ngắt kênh. Facebook Page, Instagram (chờ nền tảng duyệt), YouTube, Zalo OA (chưa hỗ trợ) có mặt trong danh mục, chưa có code.
+- **Soạn bài**: tiêu đề, nội dung chữ thường (tự thành HTML an toàn), ảnh (ảnh đầu = ảnh đại diện), chọn kênh, **Đăng ngay** / **Hẹn giờ** (giờ Việt Nam), **Hủy lịch**, **Đăng lại** các kênh lỗi, chống tạo trùng bằng `Idempotency-Key`.
+- **Danh sách bài và lịch 14 ngày**: trạng thái từng kênh, link bài chỉ khi đã xác minh, lỗi kèm hướng dẫn theo loại (RETRYABLE / PERMANENT / NEEDS_REAUTH / UNKNOWN), nhật ký gọi nền tảng, xuất CSV.
+- **Duyệt bài**: gửi duyệt kèm ý định (đăng ngay / hẹn giờ / để sau), duyệt / trả lại có lý do, không tự duyệt, người duyệt theo chuỗi cấp trên / Giám đốc / Quản trị / phạm vi; trang **Chờ duyệt**; bài do AI tạo phải duyệt (Cấu hình `mxh.ai_phai_duyet`, mặc định bật).
+- **Worker đăng bài** mỗi 15 giây: nhận việc không trùng giữa nhiều worker, thử lại có giãn cách, **đối soát** khi kết quả chưa rõ (không đăng lại mù), chỉ "Đã đăng" khi nền tảng trả mã bài và đọc lại khớp (trigger CSDL chặn thêm).
+- **Quản trị → Kết nối nền tảng (API)**: Giám đốc / Quản trị (đã bật 2 lớp) nhập App ID / App Secret Meta (Graph API điền sẵn), Client ID / Secret Google, App ID / Secret Key Zalo ngay trên màn hình; hiện sẵn tên miền, Redirect URI có nút sao chép, hướng dẫn từng bước; nút **Kiểm tra** (Meta: xin app token thật; Google / Zalo: định dạng); bí mật chỉ hiện 4 ký tự cuối; X / TikTok / LinkedIn "chưa hỗ trợ". Kỹ thuật / Marketing chỉ thấy "đã cấu hình / chưa".
+- **Link ảnh công khai có ký**, hết hạn 60 phút (Cấu hình), trên chính tên miền Cowork — để sẵn cho Instagram (0.24).
+- **Thiết lập ban đầu**: "Kết nối kênh mạng xã hội" (Marketing), "Nhập thông tin app Meta / Google" (Quản trị).
+- Quyền mới `mxh.*`; 6 khóa Cấu hình nhóm **Mạng xã hội**; bảng `brand_profiles` để sẵn cho 0.25.
+
+### Bảo mật
+- Bí mật niêm phong envelope (data key AES-256-GCM riêng, bọc bằng khóa chủ **`SOCIAL_MASTER_KEY`** — biến mới, không dùng chung `APP_ENC_KEY`), AAD doanh nghiệp + kênh / nền tảng, `key_version` + lệnh xoay khóa `npm run mxh:boc-lai-khoa`. **Chỉ worker mở được**: hàm mở nằm ngoài `src/`, ESLint cấm import, bài thử quét đồ thị import.
+- Gọi địa chỉ người dùng nhập chống SSRF (chỉ HTTPS, chặn IP nội bộ / link-local / metadata, ghim địa chỉ đã kiểm, không theo chuyển hướng sang máy khác, hạn giờ, trần dung lượng).
+- Mật khẩu ứng dụng / App Secret / tiêu đề Authorization không xuất hiện trong API, log, nhật ký kiểm toán, sự kiện, thông báo (bài thử kiểm).
+
+### Triển khai
+- `SOCIAL_MASTER_KEY` **tự sinh** bởi `trien-khai.sh` và bộ cài Windows khi `.env` chưa có (không bao giờ đè). Sao lưu `.env` mã hóa đã gồm khóa. Xem DEPLOYMENT → "Nâng cấp lên 0.23.0".
+- docker-compose: worker nhận khóa và gắn thư mục tệp đính kèm chỉ-đọc.
+- Migration `20261122090001_mang_xa_hoi`; chạy lại `prisma/rls.sql` + `db:seed`.
+
+### Kiểm thử
+- Bộ mới `npm run thu:mang-xa-hoi` (nối cuối `thu:tich-hop`): máy chủ WordPress + Meta Graph GIẢ cục bộ — đăng + đọc lại, 5xx → thử lại, 401 → NEEDS_REAUTH, hết giờ sau khi gửi → đối soát không trùng, 400 → PERMANENT, trigger PUBLISHED, RLS / IDOR, quyền, không tự duyệt, link ký (hết hạn, sửa chữ ký), SSRF, bí mật không lộ, route không import hàm giải mã, hai worker cùng nhận, tự sinh khóa. `thu/don-vi/mang-xa-hoi.test.ts` (38 bài).
+- Sửa bài thử `thu:qa-danh-gia` DG-43 phụ thuộc thứ trong tuần (hỏng vào Chủ nhật) — QĐ-202.
+
 ## 0.22.1 — 09/11/2026 — Hướng dẫn kết nối máy chấm công
 
 - Màn hình **Máy chấm công**: khi `APP_URL` là `127.0.0.1` (bản chạy thử trên máy cá nhân), hướng dẫn lấy địa chỉ đang mở nếu đó là IP trong mạng, không thì nhắc nhập IP mạng nội bộ của máy chủ (`CHAY-MANG-NOI-BO.bat` hiện IP). Bước đăng ký nói rõ mã xác minh 6 số.

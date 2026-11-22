@@ -228,6 +228,34 @@ Rồi `nginx -t && systemctl reload nginx`. Kiểm từ ngoài: `curl -i "http:/
 - Trước khi triển khai migration có sửa dữ liệu: **diễn tập nâng cấp** — dựng CSDL giống hệt bản đang chạy (migration cũ + seed cũ), áp migration mới + seed mới, kiểm kết quả. Bản 19/09 đã diễn tập đúng như vậy.
 - Không bao giờ chạy `prisma db push` hay `migrate dev` trên máy thật.
 
+### Nâng cấp lên 0.23.0 (Mạng xã hội — nền tảng + WordPress)
+
+**Biến môi trường mới `SOCIAL_MASTER_KEY`** — khóa chủ mã hóa bí mật mạng xã hội (mật khẩu ứng dụng WordPress, App Secret Meta, Client Secret Google…). 32 byte ngẫu nhiên, base64, **khác** `APP_ENC_KEY` (trùng thì hệ thống từ chối; thiếu thì KHÔNG dùng `APP_ENC_KEY` thay).
+
+- **Không phải sửa `.env` bằng tay**: `./trien-khai.sh` gọi `scripts/sinh-social-master-key.sh .env` trước mọi bước — `.env` chưa có khóa thì sinh và ghi thêm một dòng; đã có thì **giữ nguyên** (không bao giờ đè, không in khóa ra màn hình). Bộ cài Windows (`may-ca-nhan/cai-nhanh.ps1`, `cai-dat.ps1`) làm tương tự khi cài / cài lại.
+- Tự sinh bằng tay (nếu triển khai không qua `trien-khai.sh`): `openssl rand -base64 32` rồi thêm `SOCIAL_MASTER_KEY=<chuỗi>` vào `.env`, hoặc chạy `bash scripts/sinh-social-master-key.sh .env`.
+- **Sao lưu khóa cùng `.env`**: `scripts/sao-luu.sh` mã hóa NGUYÊN tệp `.env` (gpg, mật khẩu sao lưu) nên khóa nằm trong bản sao lưu `cowork-env-<lúc>.env.gpg`; `scripts/thu-phuc-hoi.sh` báo "…và có SOCIAL_MASTER_KEY" (hoặc cảnh báo nếu bản sao lưu cũ chưa có). **Mất khóa = mọi mật khẩu ứng dụng / App Secret đã lưu không mở được** — Marketing phải nhập lại mật khẩu ứng dụng từng kênh, Quản trị nhập lại thông tin app (dữ liệu bài không mất). Sau khi nâng cấp, chạy sao lưu một lần ngay để bản sao lưu có khóa.
+- docker-compose: `app` và `worker` nhận `SOCIAL_MASTER_KEY` (app chỉ niêm phong, worker mới mở — tách ở mã nguồn, QĐ-194); `worker` gắn `./data/dinh-kem` chỉ-đọc (đọc ảnh của bài để tải lên WordPress). Chạy `docker compose up -d` để áp.
+- Thiếu khóa: app + worker vẫn chạy; màn hình **Mạng xã hội → Kênh** và **Quản trị → Kết nối nền tảng (API)** báo rõ "Máy chủ chưa đặt SOCIAL_MASTER_KEY…"; worker ghi cảnh báo một lần lúc khởi động.
+
+**Xoay `SOCIAL_MASTER_KEY`** (định kỳ hoặc nghi lộ):
+```bash
+# .env: giữ khóa cũ ở SOCIAL_MASTER_KEY_V1, đặt khóa mới ở SOCIAL_MASTER_KEY, tăng phiên bản
+SOCIAL_MASTER_KEY_V1=<khóa cũ>
+SOCIAL_MASTER_KEY=<openssl rand -base64 32>
+SOCIAL_MASTER_KEY_VERSION=2
+docker compose up -d                                       # app + worker đọc khóa mới
+docker compose exec worker npm run mxh:boc-lai-khoa         # bọc lại mọi data key bằng phiên bản 2 (chạy lại được)
+# xong thì xóa SOCIAL_MASTER_KEY_V1 khỏi .env, khởi động lại, sao lưu .env
+```
+
+**Migration** `20261122090001_mang_xa_hoi` (chỉ thêm: 11 bảng, CHECK, trigger `kiem_target_da_dang`, loại đính kèm `social_post`, danh mục nền tảng, quyền `mxh.*` cho mọi doanh nghiệp — khối DO idempotent). Sau đó **bắt buộc** chạy lại `prisma/rls.sql` (RLS bảng mới, danh mục nền tảng chỉ đọc, hai bảng chỉ ghi thêm), `npm run db:seed`, khởi động lại app + worker (`trien-khai.sh` làm đủ).
+
+- Đặt `APP_URL` đúng địa chỉ HTTPS công khai: màn hình Kết nối nền tảng dựng Redirect URI và tên miền từ đây; link ảnh công khai (0.24) cũng vậy.
+- Worker chạy thêm vòng Mạng xã hội mỗi 15 giây (song song nhịp 60 giây). Worker gọi ra Internet tới site WordPress của khách (HTTPS 443) — tường lửa máy chủ phải cho đi ra; địa chỉ nội bộ / metadata bị chặn ở mã.
+- Biến dự phòng (không bắt buộc): `META_APP_ID`, `META_APP_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ZALO_APP_ID`, `ZALO_SECRET_KEY` — chỉ dùng khi chưa nhập trên màn hình Kết nối nền tảng.
+- nginx: không đổi (`/api/cong-khai/mxh/media/` đi chung `/api`).
+
 ### Nâng cấp lên 0.22.0 (Mở dần — bổ sung sau)
 
 - (Trước phát hành) Migration `20261109090006_ghim_ip_doi_chieu_giay_to`: ghim IP khi xác minh máy, bảng đối chiếu công, **gắn cờ "chưa đủ giấy tờ" cho người phụ thuộc hiện có mà giấy tờ không đạt định dạng** (MST 10 / 10-3 số, CCCD 12 số, giấy tờ khác ≥ 6 ký tự) — báo kế toán bổ sung trước kỳ lương kế tiếp (Thiết lập ban đầu đếm số người). Chạy lại `prisma/rls.sql` (thu hồi bản `ghi_log_cach_ly` cũ, cấp `ip_may_la_truoc_dang_ky`).

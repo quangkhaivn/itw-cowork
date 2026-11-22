@@ -992,3 +992,72 @@ Giám đốc yêu cầu (nguyên văn): *"Tôi cần bạn viết phần mềm m
 | MD-22 | **Thiết lập ban đầu** (`/thiet-lap-ban-dau`) + card trên Bảng điều hành: việc theo người phụ trách — Nhân sự (địa điểm + bán kính, ca, lịch mặc định, ngày lễ 12 tháng tới + nhắc lễ âm lịch, hồ sơ + PIN, địa điểm của máy), Kế toán (xác nhận tham số, hồ sơ lương, tài khoản ngân hàng), Kỹ thuật (máy chấm công, máy lạ chờ đăng ký), Giám đốc / Quản trị (hồ sơ công ty, logo, mẫu phiếu thực tập của trường, bật 2 lớp). Mỗi việc: xong / còn thiếu N, nút đi tới màn hình bổ sung, "không bắt buộc — phần mềm vẫn chạy". Ai chỉ thấy phần của mình; đếm nhẹ, không trả số tiền | [SV] · [TH] |
 
 Khóa Cấu hình mới (nhóm **Tính lương**): `luong.chan_khi_tham_so_chua_xac_nhan` (0), `luong.bat_buoc_2_lop` (1), `luong.tk_tien_mat` (1111), `luong.tang_ca_canh_bao_gio_thang` (40); nhóm **Chấm công**: `may_cham_cong.xac_minh_so_huu` (1).
+
+## 34. Mạng xã hội (0.23.0, chưa phát hành)
+
+Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt trong Cowork (QĐ-193). Bản 0.23.0: **WordPress chạy thật**; Facebook Page, Instagram, YouTube, Zalo OA có mục trong danh mục nền tảng ở trạng thái chờ duyệt / chưa hỗ trợ. Nguyên tắc nền: **không bao giờ báo "đã đăng" khi chưa xác minh** (ADR-05), **không đăng lại mù** khi kết quả chưa rõ, **bí mật chỉ worker mở được** (SEC-06). Hướng dẫn người dùng: `docs/HUONG-DAN-MANG-XA-HOI.md`. Ký hiệu chặn ở: [SV] service, [DB] CSDL, [WK] worker, [GD] giao diện, [TH] bài thử.
+
+### Quyền và kênh
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| MXH-01 | Quyền `mxh.view / create / update / approve / delete / export`. Marketing: trừ approve; Trưởng phòng Marketing: đủ; Thực tập sinh Marketing: view + create, chỉ bài của mình; Giám đốc / Quản trị: đủ; Trợ lý AI: không có | [SV] · [DB] (seed / migration) · [TH] |
+| MXH-02 | Nền tảng chỉ nối / đăng được khi danh mục ghi AVAILABLE + bật + có connector; PENDING_APPROVAL hiện "chờ nền tảng duyệt — sắp có", DISABLED "chưa hỗ trợ" | [SV] · [WK] · [GD] |
+| MXH-03 | Kênh WordPress: địa chỉ HTTPS (bỏ `/wp-admin`, `/wp-json` thừa), tên đăng nhập + **mật khẩu ứng dụng** (không phải mật khẩu đăng nhập). Lưu chỉ khi **Kiểm tra kết nối** đạt: đăng nhập được, có quyền đăng bài và tải ảnh | [SV] · [TH] |
+| MXH-04 | Một site nối một lần cho mỗi doanh nghiệp (kênh đã ngắt không tính) | [DB] chỉ mục duy nhất riêng phần |
+| MXH-05 | Mật khẩu ứng dụng niêm phong envelope bằng `SOCIAL_MASTER_KEY` (AAD doanh nghiệp + kênh); không trả qua API, không hiện lại, không vào nhật ký / kiểm toán / sự kiện / thông báo. Thiếu khóa → không lưu được, báo rõ cách khắc phục | [SV] · [DB] CHECK · [TH] |
+| MXH-06 | **Ngắt kênh** (`mxh.delete`): xóa bản niêm phong (hủy data key), hủy lượt đăng chưa chạy của kênh; nhắc người dùng thu hồi mật khẩu ứng dụng trên WordPress | [SV] |
+| MXH-07 | Nền tảng trả 401 / 403 → kênh "Cần nhập lại mật khẩu ứng dụng"; bài không đăng / đăng lại được lên kênh đó tới khi nhập lại (kiểm tra thật rồi niêm phong lại) | [WK] · [SV] |
+| MXH-08 | "Kiểm tra lại" kênh đã lưu: xếp việc cho worker (≤ 15 giây), kết quả hiện trên màn hình | [SV] · [WK] |
+| MXH-09 | Gọi địa chỉ người dùng nhập đi qua lớp chống SSRF (QĐ-196) | [SV] · [TH] |
+
+### Bài và trạng thái
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| MXH-10 | Trạng thái bài: Nháp → (Chờ duyệt → Đã duyệt) → Đã hẹn giờ / Đang đăng → Đã đăng / Lỗi một phần / Lỗi; Đã hẹn giờ → Đã hủy → (về) Nháp. Trạng thái thật nằm ở **từng kênh**: Chưa xếp lịch, Chờ đăng, Đang đăng, Đang xác minh, Đã đăng, Lỗi, Đã hủy | [SV] `CHUYEN_BAI` / `CHUYEN_KENH` · [DB] CHECK |
+| MXH-11 | Nội dung là **chữ thường** — không nhận HTML / script tự do; khi đăng chuyển sang HTML đã thoát (đoạn, xuống dòng, liên kết) | [SV] · [TH] |
+| MXH-12 | WordPress cần tiêu đề; ảnh đầu tiên là ảnh đại diện (ảnh = tệp đính kèm loại `social_post`: JPEG, PNG, GIF, WebP, ≤ 20 MB, nhận dạng theo nội dung) | [SV] connector `validate` |
+| MXH-13 | Sửa nội dung / kênh / ảnh chỉ khi Nháp, Đã duyệt, Đã hủy; sửa bài đã duyệt → về Nháp, mất duyệt | [SV] · [TH] |
+| MXH-14 | Ảnh được **chụp** vào bài (`social_post_media`) lúc gửi duyệt / hẹn giờ / đăng — ảnh thêm / gỡ sau đó không lọt vào bài đã duyệt | [SV] |
+| MXH-15 | **Khóa lặp lại**: tạo bài kèm `Idempotency-Key` → gửi lại cùng khóa trả bài cũ, không tạo bài thứ hai (duy nhất theo doanh nghiệp) | [SV] · [DB] · [TH] |
+| MXH-16 | **Đăng ngay** / **Hẹn giờ** cần `mxh.update`; giờ hẹn phải ở tương lai, trong vòng một năm; giờ lưu UTC, nhập / hiển thị giờ Việt Nam | [SV] |
+| MXH-17 | **Hủy lịch** chỉ khi chưa kênh nào bắt đầu đăng | [SV] khóa dòng kênh · [TH] |
+| MXH-18 | **Đăng lại** chỉ các kênh Lỗi (lượt mới), kênh đã đăng không bị đụng; kênh cần nhập lại phải nhập lại trước | [SV] · [TH] |
+| MXH-19 | Xóa bài: chỉ Nháp / Đã hủy, xóa mềm | [SV] |
+
+### Duyệt (SEC-09)
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| MXH-20 | **Không tự duyệt**: người duyệt khác người soạn và người gửi duyệt | [SV] · [DB] CHECK · [TH] |
+| MXH-21 | Người duyệt hợp lệ: `mxh.approve` VÀ (cấp trên trong chuỗi quản lý của người soạn — như Công việc QĐ-154 — hoặc Giám đốc / Quản trị hoặc người soạn trong phạm vi duyệt của mình) | [SV] · [TH] |
+| MXH-22 | Bài do AI tạo phải duyệt khi Cấu hình `mxh.ai_phai_duyet` = 1 (mặc định). Thực tập sinh không có quyền đăng → luôn gửi duyệt | [SV] · [TH] |
+| MXH-23 | Gửi duyệt kèm ý định: đăng ngay / đăng vào giờ hẹn / để người có quyền đăng chọn giờ. Duyệt xong chạy tiếp đúng ý (giờ hẹn đã qua lúc duyệt → đăng ngay) | [SV] · [TH] |
+| MXH-24 | Trả lại phải có lý do (≥ 3 ký tự), bài về Nháp, người soạn được báo | [SV] |
+| MXH-25 | Gửi duyệt báo những người giữ `mxh.approve` (trừ người soạn / người gửi); trang **Chờ duyệt** chỉ hiện bài mình là người duyệt hợp lệ | [SV] · [GD] |
+| MXH-26 | Lịch sử duyệt (`social_post_reviews`) chỉ ghi thêm | [DB] trigger |
+
+### Đăng bài (worker)
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| MXH-30 | Chỉ "Đã đăng" khi nền tảng trả **mã bài** VÀ **đọc lại** khớp (mã, đã công khai, slug, tiêu đề, có permalink). Có permalink đã xác minh mới hiện link | [WK] · [DB] trigger `kiem_target_da_dang` · [TH] |
+| MXH-31 | Đã đăng thì không lùi trạng thái, không đổi mã bài nền tảng | [DB] trigger |
+| MXH-32 | Phân loại lỗi: RETRYABLE (5xx, 429, mất mạng TRƯỚC khi gửi xong) → thử lại 30 s, 1, 2, 4 phút… tới `mxh.so_lan_thu_toi_da`; PERMANENT (4xx khác: sai định dạng, vi phạm) → Lỗi ngay; NEEDS_REAUTH (401 / 403) → Lỗi + kênh cần nhập lại; UNKNOWN (hết giờ / đứt SAU khi đã gửi, 2xx không có mã bài) → **đối soát** | [WK] · [TH] |
+| MXH-33 | Đối soát: chờ `mxh.cho_doi_soat_giay`, tìm bài theo **khóa đối soát** (slug duy nhất theo kênh-bài): thấy → xác minh; không thấy → đăng lại. Mọi lần đăng lại đều đối soát TRƯỚC — không bao giờ sinh bài trùng | [WK] · [TH] |
+| MXH-34 | Hai worker không nhận cùng một kênh-bài (`FOR UPDATE SKIP LOCKED`); kết quả ghi có điều kiện "đúng worker đang giữ". Lượt "Đang đăng" quá `mxh.phut_ket_dang` (worker chết) → đối soát, không đăng lại mù | [WK] · [TH] |
+| MXH-35 | Bài hẹn giờ lệch ≤ 60 giây (vòng worker 15 giây) | [WK] |
+| MXH-36 | Mọi lần gọi nền tảng ghi `social_publish_attempts` (chỉ ghi thêm, không token / mật khẩu); xem ở trang bài → Nhật ký gọi nền tảng | [WK] · [DB] |
+| MXH-37 | Kênh-bài Lỗi → thông báo cho người soạn kèm hướng dẫn theo loại lỗi | [WK] |
+
+### Ảnh công khai, thông tin app
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| MXH-40 | Link ảnh công khai có ký, hết hạn sau `mxh.han_link_media_phut` (60 phút), trên chính tên miền Cowork; chỉ phục vụ ảnh đang thuộc bài, đúng kiểu tệp, không chuyển hướng; mỗi lần phát ghi kiểm toán | [SV] · [TH] |
+| MXH-41 | **Kết nối nền tảng (API)**: chỉ Giám đốc / Quản trị (`setting.update`) đã bật 2 lớp xem / nhập; người khác chỉ thấy "đã cấu hình / chưa". Bí mật không bao giờ trả lại (4 ký tự cuối); kiểm toán chỉ ghi "đã đổi …" | [SV] · [TH] |
+| MXH-42 | Kiểm tra app: Meta xin app token (đúng / sai App ID + Secret); Google, Zalo chỉ kiểm định dạng — kiểm thật khi nối kênh đầu tiên (0.24) | [SV] · [WK] · [TH] |
+| MXH-43 | Chưa nhập trên màn hình mà máy chủ có biến môi trường (`META_APP_ID`…) → dùng biến môi trường, màn hình ghi "đang dùng giá trị từ máy chủ" | [WK] · [GD] |
+
+Khóa Cấu hình mới (nhóm **Mạng xã hội**): `mxh.ai_phai_duyet` (1), `mxh.han_link_media_phut` (60), `mxh.so_lan_thu_toi_da` (5), `mxh.han_goi_giay` (30), `mxh.cho_doi_soat_giay` (120), `mxh.phut_ket_dang` (10). **Thiết lập ban đầu**: Marketing — "Kết nối kênh mạng xã hội"; Giám đốc / Quản trị — "Nhập thông tin app Meta / Google".
