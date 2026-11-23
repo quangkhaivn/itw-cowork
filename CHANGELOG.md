@@ -30,6 +30,14 @@ Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-219.
 - “Đã cấu hình” của app Meta không tính trường tùy chọn (Configuration ID).
 - Bài thử V8 của `thu:qa-mo-dan` hỏng ngắt quãng khi máy tải nặng: tiêu chí cũ (“không lần nào cả hai cùng thành công”) sai — đặt lịch mặc định xong rồi mới khóa là thứ tự hợp lệ (QĐ-187). Mã `datLichMacDinh` (khóa chia sẻ dòng bảng công) đã đúng; bài nay dựng tất định thế xen kẽ nguy hiểm (giao dịch khóa giữ dòng chưa commit → đặt lịch phải chờ rồi bị 409) và đã kiểm: bỏ khóa chia sẻ thì bài hỏng 5/5.
 
+### Sửa sau QA độc lập (QĐ-220 → QĐ-226)
+- Hai worker có thể đổi CÙNG một mã OAuth (mã dùng một lần → `invalid_grant`, nền tảng thu hồi token): worker nay nhận mã trước khi đổi; dọn dẹp yêu cầu bị bỏ dở (QĐ-220).
+- Data Deletion của Meta xóa cả tên tài khoản Facebook + mã người dùng ở mọi kênh (kể cả kênh đã ngắt) và các lần kết nối OAuth (QĐ-221).
+- Google Drive: kiểm quyền thêm tệp vào bài trước khi gọi Google (QĐ-222).
+- Trang Kênh không in nguyên văn `?loi-ket-noi=` (QĐ-223). Google `invalid_grant` nhắc chế độ Testing 7 ngày (QĐ-224).
+- Đối soát Instagram: container 404 không còn bị coi là "chắc chắn chưa đăng" (QĐ-225). Link ký phát media hỗ trợ `Range` (QĐ-226).
+- Bài thử `npm run thu:qa-mxh-ket-noi` (nối sau `thu:mxh-ket-noi` trong `thu:tich-hop`).
+
 ### Triển khai
 - Migration `20261124090001_mxh_ket_noi`, `20261124090002_mxh_video_dinh_kem`; chạy lại `prisma/rls.sql`. `APP_URL` phải https công khai. nginx: location tải Drive chờ 300 giây. Xem DEPLOYMENT → “Nâng cấp lên 0.24.0” (gồm giới hạn của khóa đối xứng — QĐ-216a).
 

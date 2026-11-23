@@ -73,7 +73,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ ma: string 
     if (kh === "sai") return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${tong}`, "Cache-Control": "no-store" } });
     const [tu, den] = kh ?? [0, tong - 1];
     const than = tep.noiDung.subarray(tu, den + 1);
-    return new Response(new Uint8Array(than.buffer, than.byteOffset, than.length), {
+    return new Response(new Uint8Array(than.buffer as ArrayBuffer, than.byteOffset, than.length), {
       status: kh ? 206 : 200,
       headers: { ...tieuDe, "Content-Length": String(than.length), ...(kh ? { "Content-Range": `bytes ${tu}-${den}/${tong}` } : {}) },
     });
