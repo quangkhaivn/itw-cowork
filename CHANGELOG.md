@@ -2,6 +2,11 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.25.1 — 24/11/2026 — Sửa hiển thị
+
+- Lịch nội dung: ô bài trong lịch tháng hiển thị thành khối (giờ / tiêu đề / trạng thái xuống dòng), không còn bị bóp thành nhiều cột hẹp.
+- AI viết bài: thông báo "AI chưa cấu hình" không còn lặp chữ.
+
 ## 0.25.0 — 23/11/2026 — Mạng xã hội: lịch nội dung, duyệt, AI viết bài
 
 Nền: 0.24.0 (đã phát hành, gồm bản sửa QA QĐ-220 → QĐ-226). QĐ-230 → QĐ-239. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md` mục 14–16. Migration `20261126090001_mxh_lich_ai`.

@@ -80,8 +80,8 @@ export default function LichNoiDung({ kieu, ngay, thang, homNay, muc }: { kieu: 
                         onClick={() => { datChon(m.id); datGioMoi(`${m.ngay}T${m.gio}`); datLoi(null); }}
                         title={`${m.tieuDe} — ${n.nhan}${m.duKien ? " (ngày dự kiến)" : ""}${m.keoDuoc ? " · kéo sang ngày khác để đổi lịch" : ""}`}
                         className={`huy-hieu ${n.lop}`}
-                        style={{ textAlign: "left", cursor: m.keoDuoc ? "grab" : "pointer", whiteSpace: "normal", lineHeight: 1.25, padding: "3px 5px", border: chon === m.id ? "2px solid currentColor" : undefined, borderStyle: m.duKien ? "dashed" : undefined, width: "100%" }}>
-                        <span className="nho">{m.gio}{m.duKien ? " (dự kiến)" : ""}</span> {m.tieuDe.slice(0, 60)}
+                        style={{ display: "block", borderRadius: 6, fontWeight: 500, textAlign: "left", cursor: m.keoDuoc ? "grab" : "pointer", whiteSpace: "normal", lineHeight: 1.25, padding: "3px 5px", border: chon === m.id ? "2px solid currentColor" : undefined, borderStyle: m.duKien ? "dashed" : undefined, width: "100%" }}>
+                        <span className="nho" style={{ display: "block", fontWeight: 600 }}>{m.gio}{m.duKien ? " (dự kiến)" : ""}</span>{m.tieuDe.slice(0, 60)}
                         <span className="nho" style={{ display: "block", opacity: 0.8 }}>{n.nhan}{m.doAiTao ? " · AI" : ""} · {m.kenh.map((k) => k.tenNenTang).join(", ") || "chưa chọn kênh"}</span>
                       </button>
                     );

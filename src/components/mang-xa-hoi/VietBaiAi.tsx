@@ -48,7 +48,7 @@ export default function VietBaiAi({ daCauHinh, lyDo, kenh, chienDich, nganSachHe
   return (
     <section className="the">
       <div className="than" style={{ padding: 16, display: "grid", gap: 12 }}>
-        {!daCauHinh && <div className="hop-thong-bao canh-bao" role="status">AI chưa cấu hình — {lyDo ?? "chưa đặt khóa API trên máy chủ."} Vẫn soạn bài tay bình thường ở “Soạn bài”.</div>}
+        {!daCauHinh && <div className="hop-thong-bao canh-bao" role="status">{lyDo ?? "AI chưa cấu hình — chưa đặt khóa API trên máy chủ."} Vẫn soạn bài tay bình thường ở “Soạn bài”.</div>}
         {loi && <div className="hop-thong-bao loi" role="alert">{loi.thongBao}</div>}
         {canhBao.map((c) => <div key={c} className="hop-thong-bao canh-bao">{c}</div>)}
         <div className="luoi-form">
