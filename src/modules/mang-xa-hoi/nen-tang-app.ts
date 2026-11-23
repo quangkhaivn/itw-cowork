@@ -171,7 +171,7 @@ export async function luuThongTinApp(nc: NguCanh, nccNhap: string, d: z.infer<ty
   }
   // Google API key (Picker): khóa phía trình duyệt (giới hạn HTTP referrer) — trình duyệt PHẢI nhận được để mở Google
   // Picker, nên mã hóa bằng APP_ENC_KEY (ứng dụng web giải được để đưa cho người soạn bài), không dùng envelope chỉ-worker
-  // (QĐ-206). Không bao giờ hiện lại trên màn hình quản trị (chỉ 4 ký tự cuối), không vào kiểm toán.
+  // (QĐ-213). Không bao giờ hiện lại trên màn hình quản trị (chỉ 4 ký tự cuối), không vào kiểm toán.
   const picker = khoaPicker ? { pickerKeyEnc: maHoa(khoaPicker, aadPicker(nc.tenantId)), pickerKeyLast4: bonKyTuCuoi(khoaPicker) } : {};
   let niem = {};
   if (biMat) {
@@ -303,7 +303,7 @@ export async function kiemTraThongTinApp(x: NguCanh | BuocGiaoDich, nccNhap: str
 }
 
 // ---------------------------------------------------------------------------
-// Google Picker (0.24.0, QĐ-206)
+// Google Picker (0.24.0, QĐ-213)
 // ---------------------------------------------------------------------------
 
 export function aadPicker(tenantId: string): string {

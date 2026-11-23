@@ -308,7 +308,7 @@ function nhacKenhCanCapLai(t: { name: string; authType: string }): string {
 }
 
 /**
- * Kiểm bài theo LUẬT NỀN TẢNG (0.24.0, QĐ-205): đọc thông số ảnh / video trên đĩa, kiểm từng kênh, chốt kiểu nội dung
+ * Kiểm bài theo LUẬT NỀN TẢNG (0.24.0, QĐ-212): đọc thông số ảnh / video trên đĩa, kiểm từng kênh, chốt kiểu nội dung
  * (Reels, carousel…). Vi phạm → 422 kèm danh sách. Trả kiểu nội dung theo kênh-bài để ghi lúc xếp hàng.
  */
 async function kiemNoiDung(b: Bai): Promise<Map<string, KieuNoiDung>> {

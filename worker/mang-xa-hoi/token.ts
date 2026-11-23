@@ -12,7 +12,7 @@ import { moNiemPhong } from "./giai-ma";
 import { docThongTinApp } from "./kiem-tra";
 
 /**
- * Token kênh OAuth ở worker (0.24.0, QĐ-203): mở niêm phong, làm mới token Google TRƯỚC HẠN (≤ 5 phút còn lại khi dùng,
+ * Token kênh OAuth ở worker (0.24.0, QĐ-210): mở niêm phong, làm mới token Google TRƯỚC HẠN (≤ 5 phút còn lại khi dùng,
  * ≤ 10 phút với vòng làm mới chủ động), niêm phong lại bằng data key mới; hết hạn / bị thu hồi → kênh NEEDS_REAUTH +
  * báo Marketing (người giữ `mxh.update`) + nút "Kết nối lại" trên màn hình Kênh.
  */

@@ -27,7 +27,7 @@ const DUONG_MO = [
   // 0.19.0 — máy chấm công vân tay (ZKTeco ADMS/PUSH, NS-14): máy không có phiên; route tự nhận máy
   // bằng số sê-ri đã đăng ký. Không phải tiền tố /api nên không qua kiểm Origin.
   "/iclock",
-  // 0.24.0 — trang công khai nền tảng đòi khi duyệt app (QĐ-207): Điều khoản, Quyền riêng tư, Xóa dữ liệu.
+  // 0.24.0 — trang công khai nền tảng đòi khi duyệt app (QĐ-214): Điều khoản, Quyền riêng tư, Xóa dữ liệu.
   "/dieu-khoan",
   "/quyen-rieng-tu",
   "/xoa-du-lieu",
@@ -47,7 +47,7 @@ const KHONG_KIEM_NGUON = [
   "/api/cong-khai/email/",
   // 0.23.0 — ảnh bài mạng xã hội qua link ký (QĐ-198): nền tảng (máy chủ Meta…) kéo ảnh, không có Origin / cookie. Chỉ GET.
   "/api/cong-khai/mxh/media/",
-  // 0.24.0 — Data Deletion Callback của Meta (QĐ-207): máy chủ Meta POST, không Origin / cookie; xác thực bằng chữ ký
+  // 0.24.0 — Data Deletion Callback của Meta (QĐ-214): máy chủ Meta POST, không Origin / cookie; xác thực bằng chữ ký
   // signed_request (worker kiểm bằng App Secret). Callback OAuth là GET — không cần miễn.
   "/api/cong-khai/mxh/meta/",
 ];

@@ -189,6 +189,8 @@ Cột / ràng buộc khác: `attachments_loai_doi_tuong_check` thêm `social_pos
 
 ### 0.24.0 — Facebook, Instagram, YouTube, Google Drive (migration `20261123090001_mxh_ket_noi`, `20261123090002_mxh_video_dinh_kem`; BUSINESS_RULES MXH-50 →)
 
+Ghi chú: chú thích trong hai tệp migration ghi số QĐ cũ “QĐ-203 →” (trước khi đánh lại số để nhường QĐ-203 → QĐ-209 cho bản sửa QA 0.23.0); tương ứng hiện nay là QĐ-210 → QĐ-216 (migration không sửa).
+
 | Bảng | Vai trò | Ghi chú |
 |---|---|---|
 | `social_oauth_requests` | Một lần kết nối OAuth | `provider` META / GOOGLE; `state_hash` (sha256, duy nhất — không lưu state rõ); `session_ref` (băm người + doanh nghiệp + lúc ký phiên); `redirect_uri`; `scopes`; `reconnect_connection_id`; `status` CHO_DONG_Y → CHO_DOI_MA → DA_SAN_SANG → HOAN_TAT (LOI / HET_HAN); mã `code` niêm phong (CHECK đủ bộ hoặc không gì; xóa sau khi đổi); `oauth_subject` (Meta user id / kênh YouTube); `missing_scopes`; **CHECK `expires_at ≤ created_at + 10 phút`** |

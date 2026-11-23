@@ -5184,7 +5184,7 @@ model SocialAppConfig {
   checkedAt        DateTime? @map("checked_at") @db.Timestamptz(6)
   checkRequestedAt DateTime? @map("check_requested_at") @db.Timestamptz(6)
   /// 0.24.0: Google API key cho Google Picker — khóa phía trình duyệt (giới hạn HTTP referrer), mã hóa bằng APP_ENC_KEY
-  /// (QĐ-206), không bao giờ hiện lại trên màn hình quản trị (chỉ 4 ký tự cuối).
+  /// (QĐ-213), không bao giờ hiện lại trên màn hình quản trị (chỉ 4 ký tự cuối).
   pickerKeyEnc     String?   @map("picker_key_enc") @db.Text
   pickerKeyLast4   String?   @map("picker_key_last4") @db.VarChar(4)
   updatedBy        String?   @map("updated_by") @db.Uuid
@@ -5362,7 +5362,7 @@ model SocialPostReview {
   @@map("social_post_reviews")
 }
 
-/// 0.24.0 — Một lần kết nối kênh bằng OAuth (QĐ-203). `state` chỉ lưu MÃ BĂM, dùng một lần, hạn 10 phút, gắn phiên
+/// 0.24.0 — Một lần kết nối kênh bằng OAuth (QĐ-210). `state` chỉ lưu MÃ BĂM, dùng một lần, hạn 10 phút, gắn phiên
 /// (session_ref) + người + doanh nghiệp. Mã `code` nền tảng trả về được NIÊM PHONG (chỉ worker đổi lấy token — SEC-06).
 model SocialOauthRequest {
   id                    String    @id @default(uuid()) @db.Uuid
@@ -5443,7 +5443,7 @@ model SocialQuotaUsage {
 }
 
 /// Yêu cầu xóa dữ liệu từ Meta (Data Deletion Callback). Route công khai nhận + kiểm khuôn; worker kiểm chữ ký bằng App
-/// Secret (chỉ worker mở được) rồi xóa token của người đó (QĐ-207).
+/// Secret (chỉ worker mở được) rồi xóa token của người đó (QĐ-214).
 model SocialDataDeletionRequest {
   id               String    @id @default(uuid()) @db.Uuid
   tenantId         String    @map("tenant_id") @db.Uuid

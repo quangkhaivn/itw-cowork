@@ -3,7 +3,7 @@ import type { MediaKiem } from "../luat-nen-tang";
 import { docThongSoAnh, docThongSoVideo } from "./doc-media";
 
 /**
- * Đọc thông số media của bài từ tệp đính kèm trên đĩa (máy chủ) — để kiểm luật nền tảng trước khi xếp hàng (QĐ-205).
+ * Đọc thông số media của bài từ tệp đính kèm trên đĩa (máy chủ) — để kiểm luật nền tảng trước khi xếp hàng (QĐ-212).
  */
 export interface DongMediaBai {
   attachment: { id: string; fileName: string; mimeType: string; sizeBytes: number | bigint; storedPath: string };

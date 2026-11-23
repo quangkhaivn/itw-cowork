@@ -1063,7 +1063,7 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 
 Khóa Cấu hình mới (nhóm **Mạng xã hội**): `mxh.ai_phai_duyet` (1), `mxh.han_link_media_phut` (60), `mxh.so_lan_thu_toi_da` (5), `mxh.han_goi_giay` (30), `mxh.cho_doi_soat_giay` (120), `mxh.phut_ket_dang` (10). **Thiết lập ban đầu**: Marketing — "Kết nối kênh mạng xã hội"; Giám đốc / Quản trị — "Nhập thông tin app Meta / Google".
 
-### 0.24.0 — Facebook Page, Instagram, YouTube, Google Drive (QĐ-203 → QĐ-209)
+### 0.24.0 — Facebook Page, Instagram, YouTube, Google Drive (QĐ-210 → QĐ-216)
 
 Các con số giới hạn nền tảng dưới đây theo tài liệu công khai — **chưa kiểm với API thật** (danh sách đầy đủ trong báo cáo 0.24.0 và `luat-nen-tang.ts`).
 

@@ -1407,7 +1407,7 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     macDinh: 10,
     dungTuPhase: 8,
   },
-  // 0.24.0 — kết nối Facebook / Instagram / YouTube (QĐ-203 →).
+  // 0.24.0 — kết nối Facebook / Instagram / YouTube (QĐ-210 →).
   {
     khoa: "mxh.moi_bai_phai_duyet",
     nhom: "Mạng xã hội",

@@ -6,7 +6,7 @@ import { gocApi } from "./goc-api";
 import type { BoiCanhGoi, BuocGoi, KetQuaDang, KetQuaDoiSoat, KetQuaKiemTra, KetQuaXacMinh, NoiDungDang, SocialConnector, ThongTinXacThuc } from "./kieu";
 
 /**
- * Connector Instagram (0.24.0, QĐ-204) — Instagram Graph API qua Facebook Login (tài khoản chuyên nghiệp gắn Page,
+ * Connector Instagram (0.24.0, QĐ-211) — Instagram Graph API qua Facebook Login (tài khoản chuyên nghiệp gắn Page,
  * dùng page access token).
  *
  * Luồng: đọc `content_publishing_limit` → tạo container (`POST /{ig}/media` với `image_url` / `video_url` = LINK KÝ trên

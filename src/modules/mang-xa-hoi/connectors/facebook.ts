@@ -6,7 +6,7 @@ import { gocApi } from "./goc-api";
 import type { BoiCanhGoi, BuocGoi, KenhGoi, KetQuaDang, KetQuaDoiSoat, KetQuaKiemTra, KetQuaXacMinh, NoiDungDang, SocialConnector, TepMedia, ThongTinXacThuc } from "./kieu";
 
 /**
- * Connector Facebook Page (0.24.0, QĐ-204) — Graph API, page access token (lấy qua Facebook Login for Business).
+ * Connector Facebook Page (0.24.0, QĐ-211) — Graph API, page access token (lấy qua Facebook Login for Business).
  *
  *  - Chữ + liên kết: `POST /{page}/feed { message, link }`.
  *  - Một ảnh: `POST /{page}/photos` multipart `source` + `message` (đẩy byte, không cần URL công khai).

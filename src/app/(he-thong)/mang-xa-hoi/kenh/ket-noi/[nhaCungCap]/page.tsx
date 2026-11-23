@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const LA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Màn hình ĐỒNG Ý của Cowork (0.24.0, QĐ-203 — SEC-03): trước khi chuyển sang Facebook / Google, hiện rõ nền tảng, từng quyền
+ * Màn hình ĐỒNG Ý của Cowork (0.24.0, QĐ-210 — SEC-03): trước khi chuyển sang Facebook / Google, hiện rõ nền tảng, từng quyền
  * xin + vì sao, kênh sẽ kết nối lại (nếu có). Bấm "Tiếp tục" mới sinh state (dùng một lần, 10 phút) và chuyển đi.
  */
 export default async function TrangDongY({ params, searchParams }: { params: Promise<{ nhaCungCap: string }>; searchParams: Promise<{ kenh?: string }> }) {

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Data Deletion Request Callback của Meta (0.24.0, QĐ-207). Meta POST `signed_request` (form). Không phiên, không Origin.
+ * Data Deletion Request Callback của Meta (0.24.0, QĐ-214). Meta POST `signed_request` (form). Không phiên, không Origin.
  * Kiểm khuôn + giới hạn tốc độ theo IP → ghi yêu cầu → trả `{ url, confirmation_code }`. Chữ ký kiểm ở worker (App Secret
  * chỉ worker mở được); sai chữ ký → không xóa gì, trang trạng thái ghi rõ.
  */

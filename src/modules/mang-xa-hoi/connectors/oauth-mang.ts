@@ -5,7 +5,7 @@ import { docJson } from "./goi-chung";
 import { gocApi } from "./goc-api";
 
 /**
- * Gọi mạng phần OAuth (0.24.0, QĐ-203): đổi mã lấy token, token dài hạn, danh sách Page / Instagram / kênh YouTube, làm
+ * Gọi mạng phần OAuth (0.24.0, QĐ-210): đổi mã lấy token, token dài hạn, danh sách Page / Instagram / kênh YouTube, làm
  * mới token Google, kiểm token Google Picker. Nhận bí mật app ở dạng RÕ làm tham số — CHỈ worker gọi được các hàm cần
  * App Secret / Client Secret (worker là nơi duy nhất mở niêm phong, SEC-06). Không ghi log, không trả token ra ngoài
  * phạm vi kết quả hàm.

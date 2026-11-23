@@ -26,7 +26,7 @@ function Than({ noiDung }: { noiDung: string }) {
   );
 }
 
-/** Trang công khai (Điều khoản / Quyền riêng tư / Xóa dữ liệu) — 0.24.0, QĐ-207. */
+/** Trang công khai (Điều khoản / Quyền riêng tư / Xóa dữ liệu) — 0.24.0, QĐ-214. */
 export default async function TrangPhapLy({ trang, dn, ma }: { trang: Trang; dn?: string; ma?: string }) {
   const t = await timDoanhNghiepCongKhai(dn).catch(() => null);
   if (!t) {

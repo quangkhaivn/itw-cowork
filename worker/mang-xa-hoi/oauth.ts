@@ -11,7 +11,7 @@ import { moNiemPhong } from "./giai-ma";
 import { docThongTinApp } from "./kiem-tra";
 
 /**
- * Worker: đổi mã OAuth lấy token (0.24.0, QĐ-203) — cần App Secret / Client Secret nên CHỈ chạy ở đây (SEC-06).
+ * Worker: đổi mã OAuth lấy token (0.24.0, QĐ-210) — cần App Secret / Client Secret nên CHỈ chạy ở đây (SEC-06).
  *
  * Yêu cầu CHO_DOI_MA (callback đã niêm phong mã) → mở mã → đổi token → lấy Page + Instagram (Meta) / kênh YouTube
  * (Google) → mỗi kênh tìm được một dòng "chờ chọn", token niêm phong với AAD của kênh SẼ tạo (kênh đã nối thì dùng lại

@@ -25,7 +25,7 @@ const xuLy = xuLyApi<{ nhaCungCap: string }>(async (nc, req, { nhaCungCap }) => 
 }, { quyen: "mxh.update" });
 
 /**
- * Nền tảng chuyển trình duyệt về đây sau màn hình cấp quyền (0.24.0, QĐ-203). Cần phiên đăng nhập (cookie SameSite=Lax đi
+ * Nền tảng chuyển trình duyệt về đây sau màn hình cấp quyền (0.24.0, QĐ-210). Cần phiên đăng nhập (cookie SameSite=Lax đi
  * theo lần chuyển hướng cấp cao nhất); chưa đăng nhập → về trang đăng nhập (state vẫn còn hạn 10 phút).
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ nhaCungCap: string }> }) {

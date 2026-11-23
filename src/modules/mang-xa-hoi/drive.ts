@@ -15,7 +15,7 @@ import { cauLoiGon } from "./tinh-toan";
 import type { z } from "zod";
 
 /**
- * Google Drive làm KHO MEDIA (0.24.0, QĐ-206): người soạn chọn tệp bằng Google Picker (trình duyệt, quyền `drive.file` —
+ * Google Drive làm KHO MEDIA (0.24.0, QĐ-213): người soạn chọn tệp bằng Google Picker (trình duyệt, quyền `drive.file` —
  * chỉ tệp người dùng tự chọn), trình duyệt gửi mã tệp + access token NGẮN HẠN; máy chủ:
  *  1. kiểm token cấp cho đúng OAuth client của doanh nghiệp, có `drive.file`, còn hạn (tokeninfo — chống token lạ);
  *  2. đọc siêu dữ liệu tệp (`files.get?fields=id,name,mimeType,size`), kiểm loại (ảnh JPEG/PNG/GIF/WebP, video MP4/MOV)

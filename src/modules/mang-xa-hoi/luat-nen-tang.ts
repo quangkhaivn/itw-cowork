@@ -1,7 +1,7 @@
 import type { NenTang } from "./hang-so";
 
 /**
- * LUẬT NỀN TẢNG dạng dữ liệu (0.24.0, QĐ-205) — thuần, dùng chung máy chủ + trình duyệt.
+ * LUẬT NỀN TẢNG dạng dữ liệu (0.24.0, QĐ-212) — thuần, dùng chung máy chủ + trình duyệt.
  *
  * Kiểm định dạng / giới hạn media và chữ theo từng nền tảng TRƯỚC khi xếp hàng đăng; quyết định "kiểu nội dung"
  * (ảnh / nhiều ảnh / video / Reels / carousel…) cho từng kênh. Không chuyển mã video ở bản này — video không hợp thì báo

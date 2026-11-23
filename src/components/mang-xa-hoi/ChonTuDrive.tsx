@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 /**
- * Nút "Chọn từ Google Drive" (0.24.0, QĐ-206). Google Identity Services xin access token NGẮN HẠN quyền `drive.file` cho
+ * Nút "Chọn từ Google Drive" (0.24.0, QĐ-213). Google Identity Services xin access token NGẮN HẠN quyền `drive.file` cho
  * OAuth client của doanh nghiệp → Google Picker (API key của doanh nghiệp, App ID = số project) → người dùng tự chọn tệp →
  * gửi mã tệp + token lên Cowork; máy chủ kiểm token, tải tệp vào bài. Token không lưu ở đâu cả. Quyền chia sẻ trên Drive
  * không đổi. CHƯA KIỂM VỚI GOOGLE THẬT (tên hàm gsi / picker theo tài liệu công khai).

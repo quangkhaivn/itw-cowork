@@ -6,7 +6,7 @@ import { nguoiGiuQuyen, taoThongBao } from "../../src/modules/thong-bao/service"
 import { docThongTinApp } from "./kiem-tra";
 
 /**
- * Worker: Data Deletion Callback của Meta (0.24.0, QĐ-207). Route công khai đã nhận + kiểm khuôn + trả mã xác nhận; ở đây
+ * Worker: Data Deletion Callback của Meta (0.24.0, QĐ-214). Route công khai đã nhận + kiểm khuôn + trả mã xác nhận; ở đây
  * kiểm CHỮ KÝ bằng App Secret (chỉ worker mở được). Đúng chữ ký → XÓA token (bản niêm phong) của mọi kênh Meta do người
  * đó cấp quyền (oauth_subject = user_id), kênh sang "Đã ngắt", hủy lượt đăng chưa chạy, hủy kênh chờ chọn; báo Marketing.
  * Sai chữ ký → CHU_KY_SAI, không xóa gì. Trang `/xoa-du-lieu?ma=…` cho xem trạng thái.

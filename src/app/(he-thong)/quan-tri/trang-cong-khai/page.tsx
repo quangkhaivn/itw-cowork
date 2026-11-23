@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const TEN: Record<string, string> = { "dieu-khoan": "Điều khoản sử dụng", "quyen-rieng-tu": "Chính sách quyền riêng tư", "xoa-du-lieu": "Hướng dẫn xóa dữ liệu" };
 
-/** Quản trị → Trang công khai (0.24.0, QĐ-207): ba trang Meta / Google đòi khi duyệt app. Chưa sửa = bản mẫu cần luật sư rà. */
+/** Quản trị → Trang công khai (0.24.0, QĐ-214): ba trang Meta / Google đòi khi duyệt app. Chưa sửa = bản mẫu cần luật sư rà. */
 export default async function TrangQuanTriCongKhai() {
   const nd = await yeuCauQuyen("setting.view");
   const d = await docDuLieu(nd, (tx) => danhSachTrang(taoNguCanh(tx, nd.phien.tenantId, nd.hoSo)));

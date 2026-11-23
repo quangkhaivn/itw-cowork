@@ -1,5 +1,5 @@
 /**
- * Đọc THÔNG SỐ media (0.24.0) — thuần, không thư viện, không chuyển mã (QĐ-205):
+ * Đọc THÔNG SỐ media (0.24.0) — thuần, không thư viện, không chuyển mã (QĐ-212):
  *  - Ảnh JPEG / PNG / GIF / WebP: rộng × cao (đọc tiêu đề tệp).
  *  - Video MP4 / MOV (ISO BMFF): thời lượng (mvhd), rộng × cao của rãnh hình (tkhd, có tính ma trận xoay 90° của
  *    video quay dọc trên điện thoại), mã hóa hình (stsd: avc1 / hvc1 / hev1…).

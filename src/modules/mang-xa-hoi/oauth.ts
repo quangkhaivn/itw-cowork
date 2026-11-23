@@ -11,7 +11,7 @@ import { BIEN_MOI_TRUONG } from "./nen-tang-app";
 import { bamState, HAN_STATE_MS, NHA_CUNG_CAP_OAUTH, QUYEN_XIN, sinhState, TEN_OAUTH, urlDangNhapGoogle, urlDangNhapMeta, type NhaCungCapOAuth } from "./oauth-thuan";
 
 /**
- * Kết nối kênh bằng OAuth (0.24.0, QĐ-203) — phía ứng dụng web. KHÔNG có bí mật nào được mở ở đây (SEC-06):
+ * Kết nối kênh bằng OAuth (0.24.0, QĐ-210) — phía ứng dụng web. KHÔNG có bí mật nào được mở ở đây (SEC-06):
  *
  *  1. `batDauOAuth`: người có `mxh.update` bấm “Tiếp tục” trên màn hình đồng ý của Cowork → sinh `state` ngẫu nhiên (CSDL
  *     chỉ giữ MÃ BĂM), hạn 10 phút, gắn phiên + người + doanh nghiệp; Redirect URI dựng từ APP_URL (không bao giờ từ

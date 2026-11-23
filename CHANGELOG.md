@@ -4,7 +4,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 ## 0.24.0 (chưa phát hành) — Mạng xã hội: Facebook, Instagram, YouTube, Google Drive
 
-Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-203 → QĐ-209. Hướng dẫn từng bước: `docs/HUONG-DAN-MANG-XA-HOI.md`. Mọi lệnh gọi Meta / Google viết theo tài liệu công khai và thử bằng máy chủ GIẢ — **chưa kiểm với API thật** (danh sách điểm cần kiểm trong báo cáo 0.24.0).
+Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-216. Hướng dẫn từng bước: `docs/HUONG-DAN-MANG-XA-HOI.md`. Mọi lệnh gọi Meta / Google viết theo tài liệu công khai và thử bằng máy chủ GIẢ — **chưa kiểm với API thật** (danh sách điểm cần kiểm trong báo cáo 0.24.0).
 
 ### Thêm
 - **Kết nối kênh bằng OAuth**: nút “Kết nối Facebook Page / Instagram”, “Kết nối kênh YouTube” ở Mạng xã hội → Kênh → **màn hình đồng ý của Cowork** (nền tảng, từng quyền xin + lý do) → đăng nhập nền tảng → **chọn nhiều Page / tài khoản Instagram / kênh YouTube** trong một lần. “Kết nối lại” cho kênh hết quyền (giữ nguyên kênh, lịch sử).
@@ -29,7 +29,7 @@ Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-203 → QĐ-209.
 - “Đã cấu hình” của app Meta không tính trường tùy chọn (Configuration ID).
 
 ### Triển khai
-- Migration `20261123090001_mxh_ket_noi`, `20261123090002_mxh_video_dinh_kem`; chạy lại `prisma/rls.sql`. `APP_URL` phải https công khai. nginx: location tải Drive chờ 300 giây. Xem DEPLOYMENT → “Nâng cấp lên 0.24.0” (gồm giới hạn của khóa đối xứng — QĐ-209a).
+- Migration `20261123090001_mxh_ket_noi`, `20261123090002_mxh_video_dinh_kem`; chạy lại `prisma/rls.sql`. `APP_URL` phải https công khai. nginx: location tải Drive chờ 300 giây. Xem DEPLOYMENT → “Nâng cấp lên 0.24.0” (gồm giới hạn của khóa đối xứng — QĐ-216a).
 
 ### Kiểm thử
 - `npm run thu:mxh-ket-noi` (nối cuối `thu:tich-hop`): OAuth (state sai / hết hạn / dùng lại / khác phiên / redirect lạ), đổi mã, chọn kênh, kết nối lại, đăng từng loại nội dung Facebook / Instagram / YouTube, 4 loại lỗi, làm mới token, NEEDS_REAUTH, hạn mức Instagram + Reels, quota YouTube, upload YouTube bị ngắt rồi tiếp, Picker tải tệp, Data Deletion ký sai / đúng, trang công khai, RLS / IDOR, token không lộ — Graph / Google / YouTube / Drive là máy chủ giả cục bộ. `thu/don-vi/mxh-ket-noi.test.ts` (phần thuần).

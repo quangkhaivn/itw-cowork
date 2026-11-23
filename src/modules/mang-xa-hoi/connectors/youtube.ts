@@ -5,7 +5,7 @@ import { gocApi } from "./goc-api";
 import type { BoiCanhGoi, BuocGoi, KetQuaDang, KetQuaDoiSoat, KetQuaKiemTra, KetQuaXacMinh, SocialConnector, ThongTinXacThuc } from "./kieu";
 
 /**
- * Connector YouTube (0.24.0, QĐ-204) — YouTube Data API v3, OAuth Google (access token còn hạn — worker làm mới trước).
+ * Connector YouTube (0.24.0, QĐ-211) — YouTube Data API v3, OAuth Google (access token còn hạn — worker làm mới trước).
  *
  *  - Tải lên RESUMABLE: `POST /upload/youtube/v3/videos?uploadType=resumable&part=snippet,status` (siêu dữ liệu, tiêu đề
  *    `X-Upload-Content-Length/Type`) → `Location` = URI phiên; `PUT` từng đoạn (bội số 256 KiB) với `Content-Range`;

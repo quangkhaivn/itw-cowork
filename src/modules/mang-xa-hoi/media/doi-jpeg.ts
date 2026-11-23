@@ -1,5 +1,5 @@
 /**
- * Đổi ảnh sang JPEG cho Instagram (0.24.0, QĐ-205) bằng `sharp` — thư viện ảnh ĐÃ CÓ trong cây phụ thuộc (phụ thuộc tùy
+ * Đổi ảnh sang JPEG cho Instagram (0.24.0, QĐ-212) bằng `sharp` — thư viện ảnh ĐÃ CÓ trong cây phụ thuộc (phụ thuộc tùy
  * chọn của Next.js, có trong package-lock), KHÔNG thêm vào package.json. Nạp động: máy không cài được sharp (thiếu
  * libvips cho kiến trúc máy) → `coThuVienAnh()` = false → luật nền tảng từ chối ảnh không phải JPEG kèm hướng dẫn tự đổi.
  */

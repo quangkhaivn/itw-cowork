@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import type { LoaiLoi } from "./hang-so";
 
 /**
- * Phần THUẦN của kết nối OAuth và gọi API Meta / Google (0.24.0, QĐ-203 → QĐ-208): quyền xin, dựng URL đăng nhập,
+ * Phần THUẦN của kết nối OAuth và gọi API Meta / Google (0.24.0, QĐ-210 → QĐ-215): quyền xin, dựng URL đăng nhập,
  * state, khóa phiên, signed_request của Meta, appsecret_proof, ngày quota YouTube, phân loại lỗi Graph / Google,
  * dựng multipart. Không chạm CSDL, mạng, đồng hồ (giờ truyền vào).
  *

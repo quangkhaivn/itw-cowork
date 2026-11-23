@@ -47,7 +47,7 @@ import { taoMp4 } from "./mxh-mp4";
 
 /**
  * Kiểm chứng 0.24.0 — kết nối Facebook Page / Instagram / YouTube bằng OAuth, Google Drive làm kho media, trang công khai,
- * Data Deletion Callback (BUSINESS_RULES mục 34 MXH-50 →, QĐ-203 →) trên CSDL THẬT, qua đúng service API gọi và đúng hàm
+ * Data Deletion Callback (BUSINESS_RULES mục 34 MXH-50 →, QĐ-210 →) trên CSDL THẬT, qua đúng service API gọi và đúng hàm
  * worker. Graph API / Google OAuth / YouTube / Drive là MÁY CHỦ GIẢ cục bộ (http.createServer) làm đúng hình dạng yêu cầu /
  * phản hồi theo tài liệu công khai — CHƯA KIỂM VỚI API THẬT. Mốc giờ nghiệp vụ là hằng số (không dùng new Date() cho phần
  * phụ thuộc giờ). Chạy: npm run thu:mxh-ket-noi.

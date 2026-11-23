@@ -7,7 +7,7 @@ import type { LuocDoTrangCongKhai } from "./luoc-do";
 import { docKhuonSignedRequest, sinhMaXacNhan } from "./oauth-thuan";
 
 /**
- * Trang công khai nền tảng đòi khi duyệt app (0.24.0, QĐ-207): Điều khoản sử dụng, Chính sách quyền riêng tư, Hướng dẫn xóa
+ * Trang công khai nền tảng đòi khi duyệt app (0.24.0, QĐ-214): Điều khoản sử dụng, Chính sách quyền riêng tư, Hướng dẫn xóa
  * dữ liệu. Quản trị sửa được (`setting.update`); chưa sửa thì hiện BẢN MẪU tiếng Việt ghi rõ "cần luật sư rà". Trang
  * `/xoa-du-lieu` kèm tra trạng thái yêu cầu xóa (mã xác nhận Meta trả cho người dùng).
  *

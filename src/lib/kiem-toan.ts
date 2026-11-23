@@ -154,7 +154,7 @@ export type HanhDong =
   | "doi-bi-mat-app-mxh"
   | "xoa-bi-mat-app-mxh"
   | "kiem-tra-app-mxh"
-  // 0.24.0 — kết nối OAuth, token, Drive, xóa dữ liệu, trang công khai (QĐ-203 →).
+  // 0.24.0 — kết nối OAuth, token, Drive, xóa dữ liệu, trang công khai (QĐ-210 →).
   | "bat-dau-ket-noi-oauth"
   | "callback-oauth"
   | "callback-oauth-tu-choi"
