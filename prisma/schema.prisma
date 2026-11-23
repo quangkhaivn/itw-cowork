@@ -208,6 +208,11 @@ model Tenant {
   socialPublishAttempts  SocialPublishAttempt[]
   socialPostReviews      SocialPostReview[]
   brandProfiles          BrandProfile[]
+  socialOauthRequests    SocialOauthRequest[]
+  socialOauthCandidates  SocialOauthCandidate[]
+  socialQuotaUsages      SocialQuotaUsage[]
+  socialDeletionRequests SocialDataDeletionRequest[]
+  legalPages             LegalPage[]
 
   @@map("tenants")
 }
@@ -5112,6 +5117,12 @@ model SocialConnection {
   /// Người dùng bấm "Kiểm tra lại" — worker (nơi duy nhất giải mã được) xử lý rồi xóa mốc.
   checkRequestedAt DateTime? @map("check_requested_at") @db.Timestamptz(6)
   disconnectedAt   DateTime? @map("disconnected_at") @db.Timestamptz(6)
+  /// 0.24.0: app_password (WordPress) | oauth (Facebook Page, Instagram, YouTube).
+  authType         String    @default("app_password") @map("auth_type") @db.VarChar(20)
+  /// META | GOOGLE (kênh OAuth).
+  oauthProvider    String?   @map("oauth_provider") @db.VarChar(20)
+  /// Người cấp quyền phía nền tảng: Meta app-scoped user id (để xử lý Data Deletion Callback), Google: mã kênh.
+  oauthSubject     String?   @map("oauth_subject") @db.VarChar(100)
   createdBy        String    @map("created_by") @db.Uuid
   updatedBy        String?   @map("updated_by") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -5136,6 +5147,9 @@ model SocialCredential {
   /// iv(12) | tag(16) | data key đã mã hóa (32) — 60 byte.
   wrappedKey   Bytes    @map("wrapped_key")
   keyVersion   Int      @map("key_version")
+  /// 0.24.0: hạn access token (không bí mật) — worker làm mới trước hạn mà không cần mở niêm phong để biết. NULL = không hết hạn.
+  tokenExpiresAt DateTime? @map("token_expires_at") @db.Timestamptz(6)
+  refreshedAt    DateTime? @map("refreshed_at") @db.Timestamptz(6)
   updatedBy    String?  @map("updated_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -5169,6 +5183,10 @@ model SocialAppConfig {
   checkMessage     String?   @map("check_message") @db.Text
   checkedAt        DateTime? @map("checked_at") @db.Timestamptz(6)
   checkRequestedAt DateTime? @map("check_requested_at") @db.Timestamptz(6)
+  /// 0.24.0: Google API key cho Google Picker — khóa phía trình duyệt (giới hạn HTTP referrer), mã hóa bằng APP_ENC_KEY
+  /// (QĐ-206), không bao giờ hiện lại trên màn hình quản trị (chỉ 4 ký tự cuối).
+  pickerKeyEnc     String?   @map("picker_key_enc") @db.Text
+  pickerKeyLast4   String?   @map("picker_key_last4") @db.VarChar(4)
   updatedBy        String?   @map("updated_by") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -5198,6 +5216,8 @@ model SocialPost {
   approvedAt       DateTime? @map("approved_at") @db.Timestamptz(6)
   reviewNote       String?   @map("review_note") @db.Text
   idempotencyKey   String?   @map("idempotency_key") @db.VarChar(100)
+  /// 0.24.0: tùy chọn đăng { facebookReels, lienKet, youtubeRiengTu }.
+  options          Json      @default("{}")
   revision         Int       @default(1)
   createdBy        String    @map("created_by") @db.Uuid
   updatedBy        String?   @map("updated_by") @db.Uuid
@@ -5282,6 +5302,9 @@ model SocialPostTarget {
   reconcileKey   String    @map("reconcile_key") @db.VarChar(200)
   /// attachmentId → mã media trên nền tảng đã tải lên (đăng lại không tải lại).
   mediaExternal  Json      @default("{}") @map("media_external")
+  /// 0.24.0: kiểu nội dung chốt lúc xếp hàng (wp-bai, fb-chu, fb-anh, fb-nhieu-anh, fb-video, fb-reels, ig-anh, ig-carousel,
+  /// ig-reels, yt-video) — đếm hạn mức Reels, chọn cách đăng.
+  contentKind    String?   @map("content_kind") @db.VarChar(20)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -5337,6 +5360,127 @@ model SocialPostReview {
 
   @@index([tenantId, postId, createdAt])
   @@map("social_post_reviews")
+}
+
+/// 0.24.0 — Một lần kết nối kênh bằng OAuth (QĐ-203). `state` chỉ lưu MÃ BĂM, dùng một lần, hạn 10 phút, gắn phiên
+/// (session_ref) + người + doanh nghiệp. Mã `code` nền tảng trả về được NIÊM PHONG (chỉ worker đổi lấy token — SEC-06).
+model SocialOauthRequest {
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @map("tenant_id") @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  /// META | GOOGLE
+  provider              String    @db.VarChar(20)
+  sessionRef            String    @map("session_ref") @db.VarChar(64)
+  stateHash             String    @unique @map("state_hash") @db.VarChar(64)
+  redirectUri           String    @map("redirect_uri") @db.Text
+  scopes                String[]  @default([])
+  /// Kết nối lại một kênh cụ thể (NEEDS_REAUTH) — null = kết nối mới.
+  reconnectConnectionId String?   @map("reconnect_connection_id") @db.Uuid
+  /// CHO_DONG_Y | CHO_DOI_MA | DA_SAN_SANG | HOAN_TAT | LOI | HET_HAN
+  status                String    @default("CHO_DONG_Y") @db.VarChar(20)
+  ciphertext            Bytes?
+  iv                    Bytes?
+  authTag               Bytes?    @map("auth_tag")
+  wrappedKey            Bytes?    @map("wrapped_key")
+  keyVersion            Int?      @map("key_version")
+  oauthSubject          String?   @map("oauth_subject") @db.VarChar(100)
+  accountName           String?   @map("account_name") @db.VarChar(200)
+  missingScopes         String[]  @default([]) @map("missing_scopes")
+  errorMessage          String?   @map("error_message") @db.Text
+  expiresAt             DateTime  @map("expires_at") @db.Timestamptz(6)
+  callbackAt            DateTime? @map("callback_at") @db.Timestamptz(6)
+  exchangedAt           DateTime? @map("exchanged_at") @db.Timestamptz(6)
+  completedAt           DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidates SocialOauthCandidate[]
+
+  @@index([tenantId, status])
+  @@map("social_oauth_requests")
+}
+
+/// Kênh tìm thấy sau khi đổi mã (Page, tài khoản Instagram, kênh YouTube) — chờ người dùng chọn. Token niêm phong với AAD
+/// của kênh SẼ tạo (connection_id đặt trước) nên chọn xong chỉ CHÉP bản niêm phong, ứng dụng web không mở. Xóa khi xong.
+model SocialOauthCandidate {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  requestId      String    @map("request_id") @db.Uuid
+  platform       String    @db.VarChar(30)
+  externalId     String    @map("external_id") @db.VarChar(500)
+  name           String    @db.VarChar(200)
+  meta           Json      @default("{}")
+  connectionId   String    @map("connection_id") @db.Uuid
+  existing       Boolean   @default(false)
+  ciphertext     Bytes
+  iv             Bytes
+  authTag        Bytes     @map("auth_tag")
+  wrappedKey     Bytes     @map("wrapped_key")
+  keyVersion     Int       @map("key_version")
+  tokenExpiresAt DateTime? @map("token_expires_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  request SocialOauthRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, requestId])
+  @@map("social_oauth_candidates")
+}
+
+/// Bộ đếm hạn mức gọi API theo ngày (0.24.0: số lượt upload YouTube / ngày, ngày tính theo giờ Thái Bình Dương như Google).
+model SocialQuotaUsage {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  quotaKey  String   @map("quota_key") @db.VarChar(50)
+  quotaDay  DateTime @map("quota_day") @db.Date
+  used      Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, quotaKey, quotaDay])
+  @@map("social_quota_usages")
+}
+
+/// Yêu cầu xóa dữ liệu từ Meta (Data Deletion Callback). Route công khai nhận + kiểm khuôn; worker kiểm chữ ký bằng App
+/// Secret (chỉ worker mở được) rồi xóa token của người đó (QĐ-207).
+model SocialDataDeletionRequest {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  provider         String    @default("META") @db.VarChar(20)
+  confirmationCode String    @unique @map("confirmation_code") @db.VarChar(32)
+  signedRequest    String    @map("signed_request") @db.Text
+  platformUserId   String?   @map("platform_user_id") @db.VarChar(100)
+  /// CHO_KIEM | DA_XOA | CHU_KY_SAI | LOI
+  status           String    @default("CHO_KIEM") @db.VarChar(20)
+  resultMessage    String?   @map("result_message") @db.Text
+  deletedCount     Int       @default(0) @map("deleted_count")
+  ipAddress        String?   @map("ip_address") @db.VarChar(64)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  processedAt      DateTime? @map("processed_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@map("social_data_deletion_requests")
+}
+
+/// Trang công khai nền tảng đòi (Điều khoản, Quyền riêng tư, Xóa dữ liệu) — Quản trị sửa được; chưa sửa thì hiện bản mẫu.
+model LegalPage {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  /// dieu-khoan | quyen-rieng-tu | xoa-du-lieu
+  slug      String   @db.VarChar(30)
+  title     String   @db.VarChar(200)
+  body      String   @db.Text
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+  @@map("legal_pages")
 }
 
 /// Hồ sơ thương hiệu (giọng văn, từ cấm, hashtag) — để sẵn cho trợ lý AI viết bài ở 0.25.
