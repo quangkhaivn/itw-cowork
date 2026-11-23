@@ -3,6 +3,7 @@ import { voiTenant, type ClientTenant } from "../../src/lib/db";
 import { ghiKiemToan } from "../../src/lib/kiem-toan";
 import { ghiSuKien, SU_KIEN } from "../../src/lib/su-kien";
 import { docTep, maBam } from "../../src/modules/dinh-kem/kho-tep";
+import { locMediaTheoKenh, noiDungHieuLuc } from "../../src/modules/mang-xa-hoi/bien-the";
 import { baoNguoiSoanVaNguoiDuyet, capNhatTrangThaiBai, docCauHinhMxh, type CauHinhMxh } from "../../src/modules/mang-xa-hoi/chung";
 import { layConnector } from "../../src/modules/mang-xa-hoi/connectors/danh-muc";
 import type { BoiCanhGoi, BuocGoi, KenhGoi, LoiPhanLoai, NoiDungDang, SocialConnector, TepMedia, ThongTinXacThuc } from "../../src/modules/mang-xa-hoi/connectors/kieu";
@@ -95,14 +96,16 @@ async function napViec(tx: ClientTenant, targetId: string): Promise<DuLieuViec |
   if (!t) return null;
   const nt = await tx.socialConnectorSetting.findFirst({ where: { platform: t.connection.platform } });
   const bien = t.post.variants.find((v) => v.platform === t.connection.platform);
+  // 0.25.0 (QĐ-233): nội dung riêng của kênh (ghi đè + hashtag + tập ảnh con) → biến thể nền tảng → nội dung chung.
+  const nd = noiDungHieuLuc({ tieuDe: t.post.title, noiDung: t.post.body }, t, bien ?? null);
   const c = t.connection.credential;
   const dau = await tx.socialPublishAttempt.findFirst({ where: { targetId: t.id }, orderBy: { startedAt: "asc" }, select: { startedAt: true } });
   return {
     target: { id: t.id, postId: t.postId, status: t.status, attemptCount: t.attemptCount, externalPostId: t.externalPostId, reconcileKey: t.reconcileKey, errorClass: t.errorClass, mediaExternal: (t.mediaExternal ?? {}) as Record<string, string>, lockedBy: t.lockedBy, contentKind: (t.contentKind ?? null) as KieuNoiDung | null, batDauLuot: dau?.startedAt ?? null },
-    post: { title: bien?.title ?? t.post.title, body: bien?.body ?? t.post.body, createdBy: t.post.createdBy, tuyChon: docTuyChon(t.post.options) },
+    post: { title: nd.tieuDe, body: nd.noiDung, createdBy: t.post.createdBy, tuyChon: docTuyChon(t.post.options) },
     kenh: { id: t.connection.id, diaChi: t.connection.externalId, tenDangNhap: t.connection.accountName, meta: (t.connection.meta ?? {}) as Record<string, unknown>, platform: t.connection.platform, status: t.connection.status, disconnectedAt: t.connection.disconnectedAt, name: t.connection.name, authType: t.connection.authType, oauthProvider: t.connection.oauthProvider },
     niemPhong: c ? { ciphertext: c.ciphertext, iv: c.iv, authTag: c.authTag, wrappedKey: c.wrappedKey, keyVersion: c.keyVersion } : null,
-    media: t.post.media.filter((m) => !m.attachment.deletedAt).map((m) => ({ attachmentId: m.attachmentId, storedPath: m.attachment.storedPath, mime: m.attachment.mimeType, tenTep: m.attachment.fileName, sha256: m.attachment.sha256, dungLuong: m.attachment.sizeBytes })),
+    media: locMediaTheoKenh(t.post.media.filter((m) => !m.attachment.deletedAt), nd.mediaIds).map((m) => ({ attachmentId: m.attachmentId, storedPath: m.attachment.storedPath, mime: m.attachment.mimeType, tenTep: m.attachment.fileName, sha256: m.attachment.sha256, dungLuong: m.attachment.sizeBytes })),
     nenTangDungDuoc: Boolean(nt && nt.availability === "AVAILABLE" && nt.enabled),
     cfg: await docCauHinhMxh(tx),
   };

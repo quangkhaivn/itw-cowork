@@ -165,7 +165,19 @@ export type HanhDong =
   | "tai-tu-drive"
   | "xoa-du-lieu-meta"
   | "sua-trang-cong-khai"
-  | "hoan-dang-quota-mxh";
+  | "hoan-dang-quota-mxh"
+  // 0.25.0 — lịch nội dung, chiến dịch, sửa kênh lỗi, hồ sơ thương hiệu, AI viết bài (QĐ-230 →).
+  | "doi-lich-bai-mxh"
+  | "sua-kenh-loi-mxh"
+  | "gui-duyet-kenh-loi-mxh"
+  | "duyet-kenh-loi-mxh"
+  | "dang-lai-kenh-mxh"
+  | "tao-chien-dich-mxh"
+  | "sua-chien-dich-mxh"
+  | "sua-ho-so-thuong-hieu"
+  | "ai-viet-bai-mxh"
+  | "ai-viet-bai-mxh-loi"
+  | "ai-viet-bai-mxh-chan";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

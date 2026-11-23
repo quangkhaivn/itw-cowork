@@ -6,14 +6,18 @@ import { LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
 import { batBuocQuyen, coQuyen, LoiThieuQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { nguoiGiuQuyen, taoThongBao } from "@/modules/thong-bao/service";
-import { dieuKienXemBai, docCauHinhMxh, duyetDuocNguoiSoan } from "./chung";
+import { chuanHoaDsHashtag, locMediaTheoKenh, noiDungHieuLuc, suaKenhLoiAnToan } from "./bien-the";
+import { dieuKienXemBai, docCauHinhMxh, duyetDuocNguoiSoan, ghiDongTacGiaAnh } from "./chung";
 import { layConnector } from "./connectors/danh-muc";
-import { HUONG_DAN_LOI, HUONG_DAN_LOI_OAUTH, TEN_NEN_TANG, type LoaiLoi, type NenTang, type TrangThaiBai } from "./hang-so";
+import { HUONG_DAN_LOI, HUONG_DAN_LOI_OAUTH, TEN_NEN_TANG, type LoaiLoi, type NenTang, type TrangThaiBai, type TrangThaiKenhBai } from "./hang-so";
 import { ANH, docTuyChon, kiemTheoNenTang, LUAT, NHAN_KIEU_NOI_DUNG, VIDEO, type KieuNoiDung } from "./luat-nen-tang";
 import type { LuocDoBai, LuocDoGuiDuyet, LuocDoLocBai } from "./luoc-do";
 import { coThuVienAnh } from "./media/doi-jpeg";
 import { appUrlHttps, docThongSoMediaBai } from "./media/thong-so";
-import { duocChuyenBai, khoaDoiSoat, SUA_DUOC } from "./tinh-toan";
+import { kiemHanMucYoutube } from "./han-muc-lich";
+import { kiemThuongHieu } from "./thuong-hieu-thuan";
+import { docHoSoThuongHieu } from "./thuong-hieu";
+import { duocChuyenBai, khoaDoiSoat, SUA_DUOC, tongHopTrangThaiBai } from "./tinh-toan";
 
 /**
  * Bài mạng xã hội (0.23.0, MXH-10 → MXH-35): soạn, gửi duyệt / duyệt / trả lại, đăng ngay, hẹn giờ, hủy lịch, đăng lại.
@@ -25,14 +29,14 @@ import { duocChuyenBai, khoaDoiSoat, SUA_DUOC } from "./tinh-toan";
 
 type TacNhan = "user" | "ai";
 
-async function khoaBai(tx: ClientTenant, id: string): Promise<void> {
+export async function khoaBai(tx: ClientTenant, id: string): Promise<void> {
   await tx.$queryRaw`SELECT id FROM social_posts WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`;
 }
 
 const CHON_KENH_BAI = { id: true, name: true, platform: true, status: true, disconnectedAt: true, externalId: true, authType: true } as const;
 const CHON_TEP_BAI = { id: true, fileName: true, mimeType: true, sizeBytes: true, storedPath: true } as const;
 
-async function layBai(nc: NguCanh, id: string, khoa = false) {
+export async function layBai(nc: NguCanh, id: string, khoa = false) {
   if (khoa) await khoaBai(nc.tx, id);
   const b = await nc.tx.socialPost.findFirst({
     where: { AND: [{ id, deletedAt: null }, await dieuKienXemBai(nc)] },
@@ -44,7 +48,7 @@ async function layBai(nc: NguCanh, id: string, khoa = false) {
   if (!b) throw new LoiKhongTimThay("Bài");
   return b;
 }
-type Bai = Awaited<ReturnType<typeof layBai>>;
+export type Bai = Awaited<ReturnType<typeof layBai>>;
 
 /** Về nháp để sửa: bài đã hủy, hoặc bài lỗi mà không kênh nào có mã bài nền tảng (không thể sinh bài trùng). */
 function veNhapDuoc(b: { status: string; targets: { externalPostId: string | null; status: string }[] }): boolean {
@@ -52,14 +56,14 @@ function veNhapDuoc(b: { status: string; targets: { externalPostId: string | nul
   return b.status === "FAILED" && b.targets.every((t) => !t.externalPostId && ["FAILED", "CANCELED", "SKIPPED"].includes(t.status));
 }
 
-function batBuocChuyen(b: { status: string }, sang: TrangThaiBai, viec: string) {
+export function batBuocChuyen(b: { status: string }, sang: TrangThaiBai, viec: string) {
   if (!duocChuyenBai(b.status as TrangThaiBai, sang)) {
     throw new LoiNghiepVu(`Bài đang “${b.status}” — không ${viec} được.`, 409, "sai-trang-thai");
   }
 }
 
 /** Người này được sửa / gửi duyệt bài: người soạn có `mxh.create`, hoặc người có `mxh.update` (trong phạm vi xem). */
-function duocSoan(nc: NguCanh, b: { createdBy: string }): boolean {
+export function duocSoan(nc: NguCanh, b: { createdBy: string }): boolean {
   return coQuyen(nc.hoSo, "mxh.update") || (coQuyen(nc.hoSo, "mxh.create") && b.createdBy === nc.hoSo.userId);
 }
 
@@ -67,7 +71,7 @@ function duocSoan(nc: NguCanh, b: { createdBy: string }): boolean {
  * Bài cần duyệt trước khi đăng (SEC-09): bài do AI tạo khi Cấu hình `mxh.ai_phai_duyet` bật; 0.24.0 — MỌI bài khi
  * `mxh.moi_bai_phai_duyet` bật (mục 8c). Thực tập sinh không có `mxh.update` nên luôn phải gửi duyệt.
  */
-async function canDuyet(nc: NguCanh, b: { createdByType: string }): Promise<boolean> {
+export async function canDuyet(nc: NguCanh, b: { createdByType: string }): Promise<boolean> {
   const cfg = await docCauHinhMxh(nc.tx);
   return cfg.moiBaiPhaiDuyet || (b.createdByType === "ai" && cfg.aiPhaiDuyet);
 }
@@ -101,6 +105,14 @@ function kenhCuaBaiRa(t: Bai["targets"][number]) {
     // QA 0.23.0 (QĐ-207): không rõ bài đã lên chưa — người dùng kiểm tay trên site.
     canKiemTay: t.status === "NEEDS_CHECK",
     diaChiSite: t.connection.externalId,
+    // 0.25.0 (QĐ-233): nội dung riêng của kênh.
+    tieuDeRieng: t.titleOverride,
+    noiDungRieng: t.bodyOverride,
+    hashtags: t.hashtags,
+    anhIds: t.mediaSubset ? t.mediaIds : null,
+    coNoiDungRieng: Boolean(t.titleOverride || t.bodyOverride || t.hashtags.length || t.mediaSubset),
+    // 0.25.0 (QĐ-234): kênh lỗi đã sửa, chờ duyệt lại / đăng lại riêng.
+    choDangLai: t.retryRequested,
   };
 }
 
@@ -122,6 +134,10 @@ function baiRa(b: Bai) {
     phienBan: b.revision,
     canHenLai: b.status === "APPROVED" && b.needsReschedule,
     dongTacGiaIds: b.coAuthorIds,
+    chienDichId: b.campaignId,
+    henDuKien: b.plannedAt,
+    /** "kenh-loi" = đang chờ duyệt lại riêng các kênh lỗi đã sửa (QĐ-234). */
+    phamViDuyet: b.reviewScope,
     taoLuc: b.createdAt,
     capNhatLuc: b.updatedAt,
     tuyChon: docTuyChon(b.options),
@@ -180,8 +196,21 @@ export async function chiTietBai(nc: NguCanh, id: string) {
   const soan = duocSoan(nc, b);
   const update = coQuyen(nc.hoSo, "mxh.update");
   const phaiDuyet = await canDuyet(nc, b);
+  const loiMotPhan = st === "FAILED" || st === "PARTIALLY_FAILED";
+  const coKenhChoDangLai = b.targets.some((t) => t.status === "FAILED" && t.retryRequested);
+  const phaiDuyetKenhLoi = phaiDuyet || !update;
+  const lanGui = loiMotPhan ? await lanGuiCuaKenh(nc, b.targets.filter((t) => t.status === "FAILED").map((t) => t.id)) : new Map<string, string[]>();
+  const quyenKenh = Object.fromEntries(b.targets.map((t) => {
+    const an = t.status === "FAILED" ? suaKenhLoiAnToan(t.connection.platform, t, lanGui.get(t.id) ?? []) : { duoc: false, lyDo: null };
+    return [t.id, {
+      suaKenhLoi: soan && loiMotPhan && t.status === "FAILED" && an.duoc,
+      lyDoKhongSua: soan && loiMotPhan && t.status === "FAILED" && !an.duoc ? an.lyDo : null,
+      dangLaiKenh: update && loiMotPhan && t.status === "FAILED" && !(t.retryRequested && phaiDuyetKenhLoi),
+    }];
+  }));
   return {
     ...baiRa(b),
+    quyenKenh,
     canhBao: await canhBaoBai(nc, b),
     nguoiSoan: ten.get(b.createdBy) ?? "—",
     nguoiGuiDuyet: b.submittedBy ? ten.get(b.submittedBy) ?? "—" : null,
@@ -196,7 +225,9 @@ export async function chiTietBai(nc: NguCanh, id: string) {
       lyDoKhongDuyet: st === "PENDING_APPROVAL" && !duyet.ok ? duyet.lyDo : null,
       dang: update && (st === "DRAFT" || st === "APPROVED") && (!phaiDuyet || st === "APPROVED"),
       huyLich: update && st === "SCHEDULED",
-      dangLai: update && (st === "FAILED" || st === "PARTIALLY_FAILED"),
+      dangLai: update && (st === "FAILED" || st === "PARTIALLY_FAILED") && !(coKenhChoDangLai && phaiDuyetKenhLoi),
+      /** 0.25.0 (QĐ-234): gửi duyệt lại các kênh lỗi đã sửa. */
+      guiDuyetKenhLoi: soan && loiMotPhan && coKenhChoDangLai && phaiDuyetKenhLoi,
       veNhap: soan && veNhapDuoc(b),
       xoa: (coQuyen(nc.hoSo, "mxh.delete") || (b.createdBy === nc.hoSo.userId && coQuyen(nc.hoSo, "mxh.create"))) && (st === "DRAFT" || st === "CANCELED"),
       dinhKem: soan && (st === "DRAFT" || st === "CANCELED"),
@@ -217,6 +248,12 @@ async function canhBaoBai(nc: NguCanh, b: Bai): Promise<string[]> {
     const c = layConnector(t.connection.platform);
     for (const x of c?.canhBao?.({ soAnh }) ?? []) ds.push(`${t.connection.name}: ${x}`);
   }
+  // 0.25.0 (QĐ-235): hồ sơ thương hiệu — cảnh báo, không chặn. Kênh có nội dung riêng kiểm riêng.
+  const hs = await docHoSoThuongHieu(nc.tx);
+  const chung = { tieuDe: b.title, noiDung: b.body };
+  const rieng = b.targets.filter((t) => t.titleOverride || t.bodyOverride || t.hashtags.length);
+  if (rieng.length < b.targets.length || !b.targets.length) ds.push(...kiemThuongHieu(chung, hs));
+  for (const t of rieng) ds.push(...kiemThuongHieu(noiDungHieuLuc(chung, t), hs, t.connection.name));
   return [...new Set(ds)];
 }
 
@@ -255,6 +292,60 @@ async function datKenh(nc: NguCanh, postId: string, tieuDe: string | null, kenhI
   }
 }
 
+/** Kết quả các lần gọi bước "publish" của từng kênh-bài (để biết sửa nội dung kênh lỗi có an toàn không — QĐ-234). */
+export async function lanGuiCuaKenh(nc: NguCanh, targetIds: string[]): Promise<Map<string, string[]>> {
+  const m = new Map<string, string[]>();
+  if (!targetIds.length) return m;
+  const ds = await nc.tx.socialPublishAttempt.findMany({ where: { targetId: { in: targetIds }, kind: "publish" }, select: { targetId: true, outcome: true } });
+  for (const a of ds) m.set(a.targetId, [...(m.get(a.targetId) ?? []), a.outcome]);
+  return m;
+}
+
+/** Chiến dịch phải thuộc doanh nghiệp (RLS) và đang hoạt động. */
+async function kiemChienDich(nc: NguCanh, id: string | null | undefined): Promise<string | null> {
+  if (!id) return null;
+  const cd = await nc.tx.socialCampaign.findFirst({ where: { id }, select: { id: true, status: true, name: true } });
+  if (!cd) throw new LoiNghiepVu("Chiến dịch không tồn tại.", 404, "khong-tim-thay");
+  if (cd.status !== "hoat-dong") throw new LoiNghiepVu(`Chiến dịch “${cd.name}” đã lưu trữ — không thêm bài được.`, 409, "chien-dich-luu-tru");
+  return cd.id;
+}
+
+function docHenDuKien(v: string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) throw new LoiNghiepVu("Ngày dự kiến không hợp lệ.", 400, "sai-gio");
+  return d;
+}
+
+/**
+ * Nội dung riêng theo kênh (QĐ-233) cho bài đang sửa được. Kênh không có trong `bienThe` → về nội dung chung. Ảnh chọn
+ * riêng phải là tệp của bài. Người khác người soạn sửa sau lần gửi duyệt đầu → đồng tác giả (QĐ-203).
+ */
+async function datBienThe(nc: NguCanh, postId: string, bienThe: NonNullable<z.infer<typeof LuocDoBai>["bienThe"]>, bayGio = new Date()) {
+  const kenh = await nc.tx.socialPostTarget.findMany({ where: { postId }, select: { id: true, connectionId: true, titleOverride: true, bodyOverride: true, hashtags: true, mediaSubset: true, mediaIds: true } });
+  const tep = new Set((await nc.tx.attachment.findMany({ where: { objectType: "social_post", objectId: postId, deletedAt: null }, select: { id: true } })).map((a) => a.id));
+  let doi = false;
+  for (const t of kenh) {
+    const v = bienThe.find((x) => x.kenhId === t.connectionId);
+    const anh = v?.anhIds ?? null;
+    if (anh && anh.some((id) => !tep.has(id))) throw new LoiNghiepVu("Ảnh / video chọn riêng cho kênh phải là tệp của bài này.", 422, "anh-khong-thuoc-bai");
+    const moi = {
+      titleOverride: v?.tieuDe?.trim() || null,
+      bodyOverride: v?.noiDung?.trim() || null,
+      hashtags: chuanHoaDsHashtag(v?.hashtags ?? []),
+      mediaSubset: anh !== null,
+      mediaIds: anh ? [...new Set(anh)] : [],
+    };
+    const giongCu = moi.titleOverride === t.titleOverride && moi.bodyOverride === t.bodyOverride && moi.hashtags.join(" ") === t.hashtags.join(" ")
+      && moi.mediaSubset === t.mediaSubset && moi.mediaIds.join() === t.mediaIds.join();
+    if (giongCu) continue;
+    doi = true;
+    await nc.tx.socialPostTarget.update({ where: { id: t.id }, data: { ...moi, overrideUpdatedBy: nc.hoSo.userId, overrideUpdatedAt: bayGio } });
+  }
+  if (doi) await ghiDongTacGiaAnh(nc.tx, postId, nc.hoSo.userId);
+  return doi;
+}
+
 /**
  * Tạo bài nháp. Có khóa lặp lại (`Idempotency-Key`, ADR-08): gửi lại cùng khóa trả bài đã tạo (`trung: true`), không
  * tạo bài thứ hai. `tacNhan: "ai"` — bài do trợ lý AI soạn (0.25), phải duyệt khi Cấu hình `mxh.ai_phai_duyet` = 1.
@@ -270,10 +361,14 @@ export async function taoBai(nc: NguCanh, d: z.infer<typeof LuocDoBai>, tacNhan:
     }
   }
   const id = crypto.randomUUID();
+  const chienDichId = await kiemChienDich(nc, d.chienDichId);
   try {
     await nc.tx.$executeRaw`SAVEPOINT tao_bai_mxh`;
     await nc.tx.socialPost.create({
-      data: { id, tenantId: nc.tenantId, title: d.tieuDe?.trim() || null, body: d.noiDung, options: (d.tuyChon ?? {}) as object, createdByType: tacNhan, idempotencyKey: khoa, createdBy: nc.hoSo.userId },
+      data: {
+        id, tenantId: nc.tenantId, title: d.tieuDe?.trim() || null, body: d.noiDung, options: (d.tuyChon ?? {}) as object, createdByType: tacNhan, idempotencyKey: khoa, createdBy: nc.hoSo.userId,
+        campaignId: chienDichId, plannedAt: docHenDuKien(d.henDuKien),
+      },
     });
     await nc.tx.$executeRaw`RELEASE SAVEPOINT tao_bai_mxh`;
   } catch (e) {
@@ -286,7 +381,8 @@ export async function taoBai(nc: NguCanh, d: z.infer<typeof LuocDoBai>, tacNhan:
     throw e;
   }
   await datKenh(nc, id, d.tieuDe?.trim() || null, d.kenhIds);
-  await nc.kiemToan({ action: "tao", objectType: "social_post", objectId: id, after: { tieuDe: d.tieuDe ?? null, soKenh: d.kenhIds.length, tacNhan } });
+  if (d.bienThe?.length) await datBienThe(nc, id, d.bienThe);
+  await nc.kiemToan({ action: "tao", objectType: "social_post", objectId: id, after: { tieuDe: d.tieuDe ?? null, soKenh: d.kenhIds.length, tacNhan, chienDichId } });
   await nc.suKien({ eventType: SU_KIEN.SOCIAL_POST_CREATED, objectType: "social_post", objectId: id, payload: { soKenh: d.kenhIds.length, tacNhan } });
   return { ...(await chiTietBai(nc, id)), trung: false };
 }
@@ -298,11 +394,16 @@ export async function suaBai(nc: NguCanh, id: string, d: z.infer<typeof LuocDoBa
   if (!duocSoan(nc, b)) throw new LoiThieuQuyen("mxh.update", { objectType: "social_post", objectId: id });
   if (!SUA_DUOC.includes(b.status as TrangThaiBai)) throw new LoiNghiepVu("Bài đã gửi duyệt / hẹn giờ / đăng — không sửa được. Rút duyệt hoặc hủy lịch trước.", 409, "sai-trang-thai");
   const tieuDe = d.tieuDe?.trim() || null;
+  const chienDich = d.chienDichId === undefined ? {} : { campaignId: d.chienDichId === null ? null : (d.chienDichId === b.campaignId ? b.campaignId : await kiemChienDich(nc, d.chienDichId)) };
   await nc.tx.socialPost.update({
     where: { id },
-    data: { title: tieuDe, body: d.noiDung, ...(d.tuyChon ? { options: d.tuyChon as object } : {}), status: "DRAFT", approvedBy: null, approvedAt: null, revision: { increment: 1 }, needsReschedule: false, updatedBy: nc.hoSo.userId },
+    data: {
+      title: tieuDe, body: d.noiDung, ...(d.tuyChon ? { options: d.tuyChon as object } : {}), status: "DRAFT", approvedBy: null, approvedAt: null, revision: { increment: 1 }, needsReschedule: false, updatedBy: nc.hoSo.userId,
+      ...chienDich, ...(d.henDuKien !== undefined ? { plannedAt: docHenDuKien(d.henDuKien) } : {}),
+    },
   });
   await datKenh(nc, id, tieuDe, d.kenhIds);
+  if (d.bienThe) await datBienThe(nc, id, d.bienThe);
   await nc.kiemToan({ action: "sua", objectType: "social_post", objectId: id, before: { tieuDe: b.title, trangThai: b.status }, after: { tieuDe, trangThai: "DRAFT", soKenh: d.kenhIds.length } });
   await nc.suKien({ eventType: SU_KIEN.SOCIAL_POST_UPDATED, objectType: "social_post", objectId: id, payload: { boDuyet: b.status === "APPROVED" } });
   return chiTietBai(nc, id);
@@ -323,7 +424,7 @@ export async function xoaBai(nc: NguCanh, id: string) {
 // Kiểm nội dung, chụp ảnh
 // ---------------------------------------------------------------------------
 
-function nhacKenhCanCapLai(t: { name: string; authType: string }): string {
+export function nhacKenhCanCapLai(t: { name: string; authType: string }): string {
   return t.authType === "oauth"
     ? `Kênh “${t.name}” cần kết nối lại (Mạng xã hội → Kênh → Kết nối lại) — quyền đã hết hạn hoặc bị thu hồi.`
     : `Kênh “${t.name}” cần nhập lại mật khẩu ứng dụng (Mạng xã hội → Kênh).`;
@@ -333,14 +434,23 @@ function nhacKenhCanCapLai(t: { name: string; authType: string }): string {
  * Kiểm bài theo LUẬT NỀN TẢNG (0.24.0, QĐ-212): đọc thông số ảnh / video trên đĩa, kiểm từng kênh, chốt kiểu nội dung
  * (Reels, carousel…). Vi phạm → 422 kèm danh sách. Trả kiểu nội dung theo kênh-bài để ghi lúc xếp hàng.
  */
-async function kiemNoiDung(b: Bai): Promise<Map<string, KieuNoiDung>> {
+export async function kiemNoiDung(b: Bai, chiKenh?: ReadonlySet<string>): Promise<Map<string, KieuNoiDung>> {
   if (!b.targets.length) throw new LoiNghiepVu("Chọn ít nhất một kênh.", 422, "chua-chon-kenh");
   const loi: string[] = [];
   const kieu = new Map<string, KieuNoiDung>();
-  const media = await docThongSoMediaBai(b.media);
+  const mediaBai = await docThongSoMediaBai(b.media);
   const mt = { appUrlHttps: appUrlHttps(), coDoiJpeg: await coThuVienAnh() };
   const tuyChon = docTuyChon(b.options);
   for (const t of b.targets) {
+    // 0.25.0 (QĐ-234): duyệt / đăng lại riêng kênh lỗi chỉ kiểm các kênh đó (kênh đã đăng giữ nguyên).
+    if (chiKenh && !chiKenh.has(t.id)) continue;
+    // 0.25.0 (QĐ-233): kiểm ĐÚNG nội dung sẽ đăng lên kênh này (nội dung riêng + hashtag + tập ảnh con).
+    const nd = noiDungHieuLuc({ tieuDe: b.title, noiDung: b.body }, t);
+    if (nd.mediaIds) {
+      const thieu = nd.mediaIds.filter((id) => !b.media.some((m) => m.attachmentId === id));
+      if (thieu.length) loi.push(`${t.connection.name}: có ${thieu.length} ảnh / video chọn riêng cho kênh không còn trong bài — chọn lại ảnh của kênh.`);
+    }
+    const media = locMediaTheoKenh(mediaBai, nd.mediaIds);
     if (t.connection.disconnectedAt) loi.push(`Kênh “${t.connection.name}” đã ngắt.`);
     else if (t.connection.status === "NEEDS_REAUTH") loi.push(nhacKenhCanCapLai(t.connection));
     const c = layConnector(t.connection.platform);
@@ -348,7 +458,7 @@ async function kiemNoiDung(b: Bai): Promise<Map<string, KieuNoiDung>> {
       loi.push(`${TEN_NEN_TANG[t.connection.platform]} chưa được hỗ trợ.`);
       continue;
     }
-    const kq = kiemTheoNenTang(t.connection.platform as NenTang, { tieuDe: b.title, noiDung: b.body, media, tuyChon }, mt);
+    const kq = kiemTheoNenTang(t.connection.platform as NenTang, { tieuDe: nd.tieuDe, noiDung: nd.noiDung, media, tuyChon }, mt);
     for (const v of kq.viPham) loi.push(`${t.connection.name}: ${v.thongBao}`);
     if (kq.kieu) kieu.set(t.id, kq.kieu);
   }
@@ -360,7 +470,7 @@ async function kiemNoiDung(b: Bai): Promise<Map<string, KieuNoiDung>> {
  * Hạn mức Reels Facebook: 30 reel / 24 giờ mỗi Page qua API (chưa kiểm với API thật) — kiểm TRƯỚC khi xếp hàng: Reels đã
  * đăng trong 24 giờ trước giờ đăng + Reels đang chờ / đang đăng trong ±24 giờ quanh giờ đăng.
  */
-async function kiemHanMucReels(nc: NguCanh, b: Bai, kieu: Map<string, KieuNoiDung>, luc: Date) {
+export async function kiemHanMucReels(nc: NguCanh, b: Bai, kieu: Map<string, KieuNoiDung>, luc: Date) {
   for (const t of b.targets) {
     if ((kieu.get(t.id) ?? t.contentKind) !== "fb-reels") continue;
     const tu = new Date(luc.getTime() - 86_400_000);
@@ -396,7 +506,7 @@ async function chupAnh(nc: NguCanh, postId: string) {
   }
 }
 
-function docHenLuc(henLuc: string | null | undefined, bayGio: Date): Date {
+export function docHenLuc(henLuc: string | null | undefined, bayGio: Date): Date {
   if (!henLuc) throw new LoiNghiepVu("Chọn giờ đăng.", 400, "thieu-gio");
   const d = new Date(henLuc);
   if (Number.isNaN(d.getTime())) throw new LoiNghiepVu("Giờ đăng không hợp lệ.", 400, "sai-gio");
@@ -423,6 +533,29 @@ async function xepHang(nc: NguCanh, b: Bai, luc: Date, bayGio: Date, kieu: Map<s
   }
   await nc.tx.socialPost.update({ where: { id: b.id }, data: { status: sang, scheduledAt: luc, needsReschedule: false, updatedBy: nc.hoSo.userId } });
   return sang;
+}
+
+/**
+ * 0.25.0 (QĐ-234): xếp hàng LẠI riêng các kênh lỗi đã chọn (đã duyệt nếu cần). Kênh đã đăng không bị đụng; giữ loại lỗi
+ * cũ → worker ĐỐI SOÁT trước khi gửi (không đăng trùng nếu lượt trước đã lên). Bài sang PUBLISHING.
+ */
+export async function xepHangKenhLoi(nc: NguCanh, b: Bai, targetIds: readonly string[], kieu: Map<string, KieuNoiDung>, bayGio: Date) {
+  batBuocChuyen(b, "PUBLISHING", "đăng lại");
+  const chon = b.targets.filter((t) => targetIds.includes(t.id) && t.status === "FAILED");
+  if (!chon.length) throw new LoiNghiepVu("Không có kênh lỗi để đăng lại.", 409, "khong-co-kenh-loi");
+  for (const t of chon) {
+    if (t.connection.disconnectedAt) throw new LoiNghiepVu(`Kênh “${t.connection.name}” đã ngắt.`, 409, "kenh-da-ngat");
+    if (t.connection.status === "NEEDS_REAUTH") throw new LoiNghiepVu(nhacKenhCanCapLai(t.connection), 409, "kenh-can-nhap-lai");
+  }
+  await kiemHanMucReels(nc, { ...b, targets: chon }, kieu, bayGio);
+  for (const t of chon) {
+    await nc.tx.socialPostTarget.update({
+      where: { id: t.id },
+      data: { status: "QUEUED", nextAttemptAt: bayGio, attemptCount: 0, lockedBy: null, lockedAt: null, retryRequested: false, ...(kieu.get(t.id) ? { contentKind: kieu.get(t.id) } : {}) },
+    });
+  }
+  await nc.tx.socialPost.update({ where: { id: b.id }, data: { status: "PUBLISHING", updatedBy: nc.hoSo.userId } });
+  return chon.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -457,6 +590,8 @@ export async function dangNgay(nc: NguCanh, id: string, bayGio: Date = new Date(
 export async function henGio(nc: NguCanh, id: string, henLuc: string, bayGio: Date = new Date()) {
   const luc = docHenLuc(henLuc, bayGio);
   const { b, kieu } = await truocKhiDang(nc, id);
+  // 0.25.0 (QĐ-231): hẹn giờ không được vượt hạn mức YouTube / ngày quota (worker vẫn dời nếu thực tế chạm trần).
+  await kiemHanMucYoutube(nc.tx, b, luc);
   await xepHang(nc, b, luc, bayGio, kieu);
   await nc.kiemToan({ action: "hen-gio-bai-mxh", objectType: "social_post", objectId: id, after: { henLuc: luc.toISOString(), soKenh: b.targets.length } });
   await nc.suKien({ eventType: SU_KIEN.SOCIAL_POST_SCHEDULED, objectType: "social_post", objectId: id, payload: { cheDo: "hen-gio", henLuc: luc.toISOString() } });
@@ -493,12 +628,19 @@ export async function dangLai(nc: NguCanh, id: string, bayGio: Date = new Date()
     if (t.connection.disconnectedAt) throw new LoiNghiepVu(`Kênh “${t.connection.name}” đã ngắt.`, 409, "kenh-da-ngat");
     if (t.connection.status === "NEEDS_REAUTH") throw new LoiNghiepVu(nhacKenhCanCapLai(t.connection), 409, "kenh-can-nhap-lai");
   }
-  await kiemHanMucReels(nc, { ...b, targets: loi }, new Map(), bayGio);
+  // 0.25.0 (QĐ-234): kênh đã sửa nội dung riêng mà bài phải duyệt → không đăng lại khi chưa duyệt lại.
+  const daSua = loi.filter((t) => t.retryRequested);
+  if (daSua.length && (await canDuyet(nc, b))) {
+    throw new LoiNghiepVu(`Kênh ${daSua.map((t) => `“${t.connection.name}”`).join(", ")} đã sửa nội dung — phải được duyệt lại trước khi đăng (bấm “Gửi duyệt lại kênh lỗi”).`, 409, "can-duyet");
+  }
+  const kieu = daSua.length ? await kiemNoiDung(b, new Set(daSua.map((t) => t.id))) : new Map<string, KieuNoiDung>();
+  await kiemHanMucReels(nc, { ...b, targets: loi }, kieu, bayGio);
   // Giữ errorClass của lượt trước: worker thấy có lỗi cũ thì ĐỐI SOÁT trước khi gửi (không đăng trùng nếu lượt trước đã lên).
   await nc.tx.socialPostTarget.updateMany({
     where: { id: { in: loi.map((t) => t.id) } },
-    data: { status: "QUEUED", nextAttemptAt: bayGio, attemptCount: 0, lockedBy: null, lockedAt: null },
+    data: { status: "QUEUED", nextAttemptAt: bayGio, attemptCount: 0, lockedBy: null, lockedAt: null, retryRequested: false },
   });
+  for (const [tid, k] of kieu) await nc.tx.socialPostTarget.update({ where: { id: tid }, data: { contentKind: k } });
   await nc.tx.socialPost.update({ where: { id }, data: { status: "PUBLISHING", updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "dang-lai-bai-mxh", objectType: "social_post", objectId: id, after: { soKenh: loi.length } });
   await nc.suKien({ eventType: SU_KIEN.SOCIAL_POST_SCHEDULED, objectType: "social_post", objectId: id, payload: { cheDo: "dang-lai", soKenh: loi.length } });
@@ -575,7 +717,8 @@ export async function rutDuyet(nc: NguCanh, id: string) {
   const b = await layBai(nc, id, true);
   if (b.status !== "PENDING_APPROVAL") throw new LoiNghiepVu("Bài không ở trạng thái chờ duyệt.", 409, "sai-trang-thai");
   if (b.createdBy !== nc.hoSo.userId && b.submittedBy !== nc.hoSo.userId) throw new LoiThieuQuyen("mxh.update", { objectType: "social_post", objectId: id });
-  await nc.tx.socialPost.update({ where: { id }, data: { status: "DRAFT", updatedBy: nc.hoSo.userId } });
+  // 0.25.0 (QĐ-234): rút duyệt lại kênh lỗi → bài về trạng thái lỗi cũ (kênh đã đăng giữ nguyên), nội dung đã sửa giữ lại.
+  await nc.tx.socialPost.update({ where: { id }, data: { status: b.reviewScope === "kenh-loi" ? trangThaiLoiCu(b) : "DRAFT", reviewScope: null, updatedBy: nc.hoSo.userId } });
   await nc.tx.socialPostReview.create({ data: { tenantId: nc.tenantId, postId: id, action: "rut", actorId: nc.hoSo.userId } });
   await nc.kiemToan({ action: "rut-duyet-bai-mxh", objectType: "social_post", objectId: id });
   return chiTietBai(nc, id);
@@ -601,12 +744,37 @@ export async function danhSachChoDuyet(nc: NguCanh) {
   return kq;
 }
 
+/** Trạng thái lỗi của bài suy từ các kênh (bài lên một phần → PARTIALLY_FAILED, không kênh nào lên → FAILED). */
+function trangThaiLoiCu(b: Bai): TrangThaiBai {
+  const st = tongHopTrangThaiBai("PUBLISHING", b.targets.map((t) => t.status as TrangThaiKenhBai));
+  return st === "PARTIALLY_FAILED" || st === "FAILED" ? st : b.targets.some((t) => t.status === "PUBLISHED") ? "PARTIALLY_FAILED" : "FAILED";
+}
+
+/** Duyệt bản sửa các kênh lỗi (QĐ-234): kiểm riêng các kênh đó, duyệt rồi xếp hàng đăng lại NGAY — kênh đã đăng giữ nguyên. */
+async function duyetKenhLoi(nc: NguCanh, b: Bai, ghiChu: string | null, bayGio: Date) {
+  const chon = b.targets.filter((t) => t.status === "FAILED" && t.retryRequested).map((t) => t.id);
+  if (!chon.length) throw new LoiNghiepVu("Không còn kênh lỗi nào chờ duyệt lại.", 409, "khong-co-kenh-loi");
+  const kieu = await kiemNoiDung(b, new Set(chon));
+  await nc.tx.socialPost.update({ where: { id: b.id }, data: { status: "APPROVED", reviewScope: null, approvedBy: nc.hoSo.userId, approvedAt: bayGio, reviewNote: ghiChu, needsReschedule: false, updatedBy: nc.hoSo.userId } });
+  await nc.tx.socialPostReview.create({ data: { tenantId: nc.tenantId, postId: b.id, action: "duyet", actorId: nc.hoSo.userId, note: ghiChu ?? `Duyệt lại ${chon.length} kênh lỗi đã sửa` } });
+  const sau = await layBai(nc, b.id);
+  await xepHangKenhLoi(nc, sau, chon, kieu, bayGio);
+  await taoThongBao(nc.tx, nc.tenantId, {
+    nguoiNhanId: b.submittedBy ?? b.createdBy, loai: "mxh-da-duyet", tieuDe: `Đã duyệt lại kênh lỗi: ${b.title ?? b.body.slice(0, 60)}`,
+    duongDan: `/mang-xa-hoi/bai/${b.id}`, doiTuong: "social_post", doiTuongId: b.id, khoaChongTrung: `mxh-da-duyet:${b.id}:${b.revision}`,
+  });
+  await nc.kiemToan({ action: "duyet-kenh-loi-mxh", objectType: "social_post", objectId: b.id, after: { soKenh: chon.length, ghiChu } });
+  await nc.suKien({ eventType: SU_KIEN.SOCIAL_POST_REVIEWED, objectType: "social_post", objectId: b.id, payload: { ketQua: "duyet", trangThai: "PUBLISHING", phamVi: "kenh-loi" } });
+  return chiTietBai(nc, b.id);
+}
+
 export async function duyetBai(nc: NguCanh, id: string, ghiChu: string | null = null, bayGio: Date = new Date()) {
   batBuocQuyen(nc.hoSo, "mxh.approve", { objectType: "social_post", objectId: id });
   const b = await layBai(nc, id, true);
   if (b.status !== "PENDING_APPROVAL") throw new LoiNghiepVu("Bài không ở trạng thái chờ duyệt.", 409, "sai-trang-thai");
   const hl = await nguoiDuyetHopLe(nc, b);
   if (!hl.ok) throw new LoiNghiepVu(hl.lyDo, 403, "khong-duoc-duyet");
+  if (b.reviewScope === "kenh-loi") return duyetKenhLoi(nc, b, ghiChu, bayGio);
   const kieu = await kiemNoiDung(b);
   // Duyệt xong chạy tiếp đúng ý người gửi: hẹn giờ (giờ còn ở tương lai) hoặc đăng ngay. QA 0.23.0 (QĐ-206): giờ hẹn đã
   // qua lúc duyệt — trễ ≤ `mxh.tre_hen_toi_da_phut` thì đăng ngay; trễ hơn thì "Đã duyệt – cần hẹn lại giờ" + báo người soạn.
@@ -644,7 +812,9 @@ export async function traLaiBai(nc: NguCanh, id: string, lyDo: string) {
   if (b.status !== "PENDING_APPROVAL") throw new LoiNghiepVu("Bài không ở trạng thái chờ duyệt.", 409, "sai-trang-thai");
   const hl = await nguoiDuyetHopLe(nc, b);
   if (!hl.ok) throw new LoiNghiepVu(hl.lyDo, 403, "khong-duoc-duyet");
-  await nc.tx.socialPost.update({ where: { id }, data: { status: "DRAFT", reviewNote: lyDo, approvedBy: null, approvedAt: null, needsReschedule: false, updatedBy: nc.hoSo.userId } });
+  // 0.25.0 (QĐ-234): trả lại bản sửa kênh lỗi → bài về trạng thái lỗi cũ; kênh vẫn "đã sửa, chưa duyệt" (không đăng lại được).
+  const sang = b.reviewScope === "kenh-loi" ? trangThaiLoiCu(b) : "DRAFT";
+  await nc.tx.socialPost.update({ where: { id }, data: { status: sang, reviewScope: null, reviewNote: lyDo, approvedBy: null, approvedAt: null, needsReschedule: false, updatedBy: nc.hoSo.userId } });
   await nc.tx.socialPostReview.create({ data: { tenantId: nc.tenantId, postId: id, action: "tra-lai", actorId: nc.hoSo.userId, note: lyDo } });
   await taoThongBao(nc.tx, nc.tenantId, {
     nguoiNhanId: b.createdBy, loai: "mxh-tra-lai", mucDo: "canh-bao", tieuDe: `Bài bị trả lại: ${b.title ?? b.body.slice(0, 60)}`, noiDung: lyDo,

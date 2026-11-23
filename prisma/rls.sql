@@ -131,6 +131,9 @@ REVOKE DELETE ON public.attendance_punches FROM cowork_app;
 -- khoản cộng / trừ, hoa hồng của kỳ NHÁP vẫn xóa được (tính lại) — trigger chan_sua_ky_luong_da_khoa chặn kỳ đã khóa.
 REVOKE DELETE ON public.payroll_param_sets FROM cowork_app;
 REVOKE DELETE ON public.payroll_runs FROM cowork_app;
+-- 0.25.0 (QĐ-236): lượt dùng AI (ngân sách AI theo tháng) — không bao giờ xóa; UPDATE chỉ để ghi kết quả một lần cho dòng
+-- "dang-goi" (trigger kiem_ai_usage_log). Bảng chiến dịch nội dung social_campaigns: RLS chuẩn ở mục 2 (quét tenant_id).
+REVOKE DELETE ON public.ai_usage_logs FROM cowork_app;
 REVOKE ALL ON FUNCTION public.tra_may_cham_cong(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.tra_may_cham_cong(text) TO cowork_app;
 -- 0.22.0 (QĐ-175): MÁY LẠ — bảng không có tenant_id (chưa biết thuộc doanh nghiệp nào). Ứng dụng KHÔNG có quyền trực tiếp

@@ -28,6 +28,15 @@ export const LuocDoTuyChonDang = z.object({
   youtubeRiengTu: z.enum(["private", "unlisted", "public"]).optional(),
 });
 
+/** 0.25.0 (QĐ-233): nội dung riêng của một kênh. Trường bỏ trống = dùng nội dung chung. `anhIds` null = mọi ảnh / video. */
+export const LuocDoBienTheKenh = z.object({
+  kenhId: z.uuid(),
+  tieuDe: chuoi(300).optional().nullable(),
+  noiDung: z.string().trim().max(100_000).optional().nullable(),
+  hashtags: z.array(z.string().trim().max(101)).max(30, "Tối đa 30 hashtag.").optional(),
+  anhIds: z.array(z.uuid()).max(20).optional().nullable(),
+});
+
 export const LuocDoBai = z.object({
   tieuDe: chuoi(300).optional().nullable(),
   noiDung: z.string().trim().min(1, "Nhập nội dung bài.").max(100_000),
@@ -35,6 +44,12 @@ export const LuocDoBai = z.object({
   khoaLapLai: chuoi(100).optional().nullable(),
   /** 0.24.0: tùy chọn đăng theo nền tảng (Reels, liên kết, quyền riêng tư YouTube). Không gửi = giữ như cũ. */
   tuyChon: LuocDoTuyChonDang.optional(),
+  /** 0.25.0: chiến dịch nội dung (null = bỏ khỏi chiến dịch; không gửi = giữ như cũ). */
+  chienDichId: z.uuid().optional().nullable(),
+  /** 0.25.0: ngày giờ dự kiến trên lịch nội dung (chưa xếp lịch đăng). Không gửi = giữ như cũ. */
+  henDuKien: z.iso.datetime({ offset: true }).optional().nullable(),
+  /** 0.25.0: nội dung riêng theo kênh. Không gửi = giữ như cũ; kênh không có trong mảng = dùng nội dung chung. */
+  bienThe: z.array(LuocDoBienTheKenh).max(20).optional(),
 });
 
 export const LuocDoGuiDuyet = z.object({
@@ -80,4 +95,60 @@ export const LuocDoTaiDrive = z.object({
 export const LuocDoTrangCongKhai = z.object({
   tieuDe: chuoi(200).min(1, "Nhập tiêu đề."),
   noiDung: z.string().max(100_000),
+});
+
+// ---------------------------------------------------------------------------
+// 0.25.0 — lịch nội dung, chiến dịch, sửa kênh lỗi, hồ sơ thương hiệu, AI viết bài (QĐ-230 →)
+// ---------------------------------------------------------------------------
+
+const NGAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày dạng YYYY-MM-DD.");
+
+export const LuocDoLocLich = z.object({
+  kieu: z.enum(["thang", "tuan"]).default("thang"),
+  thang: z.string().regex(/^\d{4}-\d{2}$/, "Tháng dạng YYYY-MM.").optional(),
+  ngay: NGAY.optional(),
+  kenhId: z.uuid().optional(),
+  chienDichId: z.uuid().optional(),
+  nguoiSoanId: z.uuid().optional(),
+});
+
+/** Đổi lịch: `luc` (ISO có múi giờ), hoặc `ngay` (giờ VN) + `gio` "HH:mm" tùy chọn (không gửi giờ = giữ giờ cũ). */
+export const LuocDoDoiLich = z.object({
+  luc: z.iso.datetime({ offset: true }).optional(),
+  ngay: NGAY.optional(),
+  gio: z.string().regex(/^\d{2}:\d{2}$/, "Giờ dạng HH:mm.").optional().nullable(),
+}).refine((d) => Boolean(d.luc || d.ngay), { message: "Chọn ngày giờ mới." });
+
+/** Sửa nội dung riêng của MỘT kênh lỗi (QĐ-234). */
+export const LuocDoSuaKenhLoi = z.object({
+  tieuDe: chuoi(300).optional().nullable(),
+  noiDung: z.string().trim().max(100_000).optional().nullable(),
+  hashtags: z.array(z.string().trim().max(101)).max(30, "Tối đa 30 hashtag.").optional(),
+  anhIds: z.array(z.uuid()).max(20).optional().nullable(),
+});
+
+export const LuocDoChienDich = z.object({
+  ten: chuoi(200).min(2, "Nhập tên chiến dịch."),
+  tuNgay: NGAY.optional().nullable(),
+  denNgay: NGAY.optional().nullable(),
+  mucTieu: chuoi(2000).optional().nullable(),
+  chienDichMarketingId: z.uuid().optional().nullable(),
+  trangThai: z.enum(["hoat-dong", "luu-tru"]).optional(),
+}).refine((d) => !d.tuNgay || !d.denNgay || d.denNgay >= d.tuNgay, { message: "Ngày kết thúc phải từ ngày bắt đầu trở đi.", path: ["denNgay"] });
+
+export const LuocDoThuongHieu = z.object({
+  giongVan: z.string().max(2000, "Tối đa 2.000 ký tự.").optional().nullable(),
+  tuCam: z.array(z.string().max(100)).max(200, "Tối đa 200 từ cấm.").default([]),
+  hashtagBatBuoc: z.array(z.string().max(101)).max(30, "Tối đa 30 hashtag.").default([]),
+  cauBatBuoc: z.array(z.string().max(300)).max(20, "Tối đa 20 câu bắt buộc.").default([]),
+  cta: z.array(z.string().max(300)).max(10, "Tối đa 10 câu kêu gọi hành động.").default([]),
+  baiMau: z.array(z.string().max(3000, "Mỗi bài mẫu tối đa 3.000 ký tự.")).max(5, "Tối đa 5 bài mẫu.").default([]),
+});
+
+export const LuocDoVietBaiAi = z.object({
+  sanPhamIds: z.array(z.uuid()).min(1, "Chọn ít nhất một sản phẩm.").max(10, "Tối đa 10 sản phẩm một lần."),
+  kenhIds: z.array(z.uuid()).min(1, "Chọn ít nhất một kênh.").max(20),
+  yeuCau: chuoi(1000).optional().nullable(),
+  chienDichId: z.uuid().optional().nullable(),
+  khoaLapLai: chuoi(100).optional().nullable(),
 });

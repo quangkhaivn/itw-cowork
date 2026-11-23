@@ -12,13 +12,14 @@ import type { LoaiLoi, TrangThaiBai, TrangThaiKenhBai } from "./hang-so";
 /** Chuyển trạng thái BÀI được phép. Mọi service đổi trạng thái kiểm qua `duocChuyenBai`. */
 export const CHUYEN_BAI: Record<TrangThaiBai, readonly TrangThaiBai[]> = {
   DRAFT: ["PENDING_APPROVAL", "SCHEDULED", "PUBLISHING"],
-  PENDING_APPROVAL: ["DRAFT", "APPROVED", "SCHEDULED", "PUBLISHING"],
+  // 0.25.0 (QĐ-234): duyệt lại riêng kênh lỗi — trả lại / rút thì bài về đúng trạng thái lỗi cũ (kênh đã đăng giữ nguyên).
+  PENDING_APPROVAL: ["DRAFT", "APPROVED", "SCHEDULED", "PUBLISHING", "PARTIALLY_FAILED", "FAILED"],
   APPROVED: ["DRAFT", "SCHEDULED", "PUBLISHING"],
   SCHEDULED: ["PUBLISHING", "CANCELED"],
   PUBLISHING: ["PUBLISHED", "PARTIALLY_FAILED", "FAILED"],
   PUBLISHED: [],
-  PARTIALLY_FAILED: ["PUBLISHING"],
-  FAILED: ["PUBLISHING", "DRAFT"],
+  PARTIALLY_FAILED: ["PUBLISHING", "PENDING_APPROVAL"],
+  FAILED: ["PUBLISHING", "DRAFT", "PENDING_APPROVAL"],
   CANCELED: ["DRAFT"],
 };
 
