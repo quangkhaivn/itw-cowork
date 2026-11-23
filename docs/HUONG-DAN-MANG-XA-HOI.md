@@ -214,7 +214,7 @@ Mặc định mỗi Google Cloud project có **10.000 đơn vị / ngày**; mỗ
   - Bài đã hẹn giờ: dời cả giờ đăng (cần quyền đăng), **vẫn giữ duyệt**. Không dời được khi đã tới giờ và bài đang đăng.
   - Bài đang chờ duyệt kèm "đăng vào giờ hẹn": đổi giờ hẹn, người duyệt thấy trong lịch sử ("Đổi giờ hẹn").
   - Bài nháp / đã duyệt chưa hẹn giờ: chỉ đổi **ngày dự kiến** — muốn đăng đúng giờ, mở bài bấm **Hẹn giờ**.
-  - Không đổi được: bài đã đăng, đang đăng, lỗi; giờ đã qua; quá 1 năm.
+  - Không đổi được: bài đã đăng, đang đăng, lỗi; giờ đã qua; quá 1 năm. Lịch xem được các năm 2000–2100.
   - **YouTube**: một ngày (theo ngày hạn mức của Google, đổi ngày lúc 14–15 giờ chiều giờ VN) tối đa *Số video tải lên YouTube tối đa mỗi ngày* (mặc định 6) — kéo / hẹn video thứ 7 vào ngày đó bị từ chối, chọn ngày khác. Reels Facebook tối đa 30 / 24 giờ mỗi Page.
 
 ## 15. Nội dung riêng theo kênh, chiến dịch, sửa kênh lỗi (0.25)
@@ -228,7 +228,10 @@ Mặc định mỗi Google Cloud project có **10.000 đơn vị / ngày**; mỗ
 1. **Đăng lại kênh này**: đăng lại riêng kênh lỗi. Cowork **đối soát trước khi gửi** — nếu lượt trước thật ra đã lên, nhận bài đó, không đăng trùng. Kênh đã đăng không bị đụng.
 2. **Sửa nội dung kênh này**: sửa tiêu đề / nội dung / hashtag / ảnh RIÊNG cho kênh lỗi, rồi đăng lại.
    - Không sửa được khi kênh đã có mã bài trên nền tảng (bài có thể đã lên), hoặc kênh **Facebook / Instagram** từng gửi mà kết quả không chắc chắn (lỗi tạm / không rõ) — vì Facebook / Instagram nhận ra bài cũ bằng NỘI DUNG; sửa nội dung có thể dẫn tới đăng trùng. Khi đó chỉ "Đăng lại kênh này" với nội dung cũ, hoặc tạo bài mới.
-   - Bài phải duyệt (bài AI, hoặc Cấu hình "Mọi bài phải duyệt") hoặc người sửa không có quyền đăng → bài **chờ duyệt lại riêng kênh lỗi**. Bị trả lại → bấm **Gửi duyệt lại kênh lỗi** sau khi sửa.
+   - Bài phải duyệt (bài AI, hoặc Cấu hình "Mọi bài phải duyệt") hoặc người sửa không có quyền đăng → bài **chờ duyệt lại riêng kênh lỗi**. Bị trả lại → bấm **Gửi duyệt lại kênh lỗi** sau khi sửa. Bản sửa chưa được duyệt (ví dụ của thực tập sinh, bị trả lại) thì **không ai "Đăng lại" được** — kể cả người có quyền đăng — tới khi được duyệt; người có quyền đăng muốn đăng ngay thì tự sửa lại nội dung kênh đó.
+   - Sửa nội dung kênh lỗi làm mất dấu "đã duyệt" cũ của bài (người duyệt chưa xem bản sửa).
+
+**Về nháp bài lỗi**: bài lỗi hoàn toàn có kênh **Facebook / Instagram** từng gửi mà kết quả không chắc chắn → không "Về nháp" được (về nháp rồi sửa nội dung có thể đăng trùng) — dùng "Đăng lại" (nội dung cũ) hoặc tạo bài mới.
 
 **Hồ sơ thương hiệu** (Mạng xã hội → Hồ sơ thương hiệu — Trưởng phòng Marketing / Giám đốc / Quản trị sửa): giọng văn, **từ cấm**, **câu bắt buộc**, **hashtag bắt buộc**, câu kêu gọi hành động (CTA), tối đa 5 bài mẫu. AI viết theo hồ sơ này; bài soạn tay vi phạm chỉ hiện **cảnh báo** trên trang bài — không bị chặn.
 
@@ -243,7 +246,9 @@ Mặc định mỗi Google Cloud project có **10.000 đơn vị / ngày**; mỗ
 Điều cần biết:
 
 - AI **chỉ nhận giá bán thật và tình trạng tồn hiện tại** — không bao giờ nhận giá vốn, nhà cung cấp, lợi nhuận. Số lượng tồn chỉ đưa cho AI khi người bấm có quyền xem kho.
-- Cowork **làm sạch** bài AI: bỏ liên kết (thêm liên kết thật bằng tay), bỏ HTML, cắt theo độ dài của nền tảng; bài có **số tiền không khớp giá bán** trong Cowork → cảnh báo để người duyệt kiểm.
+- Cowork **làm sạch** bài AI: bỏ mọi liên kết — cả tên miền trần như `bit.ly/…`, `zalo.me/…` và email (thêm liên kết thật bằng tay), bỏ HTML, ký tự vô hình; cắt cho vừa giới hạn của từng nền tảng **tính cả hashtag** (Instagram 2.200 ký tự / 30 hashtag, YouTube 5.000 byte); bài có **số tiền không khớp giá bán** trong Cowork (kể cả viết kiểu "9,99 triệu", "9.990k") → cảnh báo để người duyệt kiểm.
+- Mô tả / thông số sản phẩm có ghi giá vốn, giá nhập, tên nhà cung cấp (dù không ghi nhãn) → dòng đó bị bỏ trước khi gửi AI. Nên giữ thông tin nội bộ ngoài phần mô tả sản phẩm.
+- Bấm hai lần khi AI đang viết → lần hai báo "AI đang viết bài cho yêu cầu này", không gọi AI lần hai.
 - Máy chủ chưa đặt khóa AI (`ANTHROPIC_API_KEY`) → nút hiện **"AI chưa cấu hình"**; vẫn soạn tay bình thường.
-- **Ngân sách AI** tháng này hiện ngay trên màn hình (token, tiền ước tính, số lượt). Lượt viết sẽ vượt ngân sách bị chặn kèm thông báo; Giám đốc / Quản trị nâng ở **Cấu hình hệ thống → Mạng xã hội** (mục 6). Lượt AI lỗi vẫn tính phần token đã tốn.
+- **Ngân sách AI** tháng này hiện ngay trên màn hình (token, tiền ước tính, số lượt). Lượt viết sẽ vượt ngân sách bị chặn kèm thông báo; Giám đốc / Quản trị nâng ở **Cấu hình hệ thống → Mạng xã hội** (mục 6). Lượt AI lỗi vẫn tính phần token đã tốn; lỗi mà không biết AI đã chạy chưa (hết giờ chờ, đứt mạng) tính phần giữ chỗ tối đa của lượt đó; nhà cung cấp từ chối rõ (quá tải, sai khóa) thì không tính.
 
