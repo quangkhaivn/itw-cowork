@@ -287,6 +287,15 @@ export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNha
 export async function dangBaiMotVong(tenantId: string, workerId: string, bayGio: Date, gioiHan = 5, env: NodeJS.ProcessEnv = process.env, dongHo?: () => Date): Promise<KetQuaXuLy[]> {
   const viec = await nhanViecDang(tenantId, workerId, bayGio, gioiHan);
   const kq: KetQuaXuLy[] = [];
-  for (const v of viec) kq.push(await xuLyViec(tenantId, workerId, v, dongHo ? dongHo() : bayGio, env));
+  for (const v of viec) {
+    // QA 0.23.0: một việc hỏng ngoài dự kiến (vd. ghi kết quả lỗi CSDL — `return xong(...)` trong try không bắt được) không
+    // được bỏ dở các việc còn lại của lô. Việc hỏng vẫn đang giữ khóa → quá ngưỡng "kẹt" thì đối soát, không đăng lại mù.
+    try {
+      kq.push(await xuLyViec(tenantId, workerId, v, dongHo ? dongHo() : bayGio, env));
+    } catch (e) {
+      console.error(`[worker] mxh: việc kênh-bài ${v.targetId} hỏng: ${cauLoiGon(e, 200)}`);
+      kq.push({ targetId: v.targetId, ketQua: "bo-qua" });
+    }
+  }
   return kq;
 }

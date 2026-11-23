@@ -20,8 +20,8 @@ import { capNhatCauHinh } from "../src/modules/cau-hinh/service";
 import { dinhKemTep } from "../src/modules/dinh-kem/service";
 import { aadKenh } from "../src/modules/mang-xa-hoi/bao-mat/khoa-chu";
 import { niemPhong } from "../src/modules/mang-xa-hoi/bao-mat/niem-phong";
-import { ketNoiWordPress } from "../src/modules/mang-xa-hoi/kenh";
-import { chiTietBai, dangNgay, taoBai, xuatCsvBai } from "../src/modules/mang-xa-hoi/bai";
+import { danhSachKenh, ketNoiWordPress, yeuCauKiemTraKenh } from "../src/modules/mang-xa-hoi/kenh";
+import { chiTietBai, dangNgay, nhatKyDang, taoBai, xuatCsvBai } from "../src/modules/mang-xa-hoi/bai";
 import { chuanHoaTieuDeWp } from "../src/modules/mang-xa-hoi/connectors/wordpress";
 import { choPhepLocalhostChoBaiThu, goiAnToan, kiemDiaChi, LoiGoiMang } from "../src/modules/mang-xa-hoi/mang/goi-an-toan";
 import { gioVietNamSangIso } from "../src/modules/mang-xa-hoi/tinh-toan";
@@ -29,6 +29,7 @@ import { kiemMaMedia, kyMaMedia } from "../src/modules/mang-xa-hoi/media-ky";
 import { moNiemPhong } from "../worker/mang-xa-hoi/giai-ma";
 import { dangBaiMotVong, nhanViecDang, xuLyViec } from "../worker/mang-xa-hoi/dang-bai";
 import { bocLaiMotDoanhNghiep } from "../worker/mang-xa-hoi/boc-lai-khoa";
+import { kiemTraKenhDaXep } from "../worker/mang-xa-hoi/kiem-tra";
 import { clientChuSoHuu, dat, ketLuan } from "./thu-lib";
 
 /**
@@ -61,6 +62,10 @@ const wp = {
   treoMedia: 0,
   choMedia: [] as (() => void)[],
   doiTieuDe: false,
+  /** Site (plugin bảo mật / chế độ gỡ lỗi) nhại lại tiêu đề Authorization + mật khẩu trong thông báo lỗi. */
+  nhaiBiMat: false,
+  /** Lần tạo bài tới trả 400 với mã lỗi rất dài (plugin tự đặt). */
+  maDai: false,
 };
 let cong = 0;
 const site = () => `http://localhost:${cong}`;
@@ -87,7 +92,7 @@ function docThan(req: IncomingMessage): Promise<Buffer> {
 
 const may = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
-  const p = url.pathname;
+  const p = url.pathname.replace(/^\/(nhai|dai)(?=\/)/, "");
   const than = await docThan(req);
   // Chuỗi chuyển hướng cùng máy, mỗi bước chậm — thử hạn giờ tính cho cả lần gọi.
   const cham = /^\/cham\/(\d+)$/.exec(p);
@@ -103,6 +108,10 @@ const may = createServer(async (req, res) => {
   const [u, ...pw] = Buffer.from(h.slice(6), "base64").toString("utf8").split(":");
   if (u !== "tacgia" || pw.join(":").replace(/\s+/g, "") !== MK.replace(/\s+/g, "")) return json(res, 401, { code: "incorrect_password", message: "Sai." });
   const r = p.slice("/wp-json/wp/v2".length);
+  if (wp.nhaiBiMat) {
+    const giai = Buffer.from(h.slice(6), "base64").toString("utf8");
+    return json(res, r === "/users/me" ? 403 : 400, { code: "rest_forbidden", message: `<p>Debug: header ${h} — user:pass ${giai} — pass ${giai.split(":").slice(1).join(":").replace(/\s+/g, "")}</p>` });
+  }
   if (r === "/users/me") return json(res, 200, { id: 9, name: "Tác giả DEMO", capabilities: { publish_posts: true, upload_files: true } });
   if (r === "/media" && req.method === "POST") {
     const id = ++wp.idTiep;
@@ -111,6 +120,10 @@ const may = createServer(async (req, res) => {
       await new Promise<void>((tha) => wp.choMedia.push(tha));
     }
     return json(res, 201, { id, mime_type: req.headers["content-type"] });
+  }
+  if (r === "/posts" && req.method === "POST" && wp.maDai) {
+    wp.maDai = false;
+    return json(res, 400, { code: `plugin_${"x".repeat(300)}`, message: "Plugin từ chối." });
   }
   if (r === "/posts" && req.method === "POST") {
     wp.soYeuCauTao++;
@@ -326,6 +339,42 @@ async function main() {
     const s = readFileSync(path.join(__dirname, "..", ps), "utf8");
     dat(`${ps}: đọc .env bằng UTF-8, nháy rỗng là chưa có khóa (đọc mã — máy thử không có PowerShell)`, s.includes("Get-Content -Encoding UTF8 $TepEnv") && s.includes(`-Pattern '^SOCIAL_MASTER_KEY=["'']?[A-Za-z0-9+/]'`));
   }
+
+  // ==================================================================
+  console.log("\n— QA-8. Site nhại lại mật khẩu ứng dụng trong thông báo lỗi — không được lưu / hiện cho người chỉ có mxh.view —");
+  const kenh3 = await voi(T, mk, (nc) => ketNoiWordPress(nc, { diaChi: `${site()}/nhai`, tenDangNhap: "tacgia", matKhauUngDung: MK, ten: "Site nhại DEMO" }));
+  wp.nhaiBiMat = true;
+  const b8 = await voi(T, mk, (nc) => taoBai(nc, { tieuDe: "Bài site nhại DEMO", noiDung: "x", kenhIds: [kenh3.id] }));
+  await voi(T, mk, (nc) => dangNgay(nc, b8.id, sau(20000)));
+  await dangBaiMotVong(T, "w-qa", sau(20000));
+  await voi(T, mk, (nc) => yeuCauKiemTraKenh(nc, kenh3.id, sau(20001)));
+  await kiemTraKenhDaXep(T, sau(20001));
+  wp.nhaiBiMat = false;
+  const xB8 = await kenhBai(b8.id);
+  const hdr = `Basic ${Buffer.from(`tacgia:${MK}`, "utf8").toString("base64")}`;
+  const biMat8 = [MK, MK.replace(/\s+/g, ""), hdr.slice(6), hdr];
+  const lo = (s: string) => biMat8.filter((b) => s.includes(b)).length;
+  dat("Site trả lỗi (FAILED) — máy giả đúng là có nhại bí mật", xB8.status === "FAILED" && /Debug/.test(xB8.errorMessage ?? ""), `${xB8.status} ${xB8.errorMessage}`);
+  const dongLo = JSON.stringify([
+    xB8,
+    await chu.socialPublishAttempt.findMany({ where: { targetId: xB8.id } }),
+    await chu.notification.findMany({ where: { tenantId: T, objectId: b8.id } }),
+    await chu.socialConnection.findUniqueOrThrow({ where: { id: kenh3.id } }),
+    await chu.auditLog.findMany({ where: { tenantId: T } }),
+    await chu.businessEvent.findMany({ where: { tenantId: T } }),
+  ]);
+  dat("CSDL (kênh-bài, nhật ký gọi, thông báo, kênh, kiểm toán, sự kiện) không chứa mật khẩu / tiêu đề Authorization", lo(dongLo) === 0, `${lo(dongLo)} dạng bí mật bị lưu`);
+  const apiLo = JSON.stringify([await voi(T, mk, (nc) => chiTietBai(nc, b8.id)), await voi(T, mk, (nc) => nhatKyDang(nc, b8.id)), await voi(T, mk, (nc) => danhSachKenh(nc))]);
+  dat("API chi tiết bài / nhật ký / kênh không trả bí mật", lo(apiLo) === 0);
+
+  // Mã lỗi site trả về dài hơn cột error_code (100) → vẫn ghi được kết quả, không kẹt.
+  const kenh4 = await voi(T, mk, (nc) => ketNoiWordPress(nc, { diaChi: `${site()}/dai`, tenDangNhap: "tacgia", matKhauUngDung: MK, ten: "Site mã dài DEMO" }));
+  wp.maDai = true;
+  const b9 = await voi(T, mk, (nc) => taoBai(nc, { tieuDe: "Bài mã lỗi dài DEMO", noiDung: "x", kenhIds: [kenh4.id] }));
+  await voi(T, mk, (nc) => dangNgay(nc, b9.id, sau(21000)));
+  const kq9 = await dangBaiMotVong(T, "w-qa", sau(21000));
+  const x9 = await kenhBai(b9.id);
+  dat("Site trả mã lỗi 300 ký tự → FAILED PERMANENT ngay, mã lưu ≤ 100 ký tự (không đối soát / thử lại vòng vo)", x9.status === "FAILED" && x9.errorClass === "PERMANENT" && (x9.errorCode ?? "").length <= 100 && kq9.some((k) => k.ketQua === "that-bai"), `${x9.status} ${x9.errorClass} ${x9.errorCode?.length} ${JSON.stringify(kq9)}`);
 
   // ==================================================================
   console.log("\n— QA-7. Chốt chặn đã kiểm, không thấy lỗi —");

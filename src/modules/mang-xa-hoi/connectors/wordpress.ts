@@ -78,6 +78,21 @@ function loiTuMang(e: unknown, laGhi: boolean): LoiPhanLoai {
   return { loai: laGhi ? "UNKNOWN" : "RETRYABLE", ma: "loi-khac", thongBao: cauLoiGon(e, 200), httpStatus: null };
 }
 
+/**
+ * QA 0.23.0: site (plugin bảo mật, chế độ gỡ lỗi, proxy) có thể NHẠI LẠI tiêu đề Authorization / mật khẩu ứng dụng trong
+ * thông báo lỗi. Thông báo được lưu vào kênh-bài, nhật ký gọi, thông báo và hiện cho người chỉ có `mxh.view` (cả thực
+ * tập sinh) → che mọi dạng của bí mật trước khi lưu / trả.
+ */
+function boChe(yc: { tieuDe?: Record<string, string> }): (s: string) => string {
+  const auth = yc.tieuDe?.Authorization ?? "";
+  if (!auth.startsWith("Basic ")) return (s) => s;
+  const b64 = auth.slice(6);
+  const ro = Buffer.from(b64, "base64").toString("utf8");
+  const mk = ro.split(":").slice(1).join(":");
+  const ds = [...new Set([b64, ro, mk, mk.replace(/\s+/g, ""), encodeURIComponent(mk)])].filter((x) => x.length >= 6).sort((a, b) => b.length - a.length);
+  return (s) => ds.reduce((kq, b) => kq.split(b).join("***"), s);
+}
+
 const KET_QUA_THEO_LOAI = { RETRYABLE: "retryable", PERMANENT: "permanent", NEEDS_REAUTH: "needs_reauth", UNKNOWN: "unknown" } as const;
 
 async function goi(
@@ -87,19 +102,27 @@ async function goi(
   yc: Parameters<typeof goiAnToan>[0],
 ): Promise<{ ok: true; ph: PhanHoiAnToan; j: unknown } | ({ ok: false; ph: PhanHoiAnToan | null; j: unknown } & LoiPhanLoai)> {
   const batDau = new Date();
+  const che = boChe(yc);
+  const trich = (j: unknown) => {
+    const t = trichDoan(j);
+    return t ? (JSON.parse(che(JSON.stringify(t))) as Record<string, unknown>) : null;
+  };
   try {
     const ph = await goiAnToan(yc);
     const j = docJson(ph);
     if (ph.status >= 200 && ph.status < 300) {
-      nhatKy.push({ kieu, ketQua: "success", loaiLoi: null, httpStatus: ph.status, thongBao: null, trichDoan: trichDoan(j), batDau, ketThuc: new Date() });
+      nhatKy.push({ kieu, ketQua: "success", loaiLoi: null, httpStatus: ph.status, thongBao: null, trichDoan: trich(j), batDau, ketThuc: new Date() });
       return { ok: true, ph, j };
     }
     const pl = phanLoaiHttp(ph.status);
-    const loi: LoiPhanLoai = { loai: pl.loai, ma: (j as { code?: string } | undefined)?.code ?? pl.ma, thongBao: thongBaoWp(ph, j), httpStatus: ph.status };
-    nhatKy.push({ kieu, ketQua: KET_QUA_THEO_LOAI[loi.loai], loaiLoi: loi.loai, httpStatus: ph.status, thongBao: loi.thongBao, trichDoan: trichDoan(j), batDau, ketThuc: new Date() });
+    // Mã lỗi do site đặt: che bí mật + cắt cho vừa cột error_code (100).
+    const maSite = (j as { code?: unknown } | undefined)?.code;
+    const loi: LoiPhanLoai = { loai: pl.loai, ma: typeof maSite === "string" && maSite ? che(maSite).slice(0, 100) : pl.ma, thongBao: che(thongBaoWp(ph, j)), httpStatus: ph.status };
+    nhatKy.push({ kieu, ketQua: KET_QUA_THEO_LOAI[loi.loai], loaiLoi: loi.loai, httpStatus: ph.status, thongBao: loi.thongBao, trichDoan: trich(j), batDau, ketThuc: new Date() });
     return { ok: false, ph, j, ...loi };
   } catch (e) {
-    const loi = loiTuMang(e, laGhi);
+    const loiGoc = loiTuMang(e, laGhi);
+    const loi = { ...loiGoc, thongBao: che(loiGoc.thongBao) };
     nhatKy.push({ kieu, ketQua: KET_QUA_THEO_LOAI[loi.loai], loaiLoi: loi.loai, httpStatus: null, thongBao: loi.thongBao, trichDoan: null, batDau, ketThuc: new Date() });
     return { ok: false, ph: null, j: undefined, ...loi };
   }
