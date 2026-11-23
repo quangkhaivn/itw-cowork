@@ -48,7 +48,7 @@ export const NHAN_TRANG_THAI_BAI: Record<TrangThaiBai, { nhan: string; lop: stri
   CANCELED: { nhan: "Đã hủy", lop: "" },
 };
 
-export const TRANG_THAI_KENH_BAI = ["PENDING", "QUEUED", "PUBLISHING", "VERIFYING", "PUBLISHED", "FAILED", "SKIPPED", "CANCELED"] as const;
+export const TRANG_THAI_KENH_BAI = ["PENDING", "QUEUED", "PUBLISHING", "VERIFYING", "PUBLISHED", "FAILED", "SKIPPED", "CANCELED", "NEEDS_CHECK"] as const;
 export type TrangThaiKenhBai = (typeof TRANG_THAI_KENH_BAI)[number];
 export const NHAN_TRANG_THAI_KENH_BAI: Record<TrangThaiKenhBai, { nhan: string; lop: string }> = {
   PENDING: { nhan: "Chưa xếp lịch", lop: "" },
@@ -59,7 +59,12 @@ export const NHAN_TRANG_THAI_KENH_BAI: Record<TrangThaiKenhBai, { nhan: string; 
   FAILED: { nhan: "Lỗi", lop: "loi" },
   SKIPPED: { nhan: "Bỏ qua", lop: "" },
   CANCELED: { nhan: "Đã hủy", lop: "" },
+  // QA 0.23.0 (QĐ-207): kênh bị ngắt khi đang xác minh, đối soát công khai không ra — bài CÓ THỂ đã lên.
+  NEEDS_CHECK: { nhan: "Không rõ – cần kiểm tay", lop: "canh-bao" },
 };
+
+/** QA 0.23.0 (QĐ-206): nhãn bài "Đã duyệt" mà giờ hẹn đã trễ quá ngưỡng lúc duyệt. */
+export const NHAN_DA_DUYET_CAN_HEN_LAI = { nhan: "Đã duyệt – cần hẹn lại giờ", lop: "canh-bao" };
 
 /** Phân loại lỗi (mục 7.1 tài liệu gốc). */
 export const LOAI_LOI = ["RETRYABLE", "PERMANENT", "NEEDS_REAUTH", "UNKNOWN"] as const;

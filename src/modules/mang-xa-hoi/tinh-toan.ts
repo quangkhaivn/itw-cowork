@@ -31,11 +31,13 @@ export const CHUYEN_KENH: Record<TrangThaiKenhBai, readonly TrangThaiKenhBai[]> 
   PENDING: ["QUEUED", "CANCELED", "SKIPPED"],
   QUEUED: ["PUBLISHING", "CANCELED", "PENDING"],
   PUBLISHING: ["VERIFYING", "PUBLISHED", "QUEUED", "FAILED"],
-  VERIFYING: ["PUBLISHED", "QUEUED", "FAILED", "VERIFYING"],
+  VERIFYING: ["PUBLISHED", "QUEUED", "FAILED", "VERIFYING", "NEEDS_CHECK"],
   PUBLISHED: [],
   FAILED: ["QUEUED", "PENDING"],
   SKIPPED: [],
   CANCELED: ["PENDING"],
+  // QA 0.23.0 (QĐ-207): đích cuối — người kiểm tay trên site; không đăng lại (có thể đã lên).
+  NEEDS_CHECK: [],
 };
 
 export function duocChuyenKenh(tu: TrangThaiKenhBai, sang: TrangThaiKenhBai): boolean {
@@ -59,7 +61,8 @@ export function tongHopTrangThaiBai(hienTai: TrangThaiBai, kenh: readonly TrangT
     return "PUBLISHING";
   }
   const da = kenh.filter((k) => k === "PUBLISHED").length;
-  const loi = kenh.filter((k) => k === "FAILED").length;
+  // NEEDS_CHECK (không rõ – cần kiểm tay) tính như chưa thành công ở cấp bài; màn hình kênh hiện cảnh báo riêng.
+  const loi = kenh.filter((k) => k === "FAILED" || k === "NEEDS_CHECK").length;
   if (da > 0 && loi === 0) return "PUBLISHED";
   if (da > 0 && loi > 0) return "PARTIALLY_FAILED";
   if (loi > 0) return "FAILED";

@@ -3,12 +3,11 @@ import { voiTenant, type ClientTenant } from "../../src/lib/db";
 import { ghiSuKien, SU_KIEN } from "../../src/lib/su-kien";
 import { docTep, maBam } from "../../src/modules/dinh-kem/kho-tep";
 import { aadKenh } from "../../src/modules/mang-xa-hoi/bao-mat/khoa-chu";
-import { capNhatTrangThaiBai, docCauHinhMxh, type CauHinhMxh } from "../../src/modules/mang-xa-hoi/chung";
+import { baoNguoiSoanVaNguoiDuyet, capNhatTrangThaiBai, docCauHinhMxh, type CauHinhMxh } from "../../src/modules/mang-xa-hoi/chung";
 import { layConnector } from "../../src/modules/mang-xa-hoi/connectors/danh-muc";
 import type { BuocGoi, KenhGoi, LoiPhanLoai, SocialConnector, TepMedia, ThongTinXacThuc } from "../../src/modules/mang-xa-hoi/connectors/kieu";
 import { HUONG_DAN_LOI } from "../../src/modules/mang-xa-hoi/hang-so";
 import { cauLoiGon, gianCachThuLai, quyetDinhSauLoi } from "../../src/modules/mang-xa-hoi/tinh-toan";
-import { taoThongBao } from "../../src/modules/thong-bao/service";
 import { moNiemPhong } from "./giai-ma";
 
 /**
@@ -119,7 +118,9 @@ type KetThucViec =
   | { kieu: "da-dang"; externalId: string; url: string }
   | { kieu: "xac-minh-sau"; externalId: string | null; sauMs: number; loi: LoiPhanLoai }
   | { kieu: "thu-lai"; sauMs: number; loi: LoiPhanLoai }
-  | { kieu: "that-bai"; loi: LoiPhanLoai; canNhapLai: boolean; externalId?: string | null };
+  | { kieu: "that-bai"; loi: LoiPhanLoai; canNhapLai: boolean; externalId?: string | null }
+  /** QA 0.23.0 (QĐ-207): kênh đã ngắt khi đang xác minh, đối soát công khai không ra — "Không rõ – cần kiểm tay". */
+  | { kieu: "can-kiem-tay"; loi: LoiPhanLoai };
 
 export interface KetQuaXuLy {
   targetId: string;
@@ -150,6 +151,18 @@ async function ghiKetQua(tenantId: string, workerId: string, d: DuLieuViec, kt: 
         where: { id: d.target.id },
         data: { ...chung, status: "QUEUED", errorClass: kt.loi.loai, errorCode: kt.loi.ma, errorMessage: kt.loi.thongBao, nextAttemptAt: new Date(bayGio.getTime() + kt.sauMs) },
       });
+    } else if (kt.kieu === "can-kiem-tay") {
+      await tx.socialPostTarget.update({
+        where: { id: d.target.id },
+        data: { ...chung, status: "NEEDS_CHECK", errorClass: "UNKNOWN", errorCode: kt.loi.ma, errorMessage: kt.loi.thongBao, nextAttemptAt: null },
+      });
+      await ghiSuKien(tx, { eventType: SU_KIEN.SOCIAL_TARGET_FAILED, actorType: "system", objectType: "social_post", objectId: d.target.postId, payload: { kenhId: d.kenh.id, loaiLoi: "UNKNOWN", ma: kt.loi.ma } });
+      await baoNguoiSoanVaNguoiDuyet(tx, tenantId, d.post.createdBy, {
+        loai: "mxh-can-kiem-tay", mucDo: "canh-bao",
+        tieuDe: `Không rõ bài đã lên “${d.kenh.name}” chưa — cần kiểm tay: ${d.post.title ?? d.post.body.slice(0, 50)}`,
+        noiDung: kt.loi.thongBao, duongDan: `/mang-xa-hoi/bai/${d.target.postId}`,
+        doiTuong: "social_post", doiTuongId: d.target.postId, khoaChongTrung: `mxh-can-kiem-tay:${d.target.id}`,
+      });
     } else {
       await tx.socialPostTarget.update({
         where: { id: d.target.id },
@@ -159,9 +172,12 @@ async function ghiKetQua(tenantId: string, workerId: string, d: DuLieuViec, kt: 
         await tx.socialConnection.update({ where: { id: d.kenh.id }, data: { status: "NEEDS_REAUTH", lastCheckOk: false, lastCheckMessage: kt.loi.thongBao, lastCheckedAt: bayGio } });
       }
       await ghiSuKien(tx, { eventType: SU_KIEN.SOCIAL_TARGET_FAILED, actorType: "system", objectType: "social_post", objectId: d.target.postId, payload: { kenhId: d.kenh.id, loaiLoi: kt.loi.loai, ma: kt.loi.ma } });
-      await taoThongBao(tx, tenantId, {
-        nguoiNhanId: d.post.createdBy, loai: "mxh-dang-loi", mucDo: "canh-bao",
-        tieuDe: `Đăng lên “${d.kenh.name}” không thành công: ${d.post.title ?? d.post.body.slice(0, 50)}`,
+      // QA 0.23.0 (QĐ-204): báo người soạn + người duyệt có phạm vi bao người soạn (thực tập sinh không tự đăng lại được).
+      await baoNguoiSoanVaNguoiDuyet(tx, tenantId, d.post.createdBy, {
+        loai: kt.canNhapLai ? "mxh-can-ket-noi-lai" : "mxh-dang-loi", mucDo: "canh-bao",
+        tieuDe: kt.canNhapLai
+          ? `Kênh “${d.kenh.name}” cần kết nối lại — bài chưa đăng: ${d.post.title ?? d.post.body.slice(0, 50)}`
+          : `Đăng lên “${d.kenh.name}” không thành công: ${d.post.title ?? d.post.body.slice(0, 50)}`,
         noiDung: `${kt.loi.thongBao} — ${HUONG_DAN_LOI[kt.loi.loai]}`, duongDan: `/mang-xa-hoi/bai/${d.target.postId}`,
         doiTuong: "social_post", doiTuongId: d.target.postId, khoaChongTrung: `mxh-dang-loi:${d.target.id}:${hien.attemptCount}:${kt.loi.ma}`,
       });
@@ -212,7 +228,22 @@ export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNha
 
   const c = layConnector(d.kenh.platform);
   if (!c || !d.nenTangDungDuoc) return xong({ kieu: "that-bai", canNhapLai: false, loi: { loai: "PERMANENT", ma: "nen-tang-tat", thongBao: "Nền tảng chưa được hỗ trợ hoặc đang tắt trên máy chủ.", httpStatus: null } });
-  if (d.kenh.disconnectedAt || !d.niemPhong) return xong({ kieu: "that-bai", canNhapLai: false, loi: { loai: "PERMANENT", ma: "kenh-da-ngat", thongBao: "Kênh đã ngắt.", httpStatus: null } });
+  if (d.kenh.disconnectedAt || !d.niemPhong) {
+    // QA 0.23.0 (QĐ-207): đang xác minh / có dấu hiệu đã gửi mà kênh bị ngắt (bản niêm phong đã hủy) → bài CÓ THỂ đã lên.
+    // Không đánh Lỗi ngay: đối soát bằng dữ liệu công khai; không ra thì "Không rõ – cần kiểm tay" kèm địa chỉ site.
+    if (viec.loai === "xac-minh" || d.target.externalPostId || d.target.errorClass === "UNKNOWN") {
+      try {
+        const v = c.doiSoatCongKhai ? await c.doiSoatCongKhai(d.kenh, d.target.reconcileKey, d.target.externalPostId, { hanMs: d.cfg.hanGoiMs }) : null;
+        if (v) nhatKy.push(...v.nhatKy);
+        if (v?.ok) return xong({ kieu: "da-dang", externalId: v.externalId, url: v.url });
+      } catch (e) {
+        console.error(`[worker] mxh: đối soát công khai kênh-bài ${d.target.id} hỏng: ${cauLoiGon(e, 200)}`);
+      }
+      return xong({ kieu: "can-kiem-tay", loi: { loai: "UNKNOWN", ma: "can-kiem-tay", httpStatus: null,
+        thongBao: `Kênh đã ngắt nên không đối soát được bằng tài khoản — bài CÓ THỂ đã lên. Kiểm tay trên site ${d.kenh.diaChi} (đường dẫn bài chứa “${d.target.reconcileKey}”); đừng đăng lại trước khi kiểm.` } });
+    }
+    return xong({ kieu: "that-bai", canNhapLai: false, loi: { loai: "PERMANENT", ma: "kenh-da-ngat", thongBao: "Kênh đã ngắt.", httpStatus: null } });
+  }
   if (d.kenh.status === "NEEDS_REAUTH") return xong({ kieu: "that-bai", canNhapLai: true, loi: { loai: "NEEDS_REAUTH", ma: "kenh-can-nhap-lai", thongBao: "Kênh cần nhập lại mật khẩu ứng dụng.", httpStatus: null } });
 
   let xt: ThongTinXacThuc;

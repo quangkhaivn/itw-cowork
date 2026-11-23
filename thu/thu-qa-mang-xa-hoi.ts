@@ -14,18 +14,19 @@ for (const k of Object.keys(process.env)) if (/^SOCIAL_MASTER_KEY_V\d+$/.test(k)
 
 import { voiTenant } from "../src/lib/db";
 import { taoNguCanh, type NguCanh } from "../src/lib/api";
-import { layHoSoQuyen } from "../src/lib/phan-quyen";
+import { layHoSoQuyen, LoiThieuQuyen } from "../src/lib/phan-quyen";
 import { seedNenMong } from "../prisma/seed/index";
 import { capNhatCauHinh } from "../src/modules/cau-hinh/service";
 import { dinhKemTep } from "../src/modules/dinh-kem/service";
 import { aadKenh } from "../src/modules/mang-xa-hoi/bao-mat/khoa-chu";
 import { niemPhong } from "../src/modules/mang-xa-hoi/bao-mat/niem-phong";
-import { danhSachKenh, ketNoiWordPress, yeuCauKiemTraKenh } from "../src/modules/mang-xa-hoi/kenh";
-import { chiTietBai, dangNgay, nhatKyDang, taoBai, xuatCsvBai } from "../src/modules/mang-xa-hoi/bai";
+import { danhSachKenh, ketNoiWordPress, ngatKenh, yeuCauKiemTraKenh } from "../src/modules/mang-xa-hoi/kenh";
+import { chiTietBai, dangLai, dangNgay, danhSachChoDuyet, duyetBai, gioVietNamCsv, guiDuyet, henGio, huyLich, nhatKyDang, suaBai, taoBai, traLaiBai, veNhap, xuatCsvBai } from "../src/modules/mang-xa-hoi/bai";
 import { chuanHoaTieuDeWp } from "../src/modules/mang-xa-hoi/connectors/wordpress";
 import { choPhepLocalhostChoBaiThu, goiAnToan, kiemDiaChi, LoiGoiMang } from "../src/modules/mang-xa-hoi/mang/goi-an-toan";
 import { gioVietNamSangIso } from "../src/modules/mang-xa-hoi/tinh-toan";
-import { kiemMaMedia, kyMaMedia } from "../src/modules/mang-xa-hoi/media-ky";
+import { kiemMaMedia, kyMaMedia, taoLinkMedia, taoLinkMediaHeThong } from "../src/modules/mang-xa-hoi/media-ky";
+import { LoiNghiepVu } from "../src/lib/loi";
 import { moNiemPhong } from "../worker/mang-xa-hoi/giai-ma";
 import { dangBaiMotVong, nhanViecDang, xuLyViec } from "../worker/mang-xa-hoi/dang-bai";
 import { bocLaiMotDoanhNghiep } from "../worker/mang-xa-hoi/boc-lai-khoa";
@@ -92,7 +93,7 @@ function docThan(req: IncomingMessage): Promise<Buffer> {
 
 const may = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
-  const p = url.pathname.replace(/^\/(nhai|dai)(?=\/)/, "");
+  const p = url.pathname.replace(/^\/(nhai|dai|cs|cs2|cs3)(?=\/)/, "");
   const than = await docThan(req);
   // Chuỗi chuyển hướng cùng máy, mỗi bước chậm — thử hạn giờ tính cho cả lần gọi.
   const cham = /^\/cham\/(\d+)$/.exec(p);
@@ -105,6 +106,14 @@ const may = createServer(async (req, res) => {
   }
   if (!p.startsWith("/wp-json/wp/v2/")) return json(res, 404, { code: "rest_no_route" });
   const h = req.headers.authorization ?? "";
+  // REST công khai (không đăng nhập): chỉ đọc bài đã công khai, không có title.raw — như WordPress thật.
+  if (!h && req.method === "GET") {
+    const rr = p.slice("/wp-json/wp/v2".length);
+    const mm = /^\/posts\/(\d+)$/.exec(rr);
+    const congKhai = (b: BaiGia) => ({ id: b.id, status: b.status, slug: b.slug, link: `${site()}/?p=${b.id}` });
+    if (mm) { const b = wp.bai.get(Number(mm[1])); return b && b.status === "publish" ? json(res, 200, congKhai(b)) : json(res, 401, { code: "rest_forbidden" }); }
+    if (rr === "/posts") return json(res, 200, [...wp.bai.values()].filter((b) => b.status === "publish" && b.slug === url.searchParams.get("slug")).map(congKhai));
+  }
   const [u, ...pw] = Buffer.from(h.slice(6), "base64").toString("utf8").split(":");
   if (u !== "tacgia" || pw.join(":").replace(/\s+/g, "") !== MK.replace(/\s+/g, "")) return json(res, 401, { code: "incorrect_password", message: "Sai." });
   const r = p.slice("/wp-json/wp/v2".length);
@@ -163,12 +172,12 @@ async function main() {
   const T = (await seedNenMong(chu, `qa-mxh-${DAU}`, "DN QA MXH DEMO")).id;
   const T2 = (await seedNenMong(chu, `qa-mxh2-${DAU}`, "DN QA MXH 2 DEMO")).id;
   const vaiTro = async (code: string, t: string) => (await chu.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: t, code } } })).id;
-  async function nguoi(ten: string, vai: string, t = T) {
+  async function nguoi(ten: string, vai: string, t = T, quanLy: string | null = null) {
     const u = await chu.user.create({
       data: {
         tenantId: t, email: `${ten}.${DAU}@thu.test`, passwordHash: "x", fullName: `${ten} DEMO`,
         userRoles: { create: { tenantId: t, roleId: await vaiTro(vai, t) } },
-        staffProfile: { create: { tenantId: t, hiredAt: new Date("2025-01-01T00:00:00Z") } },
+        staffProfile: { create: { tenantId: t, hiredAt: new Date("2025-01-01T00:00:00Z"), managerId: quanLy } },
       },
     });
     return u.id;
@@ -399,6 +408,159 @@ async function main() {
   dat("Link ảnh: đường dẫn kiểu ../ hoặc ký tự lạ → sai dạng", !kiemMaMedia("../../etc/passwd", MOC).ok && !kiemMaMedia(`${thanA}%2F.${kyA}`, MOC).ok);
   const ct = await voi(T, mk, (nc) => chiTietBai(nc, p2.id));
   dat("Chi tiết bài không lộ bí mật / bản niêm phong", !JSON.stringify(ct).includes(MK) && !JSON.stringify(ct).includes("wrappedKey") && !JSON.stringify(ct).includes("ciphertext"));
+
+  // ==================================================================
+  console.log("\n— QA-10. Chính sách sau QA (QĐ-203 → QĐ-209) —");
+  const tpmk = await nguoi("qa-tpmk", "marketing-manager", T, gd);
+  const tts = await nguoi("qa-tts", "marketing-intern", T, tpmk);
+  // Người duyệt phạm vi hẹp (vai trò tự tạo: mxh.approve + mxh.view phạm vi own), không nằm trong chuỗi quản lý của tts.
+  const vaiHep = await chu.role.create({ data: { tenantId: T, code: `duyet-hep-${DAU}`, name: "Duyệt hẹp DEMO", isBuiltIn: false } });
+  for (const ma of ["mxh.approve", "mxh.view"]) {
+    const q = await chu.permission.findUniqueOrThrow({ where: { code: ma } });
+    await chu.rolePermission.create({ data: { tenantId: T, roleId: vaiHep.id, permissionId: q.id, dataScope: "own" } });
+  }
+  const hep = (await chu.user.create({ data: { tenantId: T, email: `qa-hep.${DAU}@thu.test`, passwordHash: "x", fullName: "qa-hep DEMO", userRoles: { create: { tenantId: T, roleId: vaiHep.id } }, staffProfile: { create: { tenantId: T, hiredAt: new Date("2025-01-01T00:00:00Z") } } } })).id;
+  const k5 = await voi(T, mk, (nc) => ketNoiWordPress(nc, { diaChi: `${site()}/cs`, tenDangNhap: "tacgia", matKhauUngDung: MK, ten: "Site chính sách DEMO" }));
+  const loiMa = async (f: () => Promise<unknown>): Promise<string> => { try { await f(); return "khong-loi"; } catch (e) { return e instanceof LoiNghiepVu ? e.ma : e instanceof LoiThieuQuyen ? "thieu-quyen" : `khac:${e instanceof Error ? e.message.slice(0, 80) : e}`; } };
+  const S = (giay: number) => sau(30000 + giay);
+
+  // --- 1. Đồng tác giả không được duyệt (QĐ-203) ---
+  const c1 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Đồng tác giả DEMO", noiDung: "Bản của thực tập sinh", kenhIds: [k5.id] }));
+  await voi(T, tts, (nc) => guiDuyet(nc, c1.id, { cheDo: "khong" }, S(0)));
+  await voi(T, tpmk, (nc) => traLaiBai(nc, c1.id, "Viết lại đoạn mở"));
+  await voi(T, tpmk, (nc) => suaBai(nc, c1.id, { tieuDe: "Đồng tác giả DEMO", noiDung: "Trưởng phòng viết lại đoạn mở", kenhIds: [k5.id] }));
+  dat("Trưởng phòng sửa nội dung sau khi bài đã gửi duyệt → ghi là đồng tác giả (trigger CSDL)", (await chu.socialPost.findUniqueOrThrow({ where: { id: c1.id } })).coAuthorIds.includes(tpmk));
+  await voi(T, tts, (nc) => guiDuyet(nc, c1.id, { cheDo: "khong" }, S(1)));
+  dat("…đồng tác giả duyệt → 403 khong-duoc-duyet", (await loiMa(() => voi(T, tpmk, (nc) => duyetBai(nc, c1.id, null, S(2))))) === "khong-duoc-duyet");
+  dat("…không hiện trong “Chờ duyệt” của đồng tác giả; chi tiết bài ghi lý do", !(await voi(T, tpmk, (nc) => danhSachChoDuyet(nc))).some((b) => b.id === c1.id) && /đồng tác giả/.test((await voi(T, tpmk, (nc) => chiTietBai(nc, c1.id))).quyen.lyDoKhongDuyet ?? ""));
+  dat("…CHECK CSDL chặn approved_by là đồng tác giả (kể cả vai chủ sở hữu)", await (async () => { try { await chu.$executeRaw`UPDATE social_posts SET approved_by = ${tpmk}::uuid WHERE id = ${c1.id}::uuid`; return false; } catch { return true; } })());
+  dat("…danh sách đồng tác giả chỉ thêm, không bớt (trigger)", await (async () => { try { await chu.$executeRaw`UPDATE social_posts SET co_author_ids = '{}' WHERE id = ${c1.id}::uuid`; return false; } catch { return true; } })());
+  dat("…người khác (Giám đốc) duyệt được", (await voi(T, gd, (nc) => duyetBai(nc, c1.id, null, S(3)))).trangThai === "APPROVED");
+  // Đổi ảnh sau khi gửi duyệt cũng là sửa nội dung.
+  const c2 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Ảnh đồng tác giả DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  await voi(T, tts, (nc) => guiDuyet(nc, c2.id, { cheDo: "khong" }, S(4)));
+  await voi(T, tpmk, (nc) => traLaiBai(nc, c2.id, "Thiếu ảnh"));
+  await voi(T, tpmk, (nc) => dinhKemTep(nc, { loai: "social_post", doiTuongId: c2.id, tenTep: "anh.png", noiDung: PNG }));
+  await voi(T, tts, (nc) => guiDuyet(nc, c2.id, { cheDo: "khong" }, S(5)));
+  dat("Trưởng phòng thêm ảnh sau khi bài đã gửi duyệt → đồng tác giả, không duyệt được", (await loiMa(() => voi(T, tpmk, (nc) => duyetBai(nc, c2.id, null, S(6))))) === "khong-duoc-duyet");
+  // Sửa TRƯỚC lần gửi duyệt đầu tiên không tính (đúng chính sách: "sau khi bài được gửi duyệt").
+  const c3 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Sửa trước khi gửi DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  await voi(T, tpmk, (nc) => suaBai(nc, c3.id, { tieuDe: "Sửa trước khi gửi DEMO", noiDung: "Trưởng phòng góp ý trước", kenhIds: [k5.id] }));
+  await voi(T, tts, (nc) => guiDuyet(nc, c3.id, { cheDo: "khong" }, S(7)));
+  dat("Sửa trước lần gửi duyệt đầu tiên → không là đồng tác giả, duyệt được", (await voi(T, tpmk, (nc) => duyetBai(nc, c3.id, null, S(8)))).trangThai === "APPROVED");
+
+  // --- 2. Đăng lỗi / cần kết nối lại: báo người soạn + người duyệt có phạm vi (QĐ-204) ---
+  const c4 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Bài lỗi báo người duyệt DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  await voi(T, tts, (nc) => guiDuyet(nc, c4.id, { cheDo: "ngay" }, S(10)));
+  await voi(T, gd, (nc) => duyetBai(nc, c4.id, null, S(10)));
+  wp.maDai = true;
+  await dangBaiMotVong(T, "w-qa", S(10));
+  const tbLoi = await chu.notification.findMany({ where: { tenantId: T, objectId: c4.id, type: "mxh-dang-loi" }, select: { userId: true } });
+  const nhanLoi = tbLoi.map((x) => x.userId).sort();
+  dat("Đăng lỗi → báo người soạn (thực tập sinh) + Trưởng phòng + Giám đốc, mỗi người 1 lần", nhanLoi.join() === [tts, tpmk, gd].sort().join(), JSON.stringify(nhanLoi));
+  dat("…KHÔNG báo người duyệt phạm vi hẹp (không bao người soạn), không báo Marketing (không có quyền duyệt)", !nhanLoi.includes(hep) && !nhanLoi.includes(mk));
+  await dangBaiMotVong(T, "w-qa", S(20));
+  dat("…chạy lại không báo trùng", (await chu.notification.count({ where: { tenantId: T, objectId: c4.id, type: "mxh-dang-loi" } })) === 3);
+  // Người soạn cũng là người duyệt → chỉ 1 thông báo.
+  const c5 = await voi(T, tpmk, (nc) => taoBai(nc, { tieuDe: "Bài lỗi của Trưởng phòng DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  await voi(T, tpmk, (nc) => dangNgay(nc, c5.id, S(30)));
+  wp.maDai = true;
+  await dangBaiMotVong(T, "w-qa", S(30));
+  dat("Người soạn kiêm người duyệt → đúng 1 thông báo cho người đó", (await chu.notification.count({ where: { tenantId: T, objectId: c5.id, type: "mxh-dang-loi", userId: tpmk } })) === 1);
+
+  // --- 3. Link ảnh ký: chỉ mxh.update hoặc luồng đăng (QĐ-205) ---
+  const c6 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Bài có ảnh link DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  const anhC6 = await voi(T, tts, (nc) => dinhKemTep(nc, { loai: "social_post", doiTuongId: c6.id, tenTep: "a.png", noiDung: PNG }));
+  await chu.socialPostMedia.create({ data: { tenantId: T, postId: c6.id, attachmentId: anhC6.id, position: 0, role: "featured" } });
+  dat("Thực tập sinh không tạo được link ảnh ký cho bài của mình", (await loiMa(() => voi(T, tts, (nc) => taoLinkMedia(nc, c6.id, anhC6.id, S(40))))) === "thieu-quyen");
+  dat("Marketing (mxh.update) tạo được", (await voi(T, mk, (nc) => taoLinkMedia(nc, c6.id, anhC6.id, S(40)))).url.includes("/api/cong-khai/mxh/media/"));
+  dat("Luồng đăng (worker, không người dùng) tạo được qua taoLinkMediaHeThong", (await voiTenant(T, (tx) => taoLinkMediaHeThong(tx, T, c6.id, anhC6.id, S(40)))).url.includes("/api/cong-khai/mxh/media/"));
+
+  // --- 4. Duyệt khi giờ hẹn đã qua (QĐ-206) ---
+  const c7 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Trễ ít DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  await voi(T, tts, (nc) => guiDuyet(nc, c7.id, { cheDo: "hen-gio", henLuc: S(600).toISOString() }, S(50)));
+  dat("Duyệt trễ 30 phút (≤ 60 phút mặc định) → đăng ngay", (await voi(T, tpmk, (nc) => duyetBai(nc, c7.id, null, S(600 + 30 * 60)))).trangThai === "PUBLISHING");
+  const c8 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Trễ nhiều DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  await voi(T, tts, (nc) => guiDuyet(nc, c8.id, { cheDo: "hen-gio", henLuc: S(600).toISOString() }, S(50)));
+  const d8 = await voi(T, tpmk, (nc) => duyetBai(nc, c8.id, null, S(600 + 2 * 3600)));
+  dat("Duyệt trễ 2 giờ → “Đã duyệt – cần hẹn lại giờ”, kênh chưa xếp hàng", d8.trangThai === "APPROVED" && d8.canHenLai && d8.kenh.every((k) => k.trangThai === "PENDING"));
+  dat("…người soạn được báo cần hẹn lại", (await chu.notification.count({ where: { tenantId: T, objectId: c8.id, type: "mxh-can-hen-lai", userId: tts } })) === 1);
+  const hen8 = new Date("2026-12-31T02:00:00Z");
+  const d8b = await voi(T, mk, (nc) => henGio(nc, c8.id, hen8.toISOString(), S(600 + 2 * 3600)));
+  dat("…Marketing hẹn giờ mới → SCHEDULED, hết cờ cần hẹn lại", d8b.trangThai === "SCHEDULED" && !d8b.canHenLai);
+  await voi(T, gd, (nc) => capNhatCauHinh(nc, { giaTri: { "mxh.tre_hen_toi_da_phut": 0 } }));
+  const c9 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Ngưỡng 0 DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  await voi(T, tts, (nc) => guiDuyet(nc, c9.id, { cheDo: "hen-gio", henLuc: S(700).toISOString() }, S(50)));
+  dat("Cấu hình ngưỡng 0 phút: trễ 1 phút cũng phải hẹn lại", (await voi(T, tpmk, (nc) => duyetBai(nc, c9.id, null, S(760)))).canHenLai === true);
+  await voi(T, gd, (nc) => capNhatCauHinh(nc, { giaTri: { "mxh.tre_hen_toi_da_phut": null } }));
+
+  // --- 6. Nhiều ảnh WordPress: cảnh báo rõ (QĐ-208) ---
+  await voi(T, tts, (nc) => dinhKemTep(nc, { loai: "social_post", doiTuongId: c6.id, tenTep: "b.png", noiDung: Buffer.concat([PNG, Buffer.from([1])]) }));
+  const ct6 = await voi(T, tts, (nc) => chiTietBai(nc, c6.id));
+  dat("Bài 2 ảnh → cảnh báo “WordPress chỉ dùng ảnh đầu tiên làm ảnh đại diện”", ct6.canhBao.some((c) => c.includes("WordPress chỉ dùng ảnh đầu tiên làm ảnh đại diện") && c.includes("1 ảnh còn lại")), JSON.stringify(ct6.canhBao));
+  dat("Bài 1 ảnh / không ảnh → không cảnh báo", (await voi(T, tts, (nc) => chiTietBai(nc, c7.id))).canhBao.length === 0);
+
+  // --- 5. Ngắt kênh khi kênh-bài đang xác minh (QĐ-207) ---
+  const k6 = await voi(T, mk, (nc) => ketNoiWordPress(nc, { diaChi: `${site()}/cs2`, tenDangNhap: "tacgia", matKhauUngDung: MK, ten: "Site sẽ ngắt DEMO" }));
+  const e1 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Đã lên rồi mới ngắt DEMO", noiDung: "x", kenhIds: [k6.id] }));
+  const e2 = await voi(T, tts, (nc) => taoBai(nc, { tieuDe: "Chưa rõ rồi ngắt DEMO", noiDung: "x", kenhIds: [k6.id] }));
+  for (const e of [e1, e2]) await voi(T, mk, (nc) => dangNgay(nc, e.id, S(900)));
+  const te1 = await kenhBai(e1.id);
+  const te2 = await kenhBai(e2.id);
+  // Lượt gửi hết giờ SAU khi gửi: kênh-bài “Đang xác minh”. e1 thật ra đã lên site, e2 chưa (hoặc chỉ là bản nháp).
+  await chu.$executeRaw`UPDATE social_post_targets SET status = 'VERIFYING', error_class = 'UNKNOWN', error_code = 'het-gio-sau-gui', attempt_count = 1, next_attempt_at = ${S(900)} WHERE id IN (${te1.id}::uuid, ${te2.id}::uuid)`;
+  wp.bai.set(++wp.idTiep, { id: wp.idTiep, slug: te1.reconcileKey, title: "Đã lên rồi mới ngắt DEMO", status: "publish" });
+  wp.bai.set(++wp.idTiep, { id: wp.idTiep, slug: te2.reconcileKey, title: "Chưa rõ rồi ngắt DEMO", status: "draft" });
+  await voi(T, mk, (nc) => ngatKenh(nc, k6.id));
+  const truocNgat = wp.soYeuCauTao;
+  await dangBaiMotVong(T, "w-qa", S(901));
+  const x1 = await kenhBai(e1.id);
+  const x2 = await kenhBai(e2.id);
+  dat("Ngắt kênh, bài đã công khai → đối soát công khai (không mật khẩu) → PUBLISHED có permalink", x1.status === "PUBLISHED" && !!x1.externalUrl && !!x1.verifiedAt, `${x1.status} ${x1.errorCode}`);
+  dat("Ngắt kênh, đối soát không ra → “Không rõ – cần kiểm tay” (không Lỗi), lời nhắn có địa chỉ site", x2.status === "NEEDS_CHECK" && (x2.errorMessage ?? "").includes(`${site()}/cs2`), `${x2.status} ${x2.errorMessage}`);
+  dat("…không gửi bài mới lên site", wp.soYeuCauTao === truocNgat);
+  const ct2 = await voi(T, tts, (nc) => chiTietBai(nc, e2.id));
+  dat("…màn hình: cảnh báo cần kiểm tay + link site; không “Đăng lại”, không “Về nháp”", ct2.kenh[0].canKiemTay && ct2.kenh[0].diaChiSite === `${site()}/cs2` && !ct2.quyen.dangLai && !ct2.quyen.veNhap);
+  dat("…người soạn + người duyệt được báo “cần kiểm tay”", (await chu.notification.count({ where: { tenantId: T, objectId: e2.id, type: "mxh-can-kiem-tay", userId: { in: [tts, tpmk, gd] } } })) === 3);
+  dat("…đăng lại / về nháp qua API cũng bị chặn", (await loiMa(() => voi(T, mk, (nc) => dangLai(nc, e2.id, S(902))))) !== "khong-loi" && (await loiMa(() => voi(T, mk, (nc) => veNhap(nc, e2.id)))) === "sai-trang-thai");
+
+  // --- 2b. Kênh chuyển “cần kết nối lại” khi kiểm tra lại → báo người nối kênh + người duyệt có phạm vi ---
+  wp.nhaiBiMat = true;
+  await voi(T, mk, (nc) => yeuCauKiemTraKenh(nc, k5.id, S(950)));
+  await kiemTraKenhDaXep(T, S(950));
+  wp.nhaiBiMat = false;
+  const tbKn = (await chu.notification.findMany({ where: { tenantId: T, objectId: k5.id, type: "mxh-can-ket-noi-lai" }, select: { userId: true } })).map((x) => x.userId).sort();
+  dat("Kênh cần kết nối lại → báo người nối kênh (Marketing) + Trưởng phòng + Giám đốc, không báo người duyệt phạm vi hẹp", tbKn.join() === [mk, tpmk, gd].sort().join(), JSON.stringify(tbKn));
+
+  // --- 8. Điểm thấp (QĐ-209) ---
+  choPhepLocalhostChoBaiThu(false);
+  dat("[::127.0.0.1] (IPv4-compatible, ::/96) và [::ffff:0:7f00:1] (IPv4-translated) → chặn", (await chan("https://[::127.0.0.1]/")) && (await chan("https://[::ffff:0:7f00:1]/")) && (await chan("https://[::7f00:1]/")));
+  choPhepLocalhostChoBaiThu(true);
+  dat("gioVietNamCsv: 02:00Z → “2026-12-31 09:00 +07:00”", gioVietNamCsv(hen8) === "2026-12-31 09:00 +07:00");
+  const csv2 = await voi(T, gd, (nc) => xuatCsvBai(nc));
+  dat("CSV: cột “Hẹn lúc (giờ Việt Nam)” ghi giờ VN kèm +07:00", csv2.includes("Hẹn lúc (giờ Việt Nam)") && csv2.includes("2026-12-31 09:00 +07:00") && !csv2.includes(hen8.toISOString()));
+  // Hủy lịch đúng lúc worker nhận việc: worker giữ khóa kênh-bài rồi cập nhật bài. Hủy lịch khóa theo cùng thứ tự → không deadlock.
+  const h1 = await voi(T, mk, (nc) => taoBai(nc, { tieuDe: "Hủy lịch đúng giờ DEMO", noiDung: "x", kenhIds: [k5.id] }));
+  await chu.$executeRaw`UPDATE social_connections SET status = 'ACTIVE' WHERE id = ${k5.id}::uuid`;
+  await voi(T, mk, (nc) => henGio(nc, h1.id, S(5000).toISOString(), S(1000)));
+  const th1 = await kenhBai(h1.id);
+  let thaW!: () => void;
+  const choW = new Promise<void>((ok) => { thaW = ok; });
+  let loiWorker: unknown = null;
+  const giuW = chu.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM social_post_targets WHERE id = ${th1.id}::uuid FOR UPDATE`;
+    await tx.$executeRaw`UPDATE social_post_targets SET status = 'PUBLISHING', locked_by = 'w-gia', locked_at = ${S(5000)} WHERE id = ${th1.id}::uuid`;
+    await choW;
+    await tx.$executeRaw`UPDATE social_posts SET status = 'PUBLISHING' WHERE id = ${h1.id}::uuid`;
+  }, { timeout: 30_000 }).catch((e) => { loiWorker = e; });
+  await ngu(200);
+  const huy = loiMa(() => voi(T, mk, (nc) => huyLich(nc, h1.id)));
+  await ngu(500);
+  thaW();
+  await giuW;
+  const kqHuy = await huy;
+  dat("Hủy lịch đúng lúc worker nhận việc: không deadlock — worker ghi xong, hủy lịch trả 409", loiWorker === null && ["dang-dang", "sai-trang-thai"].includes(kqHuy), `worker: ${loiWorker instanceof Error ? loiWorker.message.slice(0, 120) : loiWorker}; hủy: ${kqHuy}`);
+  dat("DEPLOYMENT ghi rõ: nhiều worker cùng lúc được hỗ trợ", /Chạy nhiều worker cùng lúc là cấu hình ĐƯỢC HỖ TRỢ/.test(readFileSync(path.join(__dirname, "../DEPLOYMENT.md"), "utf8")));
 
   for (const t of wp.choMedia.splice(0)) t();
   may.close();

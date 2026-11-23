@@ -3,11 +3,10 @@ import type { NguCanh } from "@/lib/api";
 import type { ClientTenant } from "@/lib/db";
 import { taoCsv } from "@/lib/csv";
 import { LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
-import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi, LoiThieuQuyen } from "@/lib/phan-quyen";
+import { batBuocQuyen, coQuyen, LoiThieuQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
-import { napBanDoCapTren } from "@/modules/danh-gia/cap-tren";
 import { nguoiGiuQuyen, taoThongBao } from "@/modules/thong-bao/service";
-import { dieuKienXemBai, docCauHinhMxh } from "./chung";
+import { dieuKienXemBai, docCauHinhMxh, duyetDuocNguoiSoan } from "./chung";
 import { layConnector } from "./connectors/danh-muc";
 import { HUONG_DAN_LOI, TEN_NEN_TANG, type LoaiLoi, type TrangThaiBai } from "./hang-so";
 import type { LuocDoBai, LuocDoGuiDuyet, LuocDoLocBai } from "./luoc-do";
@@ -86,6 +85,9 @@ function kenhCuaBaiRa(t: Bai["targets"][number]) {
     soLanThu: t.attemptCount,
     lanThuToi: t.nextAttemptAt,
     kenhCanNhapLai: t.connection.status === "NEEDS_REAUTH",
+    // QA 0.23.0 (QĐ-207): không rõ bài đã lên chưa — người dùng kiểm tay trên site.
+    canKiemTay: t.status === "NEEDS_CHECK",
+    diaChiSite: t.connection.externalId,
   };
 }
 
@@ -105,6 +107,8 @@ function baiRa(b: Bai) {
     duyetLuc: b.approvedAt,
     ghiChuDuyet: b.reviewNote,
     phienBan: b.revision,
+    canHenLai: b.status === "APPROVED" && b.needsReschedule,
+    dongTacGiaIds: b.coAuthorIds,
     taoLuc: b.createdAt,
     capNhatLuc: b.updatedAt,
     kenh: b.targets.map(kenhCuaBaiRa),
@@ -164,6 +168,7 @@ export async function chiTietBai(nc: NguCanh, id: string) {
   const phaiDuyet = await canDuyet(nc, b);
   return {
     ...baiRa(b),
+    canhBao: await canhBaoBai(nc, b),
     nguoiSoan: ten.get(b.createdBy) ?? "—",
     nguoiGuiDuyet: b.submittedBy ? ten.get(b.submittedBy) ?? "—" : null,
     nguoiDuyet: b.approvedBy ? ten.get(b.approvedBy) ?? "—" : null,
@@ -183,6 +188,22 @@ export async function chiTietBai(nc: NguCanh, id: string) {
       dinhKem: soan && (st === "DRAFT" || st === "CANCELED"),
     },
   };
+}
+
+/**
+ * Cảnh báo (không chặn) của bước kiểm bài — QA 0.23.0 (QĐ-208): ví dụ WordPress chỉ dùng ảnh đầu tiên làm ảnh đại diện,
+ * ảnh thứ hai trở đi KHÔNG được đăng. Bài còn sửa được thì đếm ảnh hiện có; đã chụp thì đếm ảnh đã chụp.
+ */
+async function canhBaoBai(nc: NguCanh, b: Bai): Promise<string[]> {
+  const soAnh = SUA_DUOC.includes(b.status as TrangThaiBai)
+    ? await nc.tx.attachment.count({ where: { objectType: "social_post", objectId: b.id, deletedAt: null, mimeType: { startsWith: "image/" } } })
+    : b.media.length;
+  const ds: string[] = [];
+  for (const t of b.targets) {
+    const c = layConnector(t.connection.platform);
+    for (const x of c?.canhBao?.({ soAnh }) ?? []) ds.push(`${t.connection.name}: ${x}`);
+  }
+  return [...new Set(ds)];
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +286,7 @@ export async function suaBai(nc: NguCanh, id: string, d: z.infer<typeof LuocDoBa
   const tieuDe = d.tieuDe?.trim() || null;
   await nc.tx.socialPost.update({
     where: { id },
-    data: { title: tieuDe, body: d.noiDung, status: "DRAFT", approvedBy: null, approvedAt: null, revision: { increment: 1 }, updatedBy: nc.hoSo.userId },
+    data: { title: tieuDe, body: d.noiDung, status: "DRAFT", approvedBy: null, approvedAt: null, needsReschedule: false, revision: { increment: 1 }, updatedBy: nc.hoSo.userId },
   });
   await datKenh(nc, id, tieuDe, d.kenhIds);
   await nc.kiemToan({ action: "sua", objectType: "social_post", objectId: id, before: { tieuDe: b.title, trangThai: b.status }, after: { tieuDe, trangThai: "DRAFT", soKenh: d.kenhIds.length } });
@@ -338,7 +359,7 @@ async function xepHang(nc: NguCanh, b: Bai, luc: Date, bayGio: Date) {
     // Giữ errorClass của lượt trước (nếu có): worker đối soát trước khi gửi (QĐ-200).
     data: { status: "QUEUED", nextAttemptAt: luc, attemptCount: 0, errorMessage: null, lockedBy: null, lockedAt: null },
   });
-  await nc.tx.socialPost.update({ where: { id: b.id }, data: { status: sang, scheduledAt: luc, updatedBy: nc.hoSo.userId } });
+  await nc.tx.socialPost.update({ where: { id: b.id }, data: { status: sang, scheduledAt: luc, needsReschedule: false, updatedBy: nc.hoSo.userId } });
   return sang;
 }
 
@@ -380,10 +401,11 @@ export async function henGio(nc: NguCanh, id: string, henLuc: string, bayGio: Da
 /** Hủy lịch: chỉ khi chưa kênh nào bắt đầu đăng. */
 export async function huyLich(nc: NguCanh, id: string) {
   batBuocQuyen(nc.hoSo, "mxh.update", { objectType: "social_post", objectId: id });
+  // Khóa các dòng kênh TRƯỚC dòng bài — đúng thứ tự worker dùng (kênh-bài → bài), tránh deadlock lúc đúng giờ hẹn
+  // (QA 0.23.0, QĐ-209). Worker đang giữ (đã nhận việc) thì chờ nó commit rồi mới thấy trạng thái thật.
+  await nc.tx.$queryRaw`SELECT id FROM social_post_targets WHERE post_id = ${id}::uuid ORDER BY id FOR UPDATE`;
   const b = await layBai(nc, id, true);
   batBuocChuyen(b, "CANCELED", "hủy lịch");
-  // Khóa các dòng kênh: worker đang giữ (đã nhận việc) thì chờ nó commit rồi mới thấy trạng thái thật.
-  await nc.tx.$queryRaw`SELECT id FROM social_post_targets WHERE post_id = ${id}::uuid FOR UPDATE`;
   const kenh = await nc.tx.socialPostTarget.findMany({ where: { postId: id }, select: { status: true } });
   if (kenh.some((k) => !["QUEUED", "PENDING", "CANCELED"].includes(k.status))) {
     throw new LoiNghiepVu("Đã tới giờ, bài đang được đăng — không hủy được.", 409, "dang-dang");
@@ -427,7 +449,7 @@ export async function veNhap(nc: NguCanh, id: string) {
   }
   // Giữ loại lỗi cũ trên kênh: lần đăng sau sẽ đối soát trước khi gửi (QĐ-200).
   await nc.tx.socialPostTarget.updateMany({ where: { postId: id, status: { in: ["CANCELED", "FAILED"] } }, data: { status: "PENDING", nextAttemptAt: null } });
-  await nc.tx.socialPost.update({ where: { id }, data: { status: "DRAFT", approvedBy: null, approvedAt: null, scheduledAt: null, updatedBy: nc.hoSo.userId } });
+  await nc.tx.socialPost.update({ where: { id }, data: { status: "DRAFT", approvedBy: null, approvedAt: null, scheduledAt: null, needsReschedule: false, updatedBy: nc.hoSo.userId } });
   await nc.kiemToan({ action: "ve-nhap-bai-mxh", objectType: "social_post", objectId: id });
   return chiTietBai(nc, id);
 }
@@ -441,14 +463,13 @@ export async function veNhap(nc: NguCanh, id: string) {
  * gửi duyệt (không tự duyệt — CHECK trong CSDL chặn thêm); và là cấp trên trong chuỗi quản lý của người soạn, hoặc Giám
  * đốc / Quản trị, hoặc người soạn nằm trong phạm vi `mxh.approve` của người duyệt.
  */
-export async function nguoiDuyetHopLe(nc: NguCanh, b: { createdBy: string; submittedBy: string | null }): Promise<{ ok: true } | { ok: false; lyDo: string }> {
+export async function nguoiDuyetHopLe(nc: NguCanh, b: { createdBy: string; submittedBy: string | null; coAuthorIds?: string[] }): Promise<{ ok: true } | { ok: false; lyDo: string }> {
   if (!coQuyen(nc.hoSo, "mxh.approve")) return { ok: false, lyDo: "Bạn không có quyền duyệt bài mạng xã hội." };
   const toi = nc.hoSo.userId;
   if (toi === b.createdBy || toi === b.submittedBy) return { ok: false, lyDo: "Không tự duyệt bài mình soạn hoặc mình gửi duyệt — cần người khác duyệt." };
-  const bd = await napBanDoCapTren(nc.tx);
-  if (bd.laGiamDocHoacQuanTri(toi) || bd.chuoiQuanLy(b.createdBy).includes(toi)) return { ok: true };
-  const pv = await idNguoiTrongPhamVi(nc.tx, nc.hoSo, "mxh.approve");
-  if (pv === "tat-ca" || pv.includes(b.createdBy)) return { ok: true };
+  // QA 0.23.0 (QĐ-203): sửa nội dung / ảnh sau khi bài đã gửi duyệt = đồng tác giả. CHECK CSDL chặn thêm.
+  if (b.coAuthorIds?.includes(toi)) return { ok: false, lyDo: "Bạn đã sửa nội dung bài sau khi bài được gửi duyệt — là đồng tác giả, cần người khác duyệt." };
+  if (await duyetDuocNguoiSoan(nc.tx, nc.hoSo, b.createdBy)) return { ok: true };
   return { ok: false, lyDo: "Người soạn không thuộc phạm vi duyệt của bạn (cần cấp trên của họ, Giám đốc hoặc Quản trị)." };
 }
 
@@ -521,20 +542,32 @@ export async function duyetBai(nc: NguCanh, id: string, ghiChu: string | null = 
   const hl = await nguoiDuyetHopLe(nc, b);
   if (!hl.ok) throw new LoiNghiepVu(hl.lyDo, 403, "khong-duoc-duyet");
   kiemNoiDung(b);
-  await nc.tx.socialPost.update({ where: { id }, data: { status: "APPROVED", approvedBy: nc.hoSo.userId, approvedAt: bayGio, reviewNote: ghiChu, updatedBy: nc.hoSo.userId } });
+  // Duyệt xong chạy tiếp đúng ý người gửi: hẹn giờ (giờ còn ở tương lai) hoặc đăng ngay. QA 0.23.0 (QĐ-206): giờ hẹn đã
+  // qua lúc duyệt — trễ ≤ `mxh.tre_hen_toi_da_phut` thì đăng ngay; trễ hơn thì "Đã duyệt – cần hẹn lại giờ" + báo người soạn.
+  const treMs = b.publishMode === "hen-gio" && b.scheduledAt ? bayGio.getTime() - b.scheduledAt.getTime() : 0;
+  const canHenLai = treMs > 0 && treMs > (await docCauHinhMxh(nc.tx)).treHenToiDaPhut * 60_000;
+  await nc.tx.socialPost.update({ where: { id }, data: { status: "APPROVED", approvedBy: nc.hoSo.userId, approvedAt: bayGio, reviewNote: ghiChu, needsReschedule: canHenLai, updatedBy: nc.hoSo.userId } });
   await nc.tx.socialPostReview.create({ data: { tenantId: nc.tenantId, postId: id, action: "duyet", actorId: nc.hoSo.userId, note: ghiChu } });
-  // Duyệt xong chạy tiếp đúng ý người gửi: hẹn giờ (giờ còn ở tương lai) hoặc đăng ngay; giờ hẹn đã qua lúc duyệt → đăng ngay.
   let sang: TrangThaiBai = "APPROVED";
-  if (b.publishMode) {
+  if (b.publishMode && !canHenLai) {
     const sau = await layBai(nc, id);
     const luc = b.publishMode === "hen-gio" && b.scheduledAt && b.scheduledAt.getTime() > bayGio.getTime() ? b.scheduledAt : bayGio;
     sang = await xepHang(nc, sau, luc, bayGio);
+  }
+  if (canHenLai) {
+    for (const u of new Set([b.createdBy, b.submittedBy ?? b.createdBy])) {
+      await taoThongBao(nc.tx, nc.tenantId, {
+        nguoiNhanId: u, loai: "mxh-can-hen-lai", mucDo: "canh-bao", tieuDe: `Bài đã duyệt nhưng giờ hẹn đã qua — cần hẹn lại giờ: ${b.title ?? b.body.slice(0, 60)}`,
+        noiDung: `Giờ hẹn ${b.scheduledAt!.toISOString()} đã trễ ${Math.round(treMs / 60_000)} phút lúc duyệt (quá ngưỡng Cấu hình “Duyệt trễ giờ hẹn tối đa”). Người có quyền đăng chọn giờ mới hoặc bấm Đăng ngay.`,
+        duongDan: `/mang-xa-hoi/bai/${id}`, doiTuong: "social_post", doiTuongId: id, khoaChongTrung: `mxh-can-hen-lai:${id}:${b.revision}`,
+      });
+    }
   }
   await taoThongBao(nc.tx, nc.tenantId, {
     nguoiNhanId: b.submittedBy ?? b.createdBy, loai: "mxh-da-duyet", tieuDe: `Bài đã được duyệt: ${b.title ?? b.body.slice(0, 60)}`,
     duongDan: `/mang-xa-hoi/bai/${id}`, doiTuong: "social_post", doiTuongId: id, khoaChongTrung: `mxh-da-duyet:${id}:${b.revision}`,
   });
-  await nc.kiemToan({ action: "duyet-bai-mxh", objectType: "social_post", objectId: id, after: { trangThai: sang, ghiChu } });
+  await nc.kiemToan({ action: "duyet-bai-mxh", objectType: "social_post", objectId: id, after: { trangThai: sang, ghiChu, canHenLai } });
   await nc.suKien({ eventType: SU_KIEN.SOCIAL_POST_REVIEWED, objectType: "social_post", objectId: id, payload: { ketQua: "duyet", trangThai: sang } });
   return chiTietBai(nc, id);
 }
@@ -545,7 +578,7 @@ export async function traLaiBai(nc: NguCanh, id: string, lyDo: string) {
   if (b.status !== "PENDING_APPROVAL") throw new LoiNghiepVu("Bài không ở trạng thái chờ duyệt.", 409, "sai-trang-thai");
   const hl = await nguoiDuyetHopLe(nc, b);
   if (!hl.ok) throw new LoiNghiepVu(hl.lyDo, 403, "khong-duoc-duyet");
-  await nc.tx.socialPost.update({ where: { id }, data: { status: "DRAFT", reviewNote: lyDo, approvedBy: null, approvedAt: null, updatedBy: nc.hoSo.userId } });
+  await nc.tx.socialPost.update({ where: { id }, data: { status: "DRAFT", reviewNote: lyDo, approvedBy: null, approvedAt: null, needsReschedule: false, updatedBy: nc.hoSo.userId } });
   await nc.tx.socialPostReview.create({ data: { tenantId: nc.tenantId, postId: id, action: "tra-lai", actorId: nc.hoSo.userId, note: lyDo } });
   await taoThongBao(nc.tx, nc.tenantId, {
     nguoiNhanId: b.createdBy, loai: "mxh-tra-lai", mucDo: "canh-bao", tieuDe: `Bài bị trả lại: ${b.title ?? b.body.slice(0, 60)}`, noiDung: lyDo,
@@ -578,7 +611,12 @@ export async function xuatCsvBai(nc: NguCanh) {
   // QA 0.23.0: qua taoCsv — chống chèn công thức (CSV-01): tiêu đề "=HYPERLINK(…)" không được chạy khi mở bằng Excel.
   const dong: (string | null)[][] = [];
   for (const b of ds) for (const t of b.targets.length ? b.targets : [null]) {
-    dong.push([b.title ?? b.body.slice(0, 80), b.status, b.scheduledAt?.toISOString() ?? "", t?.connection.name ?? "", t?.status ?? "", t?.status === "PUBLISHED" ? t.externalUrl : ""]);
+    dong.push([b.title ?? b.body.slice(0, 80), b.status, gioVietNamCsv(b.scheduledAt), t?.connection.name ?? "", t?.status ?? "", t?.status === "PUBLISHED" ? t.externalUrl : ""]);
   }
-  return taoCsv(["Tiêu đề", "Trạng thái", "Hẹn lúc", "Kênh", "Trạng thái kênh", "Link đã xác minh"], dong);
+  return taoCsv(["Tiêu đề", "Trạng thái", "Hẹn lúc (giờ Việt Nam)", "Kênh", "Trạng thái kênh", "Link đã xác minh"], dong);
+}
+
+/** "2026-12-07 09:00 +07:00" — giờ Việt Nam ghi rõ múi giờ (QA 0.23.0, QĐ-209). VN không có giờ mùa hè. */
+export function gioVietNamCsv(d: Date | null | undefined): string {
+  return d ? `${new Date(d.getTime() + 7 * 3_600_000).toISOString().slice(0, 16).replace("T", " ")} +07:00` : "";
 }

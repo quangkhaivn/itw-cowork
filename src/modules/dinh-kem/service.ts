@@ -2,6 +2,7 @@ import type { NguCanh } from "@/lib/api";
 import { LoiDinhDang, LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
 import { LoiThieuQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
+import { ghiDongTacGiaAnh } from "@/modules/mang-xa-hoi/chung";
 import { docTep, ghiTep, maBam } from "./kho-tep";
 import { duocSuaChungTu, duocXemChungTu } from "./quyen";
 import {
@@ -158,6 +159,8 @@ export async function dinhKemTep(nc: NguCanh, yc: YeuCauDinhKem) {
     objectId: yc.doiTuongId,
     payload: { tepId: t.id, tenTep: ten, dungLuong: yc.noiDung.byteLength },
   });
+  // QA 0.23.0 (QĐ-203): đổi ảnh của bài đã từng gửi duyệt = sửa nội dung → đồng tác giả, không được duyệt bài đó.
+  if (yc.loai === "social_post") await ghiDongTacGiaAnh(nc.tx, yc.doiTuongId, nc.hoSo.userId);
   return tepRa(t);
 }
 
@@ -214,5 +217,6 @@ export async function goTep(nc: NguCanh, id: string, lyDo: string) {
     objectId: t.objectId,
     payload: { tepId: id, tenTep: t.fileName, lyDo },
   });
+  if (t.objectType === "social_post") await ghiDongTacGiaAnh(nc.tx, t.objectId, nc.hoSo.userId);
   return { id, daXoa: true };
 }

@@ -107,6 +107,14 @@ export interface SocialConnector {
   khaNang(): KhaNang;
   kiemTraKetNoi(kenh: KenhGoi, xt: ThongTinXacThuc, bc: BoiCanhGoi): Promise<KetQuaKiemTra>;
   validate(nd: Pick<NoiDungDang, "tieuDe" | "noiDung"> & { soAnh: number }): ViPham[];
+  /** Cảnh báo KHÔNG chặn của bước kiểm bài (QA 0.23.0, QĐ-208) — ví dụ ảnh thừa không được đăng. */
+  canhBao?(nd: { soAnh: number }): string[];
+  /**
+   * Đối soát KHÔNG dùng bí mật (QA 0.23.0, QĐ-207): kênh đã ngắt (bản niêm phong đã hủy) mà kênh-bài còn đang xác minh.
+   * Chỉ đọc dữ liệu công khai của nền tảng. Thấy bài đã công khai, đúng khóa đối soát → kết quả đã xác minh; không thấy /
+   * không đọc được → `ok: false` (không kết luận được — cần kiểm tay).
+   */
+  doiSoatCongKhai?(kenh: KenhGoi, khoaDoiSoat: string, externalId: string | null, bc: BoiCanhGoi): Promise<KetQuaXacMinh>;
   publish(kenh: KenhGoi, xt: ThongTinXacThuc, nd: NoiDungDang, bc: BoiCanhGoi): Promise<KetQuaDang>;
   verify(kenh: KenhGoi, xt: ThongTinXacThuc, externalId: string, nd: Pick<NoiDungDang, "tieuDe" | "khoaDoiSoat">, bc: BoiCanhGoi): Promise<KetQuaXacMinh>;
   /** Tìm bài theo khóa đối soát — dùng khi kết quả chưa rõ (UNKNOWN) và trước mọi lần đăng lại. */

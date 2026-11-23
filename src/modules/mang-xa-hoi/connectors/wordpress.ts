@@ -162,6 +162,12 @@ export const wordpress: SocialConnector = {
     return { kieuNoiDung: ["bai-viet", "anh"], media: "push", soAnhToiDa: 1, doDaiTieuDeToiDa: 300, doDaiNoiDungToiDa: 100_000, canTieuDe: true };
   },
 
+  canhBao(nd): string[] {
+    return nd.soAnh > 1
+      ? [`WordPress chỉ dùng ảnh đầu tiên làm ảnh đại diện — ${nd.soAnh - 1} ảnh còn lại sẽ KHÔNG được đăng lên kênh này.`]
+      : [];
+  },
+
   validate(nd): ViPham[] {
     const v: ViPham[] = [];
     if (!nd.tieuDe?.trim()) v.push({ truong: "tieuDe", thongBao: "Bài WordPress cần tiêu đề." });
@@ -267,6 +273,24 @@ export const wordpress: SocialConnector = {
       return { ok: false, khongThay: false, nhatKy, loai: b.status === "future" || b.status === "pending" || b.status === "draft" ? "RETRYABLE" : "PERMANENT", ma: "doc-lai-khong-khop", thongBao: `Đọc lại bài trên WordPress không khớp: ${sai.join(", ")}.`, httpStatus: r.ph.status };
     }
     return { ok: true, externalId, url: b.link as string, nhatKy };
+  },
+
+  async doiSoatCongKhai(kenh, khoaDoiSoat, externalId, bc): Promise<KetQuaXacMinh> {
+    // Không tiêu đề Authorization: REST API công khai của WordPress chỉ trả bài đã công khai (context=view).
+    const nhatKy: BuocGoi[] = [];
+    const khop = (b: { id?: unknown; status?: unknown; slug?: unknown; link?: unknown } | undefined) =>
+      !!b && typeof b.id === "number" && b.status === "publish" && typeof b.slug === "string" && b.slug.startsWith(khoaDoiSoat) && typeof b.link === "string" && /^https?:\/\//.test(b.link);
+    if (externalId && /^\d+$/.test(externalId)) {
+      const r = await goi(nhatKy, "reconcile", false, { url: duongApi(kenh, `/wp/v2/posts/${externalId}`), hanMs: bc.hanMs });
+      const b = r.ok ? (r.j as { id?: unknown; status?: unknown; slug?: unknown; link?: unknown }) : undefined;
+      if (khop(b)) return { ok: true, externalId: String(b!.id), url: b!.link as string, nhatKy };
+    }
+    const r = await goi(nhatKy, "reconcile", false, { url: duongApi(kenh, "/wp/v2/posts", { slug: khoaDoiSoat, _fields: "id,slug,status,link" }), hanMs: bc.hanMs });
+    if (r.ok && Array.isArray(r.j)) {
+      const b = (r.j as { id?: unknown; status?: unknown; slug?: unknown; link?: unknown }[]).find((x) => khop({ status: "publish", ...x }));
+      if (b) return { ok: true, externalId: String(b.id), url: b.link as string, nhatKy };
+    }
+    return { ok: false, khongThay: false, nhatKy, loai: "UNKNOWN", ma: "can-kiem-tay", thongBao: "Không đối soát được khi không còn mật khẩu ứng dụng.", httpStatus: r.ok ? r.ph.status : r.httpStatus };
   },
 
   async reconcile(kenh, xt, khoaDoiSoat, bc): Promise<KetQuaDoiSoat> {

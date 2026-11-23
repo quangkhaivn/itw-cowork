@@ -253,6 +253,8 @@ docker compose exec worker npm run mxh:boc-lai-khoa         # bọc lại mọi 
 
 - Đặt `APP_URL` đúng địa chỉ HTTPS công khai: màn hình Kết nối nền tảng dựng Redirect URI và tên miền từ đây; link ảnh công khai (0.24) cũng vậy.
 - Worker chạy thêm vòng Mạng xã hội mỗi 15 giây (song song nhịp 60 giây). Worker gọi ra Internet tới site WordPress của khách (HTTPS 443) — tường lửa máy chủ phải cho đi ra; địa chỉ nội bộ / metadata bị chặn ở mã.
+- **Chạy nhiều worker cùng lúc là cấu hình ĐƯỢC HỖ TRỢ** (QĐ-209, sau QA 0.23.0): ví dụ `docker compose up -d --scale worker=2` hoặc worker thứ hai trên máy khác cùng CSDL + cùng `.env` (cùng `SOCIAL_MASTER_KEY`, cùng `APP_ENC_KEY`, cùng thư mục tệp đính kèm chỉ-đọc). Hai worker không nhận cùng một kênh-bài (`FOR UPDATE SKIP LOCKED`), kết quả ghi có điều kiện "đúng worker đang giữ", mốc giữ khóa làm mới khi bắt đầu từng việc; một worker chết giữa chừng → sau max(`mxh.phut_ket_dang`, 5 × `mxh.han_goi_giay`) worker còn lại đối soát (không đăng lại mù). Đồng hồ các máy phải đồng bộ (NTP) — lệch giờ giữa hai worker làm ngưỡng "kẹt" sai. (QA 0.23.0 kiểm vòng Mạng xã hội; việc định kỳ có bài thử "hai worker cùng lúc không nhân đôi" trong `thu:danh-gia`.)
+- **Migration QA** `20261123090001_qa_mang_xa_hoi` (chỉ thêm: cột `co_author_ids`, `needs_reschedule`, CHECK `social_posts_dong_tac_gia_check`, trigger `ghi_dong_tac_gia_bai`, trạng thái kênh-bài `NEEDS_CHECK`). Khóa Cấu hình mới `mxh.tre_hen_toi_da_phut` (mặc định 60).
 - Biến dự phòng (không bắt buộc): `META_APP_ID`, `META_APP_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ZALO_APP_ID`, `ZALO_SECRET_KEY` — chỉ dùng khi chưa nhập trên màn hình Kết nối nền tảng.
 - nginx: không đổi (`/api/cong-khai/mxh/media/` đi chung `/api`).
 

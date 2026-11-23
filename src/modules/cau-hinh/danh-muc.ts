@@ -1407,6 +1407,18 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     macDinh: 10,
     dungTuPhase: 8,
   },
+  {
+    khoa: "mxh.tre_hen_toi_da_phut",
+    nhom: "Mạng xã hội",
+    nhan: "Duyệt trễ giờ hẹn tối đa",
+    moTa: "Bài gửi duyệt kèm giờ hẹn mà lúc duyệt giờ đó đã qua: trễ không quá số phút này thì đăng ngay; trễ hơn thì bài thành “Đã duyệt – cần hẹn lại giờ” và người soạn được báo (QĐ-206). Mặc định 60 phút.",
+    donVi: "phút",
+    toiThieu: 0,
+    toiDa: 1440,
+    soNguyen: true,
+    macDinh: 60,
+    dungTuPhase: 8,
+  },
 ];
 
 export function timMuc(khoa: string): MucCauHinh | undefined {

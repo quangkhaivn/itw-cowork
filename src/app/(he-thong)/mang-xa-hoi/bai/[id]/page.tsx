@@ -9,7 +9,7 @@ import { dinhDangNgayGio } from "@/lib/dinh-dang";
 import { LoiKhongTimThay } from "@/lib/loi";
 import { docDuLieu, yeuCauQuyen } from "@/lib/trang";
 import { chiTietBai, nhatKyDang } from "@/modules/mang-xa-hoi/bai";
-import { NHAN_TRANG_THAI_BAI, type TrangThaiBai } from "@/modules/mang-xa-hoi/hang-so";
+import { NHAN_DA_DUYET_CAN_HEN_LAI, NHAN_TRANG_THAI_BAI, type TrangThaiBai } from "@/modules/mang-xa-hoi/hang-so";
 import { danhSachKenh } from "@/modules/mang-xa-hoi/kenh";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default async function TrangChiTietBai({ params }: { params: Promise<{ id
   });
   if (!d) notFound();
   const b = d.bai;
-  const n = NHAN_TRANG_THAI_BAI[b.trangThai as TrangThaiBai] ?? { nhan: b.trangThai, lop: "" };
+  const n = b.canHenLai ? NHAN_DA_DUYET_CAN_HEN_LAI : NHAN_TRANG_THAI_BAI[b.trangThai as TrangThaiBai] ?? { nhan: b.trangThai, lop: "" };
   return (
     <>
       <DauTrang tieuDe={b.tieuDe ?? "Bài không tiêu đề"} duongDan={[{ nhan: "Mạng xã hội", href: "/mang-xa-hoi" }]}
@@ -43,6 +43,8 @@ export default async function TrangChiTietBai({ params }: { params: Promise<{ id
           {b.nguoiDuyet && <> · Duyệt bởi {b.nguoiDuyet} lúc {dinhDangNgayGio(b.duyetLuc)}</>}
         </>} />
 
+      {b.canHenLai && <div className="hop-thong-bao canh-bao">Bài đã được duyệt nhưng giờ hẹn đã trễ quá ngưỡng lúc duyệt — chọn giờ mới (Hẹn giờ) hoặc bấm Đăng ngay.</div>}
+      {b.canhBao.map((c) => <div key={c} className="hop-thong-bao canh-bao">{c}</div>)}
       {b.ghiChuDuyet && <div className={`hop-thong-bao ${b.trangThai === "DRAFT" ? "canh-bao" : "thong-tin"}`}>Ghi chú duyệt: {b.ghiChuDuyet}</div>}
 
       <section className="the">

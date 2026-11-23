@@ -20,6 +20,12 @@ export default function KenhCuaBai({ kenh, gon = false }: { kenh: BaiRa["kenh"];
                 {k.kenhCanNhapLai && <div><a href="/mang-xa-hoi/kenh">→ Nhập lại mật khẩu ứng dụng</a></div>}
               </div>
             )}
+            {k.canKiemTay && (
+              <div className="hop-thong-bao canh-bao nho" style={{ marginTop: 4 }}>
+                <strong>Không rõ bài đã lên chưa — cần kiểm tay.</strong> {!gon && k.thongBaoLoi}
+                {" "}<a href={k.diaChiSite} target="_blank" rel="noopener noreferrer">Mở site để kiểm ↗</a>
+              </div>
+            )}
             {gon && k.trangThai === "FAILED" && <span className="loi-truong nho"> {k.thongBaoLoi}</span>}
           </div>
         );

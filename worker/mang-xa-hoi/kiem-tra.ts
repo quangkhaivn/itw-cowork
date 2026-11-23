@@ -1,7 +1,7 @@
 import { voiTenant } from "../../src/lib/db";
 import { ghiKiemToan } from "../../src/lib/kiem-toan";
 import { aadApp, aadKenh } from "../../src/modules/mang-xa-hoi/bao-mat/khoa-chu";
-import { docCauHinhMxh } from "../../src/modules/mang-xa-hoi/chung";
+import { baoNguoiSoanVaNguoiDuyet, docCauHinhMxh } from "../../src/modules/mang-xa-hoi/chung";
 import { layConnector } from "../../src/modules/mang-xa-hoi/connectors/danh-muc";
 import type { ThongTinXacThuc } from "../../src/modules/mang-xa-hoi/connectors/kieu";
 import { GRAPH_VERSION_MAC_DINH, type NhaCungCapApp } from "../../src/modules/mang-xa-hoi/hang-so";
@@ -46,6 +46,14 @@ export async function kiemTraKenhDaXep(tenantId: string, bayGio: Date, env: Node
         },
       });
       await ghiKiemToan(tx, { action: "kiem-tra-kenh-mxh", objectType: "social_connection", objectId: k.id, after: { dat: ok, boi: "worker" } });
+      // QA 0.23.0 (QĐ-204): kênh vừa chuyển sang "cần kết nối lại" → báo người nối kênh + người duyệt có phạm vi bao người đó.
+      if (!ok && (canNhapLai || !k.credential) && k.status !== "NEEDS_REAUTH") {
+        await baoNguoiSoanVaNguoiDuyet(tx, tenantId, k.createdBy, {
+          loai: "mxh-can-ket-noi-lai", mucDo: "canh-bao", tieuDe: `Kênh “${k.name}” cần kết nối lại (nhập lại mật khẩu ứng dụng)`,
+          noiDung: thongBao, duongDan: "/mang-xa-hoi/kenh", doiTuong: "social_connection", doiTuongId: k.id,
+          khoaChongTrung: `mxh-can-ket-noi-lai:${k.id}:${bayGio.toISOString()}`,
+        });
+      }
     });
     dem++;
   }
