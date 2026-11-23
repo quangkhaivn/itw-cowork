@@ -75,7 +75,7 @@ function boDau(s: string): string {
  * khớp → bỏ; dòng mô tả khớp → bỏ dòng. Thừa còn hơn thiếu: lỡ bỏ một thông số vô hại không sao, lọt giá vốn thì có hại.
  * ("mạng nội bộ" — LAN — không tính là thông tin nội bộ.)
  */
-const MAU_CAM = /(gia\s*von|von\s*hang|gia\s*nhap|nhap\s*gia|nhap\s*hang|gia\s*mua|mua\s*vao|cost|nha\s*cung\s*cap|ncc\b|supplier|vendor|nha\s*phan\s*phoi|margin|bien\s*loi|loi\s*nhuan|lai\s*gop|tien\s*lai|hoa\s*hong|chiet\s*khau\s*(dai\s*ly|nha)|purchase|wholesale|gia\s*si|gia\s*dai\s*ly|(?<!mang\s)noi\s*bo\b|khong\s*cong\s*khai|bi\s*mat|confidential|internal)/;
+const MAU_CAM = /(gia\s*von|von\s*hang|gia\s*nhap|nhap\s*gia|nhap\s*hang|gia\s*mua|mua\s*vao|cost|nha\s*cung\s*cap|ncc\b|supplier|vendor|nha\s*phan\s*phoi|margin|bien\s*loi|loi\s*nhuan|lai\s*gop|tien\s*lai|hoa\s*hong|chiet\s*khau\s*(dai\s*ly|nha)|purchase|wholesale|gia\s*si|gia\s*dai\s*ly|(?<!mang\s)noi\s*bo\b|khong\s*cong\s*khai|bi\s*mat|confidential)/;
 
 export function coChuCam(s: string): boolean {
   return MAU_CAM.test(boDau(s));
@@ -103,11 +103,10 @@ export interface DoiChieuNhayCam {
 
 function chuaNhayCam(s: string, dc: DoiChieuNhayCam | undefined): boolean {
   if (!dc) return false;
-  const so = [...s.matchAll(/\d[\d.,\s]*\d|\d/g)].map((m) => m[0].replace(/[.,\s]/g, ""));
-  for (const g of dc.giaVon) {
-    const n = Math.round(g);
-    if (n >= 1000 && so.some((x) => x.includes(String(n)))) return true;
-  }
+  // Mọi cách viết một số: nhóm nghìn bằng chấm / phẩy / dấu cách ("9.876.543", "9,876,543", "9 876 543") và mọi dãy chữ số
+  // liền (cả khi dính chữ: "GV9876543"). So BẰNG (không so chuỗi con — giá vốn 50.000 không được bỏ nhầm dòng có 150.000).
+  const so = new Set([...s.matchAll(/\d{1,3}(?:[.,\s]\d{3})+|\d+/g), ...s.matchAll(/\d+/g)].map((m) => Number(m[0].replace(/[.,\s]/g, ""))));
+  if (dc.giaVon.some((g) => Math.round(g) >= 1000 && so.has(Math.round(g)))) return true;
   const c = ` ${boDau(s)} `;
   return dc.nhaCungCap.some((t) => {
     const k = boDau(t).trim();
