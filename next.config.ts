@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: process.cwd(),
   serverExternalPackages: ["@prisma/client", "pg", "bcryptjs"],
+  // 0.24.0: proxy (src/proxy.ts) đệm thân yêu cầu tối đa 10 MB theo mặc định — tệp đính kèm 10–20 MB bị cắt cụt. Nâng
+  // khớp nginx (client_max_body_size 25m). Video lớn hơn đi đường Google Drive (máy chủ tự tải), không qua trình duyệt.
+  experimental: { proxyClientMaxBodySize: "25mb" },
   // Tiêu đề bảo mật đặt ngay trong ứng dụng, không phụ thuộc cấu hình nginx của từng máy.
   // Không đặt X-Frame-Options: nginx máy chủ đã gửi SAMEORIGIN, đặt thêm DENY ở đây thành hai
   // giá trị mâu thuẫn (đã thấy trên máy thật 19/09). Chống nhúng khung bằng CSP frame-ancestors —

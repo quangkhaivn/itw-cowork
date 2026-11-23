@@ -76,6 +76,9 @@ export function kiemDinhDang(ncc: NhaCungCapApp, cong: Record<string, string | n
   return null;
 }
 
+/** Trường không bắt buộc (không tính vào "đã cấu hình"). */
+const TRUONG_TUY_CHON = ["graphVersion", "configId"];
+
 function tenTruong(ncc: NhaCungCapApp) {
   return ncc === "GOOGLE" ? ["clientId"] : ncc === "META" ? ["appId", "graphVersion", "configId"] : ["appId"];
 }
@@ -119,7 +122,7 @@ export async function danhSachThongTinApp(nc: NguCanh) {
   const dong = NHA_CUNG_CAP_APP.map((ncc) => {
     const d = ds.find((x) => x.provider === ncc);
     const cong = (d?.publicConfig ?? {}) as Record<string, string>;
-    const coManHinh = Boolean(d?.ciphertext) && tenTruong(ncc).filter((t) => t !== "graphVersion").every((t) => cong[t]);
+    const coManHinh = Boolean(d?.ciphertext) && tenTruong(ncc).filter((t) => !TRUONG_TUY_CHON.includes(t)).every((t) => cong[t]);
     const mayChu = coGiaTriMayChu(ncc);
     return {
       nhaCungCap: ncc,
@@ -248,7 +251,7 @@ export async function kiemTraAppMeta(appId: string, biMat: string, graphVersion:
 function kiemTraDinhDangApp(ncc: NhaCungCapApp, cong: Record<string, string>, coBiMat: boolean): KetQuaKiemTraApp {
   const loi = kiemDinhDang(ncc, cong, null);
   if (loi) return { trangThai: "loi", thongBao: loi };
-  const thieu = tenTruong(ncc).filter((t) => t !== "graphVersion" && !cong[t]);
+  const thieu = tenTruong(ncc).filter((t) => !TRUONG_TUY_CHON.includes(t) && !cong[t]);
   if (thieu.length || !coBiMat) return { trangThai: "loi", thongBao: "Chưa nhập đủ thông tin app." };
   return {
     trangThai: "chi-dinh-dang",

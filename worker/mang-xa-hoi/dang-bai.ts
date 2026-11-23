@@ -264,9 +264,13 @@ export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNha
   }
   const xt: ThongTinXacThuc = mo.xt;
   const goc = (env.APP_URL ?? "").trim().replace(/\/+$/, "");
+  const laThu = env.NODE_ENV !== "production";
   const bc: BoiCanhGoi = {
     hanMs: d.cfg.hanGoiMs,
     app: mo.app,
+    // Kỹ thuật: cỡ đoạn tải YouTube (bội số 256 KiB, mặc định 8 MiB). Bài thử: đoạn nhỏ + không chờ giữa các lần hỏi trạng thái.
+    ...(Number(env.MXH_YOUTUBE_DOAN_BYTE) > 0 ? { doanYoutube: Number(env.MXH_YOUTUBE_DOAN_BYTE) } : {}),
+    ...(laThu && env.MXH_THU_KHONG_CHO === "1" ? { ngu: async () => undefined } : {}),
     linkMedia: appUrlHttps(env)
       ? (attachmentId, jpeg) => `${goc}/api/cong-khai/mxh/media/${kyMaMedia({ tenantId, postId: d.target.postId, attachmentId, hetHanGiay: Math.floor(bayGio.getTime() / 1000) + d.cfg.hanLinkMediaPhut * 60, ...(jpeg ? { jpeg: true } : {}) })}`
       : undefined,
