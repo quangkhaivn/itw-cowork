@@ -993,7 +993,7 @@ Giám đốc yêu cầu (nguyên văn): *"Tôi cần bạn viết phần mềm m
 
 Khóa Cấu hình mới (nhóm **Tính lương**): `luong.chan_khi_tham_so_chua_xac_nhan` (0), `luong.bat_buoc_2_lop` (1), `luong.tk_tien_mat` (1111), `luong.tang_ca_canh_bao_gio_thang` (40); nhóm **Chấm công**: `may_cham_cong.xac_minh_so_huu` (1).
 
-## 34. Mạng xã hội (0.23.0, chưa phát hành)
+## 34. Mạng xã hội (0.23.0 → 0.24.0, chưa phát hành)
 
 Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt trong Cowork (QĐ-193). Bản 0.23.0: **WordPress chạy thật**; Facebook Page, Instagram, YouTube, Zalo OA có mục trong danh mục nền tảng ở trạng thái chờ duyệt / chưa hỗ trợ. Nguyên tắc nền: **không bao giờ báo "đã đăng" khi chưa xác minh** (ADR-05), **không đăng lại mù** khi kết quả chưa rõ, **bí mật chỉ worker mở được** (SEC-06). Hướng dẫn người dùng: `docs/HUONG-DAN-MANG-XA-HOI.md`. Ký hiệu chặn ở: [SV] service, [DB] CSDL, [WK] worker, [GD] giao diện, [TH] bài thử.
 
@@ -1062,3 +1062,32 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 | MXH-43 | Chưa nhập trên màn hình mà máy chủ có biến môi trường (`META_APP_ID`…) → dùng biến môi trường, màn hình ghi "đang dùng giá trị từ máy chủ" | [WK] · [GD] |
 
 Khóa Cấu hình mới (nhóm **Mạng xã hội**): `mxh.ai_phai_duyet` (1), `mxh.han_link_media_phut` (60), `mxh.so_lan_thu_toi_da` (5), `mxh.han_goi_giay` (30), `mxh.cho_doi_soat_giay` (120), `mxh.phut_ket_dang` (10). **Thiết lập ban đầu**: Marketing — "Kết nối kênh mạng xã hội"; Giám đốc / Quản trị — "Nhập thông tin app Meta / Google".
+
+### 0.24.0 — Facebook Page, Instagram, YouTube, Google Drive (QĐ-203 → QĐ-209)
+
+Các con số giới hạn nền tảng dưới đây theo tài liệu công khai — **chưa kiểm với API thật** (danh sách đầy đủ trong báo cáo 0.24.0 và `luat-nen-tang.ts`).
+
+| # | Luật | Chặn ở |
+|---|---|---|
+| MXH-50 | Kết nối Facebook Page / Instagram (Meta) và YouTube (Google) bằng **OAuth**, dùng thông tin app ở Quản trị → Kết nối nền tảng (API) (thiếu → 409 “chưa cấu hình app”). Cần `mxh.update` | [SV] · [TH] |
+| MXH-51 | **Màn hình đồng ý của Cowork** trước khi sang nền tảng: tên nền tảng, từng quyền xin + lý do, kênh kết nối lại. Quyền Meta: `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`, `publish_video`, `instagram_basic`, `instagram_content_publish`, `business_management` (không bắt buộc). Google: `youtube.upload`, `youtube.readonly`, `drive.file` — KHÔNG `drive.readonly` | [GD] · [SV] · [TH] |
+| MXH-52 | `state` ngẫu nhiên, CSDL chỉ giữ mã băm, **dùng một lần**, **hạn 10 phút**, gắn **phiên đăng nhập + người + doanh nghiệp**; sai / hết hạn / dùng lại / khác phiên / sai nền tảng → từ chối, đốt state | [SV] · [DB] CHECK hạn · [TH] |
+| MXH-53 | **Redirect URI** dựng chỉ từ `APP_URL` (https; http://localhost khi thử), đường callback phải khớp chính xác; Google `access_type=offline` + `prompt=consent`, bắt buộc có refresh token | [SV] · [TH] |
+| MXH-54 | Mã `code` được niêm phong; **worker** đổi lấy token (Meta: token dài hạn → page token + Instagram chuyên nghiệp gắn Page; Google: refresh token + kênh YouTube). Một lần đăng nhập chọn được **nhiều Page / Instagram / kênh**; kênh không chọn không giữ token; quá 30 phút chưa chọn → hủy | [WK] · [SV] · [TH] |
+| MXH-55 | Token niêm phong envelope như 0.23 (AAD doanh nghiệp + kênh); web chỉ CHÉP bản niêm phong, không mở. Token không xuất hiện trong API, log, kiểm toán, sự kiện, thông báo, nhật ký gọi nền tảng | [SV] · [WK] · [TH] |
+| MXH-56 | **Làm mới token trước hạn** (Google ≤ 5 phút khi dùng, ≤ 10 phút vòng chủ động); Meta kiểm đọc Page mỗi 24 giờ. Hết hạn / thu hồi → kênh `NEEDS_REAUTH`, **báo Marketing** (người giữ `mxh.update`), nút **Kết nối lại** (giữ nguyên kênh) | [WK] · [GD] · [TH] |
+| MXH-57 | **Facebook Page**: chữ + liên kết, một ảnh, nhiều ảnh (≤ 10, không trộn video), video (tải theo phần start / transfer / finish), **Reels** (một video dọc 9:16, 3–90 giây, ≥ 540×960; chọn “Đăng thành Reels”). Xác minh = đọc lại bài / video lấy permalink | [SV] luật · [WK] · [TH] |
+| MXH-58 | **Hạn mức Reels 30 / 24 giờ / Page** kiểm trước khi xếp hàng (409) và lại ở worker (hoãn 1 giờ) | [SV] · [WK] · [TH] |
+| MXH-59 | **Instagram**: ảnh JPEG (khác JPEG → đổi sang JPEG nếu máy chủ có thư viện ảnh, không thì từ chối kèm hướng dẫn), tỉ lệ 4:5 → 1,91:1, ≤ 8 MB; carousel 2–10 ảnh; Reels (3 giây – 15 phút, H.264 / HEVC). Luồng container → `status_code` FINISHED → publish → permalink; đọc `content_publishing_limit` trước khi đăng (hết → hoãn 1 giờ). Media đưa sang bằng **link ký** trên tên miền Cowork — `APP_URL` phải là https, không thì báo “Instagram cần Cowork chạy ở địa chỉ https công khai” | [SV] · [WK] · [TH] |
+| MXH-60 | **YouTube**: đúng một video, tiêu đề ≤ 100 ký tự, mô tả ≤ 5.000 byte; tải **resumable** (đoạn bội số 256 KiB, đứt giữa chừng tải tiếp từ byte đã nhận, kể cả lượt sau); quyền riêng tư **Riêng tư / Không công khai / Công khai** (mặc định Riêng tư); xác minh bằng `videos.list`. Video dọc ≤ 3 phút → ghi chú Shorts (không API riêng) | [SV] · [WK] · [TH] |
+| MXH-61 | **Quota YouTube** đếm chung doanh nghiệp theo ngày quota (giờ Thái Bình Dương), ngưỡng `mxh.youtube_upload_toi_da_ngay` (100): chạm ngưỡng / YouTube báo hết quota → **dời sang đầu ngày quota sau** + báo người soạn; không tính lần thử | [WK] · [DB] · [TH] |
+| MXH-62 | **Kiểm media theo luật nền tảng** trước khi gửi duyệt / hẹn giờ / đăng: định dạng, dung lượng, kích thước, tỉ lệ, thời lượng, mã hóa video. **Không chuyển mã video** — không hợp thì báo lý do + cách sửa. Kiểu nội dung chốt theo từng kênh lúc xếp hàng | [SV] · [TH] |
+| MXH-63 | Video của bài: MP4 / MOV, **chỉ bài mạng xã hội** nhận video; tải thẳng ≤ 20 MB, lấy từ Google Drive ≤ 200 MB | [SV] · [DB] CHECK · [TH] |
+| MXH-64 | **Chọn từ Google Drive**: Google Picker (API key ở màn hình API), quyền `drive.file` — Cowork chỉ đọc đúng tệp người dùng chọn; máy chủ kiểm token đúng app (tokeninfo), kiểm loại + dung lượng trước khi tải, tải vào tệp đính kèm của bài. Không lưu token, **không đổi quyền chia sẻ** trên Drive | [SV] · [TH] |
+| MXH-65 | Trang công khai **Điều khoản**, **Quyền riêng tư**, **Xóa dữ liệu** (`/dieu-khoan`, `/quyen-rieng-tu`, `/xoa-du-lieu`, `?dn=<mã doanh nghiệp>`), sửa ở Quản trị → Trang công khai (`setting.update`); mặc định bản mẫu tiếng Việt ghi “cần luật sư rà”; không nhận HTML / script | [SV] · [GD] · [TH] |
+| MXH-66 | **Data Deletion Callback** của Meta: nhận `signed_request`, kiểm khuôn (rác → 400) + giới hạn tốc độ, trả `{ url, confirmation_code }`; worker kiểm chữ ký bằng App Secret — đúng → xóa token mọi kênh Meta do người đó cấp quyền, kênh “Đã ngắt”, hủy lượt chờ, báo Marketing; sai → không xóa gì. Tra trạng thái ở `/xoa-du-lieu?ma=` | [SV] · [WK] · [TH] |
+| MXH-67 | Màn hình Kết nối nền tảng hiện sẵn URL để dán sang Meta / Google: tên miền, Redirect URI, Điều khoản, Quyền riêng tư, Xóa dữ liệu, Data Deletion Callback, referrer cho API key Picker; Meta thêm ô **Configuration ID** (Facebook Login for Business), Google thêm ô **Google API key (Picker)** (cất mã hóa, chỉ hiện 4 ký tự cuối); phiên bản Graph API sửa được | [GD] · [SV] · [TH] |
+| MXH-68 | Cấu hình **`mxh.moi_bai_phai_duyet`** (mặc định 0): bật thì mọi bài (người soạn lẫn AI) phải duyệt trước khi hẹn giờ / đăng | [SV] · [TH] |
+| MXH-69 | Sửa riêng từng kênh của bài lỗi một phần: **chưa làm** (0.25) — bài lên một phần thì tạo bài mới cho kênh lỗi | — |
+
+Khóa Cấu hình mới 0.24.0: `mxh.moi_bai_phai_duyet` (0), `mxh.youtube_upload_toi_da_ngay` (100).

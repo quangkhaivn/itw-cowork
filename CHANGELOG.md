@@ -2,6 +2,38 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.24.0 (chưa phát hành) — Mạng xã hội: Facebook, Instagram, YouTube, Google Drive
+
+Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-203 → QĐ-209. Hướng dẫn từng bước: `docs/HUONG-DAN-MANG-XA-HOI.md`. Mọi lệnh gọi Meta / Google viết theo tài liệu công khai và thử bằng máy chủ GIẢ — **chưa kiểm với API thật** (danh sách điểm cần kiểm trong báo cáo 0.24.0).
+
+### Thêm
+- **Kết nối kênh bằng OAuth**: nút “Kết nối Facebook Page / Instagram”, “Kết nối kênh YouTube” ở Mạng xã hội → Kênh → **màn hình đồng ý của Cowork** (nền tảng, từng quyền xin + lý do) → đăng nhập nền tảng → **chọn nhiều Page / tài khoản Instagram / kênh YouTube** trong một lần. “Kết nối lại” cho kênh hết quyền (giữ nguyên kênh, lịch sử).
+- **Facebook Page**: chữ + liên kết, một ảnh, nhiều ảnh, video (tải theo phần), **Reels** (tùy chọn “Đăng thành Reels”); hạn mức 30 Reels / 24 giờ kiểm trước khi xếp lịch.
+- **Instagram** (tài khoản chuyên nghiệp gắn Page): ảnh, **carousel** 2–10 ảnh, **Reels**; ảnh PNG / WebP / GIF tự đổi sang JPEG; đọc hạn mức đăng / 24 giờ trước khi đăng; media đưa sang bằng link ký trên tên miền Cowork.
+- **YouTube**: tải resumable (đứt mạng tải tiếp từ chỗ dừng), chọn quyền riêng tư (Riêng tư / Không công khai / Công khai), đếm **quota** toàn doanh nghiệp (Cấu hình `mxh.youtube_upload_toi_da_ngay`, mặc định 100 / ngày) — hết thì dời sang ngày sau và báo; ghi chú Shorts.
+- **Google Drive làm kho media**: nút **Chọn từ Google Drive** (Google Picker, quyền `drive.file` — chỉ tệp bạn chọn), máy chủ tải ảnh / video (≤ 200 MB) vào bài; tệp trên Drive vẫn riêng tư.
+- **Video** cho bài mạng xã hội (MP4 / MOV); **kiểm định dạng theo từng nền tảng** trước khi gửi duyệt / xếp lịch (kích thước, tỉ lệ, thời lượng, mã hóa) — không chuyển mã, báo rõ lý do + cách sửa; trang bài hiện kiểu nội dung từng kênh (Reels, Carousel…).
+- **Trang công khai** `/dieu-khoan`, `/quyen-rieng-tu`, `/xoa-du-lieu` (bản mẫu tiếng Việt ghi “cần luật sư rà”, sửa ở **Quản trị → Trang công khai**) + **Data Deletion Callback** của Meta (mã xác nhận, trang tra trạng thái).
+- **Kết nối nền tảng (API)**: URL Điều khoản / Quyền riêng tư / Xóa dữ liệu / Data Deletion Callback / referrer Picker để dán sang Meta / Google; ô **Configuration ID** (Facebook Login for Business), **Google API key (Picker)**; hướng dẫn từng bước cập nhật.
+- Token tự **làm mới trước hạn** (worker); hết hạn / bị thu hồi → kênh “Cần cấp lại quyền”, **báo Marketing**, nút Kết nối lại.
+- Cấu hình **`mxh.moi_bai_phai_duyet`** (mặc định 0): bật thì mọi bài phải duyệt.
+
+### Bảo mật
+- OAuth: `state` dùng một lần, hạn 10 phút, gắn phiên + người + doanh nghiệp (CSDL chỉ giữ mã băm); Redirect URI cố định theo `APP_URL`, đường callback khớp chính xác. Mã `code` niêm phong; chỉ worker đổi mã (cần App Secret / Client Secret). Token niêm phong envelope theo kênh; web chỉ chép bản niêm phong, không mở. Graph API gọi kèm `appsecret_proof`.
+- Drive: kiểm token Picker thuộc đúng OAuth client (chống token của ứng dụng khác), không lưu token, không đổi quyền chia sẻ; không xin `drive.readonly`.
+- Data Deletion: kiểm khuôn + giới hạn tốc độ ở route, chữ ký kiểm bằng App Secret ở worker (sai → không xóa gì).
+- Token / code / secret không xuất hiện trong API, log, kiểm toán, sự kiện, thông báo, nhật ký gọi nền tảng (bài thử kiểm).
+
+### Sửa
+- Proxy Next 16 đệm thân yêu cầu tối đa 10 MB theo mặc định → tệp đính kèm 10–20 MB bị cắt; nâng `proxyClientMaxBodySize` lên 25 MB (khớp nginx).
+- “Đã cấu hình” của app Meta không tính trường tùy chọn (Configuration ID).
+
+### Triển khai
+- Migration `20261123090001_mxh_ket_noi`, `20261123090002_mxh_video_dinh_kem`; chạy lại `prisma/rls.sql`. `APP_URL` phải https công khai. nginx: location tải Drive chờ 300 giây. Xem DEPLOYMENT → “Nâng cấp lên 0.24.0” (gồm giới hạn của khóa đối xứng — QĐ-209a).
+
+### Kiểm thử
+- `npm run thu:mxh-ket-noi` (nối cuối `thu:tich-hop`): OAuth (state sai / hết hạn / dùng lại / khác phiên / redirect lạ), đổi mã, chọn kênh, kết nối lại, đăng từng loại nội dung Facebook / Instagram / YouTube, 4 loại lỗi, làm mới token, NEEDS_REAUTH, hạn mức Instagram + Reels, quota YouTube, upload YouTube bị ngắt rồi tiếp, Picker tải tệp, Data Deletion ký sai / đúng, trang công khai, RLS / IDOR, token không lộ — Graph / Google / YouTube / Drive là máy chủ giả cục bộ. `thu/don-vi/mxh-ket-noi.test.ts` (phần thuần).
+
 ## 0.23.0 (chưa phát hành) — Mạng xã hội: nền tảng + WordPress
 
 Phân hệ mới **Mạng xã hội** (BUSINESS_RULES mục 34, QĐ-193 → QĐ-202), theo thiết kế ITW SOCIAL MCP đã duyệt nhưng đặt trong Cowork. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md`.

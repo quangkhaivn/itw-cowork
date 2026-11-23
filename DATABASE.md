@@ -173,7 +173,7 @@ Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_
 
 | Bảng | Vai trò | Ghi chú |
 |---|---|---|
-| `social_connector_settings` | Danh mục nền tảng toàn hệ thống (ADR-04) | KHÔNG `tenant_id`; khóa `platform`; `availability` ∈ AVAILABLE / PENDING_APPROVAL / DISABLED + `enabled`. RLS bật, ứng dụng chỉ SELECT; đổi bằng migration / vai chủ sở hữu. Nạp sẵn: WORDPRESS (AVAILABLE), FACEBOOK_PAGE, INSTAGRAM (PENDING_APPROVAL), YOUTUBE, ZALO_OA (DISABLED) |
+| `social_connector_settings` | Danh mục nền tảng toàn hệ thống (ADR-04) | KHÔNG `tenant_id`; khóa `platform`; `availability` ∈ AVAILABLE / PENDING_APPROVAL / DISABLED + `enabled`. RLS bật, ứng dụng chỉ SELECT; đổi bằng migration / vai chủ sở hữu. Nạp sẵn: WORDPRESS (AVAILABLE), FACEBOOK_PAGE, INSTAGRAM (PENDING_APPROVAL), YOUTUBE, ZALO_OA (DISABLED); 0.24.0 đổi FACEBOOK_PAGE, INSTAGRAM, YOUTUBE → AVAILABLE |
 | `social_connections` | Kênh đã nối | `external_id` = địa chỉ site chuẩn hóa; `account_name` (tên đăng nhập, không bí mật); `status` ∈ ACTIVE / NEEDS_REAUTH / ERROR / DISCONNECTED; `meta` (tên hiển thị, kiểu đường API); `last_check_*`, `check_requested_at` (việc cho worker); `disconnected_at`. Duy nhất `(tenant_id, platform, external_id)` khi chưa ngắt |
 | `social_credentials` | Bí mật của kênh, niêm phong envelope | Khóa = `connection_id`. `ciphertext`, `iv` (12), `auth_tag` (16), `wrapped_key` (60 = IV + tag + data key mã hóa bằng `SOCIAL_MASTER_KEY`), `key_version`. AAD = `mxh:kenh:<tenant>:<kênh>`. Ngắt kênh → xóa dòng |
 | `social_app_configs` | Thông tin app nền tảng theo doanh nghiệp | Duy nhất `(tenant_id, provider)`, `provider` ∈ META / GOOGLE / ZALO. `public_config` (appId, graphVersion, clientId); bộ niêm phong như trên (CHECK đủ bộ hoặc không có gì), `secret_last4`, `secret_updated_*`, `check_*`, `check_requested_at`. AAD = `mxh:app:<tenant>:<nền tảng>` |
@@ -186,6 +186,18 @@ Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_
 | `brand_profiles` | Giọng văn, từ cấm, hashtag, mẫu kêu gọi | Để sẵn cho 0.25; một dòng / doanh nghiệp |
 
 Cột / ràng buộc khác: `attachments_loai_doi_tuong_check` thêm `social_post`. Quyền `mxh.*` (6 mã) cấp cho mọi doanh nghiệp trong cùng migration.
+
+### 0.24.0 — Facebook, Instagram, YouTube, Google Drive (migration `20261123090001_mxh_ket_noi`, `20261123090002_mxh_video_dinh_kem`; BUSINESS_RULES MXH-50 →)
+
+| Bảng | Vai trò | Ghi chú |
+|---|---|---|
+| `social_oauth_requests` | Một lần kết nối OAuth | `provider` META / GOOGLE; `state_hash` (sha256, duy nhất — không lưu state rõ); `session_ref` (băm người + doanh nghiệp + lúc ký phiên); `redirect_uri`; `scopes`; `reconnect_connection_id`; `status` CHO_DONG_Y → CHO_DOI_MA → DA_SAN_SANG → HOAN_TAT (LOI / HET_HAN); mã `code` niêm phong (CHECK đủ bộ hoặc không gì; xóa sau khi đổi); `oauth_subject` (Meta user id / kênh YouTube); `missing_scopes`; **CHECK `expires_at ≤ created_at + 10 phút`** |
+| `social_oauth_candidates` | Kênh tìm được chờ chọn | `platform` FACEBOOK_PAGE / INSTAGRAM / YOUTUBE; `external_id`; `connection_id` đặt trước (kênh đã nối → mã cũ, `existing`); token niêm phong với AAD của `connection_id` (chép thẳng sang `social_credentials` khi chọn); xóa khi chọn xong / quá 30 phút |
+| `social_quota_usages` | Đếm hạn mức theo ngày | Khóa `(tenant_id, quota_key, quota_day)`; `quota_key` = `youtube-upload`; ngày theo giờ Thái Bình Dương; giữ lượt bằng `INSERT … ON CONFLICT … WHERE used < ngưỡng` |
+| `social_data_deletion_requests` | Data Deletion Callback của Meta | `confirmation_code` (duy nhất, 16 ký tự); `signed_request` (≤ 8 KB, kiểm chữ ký ở worker); `status` CHO_KIEM / DA_XOA / CHU_KY_SAI / LOI; `platform_user_id`, `deleted_count`, `ip_address` |
+| `legal_pages` | Trang công khai | `slug` dieu-khoan / quyen-rieng-tu / xoa-du-lieu (duy nhất theo doanh nghiệp); `title`, `body` (chữ thường ≤ 100.000 ký tự). Chưa có dòng → hiện bản mẫu |
+
+Cột mới: `social_connections.auth_type` (app_password / oauth, CHECK có `oauth_provider` khi oauth), `oauth_provider`, `oauth_subject` (+ chỉ mục để xử lý xóa dữ liệu); `social_credentials.token_expires_at`, `refreshed_at`; `social_app_configs.picker_key_enc` (Google API key Picker mã hóa `APP_ENC_KEY`, chỉ GOOGLE — CHECK), `picker_key_last4`; `social_posts.options` (facebookReels, lienKet, youtubeRiengTu); `social_post_targets.content_kind` (10 kiểu, CHECK) + chỉ mục đếm Reels. `social_connector_settings`: FACEBOOK_PAGE, INSTAGRAM, YOUTUBE → AVAILABLE + bật. `attachments_kieu_tep_check` / `attachments_dung_luong_check`: thêm `video/mp4`, `video/quicktime` CHỈ khi `object_type = 'social_post'`, video ≤ 200 MB (tệp khác giữ 20 MB). RLS: các bảng mới có `tenant_id` được `rls.sql` tự bật.
 
 Vai kết nối: `cowork_app` (ứng dụng, bị RLS) và chủ sở hữu (migration, seed). Ứng dụng **không bao giờ** chạy bằng chủ sở hữu.
 
