@@ -5,7 +5,7 @@ import { batBuocQuyen, coQuyen, LoiThieuQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { nguoiGiuQuyen, taoThongBao } from "@/modules/thong-bao/service";
 import {
-  batBuocChuyen, canDuyet, chiTietBai, duocSoan, kiemNoiDung, lanGuiCuaKenh, layBai, xepHangKenhLoi, type Bai,
+  batBuocChuyen, canDuyet, chiTietBai, duocSoan, kenhSuaCanDuyet, kiemNoiDung, lanGuiCuaKenh, layBai, xepHangKenhLoi, type Bai,
 } from "./bai";
 import { chuanHoaDsHashtag, suaKenhLoiAnToan } from "./bien-the";
 import { ghiDongTacGiaAnh } from "./chung";
@@ -91,7 +91,8 @@ export async function suaKenhLoi(nc: NguCanh, postId: string, targetId: string, 
   delete daTai.__igContainer;
   delete daTai.__ytPhien;
   await nc.tx.socialPostTarget.update({ where: { id: t.id }, data: { ...moi, retryRequested: true, mediaExternal: daTai, overrideUpdatedBy: nc.hoSo.userId, overrideUpdatedAt: bayGio } });
-  await nc.tx.socialPost.update({ where: { id: postId }, data: { revision: { increment: 1 }, updatedBy: nc.hoSo.userId } });
+  // QA 0.25.0 (QĐ-243): nội dung đổi → dấu "đã duyệt" cũ không còn đúng (người duyệt chưa xem bản sửa) — như QĐ-197.
+  await nc.tx.socialPost.update({ where: { id: postId }, data: { revision: { increment: 1 }, approvedBy: null, approvedAt: null, reviewNote: null, updatedBy: nc.hoSo.userId } });
   // Sửa nội dung sau khi bài đã gửi duyệt = đồng tác giả (QĐ-203) → không duyệt được bản sửa của chính mình.
   await ghiDongTacGiaAnh(nc.tx, postId, nc.hoSo.userId);
   const sau = await layBai(nc, postId);
@@ -127,7 +128,7 @@ export async function dangLaiKenh(nc: NguCanh, postId: string, targetId: string,
   batBuocBaiLoi(b);
   const t = kenhCua(b, targetId);
   if (t.status !== "FAILED") throw new LoiNghiepVu("Chỉ đăng lại được kênh đang Lỗi.", 409, "sai-trang-thai");
-  if (t.retryRequested && (await canDuyet(nc, b))) {
+  if ((await kenhSuaCanDuyet(nc, b, [t])).has(t.id)) {
     throw new LoiNghiepVu(`Kênh “${t.connection.name}” đã sửa nội dung — phải được duyệt lại trước khi đăng (bấm “Gửi duyệt lại kênh lỗi”).`, 409, "can-duyet");
   }
   const kieu = await kiemNoiDung(b, new Set([t.id]));

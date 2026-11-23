@@ -5582,6 +5582,9 @@ model AiUsageLog {
   model          String?   @db.VarChar(100)
   itemCount      Int       @default(0) @map("item_count")
   errorCode      String?   @map("error_code") @db.VarChar(100)
+  /// QA 0.25.0 (QĐ-245): khóa lặp lại (Idempotency-Key) của lượt — chặn gọi AI lần hai khi bấm đúp. Chỉ mục riêng phần
+  /// (WHERE idempotency_key IS NOT NULL) ở migration 20261127090001.
+  idempotencyKey String?   @map("idempotency_key") @db.VarChar(100)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   finishedAt     DateTime? @map("finished_at") @db.Timestamptz(6)
 

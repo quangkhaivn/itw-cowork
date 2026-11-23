@@ -2,7 +2,7 @@ import type { z } from "zod";
 import type { NguCanh } from "@/lib/api";
 import { thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
-import { batBuocQuyen, coQuyen } from "@/lib/phan-quyen";
+import { batBuocQuyen, coQuyen, LoiThieuQuyen } from "@/lib/phan-quyen";
 import { LoiNhaCungCapAI, nhaCungCapDangDung, tinhTrangAI, type NhaCungCapAI } from "@/modules/tro-ly/nha-cung-cap";
 import { chiTietBai, taoBai } from "../bai";
 import { ganHashtag } from "../bien-the";
@@ -10,10 +10,10 @@ import { docCauHinhMxh } from "../chung";
 import { NEN_TANG, type NenTang } from "../hang-so";
 import type { LuocDoBai, LuocDoVietBaiAi } from "../luoc-do";
 import { docHoSoThuongHieu } from "../thuong-hieu";
-import { batBuocKhongCoTruongCam, giaHopLe, sanPhamChoAI } from "./du-lieu-san-pham";
+import { batBuocKhongCoTruongCam, giaHopLe, sanPhamChoAI, type DoiChieuNhayCam } from "./du-lieu-san-pham";
 import { docKetQuaAI, LoiKetQuaAI } from "./ket-qua";
 import { loiNhacHeThong, loiNhacNguoiDung, TOI_DA_TOKEN_RA, uocTinhTokenVao } from "./loi-nhac";
-import { docNganSach, ghiKetQuaLuotAI, giuChoNganSach, TINH_NANG_VIET_BAI, trangThaiNganSach } from "./ngan-sach";
+import { chanLuotTrungKhoa, docNganSach, ghiKetQuaLuotAI, giuChoNganSach, khoaNganSach, TINH_NANG_VIET_BAI, trangThaiNganSach } from "./ngan-sach";
 import { chiPhiVnd } from "./ngan-sach-thuan";
 
 /**
@@ -65,8 +65,31 @@ const CHON_SAN_PHAM = {
   warrantyMonths: true, status: true, quanLyTon: true, minStock: true, category: { select: { name: true } }, brand: { select: { name: true } },
 } as const;
 
-/** Sản phẩm để chọn trên màn hình AI viết bài (giá bán + tình trạng tồn — không có giá vốn). */
+/**
+ * LỚP ĐỐI CHIẾU (QA 0.25.0, QĐ-240): đọc RIÊNG giá vốn, giá nhập theo nhà cung cấp, tên / mã nhà cung cấp của các sản phẩm —
+ * KHÔNG đưa vào dữ liệu gửi đi, chỉ để `sanPhamChoAI` bỏ dòng mô tả / thông số chứa đúng các giá trị đó (người nhập ghi giá
+ * vốn không nhãn, viết lách dấu, kẻ bảng…). Truy vấn dữ liệu gửi AI (`CHON_SAN_PHAM`) vẫn không chọn các cột này.
+ */
+async function doiChieuNhayCam(nc: NguCanh, ids: string[]): Promise<Map<string, DoiChieuNhayCam>> {
+  if (!ids.length) return new Map();
+  const ds = await nc.tx.product.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, costPrice: true, defaultSupplier: { select: { name: true, code: true } }, supplierPrices: { select: { purchasePrice: true, supplier: { select: { name: true, code: true } } } } },
+  });
+  return new Map(ds.map((p) => [p.id, {
+    giaVon: [p.costPrice, ...p.supplierPrices.map((x) => x.purchasePrice)].filter((x) => x !== null).map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0),
+    nhaCungCap: [p.defaultSupplier, ...p.supplierPrices.map((x) => x.supplier)].flatMap((x) => (x ? [x.name, x.code] : [])),
+  }]));
+}
+
+/**
+ * Sản phẩm để chọn trên màn hình AI viết bài (giá bán + tình trạng tồn — không có giá vốn). QA 0.25.0 (QĐ-240): cùng quyền
+ * với AI viết bài (mxh.create + ai.view + product.view) — trước đây chỉ cần product.view nên ai xem sản phẩm (Kinh doanh, Kỹ
+ * thuật…) cũng đọc được tình trạng còn / sắp hết / hết hàng dù không có quyền xem kho.
+ */
 export async function sanPhamDeVietBai(nc: NguCanh, tuKhoa: string | null) {
+  batBuocQuyen(nc.hoSo, "mxh.create");
+  batBuocQuyen(nc.hoSo, "ai.view");
   batBuocQuyen(nc.hoSo, "product.view");
   const q = tuKhoa?.trim();
   const ds = await nc.tx.product.findMany({
@@ -74,8 +97,9 @@ export async function sanPhamDeVietBai(nc: NguCanh, tuKhoa: string | null) {
     select: CHON_SAN_PHAM, orderBy: { name: "asc" }, take: 50,
   });
   const ton = await tonConBan(nc, ds.map((p) => p.id));
+  const dc = await doiChieuNhayCam(nc, ds.map((p) => p.id));
   const xem = coQuyen(nc.hoSo, "inventory.view");
-  return ds.map((p) => ({ id: p.id, ...sanPhamChoAI({ ...p, conBanDuoc: ton.get(p.id) ?? 0 }, xem) }));
+  return ds.map((p) => ({ id: p.id, ...sanPhamChoAI({ ...p, conBanDuoc: ton.get(p.id) ?? 0 }, xem, dc.get(p.id)) }));
 }
 
 /**
@@ -101,11 +125,14 @@ export async function vietBaiAi(x: NguCanh | BuocGiaoDich, d: z.infer<typeof Luo
     batBuocQuyen(nc.hoSo, "product.view", { objectType: "social_post" });
     const khoa = d.khoaLapLai?.trim() || null;
     if (khoa) {
+      // QA 0.25.0 (QĐ-245): kiểm khóa lặp lại DƯỚI khóa tư vấn ngân sách — lượt cùng khóa đang gọi mô hình (chưa có bài) → 409.
+      await khoaNganSach(nc);
       const da = await nc.tx.socialPost.findFirst({ where: { idempotencyKey: khoa }, select: { id: true, createdBy: true } });
       if (da) {
         if (da.createdBy !== nc.hoSo.userId) throw new LoiNghiepVu("Khóa lặp lại đã được dùng cho bài khác.", 409, "khoa-lap-lai-trung");
         return { trung: { ...(await chiTietBai(nc, da.id)), trung: true, canhBaoAi: [] as string[] } };
       }
+      await chanLuotTrungKhoa(nc, TINH_NANG_VIET_BAI, khoa);
     }
     const { ncc, lyDo } = nccHienTai();
     if (!ncc) throw new LoiNghiepVu(`AI chưa cấu hình — ${lyDo} Bài vẫn soạn tay được như thường.`, 503, "ai-chua-cau-hinh");
@@ -128,8 +155,9 @@ export async function vietBaiAi(x: NguCanh | BuocGiaoDich, d: z.infer<typeof Luo
     const ngung = sp.find((p) => p.status !== "hoat-dong");
     if (ngung) throw new LoiNghiepVu(`Sản phẩm “${ngung.name}” đã ngừng kinh doanh — không viết bài quảng cáo.`, 409, "san-pham-ngung");
     const ton = await tonConBan(nc, ids);
+    const dc = await doiChieuNhayCam(nc, ids);
     const xem = coQuyen(nc.hoSo, "inventory.view");
-    const duLieu = ids.map((id) => sp.find((p) => p.id === id)!).map((p) => sanPhamChoAI({ ...p, conBanDuoc: ton.get(p.id) ?? 0 }, xem));
+    const duLieu = ids.map((id) => sp.find((p) => p.id === id)!).map((p) => sanPhamChoAI({ ...p, conBanDuoc: ton.get(p.id) ?? 0 }, xem, dc.get(p.id)));
     batBuocKhongCoTruongCam(duLieu);
 
     const hoSo = await docHoSoThuongHieu(nc.tx);
@@ -138,7 +166,7 @@ export async function vietBaiAi(x: NguCanh | BuocGiaoDich, d: z.infer<typeof Luo
     const duTruToken = uocTinhTokenVao(heThong, nguoiDung) + TOI_DA_TOKEN_RA;
     const { gia } = await docNganSach(nc.tx);
     const duTruVnd = chiPhiVnd(duTruToken - TOI_DA_TOKEN_RA, TOI_DA_TOKEN_RA, gia);
-    const luotId = await giuChoNganSach(nc, { tinhNang: TINH_NANG_VIET_BAI, duTruToken, duTruVnd, soMuc: duLieu.length }, bayGio);
+    const luotId = await giuChoNganSach(nc, { tinhNang: TINH_NANG_VIET_BAI, duTruToken, duTruVnd, soMuc: duLieu.length, khoaLapLai: khoa }, bayGio);
     return { trung: null, ncc, heThong, nguoiDung, nenTang, gia, luotId, giaThat: giaHopLe(duLieu), soSanPham: duLieu.length };
   });
   if (b1.trung) return b1.trung;
@@ -179,7 +207,6 @@ export async function vietBaiAi(x: NguCanh | BuocGiaoDich, d: z.infer<typeof Luo
       await nc.kiemToan({ action: "ai-viet-bai-mxh-loi", objectType: "social_post", after: { luotId, ma: "ket-qua-hong" } });
       return { loi: new LoiNghiepVu(`${e.message} (Lượt này vẫn tính vào ngân sách AI.)`, 502, "ai-ket-qua-hong") };
     }
-    await ghiKetQuaLuotAI(nc.tx, luotId, { trangThai: "xong", tokenVao, tokenRa, chiPhiVnd: chiPhi, nhaCungCap: ncc.ten, model }, new Date());
     const kenh = await nc.tx.socialConnection.findMany({ where: { id: { in: d.kenhIds } }, select: { id: true, platform: true } });
     const bienThe = kenh.flatMap((k) => {
       const v = kq.bienThe[k.platform as NenTang];
@@ -189,7 +216,25 @@ export async function vietBaiAi(x: NguCanh | BuocGiaoDich, d: z.infer<typeof Luo
       tieuDe: kq.tieuDe, noiDung: ganHashtag(kq.noiDung, kq.hashtags), kenhIds: d.kenhIds, khoaLapLai: d.khoaLapLai?.trim() || null,
       chienDichId: d.chienDichId ?? null, bienThe,
     };
-    const bai = await taoBai(nc, duLieuBai, "ai");
+    // QA 0.25.0 (QĐ-246): tạo bài trong SAVEPOINT — hỏng nghiệp vụ SAU khi đã gọi AI (chiến dịch vừa bị lưu trữ, kênh vừa
+    // ngắt, mất quyền giữa chừng…) thì cuộn riêng phần bài, vẫn ghi lượt AI "lỗi" kèm số token thật. Trước đây cả bước cuộn
+    // ngược → lượt AI treo "dang-goi" mãi (giữ chỗ ước tính tối đa, mất số token thật).
+    await nc.tx.$executeRaw`SAVEPOINT ai_viet_bai_tao`;
+    let bai: Awaited<ReturnType<typeof taoBai>>;
+    try {
+      bai = await taoBai(nc, duLieuBai, "ai");
+      // Trùng khóa lặp lại với bài vừa có (hiếm — người dùng tự tạo bài cùng khóa): không gắn lượt AI này vào bài đó.
+      if (bai.trung) throw new LoiNghiepVu("Khóa lặp lại đã được dùng cho một bài khác vừa tạo — thử lại.", 409, "khoa-lap-lai-trung");
+    } catch (e) {
+      if (!(e instanceof LoiNghiepVu) && !(e instanceof LoiThieuQuyen)) throw e;
+      await nc.tx.$executeRaw`ROLLBACK TO SAVEPOINT ai_viet_bai_tao`;
+      const ma = e instanceof LoiNghiepVu ? e.ma : "thieu-quyen";
+      await ghiKetQuaLuotAI(nc.tx, luotId, { trangThai: "loi", tokenVao, tokenRa, chiPhiVnd: chiPhi, nhaCungCap: ncc.ten, model, maLoi: `tao-bai:${ma}` }, new Date());
+      await nc.kiemToan({ action: "ai-viet-bai-mxh-loi", objectType: "social_post", after: { luotId, ma: `tao-bai:${ma}` } });
+      return { loi: e };
+    }
+    await nc.tx.$executeRaw`RELEASE SAVEPOINT ai_viet_bai_tao`;
+    await ghiKetQuaLuotAI(nc.tx, luotId, { trangThai: "xong", tokenVao, tokenRa, chiPhiVnd: chiPhi, nhaCungCap: ncc.ten, model }, new Date());
     await nc.tx.socialPost.update({ where: { id: bai.id }, data: { aiUsageId: luotId } });
     await nc.tx.socialPostReview.create({ data: { tenantId: nc.tenantId, postId: bai.id, action: "ai-tao", actorId: nc.hoSo.userId, note: `AI soạn từ ${b1.soSanPham} sản phẩm — nháp, ${(await docCauHinhMxh(nc.tx)).aiPhaiDuyet ? "phải duyệt trước khi đăng" : "kiểm kỹ trước khi đăng"}` } });
     // Kiểm toán ghi số liệu, KHÔNG ghi lời nhắc / dữ liệu sản phẩm / nội dung AI viết.

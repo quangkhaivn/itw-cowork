@@ -50,10 +50,37 @@ export async function layBai(nc: NguCanh, id: string, khoa = false) {
 }
 export type Bai = Awaited<ReturnType<typeof layBai>>;
 
-/** Về nháp để sửa: bài đã hủy, hoặc bài lỗi mà không kênh nào có mã bài nền tảng (không thể sinh bài trùng). */
-function veNhapDuoc(b: { status: string; targets: { externalPostId: string | null; status: string }[] }): boolean {
-  if (b.status === "CANCELED") return true;
-  return b.status === "FAILED" && b.targets.every((t) => !t.externalPostId && ["FAILED", "CANCELED", "SKIPPED"].includes(t.status));
+/**
+ * Về nháp để sửa: bài đã hủy, hoặc bài lỗi mà không kênh nào có mã bài nền tảng (không thể sinh bài trùng). QA 0.25.0
+ * (QĐ-244): kênh lỗi Facebook / Instagram từng gửi mà kết quả CHƯA CHẮC CHẮN (lỗi tạm / không rõ — bài có thể đã lên) →
+ * KHÔNG về nháp: về nháp cho sửa nội dung, mà hai nền tảng này đối soát theo NỘI DUNG → không nhận ra bài cũ → đăng trùng.
+ * Cùng luật `suaKenhLoiAnToan` của sửa riêng kênh lỗi (QĐ-234). `lanGui` = kết quả các lần gửi theo kênh-bài.
+ */
+function veNhapDuoc(
+  b: { status: string; targets: { id: string; externalPostId: string | null; errorClass: string | null; status: string; connection: { platform: string; name: string } }[] },
+  lanGui: Map<string, string[]>,
+): { duoc: boolean; lyDo: string | null } {
+  if (b.status === "CANCELED") return { duoc: true, lyDo: null };
+  if (b.status !== "FAILED" || !b.targets.every((t) => !t.externalPostId && ["FAILED", "CANCELED", "SKIPPED"].includes(t.status))) return { duoc: false, lyDo: null };
+  for (const t of b.targets) {
+    if (t.status !== "FAILED") continue;
+    const an = suaKenhLoiAnToan(t.connection.platform, t, lanGui.get(t.id) ?? []);
+    if (!an.duoc) return { duoc: false, lyDo: `Không về nháp được — kênh “${t.connection.name}”: ${an.lyDo}` };
+  }
+  return { duoc: true, lyDo: null };
+}
+
+/**
+ * QA 0.25.0 (QĐ-243): các kênh lỗi ĐÃ SỬA (chờ đăng lại) mà bản sửa CẦN DUYỆT trước khi đăng: bài phải duyệt, hoặc người sửa
+ * cuối không có quyền đăng (`mxh.update`). Bản sửa của thực tập sinh bị trả lại / rút → không ai "Đăng lại" được (kể cả người có
+ * quyền đăng) tới khi gửi duyệt lại và được duyệt; trước đây chỉ chặn khi Cấu hình bắt duyệt.
+ */
+export async function kenhSuaCanDuyet(nc: NguCanh, b: { createdByType: string }, ds: readonly { id: string; status: string; retryRequested: boolean; overrideUpdatedBy: string | null }[]): Promise<Set<string>> {
+  const sua = ds.filter((t) => t.status === "FAILED" && t.retryRequested);
+  if (!sua.length) return new Set();
+  if (await canDuyet(nc, b)) return new Set(sua.map((t) => t.id));
+  const coQuyenDang = new Set(await nguoiGiuQuyen(nc.tx, "mxh.update", true));
+  return new Set(sua.filter((t) => !t.overrideUpdatedBy || !coQuyenDang.has(t.overrideUpdatedBy)).map((t) => t.id));
 }
 
 export function batBuocChuyen(b: { status: string }, sang: TrangThaiBai, viec: string) {
@@ -199,13 +226,14 @@ export async function chiTietBai(nc: NguCanh, id: string) {
   const loiMotPhan = st === "FAILED" || st === "PARTIALLY_FAILED";
   const coKenhChoDangLai = b.targets.some((t) => t.status === "FAILED" && t.retryRequested);
   const phaiDuyetKenhLoi = phaiDuyet || !update;
+  const canDuyetLai = loiMotPhan ? await kenhSuaCanDuyet(nc, b, b.targets) : new Set<string>();
   const lanGui = loiMotPhan ? await lanGuiCuaKenh(nc, b.targets.filter((t) => t.status === "FAILED").map((t) => t.id)) : new Map<string, string[]>();
   const quyenKenh = Object.fromEntries(b.targets.map((t) => {
     const an = t.status === "FAILED" ? suaKenhLoiAnToan(t.connection.platform, t, lanGui.get(t.id) ?? []) : { duoc: false, lyDo: null };
     return [t.id, {
       suaKenhLoi: soan && loiMotPhan && t.status === "FAILED" && an.duoc,
       lyDoKhongSua: soan && loiMotPhan && t.status === "FAILED" && !an.duoc ? an.lyDo : null,
-      dangLaiKenh: update && loiMotPhan && t.status === "FAILED" && !(t.retryRequested && phaiDuyetKenhLoi),
+      dangLaiKenh: update && loiMotPhan && t.status === "FAILED" && !(t.retryRequested && phaiDuyetKenhLoi) && !canDuyetLai.has(t.id),
     }];
   }));
   return {
@@ -225,10 +253,10 @@ export async function chiTietBai(nc: NguCanh, id: string) {
       lyDoKhongDuyet: st === "PENDING_APPROVAL" && !duyet.ok ? duyet.lyDo : null,
       dang: update && (st === "DRAFT" || st === "APPROVED") && (!phaiDuyet || st === "APPROVED"),
       huyLich: update && st === "SCHEDULED",
-      dangLai: update && (st === "FAILED" || st === "PARTIALLY_FAILED") && !(coKenhChoDangLai && phaiDuyetKenhLoi),
+      dangLai: update && (st === "FAILED" || st === "PARTIALLY_FAILED") && !(coKenhChoDangLai && phaiDuyetKenhLoi) && canDuyetLai.size === 0,
       /** 0.25.0 (QĐ-234): gửi duyệt lại các kênh lỗi đã sửa. */
-      guiDuyetKenhLoi: soan && loiMotPhan && coKenhChoDangLai && phaiDuyetKenhLoi,
-      veNhap: soan && veNhapDuoc(b),
+      guiDuyetKenhLoi: soan && loiMotPhan && coKenhChoDangLai && (phaiDuyetKenhLoi || canDuyetLai.size > 0),
+      veNhap: soan && veNhapDuoc(b, lanGui).duoc,
       xoa: (coQuyen(nc.hoSo, "mxh.delete") || (b.createdBy === nc.hoSo.userId && coQuyen(nc.hoSo, "mxh.create"))) && (st === "DRAFT" || st === "CANCELED"),
       dinhKem: soan && (st === "DRAFT" || st === "CANCELED"),
     },
@@ -630,8 +658,9 @@ export async function dangLai(nc: NguCanh, id: string, bayGio: Date = new Date()
   }
   // 0.25.0 (QĐ-234): kênh đã sửa nội dung riêng mà bài phải duyệt → không đăng lại khi chưa duyệt lại.
   const daSua = loi.filter((t) => t.retryRequested);
-  if (daSua.length && (await canDuyet(nc, b))) {
-    throw new LoiNghiepVu(`Kênh ${daSua.map((t) => `“${t.connection.name}”`).join(", ")} đã sửa nội dung — phải được duyệt lại trước khi đăng (bấm “Gửi duyệt lại kênh lỗi”).`, 409, "can-duyet");
+  const canDuyetLai = await kenhSuaCanDuyet(nc, b, loi);
+  if (canDuyetLai.size) {
+    throw new LoiNghiepVu(`Kênh ${daSua.filter((t) => canDuyetLai.has(t.id)).map((t) => `“${t.connection.name}”`).join(", ")} đã sửa nội dung — phải được duyệt lại trước khi đăng (bấm “Gửi duyệt lại kênh lỗi”).`, 409, "can-duyet");
   }
   const kieu = daSua.length ? await kiemNoiDung(b, new Set(daSua.map((t) => t.id))) : new Map<string, KieuNoiDung>();
   await kiemHanMucReels(nc, { ...b, targets: loi }, kieu, bayGio);
@@ -652,8 +681,9 @@ export async function veNhap(nc: NguCanh, id: string) {
   const b = await layBai(nc, id, true);
   if (!duocSoan(nc, b)) throw new LoiThieuQuyen("mxh.update", { objectType: "social_post", objectId: id });
   batBuocChuyen(b, "DRAFT", "chuyển về nháp");
-  if (!veNhapDuoc(b)) {
-    throw new LoiNghiepVu("Chỉ bài đã hủy, hoặc bài lỗi mà chưa kênh nào nhận bài (không có mã bài trên nền tảng), mới chuyển về nháp để sửa. Bài đã lên một phần: tạo bài mới cho kênh lỗi.", 409, "sai-trang-thai");
+  const vn = veNhapDuoc(b, b.status === "FAILED" ? await lanGuiCuaKenh(nc, b.targets.filter((t) => t.status === "FAILED").map((t) => t.id)) : new Map());
+  if (!vn.duoc) {
+    throw new LoiNghiepVu(vn.lyDo ?? "Chỉ bài đã hủy, hoặc bài lỗi mà chưa kênh nào nhận bài (không có mã bài trên nền tảng), mới chuyển về nháp để sửa. Bài đã lên một phần: sửa / đăng lại riêng từng kênh lỗi.", 409, "sai-trang-thai");
   }
   // Giữ loại lỗi cũ trên kênh: lần đăng sau sẽ đối soát trước khi gửi (QĐ-200).
   await nc.tx.socialPostTarget.updateMany({ where: { postId: id, status: { in: ["CANCELED", "FAILED"] } }, data: { status: "PENDING", nextAttemptAt: null } });
