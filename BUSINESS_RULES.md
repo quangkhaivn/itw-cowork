@@ -1021,7 +1021,7 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 | MXH-13 | Sửa nội dung / kênh / ảnh chỉ khi Nháp, Đã duyệt, Đã hủy; sửa bài đã duyệt → về Nháp, mất duyệt | [SV] · [TH] |
 | MXH-14 | Ảnh được **chụp** vào bài (`social_post_media`) lúc gửi duyệt / hẹn giờ / đăng — ảnh thêm / gỡ sau đó không lọt vào bài đã duyệt | [SV] |
 | MXH-15 | **Khóa lặp lại**: tạo bài kèm `Idempotency-Key` → gửi lại cùng khóa trả bài cũ, không tạo bài thứ hai (duy nhất theo doanh nghiệp) | [SV] · [DB] · [TH] |
-| MXH-16 | **Đăng ngay** / **Hẹn giờ** cần `mxh.update`; giờ hẹn phải ở tương lai, trong vòng một năm; giờ lưu UTC, nhập / hiển thị giờ Việt Nam | [SV] |
+| MXH-16 | **Đăng ngay** / **Hẹn giờ** cần `mxh.update`; giờ hẹn phải ở tương lai, trong vòng một năm; giờ lưu UTC, nhập / hiển thị giờ Việt Nam (ô nhập luôn hiểu +07:00, không theo múi giờ trình duyệt — QA 0.23.0) | [SV] |
 | MXH-17 | **Hủy lịch** chỉ khi chưa kênh nào bắt đầu đăng | [SV] khóa dòng kênh · [TH] |
 | MXH-18 | **Đăng lại** chỉ các kênh Lỗi (lượt mới), kênh đã đăng không bị đụng; kênh cần nhập lại phải nhập lại trước | [SV] · [TH] |
 | MXH-19 | Xóa bài: chỉ Nháp / Đã hủy, xóa mềm | [SV] |
@@ -1043,13 +1043,13 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 
 | # | Luật | Chặn ở |
 |---|---|---|
-| MXH-30 | Chỉ "Đã đăng" khi nền tảng trả **mã bài** VÀ **đọc lại** khớp (mã, đã công khai, slug, tiêu đề, có permalink). Có permalink đã xác minh mới hiện link | [WK] · [DB] trigger `kiem_target_da_dang` · [TH] |
+| MXH-30 | Chỉ "Đã đăng" khi nền tảng trả **mã bài** VÀ **đọc lại** khớp (mã, đã công khai, slug, tiêu đề, có permalink). Tiêu đề so sau khi bỏ thẻ + giải mã ký tự HTML (WordPress lọc kses với tài khoản Tác giả — QA 0.23.0). Có permalink đã xác minh mới hiện link | [WK] · [DB] trigger `kiem_target_da_dang` · [TH] |
 | MXH-31 | Đã đăng thì không lùi trạng thái, không đổi mã bài nền tảng | [DB] trigger |
 | MXH-32 | Phân loại lỗi: RETRYABLE (5xx, 429, mất mạng TRƯỚC khi gửi xong) → thử lại 30 s, 1, 2, 4 phút… tới `mxh.so_lan_thu_toi_da`; PERMANENT (4xx khác: sai định dạng, vi phạm) → Lỗi ngay; NEEDS_REAUTH (401 / 403) → Lỗi + kênh cần nhập lại; UNKNOWN (hết giờ / đứt SAU khi đã gửi, 2xx không có mã bài) → **đối soát** | [WK] · [TH] |
 | MXH-33 | Đối soát: chờ `mxh.cho_doi_soat_giay`, tìm bài theo **khóa đối soát** (slug duy nhất theo kênh-bài): thấy → xác minh; không thấy → đăng lại. Mọi lần đăng lại đều đối soát TRƯỚC — không bao giờ sinh bài trùng | [WK] · [TH] |
-| MXH-34 | Hai worker không nhận cùng một kênh-bài (`FOR UPDATE SKIP LOCKED`); kết quả ghi có điều kiện "đúng worker đang giữ". Lượt "Đang đăng" quá `mxh.phut_ket_dang` (worker chết) → đối soát, không đăng lại mù | [WK] · [TH] |
+| MXH-34 | Hai worker không nhận cùng một kênh-bài (`FOR UPDATE SKIP LOCKED`); kết quả ghi có điều kiện "đúng worker đang giữ". Mốc giữ khóa làm mới khi **bắt đầu** từng việc (QA 0.23.0). Lượt "Đang đăng" quá max(`mxh.phut_ket_dang`, 5 × `mxh.han_goi_giay`) (worker chết) → đối soát, không đăng lại mù | [WK] · [TH] |
 | MXH-35 | Bài hẹn giờ lệch ≤ 60 giây (vòng worker 15 giây) | [WK] |
-| MXH-36 | Mọi lần gọi nền tảng ghi `social_publish_attempts` (chỉ ghi thêm, không token / mật khẩu); xem ở trang bài → Nhật ký gọi nền tảng | [WK] · [DB] |
+| MXH-36 | Mọi lần gọi nền tảng ghi `social_publish_attempts` (chỉ ghi thêm, không token / mật khẩu); xem ở trang bài → Nhật ký gọi nền tảng. Thông báo / mã lỗi của nền tảng được **che bí mật** nếu nền tảng nhại lại (QA 0.23.0); mã lỗi cắt 100 ký tự | [WK] · [DB] |
 | MXH-37 | Kênh-bài Lỗi → thông báo cho người soạn kèm hướng dẫn theo loại lỗi | [WK] |
 
 ### Ảnh công khai, thông tin app
