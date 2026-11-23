@@ -35,7 +35,9 @@ export interface ViecNhan {
 export async function nhanViecDang(tenantId: string, workerId: string, bayGio: Date, gioiHan = 5): Promise<ViecNhan[]> {
   return voiTenant(tenantId, async (tx) => {
     const cfg = await docCauHinhMxh(tx);
-    const moc = new Date(bayGio.getTime() - cfg.phutKetDang * 60_000);
+    // QA 0.23.0: một lượt hợp lệ có thể gọi nền tảng 4 lần (đối soát, ảnh, đăng, đọc lại), mỗi lần tới `mxh.han_goi_giay` —
+    // ngưỡng "kẹt" không được ngắn hơn thế, kẻo worker khác đối soát + đăng lại trong lúc lượt này còn đang gửi (bài trùng).
+    const moc = new Date(bayGio.getTime() - Math.max(cfg.phutKetDang * 60_000, 5 * cfg.hanGoiMs));
     // Lượt kẹt: PUBLISHING quá lâu → đối soát ngay; VERIFYING đã nhận mà kẹt → mở lại cho lượt sau.
     await tx.$executeRaw`
       UPDATE social_post_targets SET status = 'VERIFYING', error_class = 'UNKNOWN', error_code = 'ket-dang',
@@ -194,6 +196,11 @@ async function docMedia(d: DuLieuViec): Promise<TepMedia[]> {
 
 /** Xử lý một việc đã nhận. Không bao giờ ném ra ngoài (lỗi bất ngờ → ghi thành lỗi tạm, thử lại có giãn cách). */
 export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNhan, bayGio: Date, env: NodeJS.ProcessEnv = process.env): Promise<KetQuaXuLy> {
+  // QA 0.23.0: làm mới mốc giữ khóa lúc BẮT ĐẦU xử lý (không phải lúc nhận cả lô): việc thứ 5 của lô có thể bắt đầu sau
+  // nhiều phút; giữ mốc lúc nhận thì worker khác coi là "kẹt", đối soát không thấy rồi đăng lại trong lúc lượt này đang gửi.
+  const conGiu = await voiTenant(tenantId, (tx) => tx.$executeRaw`UPDATE social_post_targets SET locked_at = ${bayGio}
+    WHERE id = ${viec.targetId}::uuid AND locked_by = ${workerId} AND status IN ('PUBLISHING', 'VERIFYING')`);
+  if (conGiu === 0) return { targetId: viec.targetId, ketQua: "bo-qua" };
   const d = await voiTenant(tenantId, (tx) => napViec(tx, viec.targetId));
   if (!d || d.target.lockedBy !== workerId) return { targetId: viec.targetId, ketQua: "bo-qua" };
   const nhatKy: BuocGoi[] = [];
@@ -273,10 +280,13 @@ export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNha
   }
 }
 
-/** Một vòng cho một doanh nghiệp: nhận việc rồi xử lý lần lượt. */
-export async function dangBaiMotVong(tenantId: string, workerId: string, bayGio: Date, gioiHan = 5, env: NodeJS.ProcessEnv = process.env): Promise<KetQuaXuLy[]> {
+/**
+ * Một vòng cho một doanh nghiệp: nhận việc rồi xử lý lần lượt. `dongHo` (worker thật: giờ hiện tại) cho mốc bắt đầu TỪNG
+ * việc — bài thử không truyền thì mọi việc dùng `bayGio`.
+ */
+export async function dangBaiMotVong(tenantId: string, workerId: string, bayGio: Date, gioiHan = 5, env: NodeJS.ProcessEnv = process.env, dongHo?: () => Date): Promise<KetQuaXuLy[]> {
   const viec = await nhanViecDang(tenantId, workerId, bayGio, gioiHan);
   const kq: KetQuaXuLy[] = [];
-  for (const v of viec) kq.push(await xuLyViec(tenantId, workerId, v, bayGio, env));
+  for (const v of viec) kq.push(await xuLyViec(tenantId, workerId, v, dongHo ? dongHo() : bayGio, env));
   return kq;
 }

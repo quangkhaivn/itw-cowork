@@ -105,6 +105,27 @@ async function goi(
   }
 }
 
+const THUC_THE: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+
+/**
+ * Tiêu đề để so khi đọc lại: bỏ thẻ HTML, giải mã thực thể (`&amp;`, `&#8211;`, `&#x27;`…), gộp khoảng trắng. WordPress lọc
+ * kses tiêu đề của người không có `unfiltered_html` nên bản lưu có thể khác bản gửi mà vẫn là cùng một tiêu đề.
+ */
+export function chuanHoaTieuDeWp(s: string): string {
+  return s
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, t: string) => {
+      if (t[0] === "#") {
+        const n = t[1] === "x" || t[1] === "X" ? Number.parseInt(t.slice(2), 16) : Number(t.slice(1));
+        return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m;
+      }
+      return THUC_THE[t.toLowerCase()] ?? m;
+    })
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Tên tệp an toàn cho tiêu đề Content-Disposition. */
 function tenTepAnToan(ten: string): string {
   const s = ten.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
@@ -214,7 +235,9 @@ export const wordpress: SocialConnector = {
     if (String(b.id) !== externalId) sai.push("mã bài");
     if (b.status !== "publish") sai.push(`trạng thái (${String(b.status)})`);
     if (typeof b.slug !== "string" || !b.slug.startsWith(nd.khoaDoiSoat)) sai.push("đường dẫn (slug)");
-    if (nd.tieuDe && typeof b.title?.raw === "string" && b.title.raw !== nd.tieuDe) sai.push("tiêu đề");
+    // QA 0.23.0: tài khoản không có quyền unfiltered_html (Tác giả — vai trò khuyến nghị) bị WordPress lọc kses tiêu đề
+    // ("A & B" lưu thành "A &amp; B", thẻ lạ bị gỡ) → so sau khi chuẩn hóa, không so nguyên văn (bài đã lên mà báo Lỗi).
+    if (nd.tieuDe && typeof b.title?.raw === "string" && chuanHoaTieuDeWp(b.title.raw) !== chuanHoaTieuDeWp(nd.tieuDe)) sai.push("tiêu đề");
     if (typeof b.link !== "string" || !/^https?:\/\//.test(b.link)) sai.push("permalink");
     if (sai.length) {
       nhatKy[nhatKy.length - 1] = { ...nhatKy[nhatKy.length - 1], ketQua: "permanent", loaiLoi: "PERMANENT", thongBao: `Đọc lại không khớp: ${sai.join(", ")}.` };

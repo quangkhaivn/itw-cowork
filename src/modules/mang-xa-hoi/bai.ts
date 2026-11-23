@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { NguCanh } from "@/lib/api";
 import type { ClientTenant } from "@/lib/db";
+import { taoCsv } from "@/lib/csv";
 import { LoiKhongTimThay, LoiNghiepVu, laLoiTrung } from "@/lib/loi";
 import { batBuocQuyen, coQuyen, idNguoiTrongPhamVi, LoiThieuQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
@@ -574,10 +575,10 @@ export async function xuatCsvBai(nc: NguCanh) {
     take: 5000,
   });
   await nc.kiemToan({ action: "xuat-csv", objectType: "social_post", after: { soDong: ds.length } });
-  const q = (s: unknown) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-  const dong = ["Tiêu đề,Trạng thái,Hẹn lúc,Kênh,Trạng thái kênh,Link đã xác minh"];
+  // QA 0.23.0: qua taoCsv — chống chèn công thức (CSV-01): tiêu đề "=HYPERLINK(…)" không được chạy khi mở bằng Excel.
+  const dong: (string | null)[][] = [];
   for (const b of ds) for (const t of b.targets.length ? b.targets : [null]) {
-    dong.push([q(b.title ?? b.body.slice(0, 80)), q(b.status), q(b.scheduledAt?.toISOString() ?? ""), q(t?.connection.name ?? ""), q(t?.status ?? ""), q(t?.status === "PUBLISHED" ? t.externalUrl : "")].join(","));
+    dong.push([b.title ?? b.body.slice(0, 80), b.status, b.scheduledAt?.toISOString() ?? "", t?.connection.name ?? "", t?.status ?? "", t?.status === "PUBLISHED" ? t.externalUrl : ""]);
   }
-  return "﻿" + dong.join("\r\n");
+  return taoCsv(["Tiêu đề", "Trạng thái", "Hẹn lúc", "Kênh", "Trạng thái kênh", "Link đã xác minh"], dong);
 }

@@ -185,8 +185,10 @@ ANTHROPIC_API_KEY=
   Write-Host 'Đã tạo .env với mật khẩu và khoá ngẫu nhiên.'
 } else { Write-Host '.env đã có — giữ nguyên.' }
 # 0.23.0 (QĐ-201): .env cũ chưa có SOCIAL_MASTER_KEY thì thêm khóa ngẫu nhiên; KHÔNG BAO GIỜ đè khóa đã có.
-if (-not (Select-String -Path $TepEnv -Pattern '^SOCIAL_MASTER_KEY=.+' -Quiet)) {
-  $cu = (Get-Content $TepEnv | Where-Object { $_ -notmatch '^SOCIAL_MASTER_KEY=\s*$' }) -join "`n"
+# QA 0.23.0: giá trị rỗng / chỉ cặp nháy ("") là CHƯA có khóa; đọc .env bằng UTF-8 (Windows PowerShell 5.1 mặc định đọc
+# theo bảng mã ANSI → ghi lại làm hỏng mọi chữ có dấu trong .env).
+if (-not (Select-String -Path $TepEnv -Encoding UTF8 -CaseSensitive -Pattern '^SOCIAL_MASTER_KEY=["'']?[A-Za-z0-9+/]' -Quiet)) {
+  $cu = (Get-Content -Encoding UTF8 $TepEnv | Where-Object { $_ -notmatch '^SOCIAL_MASTER_KEY=\s*(""|'''')?\s*$' }) -join "`n"
   GhiUtf8 $TepEnv ($cu.TrimEnd() + "`n# 0.23.0 — khóa chủ mã hóa bí mật mạng xã hội (tự sinh). Sao lưu cùng .env.`nSOCIAL_MASTER_KEY=$(NgauNhienB64 32)`n") $false
   Write-Host 'Đã thêm SOCIAL_MASTER_KEY vào .env (khóa mới, ngẫu nhiên).'
 }

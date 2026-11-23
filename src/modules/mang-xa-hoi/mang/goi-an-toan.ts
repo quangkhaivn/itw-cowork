@@ -175,9 +175,13 @@ export async function goiAnToan(yc: YeuCauAnToan, phanGiai?: (h: string) => Prom
     throw new LoiGoiMang("giao-thuc", "Địa chỉ không hợp lệ.", false);
   }
   const goc = url;
+  // QA 0.23.0: hạn giờ tính cho CẢ lần gọi (kể cả chuyển hướng cùng máy) — không nhân lên theo số lần chuyển hướng.
+  const hetLuc = Date.now() + yc.hanMs;
   for (let lan = 0; lan <= 3; lan++) {
     const dc = await kiemDiaChi(url, phanGiai);
-    const ph = await motLan(url, dc, yc);
+    const conLai = hetLuc - Date.now();
+    if (conLai <= 0) throw new LoiGoiMang("het-gio-truoc-gui", "Quá hạn kết nối tới máy chủ.", false);
+    const ph = await motLan(url, dc, { ...yc, hanMs: conLai });
     if (ph.status < 300 || ph.status >= 400 || !ph.tieuDe.location) return ph;
     let toi: URL;
     try {

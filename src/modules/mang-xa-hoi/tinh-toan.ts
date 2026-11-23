@@ -187,6 +187,19 @@ export function chuanHoaDiaChiSite(nhap: string, choPhepLocalhost = false): DiaC
   return { hopLe: true, url: `${u.protocol}//${u.host}${duong}` };
 }
 
+/**
+ * Giá trị ô `datetime-local` ("yyyy-mm-ddTHH:mm[:ss]") hiểu là GIỜ VIỆT NAM (+07:00, không có giờ mùa hè) → ISO UTC.
+ * QA 0.23.0 (MXH-16): trước đây dùng múi giờ của trình duyệt — máy đặt múi giờ khác (UTC, đi công tác) hẹn lệch vài giờ.
+ * Chuỗi đã có múi giờ thì đọc nguyên. Sai dạng → null.
+ */
+export function gioVietNamSangIso(v: string): string | null {
+  const s = v.trim();
+  if (!s) return null;
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(:\d{2}(?:\.\d{1,3})?)?$/.exec(s);
+  const d = m ? new Date(`${m[1]}T${m[2]}${m[3] ?? ":00"}+07:00`) : /(Z|[+-]\d{2}:\d{2})$/.test(s) ? new Date(s) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+}
+
 /** 4 ký tự cuối để hiện thay cho bí mật (không bao giờ hiện cả chuỗi). */
 export function bonKyTuCuoi(biMat: string): string {
   const s = biMat.replace(/\s+/g, "");

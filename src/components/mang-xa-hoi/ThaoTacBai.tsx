@@ -3,18 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGoiApi } from "@/components/ui/goi-api";
+import { gioVietNamSangIso } from "@/modules/mang-xa-hoi/tinh-toan";
 
 export interface QuyenBai {
   sua: boolean; guiDuyet: boolean; rutDuyet: boolean; duyet: boolean; lyDoKhongDuyet: string | null; dang: boolean; huyLich: boolean;
   dangLai: boolean; veNhap: boolean; xoa: boolean;
 }
 
-/** Giờ địa phương của trình duyệt (giờ VN) → ISO có múi giờ. */
-function sangIso(v: string): string | null {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
+/** Ô datetime-local là giờ Việt Nam (không theo múi giờ của trình duyệt) → ISO có múi giờ. */
+const sangIso = gioVietNamSangIso;
 
 /** Các nút thao tác trên một bài — hiện theo quyền máy chủ trả về; máy chủ vẫn kiểm lại mọi thao tác. */
 export default function ThaoTacBai({ id, quyen, phaiDuyet }: { id: string; quyen: QuyenBai; phaiDuyet: boolean }) {
