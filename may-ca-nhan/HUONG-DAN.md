@@ -2,19 +2,19 @@
 
 > **Cách nhanh nhất, không cần cài Git, Node.js hay Docker:** bấm đúp **`CAI-NHANH-TGTH-COWORK.bat`**. Bộ cài tự tải mọi thứ vào `L:\TGTH-Cowork` (không có ổ L: thì vào thư mục người dùng), dựng xong thì mở phần mềm. Đã cài bản cũ thì bấm lại tệp này để cập nhật: dữ liệu thử và `.env` được giữ. Phần dưới đây là cách cài bằng Docker Desktop.
 
-Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.23`) chạy riêng trên **một máy Windows**, với **dữ liệu thử DEMO**. Nó không kết nối và không đụng gì tới bản đang chạy thật ở thegioitinhoc.io.vn.
+Bộ này dựng TGTH Cowork (bản trên nhánh `release/0.24`) chạy riêng trên **một máy Windows**, với **dữ liệu thử DEMO**. Nó không kết nối và không đụng gì tới bản đang chạy thật ở thegioitinhoc.io.vn.
 
 - **Cơ sở dữ liệu**: PostgreSQL 16 và Redis 7 chạy trong Docker Desktop. Chỉ máy này truy cập được, qua cổng 55432 và 56379.
 - **Phần mềm**: ứng dụng Next.js và worker chạy bằng Node.js. Mở trong trình duyệt tại **http://127.0.0.1:3000**.
 
 ## 0. Đã tải mã nguồn về máy rồi (không tải lại)
 
-Mã nguồn đã tải từ GitHub (nhánh `release/0.23` → **Code → Download ZIP**) và giải nén — chọn một trong hai:
+Mã nguồn đã tải từ GitHub (nhánh `release/0.24` → **Code → Download ZIP**) và giải nén — chọn một trong hai:
 
 - **Máy đã có Node.js 22 và Docker Desktop** (nhanh nhất): mở Docker Desktop, đợi *Engine running*, rồi trong thư mục `may-ca-nhan` của mã nguồn bấm đúp **`CAI-DAT.bat`**. Cài ngay trong thư mục mã nguồn đó (không tải lại mã, không tải Node.js / PostgreSQL); CSDL chạy trong Docker. Xong thì mở bằng **`CHAY.bat`**, hoặc **`CHAY-MANG-NOI-BO.bat`** khi cần nối máy chấm công vân tay (cửa sổ hiện IP để nhập vào máy). Tắt bằng `DUNG.bat`.
 - **Máy chưa có Node.js / Docker**: bấm đúp **`CAI-TU-MA-NGUON-DA-TAI.bat`** — chép mã từ thư mục này vào `L:\TGTH-Cowork` (hoặc thư mục người dùng), tự tải Node.js + PostgreSQL bản gọn.
 
-Chưa tải mã nguồn: dùng **`CAI-TGTH-COWORK-0.23.bat`** (tự tải bản 0.23 mới nhất, báo phiên bản trước khi cài).
+Chưa tải mã nguồn: dùng **`CAI-TGTH-COWORK-0.24.bat`** (tự tải bản 0.24 mới nhất, báo phiên bản trước khi cài).
 
 ## 1. Cài 3 phần mềm (một lần)
 
@@ -63,7 +63,7 @@ Mở thư mục `TGTH-Cowork\may-ca-nhan`:
 | **`CAI-DAT.bat`** | Chạy lại sau mỗi lần cập nhật mã. Dữ liệu và `.env` được giữ nguyên. |
 | **`XOA-DU-LIEU-THU.bat`** | Xoá sạch dữ liệu thử để cài lại từ đầu. Phải gõ `XOA` để xác nhận. |
 
-**Cập nhật bản mới:** bấm đúp lại `TAI-VE-VA-CAI-DAT.bat`. Tệp này lấy mã mới nhất của nhánh `release/0.23` rồi cài lại.
+**Cập nhật bản mới:** bấm đúp lại `TAI-VE-VA-CAI-DAT.bat`. Tệp này lấy mã mới nhất của nhánh `release/0.24` rồi cài lại.
 
 ## 4b. Thử phần Nhân sự (0.19 → 0.21): chấm công, giao việc, đánh giá, thực tập, lương
 

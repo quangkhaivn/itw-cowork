@@ -1,34 +1,34 @@
 @echo off
 rem ============================================================================
-rem  CAI DAT / CAP NHAT TGTH COWORK - BAN 0.23 (nhanh release/0.23 tren GitHub)
+rem  CAI DAT / CAP NHAT TGTH COWORK - BAN 0.24 (nhanh release/0.24 tren GitHub)
 rem  Chi can Windows 10/11 64-bit va mang Internet. Khong can Git, Node.js, Docker.
 rem  Mac dinh cai vao L:\TGTH-Cowork (khong co o L: thi vao thu muc nguoi dung).
-rem  Da cai ban cu (0.17 - 0.22): chay tep nay de len 0.23, du lieu thu va .env duoc giu.
-rem  Cai vao thu muc khac:  CAI-TGTH-COWORK-0.23.bat -ThuMuc "D:\TGTH-Cowork"
+rem  Da cai ban cu (0.17 - 0.23): chay tep nay de len 0.24, du lieu thu va .env duoc giu.
+rem  Cai vao thu muc khac:  CAI-TGTH-COWORK-0.24.bat -ThuMuc "D:\TGTH-Cowork"
 rem ============================================================================
 setlocal
-title Cai dat TGTH Cowork 0.23
-set "NHANH=release/0.23"
-set "GOC=https://raw.githubusercontent.com/quangkhaivn/itw-cowork/release/0.23"
-set "TEP=%TEMP%\cai-tgth-cowork-0.23.ps1"
+title Cai dat TGTH Cowork 0.24
+set "NHANH=release/0.24"
+set "GOC=https://raw.githubusercontent.com/quangkhaivn/itw-cowork/release/0.24"
+set "TEP=%TEMP%\cai-tgth-cowork-0.24.ps1"
 
 echo.
 echo ==================================================================
-echo   CAI DAT TGTH COWORK - BAN 0.23   ^(nhanh %NHANH%^)
+echo   CAI DAT TGTH COWORK - BAN 0.24   ^(nhanh %NHANH%^)
 echo ==================================================================
 echo.
 echo [1/3] Kiem tra phien ban tren GitHub...
-powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { $v = ((Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 '%GOC%/package.json').Content | ConvertFrom-Json).version; if (-not $v.StartsWith('0.23')) { Write-Host ('   Nhanh tren GitHub dang la ban ' + $v + ', khong phai 0.23.') -ForegroundColor Red; exit 2 }; Write-Host ('   Se cai phien ban: ' + $v) -ForegroundColor Green } catch { Write-Host ('   Khong doc duoc GitHub: ' + $_.Exception.Message) -ForegroundColor Red; exit 1 }"
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { $v = ((Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 '%GOC%/package.json').Content | ConvertFrom-Json).version; if (-not $v.StartsWith('0.24')) { Write-Host ('   Nhanh tren GitHub dang la ban ' + $v + ', khong phai 0.24.') -ForegroundColor Red; exit 2 }; Write-Host ('   Se cai phien ban: ' + $v) -ForegroundColor Green } catch { Write-Host ('   Khong doc duoc GitHub: ' + $_.Exception.Message) -ForegroundColor Red; exit 1 }"
 if errorlevel 2 goto sai_ban
 if errorlevel 1 goto loi_mang
 
 echo.
-echo [2/3] Tai bo cai moi nhat cua ban 0.23...
+echo [2/3] Tai bo cai moi nhat cua ban 0.24...
 if exist "%TEP%" del /f /q "%TEP%" >nul 2>nul
 powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; for ($i = 1; $i -le 3; $i++) { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 '%GOC%/may-ca-nhan/cai-nhanh.ps1' -OutFile '%TEP%'; exit 0 } catch { Write-Host ('   Lan ' + $i + ' hong: ' + $_.Exception.Message) -ForegroundColor Yellow; Start-Sleep -Seconds (3 * $i) } }; exit 1"
 if errorlevel 1 goto loi_mang
 if not exist "%TEP%" goto loi_mang
-findstr /c:"release/0.23" "%TEP%" >nul
+findstr /c:"release/0.24" "%TEP%" >nul
 if errorlevel 1 goto sai_ban
 echo    Da tai bo cai ^(nhanh %NHANH%^).
 
@@ -58,7 +58,7 @@ goto ket_thuc
 
 :sai_ban
 echo.
-echo LOI: bo cai tai ve khong phai ban 0.23. Bao nguoi ho tro.
+echo LOI: bo cai tai ve khong phai ban 0.24. Bao nguoi ho tro.
 goto loi_chung
 
 :loi_mang
