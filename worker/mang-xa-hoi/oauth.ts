@@ -32,7 +32,8 @@ interface UngVien {
 
 export async function doiMaOAuthDaXep(tenantId: string, bayGio: Date, env: NodeJS.ProcessEnv = process.env): Promise<number> {
   const ds = await voiTenant(tenantId, async (tx) => ({
-    yc: await tx.socialOauthRequest.findMany({ where: { status: "CHO_DOI_MA" }, take: 5, orderBy: { callbackAt: "asc" } }),
+    // QA 0.24.0 (QĐ-220): chỉ nhận yêu cầu CÒN bản niêm phong mã — dòng đã bị worker khác "nhận" (xóa bản niêm phong) thì bỏ.
+    yc: await tx.socialOauthRequest.findMany({ where: { status: "CHO_DOI_MA", ciphertext: { not: null } }, take: 5, orderBy: { callbackAt: "asc" } }),
     hanMs: (await docCauHinhMxh(tx)).hanGoiMs,
   }));
   let dem = 0;
@@ -50,6 +51,17 @@ export async function doiMaOAuthDaXep(tenantId: string, bayGio: Date, env: NodeJ
     }
     if (!yc.ciphertext || !yc.iv || !yc.authTag || !yc.wrappedKey || !yc.keyVersion) {
       await loi("Thiếu mã cấp quyền.");
+      continue;
+    }
+    // QA 0.24.0 (QĐ-220): NHẬN mã trước khi gọi nền tảng — xóa bản niêm phong có điều kiện (một câu UPDATE). Hai worker
+    // cùng thấy dòng này thì chỉ một bên đổi mã: mã OAuth dùng một lần, đổi lần hai bị từ chối và Google có thể THU HỒI
+    // luôn token đã cấp từ mã đó (RFC 6749 mục 4.1.2). Worker chết sau bước này → dọn dẹp đánh LOI (donDepOAuth).
+    const nhan = await voiTenant(tenantId, (tx) => tx.socialOauthRequest.updateMany({
+      where: { id: yc.id, status: "CHO_DOI_MA", ciphertext: { not: null } },
+      data: { ciphertext: null, iv: null, authTag: null, wrappedKey: null, keyVersion: null },
+    }));
+    if (nhan.count !== 1) {
+      dem--;
       continue;
     }
     let code: string;
@@ -117,6 +129,12 @@ export async function doiMaOAuthDaXep(tenantId: string, bayGio: Date, env: NodeJ
     }
 
     await voiTenant(tenantId, async (tx) => {
+      // Ghi có điều kiện: yêu cầu đã bị dọn (quá hạn) / hủy trong lúc đổi mã thì không tạo kênh chờ chọn.
+      const xong = await tx.socialOauthRequest.updateMany({
+        where: { id: yc.id, status: "CHO_DOI_MA" },
+        data: { status: "DA_SAN_SANG", oauthSubject: subject, accountName: taiKhoan ? cauLoiGon(taiKhoan, 200) : null, missingScopes: quyenThieu, exchangedAt: bayGio },
+      });
+      if (xong.count !== 1) return;
       for (const u of uv) {
         const daCo = await tx.socialConnection.findFirst({ where: { platform: u.platform, externalId: u.externalId, disconnectedAt: null }, select: { id: true } });
         const connectionId = daCo?.id ?? crypto.randomUUID();
@@ -125,10 +143,6 @@ export async function doiMaOAuthDaXep(tenantId: string, bayGio: Date, env: NodeJ
           data: { tenantId, requestId: yc.id, platform: u.platform, externalId: u.externalId, name: cauLoiGon(u.name, 200), meta: u.meta as object, connectionId, existing: Boolean(daCo), ...bn, tokenExpiresAt: u.tokenExpiresAt },
         });
       }
-      await tx.socialOauthRequest.update({
-        where: { id: yc.id },
-        data: { status: "DA_SAN_SANG", oauthSubject: subject, accountName: taiKhoan ? cauLoiGon(taiKhoan, 200) : null, missingScopes: quyenThieu, exchangedAt: bayGio, ciphertext: null, iv: null, authTag: null, wrappedKey: null, keyVersion: null },
-      });
       await ghiKiemToan(tx, { action: "doi-ma-oauth", objectType: "social_oauth_request", objectId: yc.id, after: { nenTang: yc.provider, ketQua: "ok", soKenh: uv.length, quyenThieu, boi: "worker" } });
     }, { timeoutMs: 30_000 });
   }
@@ -139,6 +153,12 @@ export async function doiMaOAuthDaXep(tenantId: string, bayGio: Date, env: NodeJ
 export async function donDepOAuth(tenantId: string, bayGio: Date): Promise<void> {
   await voiTenant(tenantId, async (tx) => {
     await tx.socialOauthRequest.updateMany({ where: { status: "CHO_DONG_Y", expiresAt: { lt: bayGio } }, data: { status: "HET_HAN" } });
+    // QA 0.24.0 (QĐ-220): mã đã được một worker nhận (bản niêm phong đã xóa) mà quá 15 phút chưa xong — worker đó chết
+    // giữa lúc đổi mã. Không đổi lại được (mã dùng một lần) → LOI để người dùng bắt đầu lại.
+    await tx.socialOauthRequest.updateMany({
+      where: { status: "CHO_DOI_MA", ciphertext: null, callbackAt: { lt: new Date(bayGio.getTime() - HAN_DOI_MA_MS - 5 * 60_000) } },
+      data: { status: "LOI", errorMessage: "Máy nền dừng giữa lúc đổi mã cấp quyền — bắt đầu kết nối lại từ màn hình Kênh.", exchangedAt: bayGio },
+    });
     const cu = await tx.socialOauthRequest.findMany({ where: { status: "DA_SAN_SANG", exchangedAt: { lt: new Date(bayGio.getTime() - HAN_CHON_MS) } }, select: { id: true } });
     if (cu.length) {
       await tx.socialOauthCandidate.deleteMany({ where: { requestId: { in: cu.map((c) => c.id) } } });

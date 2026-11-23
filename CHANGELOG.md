@@ -4,7 +4,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 ## 0.25.0 (chưa phát hành) — Mạng xã hội: lịch nội dung, duyệt, AI viết bài
 
-Nền: 0.24.0. QĐ-230 → QĐ-239. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md` mục 14–16. Migration `20261126090001_mxh_lich_ai`.
+Nền: 0.24.0 (đã phát hành, gồm bản sửa QA QĐ-220 → QĐ-226). QĐ-230 → QĐ-239. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md` mục 14–16. Migration `20261126090001_mxh_lich_ai`.
 
 ### Thêm
 - **Lịch nội dung** (Mạng xã hội → Lịch nội dung): tháng / tuần theo giờ Việt Nam; bài nháp / chờ duyệt / đã duyệt / đã hẹn / đã đăng / lỗi / **cần kiểm tay**; lọc theo kênh, chiến dịch, người soạn; **kéo-thả hoặc sửa giờ để đổi lịch** — máy chủ kiểm: không đổi bài đã đăng / đang đăng / lỗi, giờ ở tương lai, YouTube ≤ hạn mức / ngày (cũng kiểm khi Hẹn giờ), Reels ≤ 30 / 24 giờ; bài đã hẹn đổi giờ không mất duyệt. Ngày dự kiến cho bài chưa hẹn giờ.
@@ -24,7 +24,7 @@ Nền: 0.24.0. QĐ-230 → QĐ-239. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.
 ### Kiểm thử
 - `npm run thu:mxh-lich-ai` (cuối chuỗi `thu:tich-hop`); bài thử đơn vị `mxh-ai-du-lieu.test.ts`, `mxh-lich-ai.test.ts`.
 
-## 0.24.0 (chưa phát hành) — Mạng xã hội: Facebook, Instagram, YouTube, Google Drive
+## 0.24.0 — 23/11/2026 — Mạng xã hội: Facebook, Instagram, YouTube, Google Drive
 
 Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-219. Hướng dẫn từng bước: `docs/HUONG-DAN-MANG-XA-HOI.md`. Mọi lệnh gọi Meta / Google viết theo tài liệu công khai và thử bằng máy chủ GIẢ — **chưa kiểm với API thật** (danh sách điểm cần kiểm trong báo cáo 0.24.0).
 
@@ -51,6 +51,14 @@ Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-219.
 - Proxy Next 16 đệm thân yêu cầu tối đa 10 MB theo mặc định → tệp đính kèm 10–20 MB bị cắt; nâng `proxyClientMaxBodySize` lên 25 MB (khớp nginx).
 - “Đã cấu hình” của app Meta không tính trường tùy chọn (Configuration ID).
 - Bài thử V8 của `thu:qa-mo-dan` hỏng ngắt quãng khi máy tải nặng: tiêu chí cũ (“không lần nào cả hai cùng thành công”) sai — đặt lịch mặc định xong rồi mới khóa là thứ tự hợp lệ (QĐ-187). Mã `datLichMacDinh` (khóa chia sẻ dòng bảng công) đã đúng; bài nay dựng tất định thế xen kẽ nguy hiểm (giao dịch khóa giữ dòng chưa commit → đặt lịch phải chờ rồi bị 409) và đã kiểm: bỏ khóa chia sẻ thì bài hỏng 5/5.
+
+### Sửa sau QA độc lập (QĐ-220 → QĐ-226)
+- Hai worker có thể đổi CÙNG một mã OAuth (mã dùng một lần → `invalid_grant`, nền tảng thu hồi token): worker nay nhận mã trước khi đổi; dọn dẹp yêu cầu bị bỏ dở (QĐ-220).
+- Data Deletion của Meta xóa cả tên tài khoản Facebook + mã người dùng ở mọi kênh (kể cả kênh đã ngắt) và các lần kết nối OAuth (QĐ-221).
+- Google Drive: kiểm quyền thêm tệp vào bài trước khi gọi Google (QĐ-222).
+- Trang Kênh không in nguyên văn `?loi-ket-noi=` (QĐ-223). Google `invalid_grant` nhắc chế độ Testing 7 ngày (QĐ-224).
+- Đối soát Instagram: container 404 không còn bị coi là "chắc chắn chưa đăng" (QĐ-225). Link ký phát media hỗ trợ `Range` (QĐ-226).
+- Bài thử `npm run thu:qa-mxh-ket-noi` (nối sau `thu:mxh-ket-noi` trong `thu:tich-hop`).
 
 ### Triển khai
 - Migration `20261124090001_mxh_ket_noi`, `20261124090002_mxh_video_dinh_kem`; chạy lại `prisma/rls.sql`. `APP_URL` phải https công khai. nginx: location tải Drive chờ 300 giây. Xem DEPLOYMENT → “Nâng cấp lên 0.24.0” (gồm giới hạn của khóa đối xứng — QĐ-216a).

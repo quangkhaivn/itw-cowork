@@ -55,16 +55,19 @@ type TrangThaiContainer = "FINISHED" | "IN_PROGRESS" | "ERROR" | "EXPIRED" | "PU
 
 async function hoiContainer(nhatKy: BuocGoi[], xt: ThongTinXacThuc, bc: BoiCanhGoi, id: string, soLan = SO_LAN_HOI): Promise<{ tt: TrangThaiContainer; loi?: Extract<KetQuaGoi, { ok: false }>; chiTiet?: string }> {
   const ngu = bc.ngu ?? nguMacDinh;
+  let cuoi = "";
   for (let i = 0; i < soLan; i++) {
     await bc.giuKhoa?.();
     const r = await graph(nhatKy, "media", false, xt, bc, { duong: id, query: { fields: "status_code,status" } });
     if (!r.ok) return { tt: "KHAC", loi: r };
     const j = (r.j ?? {}) as { status_code?: unknown; status?: unknown };
     const tt = String(j.status_code ?? "");
+    cuoi = tt;
     if (tt === "FINISHED" || tt === "ERROR" || tt === "EXPIRED" || tt === "PUBLISHED") return { tt, chiTiet: typeof j.status === "string" ? j.status : undefined };
     if (i < soLan - 1) await ngu(CACH_HOI_MS);
   }
-  return { tt: "IN_PROGRESS" };
+  // Trạng thái lạ / trống: không coi là "đang xử lý" chắc chắn (đối soát cần phân biệt).
+  return { tt: cuoi === "IN_PROGRESS" ? "IN_PROGRESS" : "KHAC" };
 }
 
 export const instagram: SocialConnector = {
@@ -156,7 +159,7 @@ export const instagram: SocialConnector = {
 
     const h = await hoiContainer(nhatKy, xt, bc, container);
     if (h.loi) return loi(nhatKy, mediaDaTai, h.loi);
-    if (h.tt === "IN_PROGRESS") return { ok: false, mediaDaTai, nhatKy, loai: "RETRYABLE", ma: "ig-dang-xu-ly", thongBao: "Instagram đang xử lý media — hoãn 30 giây rồi hỏi lại (không tính lần thử).", httpStatus: null, hoanMs: 30_000 };
+    if (h.tt === "IN_PROGRESS" || h.tt === "KHAC") return { ok: false, mediaDaTai, nhatKy, loai: "RETRYABLE", ma: "ig-dang-xu-ly", thongBao: "Instagram đang xử lý media — hoãn 30 giây rồi hỏi lại (không tính lần thử).", httpStatus: null, hoanMs: 30_000 };
     if (h.tt === "EXPIRED") {
       delete mediaDaTai.__igContainer;
       return { ok: false, mediaDaTai, nhatKy, loai: "RETRYABLE", ma: "ig-container-het-han", thongBao: "Container Instagram hết hạn (quá 24 giờ chưa đăng) — tạo lại ở lần sau.", httpStatus: null };
@@ -202,7 +205,9 @@ export const instagram: SocialConnector = {
       const h = await hoiContainer(nhatKy, xt, bc, container, 1);
       if (h.loi && !(h.loi.httpStatus === 404)) return { ok: false, nhatKy, loai: h.loi.loai, ma: h.loi.ma, thongBao: h.loi.thongBao, httpStatus: h.loi.httpStatus };
       // Container chưa được đăng → chắc chắn chưa có bài; đăng lại bằng chính container này (không sinh trùng).
-      if (h.tt !== "PUBLISHED") {
+      // QA 0.24.0 (QĐ-225): CHỈ khi Instagram NÓI RÕ trạng thái chưa đăng. Container 404 / trạng thái lạ (container đã đăng
+      // có thể bị Instagram dọn) KHÔNG chứng minh được "chưa lên" → tìm tiếp theo chú thích + mốc thời gian.
+      if (h.tt === "FINISHED" || h.tt === "IN_PROGRESS" || h.tt === "ERROR" || h.tt === "EXPIRED") {
         doiBuocCuoi(nhatKy, { kieu: "reconcile", ketQua: "not_found" });
         return { ok: true, externalId: null, nhatKy };
       }

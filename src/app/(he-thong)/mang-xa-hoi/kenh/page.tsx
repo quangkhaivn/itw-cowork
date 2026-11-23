@@ -11,20 +11,10 @@ import { docDuLieu, yeuCauQuyen } from "@/lib/trang";
 import { trangThaiKhoaChu } from "@/modules/mang-xa-hoi/bao-mat/khoa-chu";
 import { NHAN_TRANG_THAI_KENH, type TrangThaiKenh } from "@/modules/mang-xa-hoi/hang-so";
 import { danhMucNenTang, danhSachKenh } from "@/modules/mang-xa-hoi/kenh";
+import { thongBaoLoiKetNoi } from "@/modules/mang-xa-hoi/oauth-thuan";
 
 export const dynamic = "force-dynamic";
 
-const LOI_KET_NOI: Record<string, string> = {
-  "thieu-state": "Thiếu mã chống giả mạo — bắt đầu kết nối lại.",
-  "state-sai": "Mã chống giả mạo (state) không đúng — liên kết có thể bị sửa. Bắt đầu kết nối lại.",
-  "state-da-dung": "Liên kết kết nối đã được dùng — bắt đầu lại.",
-  "state-het-han": "Quá 10 phút kể từ lúc bấm kết nối — bắt đầu lại.",
-  "sai-phien": "Lần kết nối không thuộc phiên đăng nhập này — bắt đầu lại trên chính trình duyệt này.",
-  "sai-nen-tang": "Đường quay về không đúng nền tảng.",
-  "redirect-khong-khop": "Đường quay về không khớp Redirect URI đã đăng ký.",
-  "tu-choi": "Bạn đã không cấp quyền trên nền tảng.",
-  "thieu-code": "Nền tảng không trả mã cấp quyền.",
-};
 
 /** Kênh mạng xã hội: WordPress (mật khẩu ứng dụng), Facebook / Instagram / YouTube (OAuth, 0.24.0); Zalo OA "chưa hỗ trợ" (ADR-04). */
 export default async function TrangKenh({ searchParams }: { searchParams: Promise<{ "loi-ket-noi"?: string }> }) {
@@ -42,7 +32,7 @@ export default async function TrangKenh({ searchParams }: { searchParams: Promis
       <DauTrang tieuDe="Kênh" duongDan={[{ nhan: "Mạng xã hội", href: "/mang-xa-hoi" }]}
         moTa="Các trang / kênh / site mà Cowork đăng bài thay bạn. Mật khẩu ứng dụng và mã truy cập (token) được mã hóa trên máy chủ (khóa riêng SOCIAL_MASTER_KEY) và không bao giờ hiện lại." />
 
-      {loiKetNoi && <div className="hop-thong-bao loi" role="alert"><strong>Chưa kết nối được:</strong> {LOI_KET_NOI[loiKetNoi] ?? loiKetNoi}</div>}
+      {loiKetNoi && <div className="hop-thong-bao loi" role="alert"><strong>Chưa kết nối được:</strong> {thongBaoLoiKetNoi(loiKetNoi)}</div>}
 
       {!khoa.coKhoa && <div className="hop-thong-bao loi" role="alert"><strong>Chưa nối kênh được:</strong> {khoa.loi} Báo quản trị máy chủ (DEPLOYMENT.md → Nâng cấp lên 0.23.0).</div>}
 

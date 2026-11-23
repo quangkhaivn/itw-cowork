@@ -48,6 +48,27 @@ export function nhaCungCapCuaNenTang(nenTang: string): NhaCungCapOAuth | null {
 
 export const HAN_STATE_MS = 10 * 60_000;
 
+const LOI_KET_NOI: Record<string, string> = {
+  "thieu-state": "Thiếu mã chống giả mạo — bắt đầu kết nối lại.",
+  "state-sai": "Mã chống giả mạo (state) không đúng — liên kết có thể bị sửa. Bắt đầu kết nối lại.",
+  "state-da-dung": "Liên kết kết nối đã được dùng — bắt đầu lại.",
+  "state-het-han": "Quá 10 phút kể từ lúc bấm kết nối — bắt đầu lại.",
+  "sai-phien": "Lần kết nối không thuộc phiên đăng nhập này — bắt đầu lại trên chính trình duyệt này.",
+  "sai-nen-tang": "Đường quay về không đúng nền tảng.",
+  "redirect-khong-khop": "Đường quay về không khớp Redirect URI đã đăng ký.",
+  "tu-choi": "Bạn đã không cấp quyền trên nền tảng.",
+  "thieu-code": "Nền tảng không trả mã cấp quyền.",
+  "thieu-social-master-key": "Máy chủ chưa đặt khóa SOCIAL_MASTER_KEY — báo quản trị máy chủ.",
+};
+
+/**
+ * Lời giải thích cho mã lỗi kết nối trên đường dẫn (`?loi-ket-noi=`). QA 0.24.0 (QĐ-223): CHỈ mã đã biết — không bao giờ
+ * hiện nguyên văn tham số (người ngoài dựng liên kết chèn chữ tùy ý lên trang Kênh của Cowork: "gọi số … để hỗ trợ").
+ */
+export function thongBaoLoiKetNoi(ma: string | null | undefined): string {
+  return (ma && Object.hasOwn(LOI_KET_NOI, ma) ? LOI_KET_NOI[ma] : null) ?? "Kết nối không thành công — bắt đầu lại từ màn hình Kênh.";
+}
+
 /** state ngẫu nhiên 32 byte — CHỈ đi trong URL tới nền tảng và quay về; CSDL lưu mã băm. */
 export function sinhState(): string {
   return randomBytes(32).toString("base64url");
@@ -207,7 +228,10 @@ export function phanLoaiLoiGoogle(status: number, j: unknown): LoiNenTang {
   const o = (j ?? {}) as { error?: unknown; error_description?: string };
   if (typeof o.error === "string") {
     const tin = `${o.error}${o.error_description ? ` — ${o.error_description}` : ""}`.slice(0, 250);
-    if (o.error === "invalid_grant" || o.error === "unauthorized_client" || o.error === "invalid_client") return { loai: "NEEDS_REAUTH", ma: `google-${o.error}`, thongBao: `Google không còn chấp nhận quyền đã cấp (${tin}).` };
+    // QA 0.24.0 (QĐ-224): invalid_grant thường gặp nhất là màn hình OAuth của Google ở chế độ "Testing" — refresh token
+    // chỉ sống 7 ngày. Nói rõ cách sửa thay vì chỉ "hết hạn".
+    if (o.error === "invalid_grant") return { loai: "NEEDS_REAUTH", ma: `google-${o.error}`, thongBao: `Google không còn chấp nhận quyền đã cấp (${tin}). Bấm “Kết nối lại”. Nếu tuần nào cũng gặp: màn hình OAuth của Google đang ở chế độ Testing (Google chỉ cho token 7 ngày) — chuyển Internal hoặc xuất bản app (docs/HUONG-DAN-MANG-XA-HOI.md).` };
+    if (o.error === "unauthorized_client" || o.error === "invalid_client") return { loai: "NEEDS_REAUTH", ma: `google-${o.error}`, thongBao: `Google không còn chấp nhận quyền đã cấp (${tin}).` };
     return status >= 500 ? { loai: "RETRYABLE", ma: `google-${o.error}`, thongBao: `Google tạm lỗi (${tin}).` } : { loai: "PERMANENT", ma: `google-${o.error}`, thongBao: `Google từ chối: ${tin}` };
   }
   const e = (o.error ?? {}) as { message?: string; errors?: { reason?: string }[] };

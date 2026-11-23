@@ -45,6 +45,17 @@ export async function xuLyXoaDuLieu(tenantId: string, bayGio: Date, env: NodeJS.
       }
       const yeuCau = await tx.socialOauthRequest.findMany({ where: { provider: "META", oauthSubject: uid }, select: { id: true } });
       await tx.socialOauthCandidate.deleteMany({ where: { requestId: { in: yeuCau.map((y) => y.id) } } });
+      // QA 0.24.0 (QĐ-221): xóa luôn DỮ LIỆU CÁ NHÂN của người đó (tên tài khoản Facebook, mã người dùng trong app) ở
+      // MỌI kênh họ từng cấp quyền — kể cả kênh đã ngắt từ trước — và ở các lần kết nối OAuth. Chỉ giữ mã người dùng
+      // trong chính yêu cầu xóa (bằng chứng đã xử lý, trang trạng thái). Tên Page / kênh là của doanh nghiệp, giữ.
+      const moiKenh = await tx.socialConnection.findMany({ where: { oauthProvider: "META", oauthSubject: uid }, select: { id: true, meta: true } });
+      for (const c of moiKenh) {
+        const { metaUserId: _bo, ...meta } = (c.meta ?? {}) as Record<string, unknown>;
+        void _bo;
+        await tx.socialConnection.update({ where: { id: c.id }, data: { accountName: null, oauthSubject: null, meta: meta as object } });
+      }
+      await tx.socialOauthRequest.updateMany({ where: { id: { in: yeuCau.map((y) => y.id) }, status: "DA_SAN_SANG" }, data: { status: "LOI", errorMessage: "Người cấp quyền đã yêu cầu xóa dữ liệu trên Facebook — bắt đầu kết nối lại nếu cần." } });
+      await tx.socialOauthRequest.updateMany({ where: { id: { in: yeuCau.map((y) => y.id) } }, data: { accountName: null, oauthSubject: null } });
       await tx.socialDataDeletionRequest.update({ where: { id: yc.id }, data: { status: "DA_XOA", platformUserId: uid, deletedCount: kenh.length, resultMessage: kenh.length ? `Đã xóa token của ${kenh.length} kênh.` : "Không có dữ liệu nào của người này.", processedAt: bayGio } });
       await ghiKiemToan(tx, { action: "xoa-du-lieu-meta", objectType: "social_data_deletion_request", objectId: yc.id, after: { ketQua: "da-xoa", soKenh: kenh.length, boi: "worker" } });
       if (kenh.length) {
