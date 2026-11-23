@@ -1,7 +1,8 @@
 import type { NguCanh } from "@/lib/api";
 import { thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
 import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
-import { batBuocQuyen } from "@/lib/phan-quyen";
+import { batBuocQuyen, LoiThieuQuyen } from "@/lib/phan-quyen";
+import { duocSuaChungTu } from "@/modules/dinh-kem/quyen";
 import { dinhKemTep } from "@/modules/dinh-kem/service";
 import { DUNG_LUONG_TOI_DA, DUNG_LUONG_VIDEO_DRIVE_TOI_DA, duoiTep } from "@/modules/dinh-kem/tinh-toan";
 import { dieuKienXemBai, docCauHinhMxh } from "./chung";
@@ -47,6 +48,9 @@ export async function taiTuDrive(x: NguCanh | BuocGiaoDich, postId: string, d: z
     const b = await nc.tx.socialPost.findFirst({ where: { AND: [{ id: postId, deletedAt: null }, await dieuKienXemBai(nc)] }, select: { id: true, status: true } });
     if (!b) throw new LoiKhongTimThay("Bài");
     if (!["DRAFT", "CANCELED"].includes(b.status)) throw new LoiNghiepVu("Chỉ thêm tệp khi bài còn nháp (hoặc đã hủy).", 409, "sai-trang-thai");
+    // QA 0.24.0 (QĐ-222): kiểm quyền THÊM TỆP vào bài TRƯỚC khi gọi Google — người chỉ được xem bài (hoặc thực tập sinh
+    // với bài người khác) không được bắt máy chủ tải tới 10 × 200 MB rồi mới bị từ chối ở bước ghi tệp.
+    if (!(await duocSuaChungTu(nc, "social_post", postId))) throw new LoiThieuQuyen("đính kèm vào social_post", { objectType: "social_post", objectId: postId });
     const app = await nc.tx.socialAppConfig.findFirst({ where: { provider: "GOOGLE" }, select: { publicConfig: true } });
     const clientId = ((app?.publicConfig ?? {}) as Record<string, string>).clientId || process.env.GOOGLE_CLIENT_ID?.trim() || "";
     if (!clientId) throw new LoiNghiepVu("Chưa nhập Client ID của Google (Quản trị → Kết nối nền tảng (API)).", 409, "chua-cau-hinh-app");
@@ -99,7 +103,8 @@ export async function taiTuDrive(x: NguCanh | BuocGiaoDich, postId: string, d: z
       const tep = await nb.giaoDich((nc) => dinhKemTep(nc, { loai: "social_post", doiTuongId: postId, tenTep: ten, noiDung: new Uint8Array(t.than), ghiChu: "Lấy từ Google Drive" }, { dungLuongToiDa: toiDa, nguon: "google-drive" }));
       kq.daThem.push({ tepId, tenTep: tep.tenTep, kieu: mime, dungLuong: co });
     } catch (e) {
-      if (e instanceof LoiNghiepVu) kq.loi.push({ tepId, thongBao: e.message });
+      if (e instanceof LoiThieuQuyen) kq.loi.push({ tepId, thongBao: "Không thêm tệp được: bài không còn là nháp hoặc bạn không có quyền thêm tệp vào bài này." });
+      else if (e instanceof LoiNghiepVu) kq.loi.push({ tepId, thongBao: e.message });
       else kq.loi.push({ tepId, thongBao: e instanceof LoiGoiMang ? `Không tải được từ Google Drive: ${e.message}` : "Không tải được từ Google Drive." });
     }
   }

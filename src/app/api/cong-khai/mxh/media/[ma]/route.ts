@@ -8,6 +8,26 @@ import { doiSangJpeg } from "@/modules/mang-xa-hoi/media/doi-jpeg";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/** Một khúc `Range: bytes=a-b` / `a-` / `-n`. Không có / nhiều khúc / khác bytes → null (trả cả tệp, RFC 9110 cho phép). */
+function docRange(h: string | null, tong: number): [number, number] | null | "sai" {
+  if (!h) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(h.trim());
+  if (!m || (m[1] === "" && m[2] === "")) return null;
+  let tu: number;
+  let den: number;
+  if (m[1] === "") {
+    const n = Number(m[2]);
+    if (n === 0) return "sai";
+    tu = Math.max(0, tong - n);
+    den = tong - 1;
+  } else {
+    tu = Number(m[1]);
+    den = m[2] === "" ? tong - 1 : Math.min(Number(m[2]), tong - 1);
+  }
+  if (!Number.isSafeInteger(tu) || !Number.isSafeInteger(den) || tu >= tong || den < tu) return "sai";
+  return [tu, den];
+}
+
 function loi(status: number, cau: string) {
   return new Response(cau, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
 }
@@ -39,15 +59,23 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ ma: string 
       tep.mime = "image/jpeg";
     }
     const conLai = Math.max(0, kq.noiDung.hetHanGiay - Math.floor(Date.now() / 1000));
-    return new Response(new Uint8Array(tep.noiDung), {
-      status: 200,
-      headers: {
-        "Content-Type": tep.mime,
-        "Content-Length": String(tep.noiDung.length),
-        "Cache-Control": `public, max-age=${Math.min(conLai, 3600)}`,
-        "X-Content-Type-Options": "nosniff",
-        "Content-Disposition": "inline",
-      },
+    const tieuDe: Record<string, string> = {
+      "Content-Type": tep.mime,
+      "Cache-Control": `public, max-age=${Math.min(conLai, 3600)}`,
+      "X-Content-Type-Options": "nosniff",
+      "Content-Disposition": "inline",
+      "Accept-Ranges": "bytes",
+    };
+    // QA 0.24.0 (QĐ-226): máy kéo video của nền tảng có thể hỏi từng khúc (Range) — trả 206 đúng khúc, khúc sai → 416.
+    // Không chép thêm một bản 200 MB trong bộ nhớ (dùng thẳng vùng nhớ của Buffer).
+    const tong = tep.noiDung.length;
+    const kh = docRange(req.headers.get("range"), tong);
+    if (kh === "sai") return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${tong}`, "Cache-Control": "no-store" } });
+    const [tu, den] = kh ?? [0, tong - 1];
+    const than = tep.noiDung.subarray(tu, den + 1);
+    return new Response(new Uint8Array(than.buffer, than.byteOffset, than.length), {
+      status: kh ? 206 : 200,
+      headers: { ...tieuDe, "Content-Length": String(than.length), ...(kh ? { "Content-Range": `bytes ${tu}-${den}/${tong}` } : {}) },
     });
   } catch (e) {
     console.error("[mxh-media] lỗi phát ảnh:", e instanceof Error ? e.message : e);
