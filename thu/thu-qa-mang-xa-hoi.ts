@@ -421,7 +421,7 @@ async function main() {
   }
   const hep = (await chu.user.create({ data: { tenantId: T, email: `qa-hep.${DAU}@thu.test`, passwordHash: "x", fullName: "qa-hep DEMO", userRoles: { create: { tenantId: T, roleId: vaiHep.id } }, staffProfile: { create: { tenantId: T, hiredAt: new Date("2025-01-01T00:00:00Z") } } } })).id;
   const k5 = await voi(T, mk, (nc) => ketNoiWordPress(nc, { diaChi: `${site()}/cs`, tenDangNhap: "tacgia", matKhauUngDung: MK, ten: "Site chính sách DEMO" }));
-  const loiMa = async (f: () => Promise<unknown>): Promise<string> => { try { await f(); return "khong-loi"; } catch (e) { return e instanceof LoiNghiepVu ? e.ma : e instanceof LoiThieuQuyen ? "thieu-quyen" : `khac:${e instanceof Error ? e.message.slice(0, 80) : e}`; } };
+  const loiMa = async (f: () => Promise<unknown>): Promise<string> => { try { await f(); return "khong-loi"; } catch (e) { return e instanceof LoiNghiepVu ? (e.ma ?? "nghiep-vu") : e instanceof LoiThieuQuyen ? "thieu-quyen" : `khac:${e instanceof Error ? e.message.slice(0, 80) : e}`; } };
   const S = (giay: number) => sau(30000 + giay);
 
   // --- 1. Đồng tác giả không được duyệt (QĐ-203) ---
