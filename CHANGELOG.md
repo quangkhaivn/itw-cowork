@@ -2,6 +2,28 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
+## 0.25.0 (chưa phát hành) — Mạng xã hội: lịch nội dung, duyệt, AI viết bài
+
+Nền: 0.24.0. QĐ-230 → QĐ-239. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md` mục 14–16. Migration `20261126090001_mxh_lich_ai`.
+
+### Thêm
+- **Lịch nội dung** (Mạng xã hội → Lịch nội dung): tháng / tuần theo giờ Việt Nam; bài nháp / chờ duyệt / đã duyệt / đã hẹn / đã đăng / lỗi / **cần kiểm tay**; lọc theo kênh, chiến dịch, người soạn; **kéo-thả hoặc sửa giờ để đổi lịch** — máy chủ kiểm: không đổi bài đã đăng / đang đăng / lỗi, giờ ở tương lai, YouTube ≤ hạn mức / ngày (cũng kiểm khi Hẹn giờ), Reels ≤ 30 / 24 giờ; bài đã hẹn đổi giờ không mất duyệt. Ngày dự kiến cho bài chưa hẹn giờ.
+- **Nội dung riêng theo kênh**: tiêu đề, nội dung, hashtag, tập ảnh / video riêng cho từng kênh; kiểm luật nền tảng theo nội dung của từng kênh; worker đăng đúng nội dung riêng.
+- **Chiến dịch nội dung**: tên, thời gian, mục tiêu, liên kết tùy chọn với chiến dịch Marketing; gán bài; lưu trữ.
+- **Sửa / đăng lại RIÊNG từng kênh lỗi** của bài lỗi một phần (QĐ-216 d): kênh đã đăng giữ nguyên; đối soát trước khi gửi (không đăng trùng); bài phải duyệt → chờ duyệt lại riêng kênh lỗi; Facebook / Instagram từng lỗi không rõ → chỉ đăng lại nội dung cũ.
+- **Hồ sơ thương hiệu**: giọng văn, từ cấm, câu / hashtag bắt buộc, CTA, bài mẫu; dùng cho AI và cảnh báo (không chặn) trên bài soạn tay.
+- **AI viết bài từ sản phẩm** qua nhà cung cấp AI sẵn có của Trợ lý: nội dung chung + biến thể theo nền tảng, theo hồ sơ thương hiệu, dùng giá bán thật + tình trạng tồn hiện tại; ra bài nháp "AI soạn", **phải duyệt** khi *Bài do AI tạo phải duyệt* = 1 (mặc định). Chưa có khóa AI → "AI chưa cấu hình".
+- **Ngân sách AI theo tháng** (token + VND ước tính, Cấu hình `mxh.ai_ngan_sach_*`, `mxh.ai_gia_vnd_trieu_token_*`): giữ chỗ trước khi gọi, chặn kèm thông báo khi vượt, hiện mức đã dùng trên màn hình.
+- Dữ liệu mẫu (`db:seed:mau`): hồ sơ thương hiệu DEMO, chiến dịch "Mùa khai giảng DEMO", 4 bài nháp DEMO trên lịch tháng hiện tại.
+
+### Bảo mật
+- **Không bao giờ gửi giá vốn / nhà cung cấp / lợi nhuận cho AI**: truy vấn không chọn cột đó + bộ chọn danh sách trắng + kiểm lần cuối; bài thử đơn vị hỏng nếu lọt (`thu/don-vi/mxh-ai-du-lieu.test.ts`).
+- Chống chèn lệnh: dữ liệu sản phẩm / thương hiệu / yêu cầu người dùng đưa AI dạng dữ liệu JSON trong khối riêng (không đóng được khối); đầu ra AI làm sạch (bỏ liên kết, HTML, ký tự vô hình), giới hạn độ dài, chỉ thành bài nháp.
+- CSDL: trigger chặn sửa nội dung riêng của kênh đang / đã đăng; `review_scope` chỉ khi chờ duyệt; lượt AI không xóa được, chỉ ghi kết quả một lần; lượt AI chỉ gắn vào bài AI. Bảng mới có RLS (`social_campaigns`, `ai_usage_logs`).
+
+### Kiểm thử
+- `npm run thu:mxh-lich-ai` (cuối chuỗi `thu:tich-hop`); bài thử đơn vị `mxh-ai-du-lieu.test.ts`, `mxh-lich-ai.test.ts`.
+
 ## 0.24.0 (chưa phát hành) — Mạng xã hội: Facebook, Instagram, YouTube, Google Drive
 
 Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-219. Hướng dẫn từng bước: `docs/HUONG-DAN-MANG-XA-HOI.md`. Mọi lệnh gọi Meta / Google viết theo tài liệu công khai và thử bằng máy chủ GIẢ — **chưa kiểm với API thật** (danh sách điểm cần kiểm trong báo cáo 0.24.0).

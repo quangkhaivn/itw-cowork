@@ -1,4 +1,4 @@
-# Hướng dẫn Mạng xã hội (0.23.0 → 0.24.0)
+# Hướng dẫn Mạng xã hội (0.23.0 → 0.25.0)
 
 Cowork đăng bài lên kênh mạng xã hội của công ty thay bạn, theo giờ đã hẹn, và **chỉ báo "Đã đăng" khi đã đọc lại thấy bài trên kênh**. Đăng được lên **WordPress** (0.23), **Facebook Page, Instagram, YouTube** (0.24); lấy ảnh / video từ **Google Drive** (0.24). Zalo OA mở ở bản sau.
 
@@ -8,9 +8,9 @@ Ai làm gì:
 
 | Vai trò | Được làm |
 |---|---|
-| Nhân viên Marketing | Nối kênh, soạn bài, đăng ngay, hẹn giờ, hủy lịch, đăng lại, xóa nháp, xuất CSV |
-| Trưởng phòng Marketing | Như trên + **duyệt** bài người khác soạn |
-| Thực tập sinh Marketing | Soạn bài của mình và **gửi duyệt** (không tự đăng) |
+| Nhân viên Marketing | Nối kênh, soạn bài, đăng ngay, hẹn giờ, hủy lịch, đăng lại, xóa nháp, xuất CSV; (0.25) lịch nội dung, chiến dịch, **AI viết bài**, sửa / đăng lại riêng kênh lỗi |
+| Trưởng phòng Marketing | Như trên + **duyệt** bài người khác soạn + sửa **hồ sơ thương hiệu** |
+| Thực tập sinh Marketing | Soạn bài của mình và **gửi duyệt** (không tự đăng, không dùng AI viết bài) |
 | Giám đốc / Quản trị | Tất cả; nhập thông tin app Meta / Google / Zalo (cần bật xác thực 2 lớp); sửa trang Điều khoản / Quyền riêng tư / Xóa dữ liệu |
 
 ## 1. Tạo mật khẩu ứng dụng (Application Password) trên WordPress
@@ -75,8 +75,10 @@ Trang bài có **Nhật ký gọi nền tảng** — từng lần Cowork gọi W
 
 - Bài gửi duyệt báo chuông cho người có quyền duyệt. Người duyệt vào **Mạng xã hội → Chờ duyệt** (chỉ hiện bài mình được duyệt) → mở bài → **Duyệt** (có thể ghi chú) hoặc **Trả lại** (bắt buộc ghi lý do — bài về Nháp, người soạn được báo).
 - **Không ai tự duyệt** bài mình soạn hoặc mình gửi duyệt. Người duyệt phải là cấp trên của người soạn (theo hồ sơ nhân sự), Giám đốc / Quản trị, hoặc người có quyền duyệt bài cả phòng (Trưởng phòng Marketing).
-- Sửa bài đã duyệt → bài về Nháp, phải duyệt lại.
-- Bài do trợ lý AI soạn (từ bản 0.25) **luôn phải duyệt** khi Cấu hình *Mạng xã hội → Bài do AI tạo phải duyệt* = 1 (mặc định).
+- Sửa bài đã duyệt (kể cả nội dung riêng của một kênh) → bài về Nháp, phải duyệt lại. Chỉ đổi GIỜ (kéo trên lịch) thì không mất duyệt.
+- Bài do AI soạn (0.25, mục 16) **luôn phải duyệt** khi Cấu hình *Mạng xã hội → Bài do AI tạo phải duyệt* = 1 (mặc định). Người bấm "Viết bằng AI" là người soạn — không tự duyệt được.
+- Người sửa nội dung sau khi bài đã gửi duyệt là **đồng tác giả** — không duyệt được bài đó.
+- Bài đăng lỗi một phần mà sửa kênh lỗi (mục 15) → bài **Chờ duyệt lại riêng kênh lỗi**; duyệt xong các kênh đó được đăng lại ngay, kênh đã đăng giữ nguyên; trả lại → bài về "Lỗi một phần".
 
 ## 5. Quản trị → Kết nối nền tảng (API)
 
@@ -102,6 +104,9 @@ Nền tảng yêu cầu trang **Điều khoản**, **Quyền riêng tư**, **Xó
 | Hạn một lần gọi nền tảng | 30 giây | Quá hạn sau khi đã gửi → đối soát |
 | Chờ trước khi đối soát | 120 giây | |
 | Coi lượt đăng là kẹt sau | 10 phút | Máy nền dừng giữa chừng → đối soát |
+| Ngân sách AI mỗi tháng (token) | 2.000.000 | 0.25: tổng token AI viết bài / tháng (giờ VN); 0 = tắt AI viết bài |
+| Ngân sách AI mỗi tháng (VND) | 500.000 đ | 0.25: chi phí ước tính tối đa / tháng; 0 = tắt |
+| Đơn giá AI — 1 triệu token vào / ra | 80.000 đ / 400.000 đ | 0.25: ước tính theo bảng giá nhà cung cấp + tỷ giá — sửa khi đổi mô hình |
 
 ## 7. Khi có sự cố
 
@@ -197,3 +202,48 @@ Mặc định mỗi Google Cloud project có **10.000 đơn vị / ngày**; mỗ
 3. Được duyệt → **Quản trị → Cấu hình hệ thống → Mạng xã hội → Số video tải lên YouTube tối đa mỗi ngày**: nâng đúng bằng (mức được cấp ÷ 1.600), làm tròn xuống.
 
 (Con số 1.600 đơn vị / lần tải là theo tài liệu công khai của Google — chưa kiểm với API thật.)
+
+## 14. Lịch nội dung (0.25)
+
+**Mạng xã hội → Lịch nội dung**. Xem theo **Tháng** hoặc **Tuần** (thứ Hai → Chủ nhật), giờ Việt Nam.
+
+- Bài có **giờ hẹn** (đã hẹn giờ / đã đăng / lỗi) hiện viền liền; bài chưa hẹn giờ có **ngày dự kiến** hiện viền đứt (đặt ngày dự kiến ở ô "Ngày dự kiến trên lịch" khi soạn bài).
+- Màu theo trạng thái: Nháp, Chờ duyệt, Đã duyệt, Đã hẹn giờ, Đang đăng, Đã đăng, Lỗi một phần, Lỗi, **Cần kiểm tay** (có kênh không rõ đã lên chưa).
+- Lọc theo **kênh**, **chiến dịch**, **người soạn**.
+- **Đổi lịch**: kéo bài sang ngày khác (giữ nguyên giờ), hoặc bấm vào bài → chọn ngày giờ mới → **Đổi lịch**.
+  - Bài đã hẹn giờ: dời cả giờ đăng (cần quyền đăng), **vẫn giữ duyệt**. Không dời được khi đã tới giờ và bài đang đăng.
+  - Bài đang chờ duyệt kèm "đăng vào giờ hẹn": đổi giờ hẹn, người duyệt thấy trong lịch sử ("Đổi giờ hẹn").
+  - Bài nháp / đã duyệt chưa hẹn giờ: chỉ đổi **ngày dự kiến** — muốn đăng đúng giờ, mở bài bấm **Hẹn giờ**.
+  - Không đổi được: bài đã đăng, đang đăng, lỗi; giờ đã qua; quá 1 năm.
+  - **YouTube**: một ngày (theo ngày hạn mức của Google, đổi ngày lúc 14–15 giờ chiều giờ VN) tối đa *Số video tải lên YouTube tối đa mỗi ngày* (mặc định 6) — kéo / hẹn video thứ 7 vào ngày đó bị từ chối, chọn ngày khác. Reels Facebook tối đa 30 / 24 giờ mỗi Page.
+
+## 15. Nội dung riêng theo kênh, chiến dịch, sửa kênh lỗi (0.25)
+
+**Nội dung riêng theo kênh**: ở form soạn, mục "Nội dung riêng theo kênh" — mỗi kênh đã chọn có thể có tiêu đề riêng, nội dung riêng, **hashtag riêng** (thêm vào cuối bài khi đăng) và chọn **một phần ảnh / video** (hoặc không ảnh). Bỏ trống = dùng nội dung chung. Cowork kiểm giới hạn của từng nền tảng theo đúng nội dung của kênh đó (lỗi ghi rõ tên kênh).
+
+**Chiến dịch nội dung** (Mạng xã hội → Chiến dịch nội dung): tên, từ ngày – đến ngày, mục tiêu, liên kết (tùy chọn) với chiến dịch Marketing. Gán chiến dịch khi soạn bài / khi AI viết; lọc lịch theo chiến dịch. Chiến dịch không xóa — chuyển **Lưu trữ** (không thêm bài mới).
+
+**Bài lỗi một phần** (đã lên kênh A, lỗi kênh B): mở bài → khung "Kênh lỗi — sửa / đăng lại riêng":
+
+1. **Đăng lại kênh này**: đăng lại riêng kênh lỗi. Cowork **đối soát trước khi gửi** — nếu lượt trước thật ra đã lên, nhận bài đó, không đăng trùng. Kênh đã đăng không bị đụng.
+2. **Sửa nội dung kênh này**: sửa tiêu đề / nội dung / hashtag / ảnh RIÊNG cho kênh lỗi, rồi đăng lại.
+   - Không sửa được khi kênh đã có mã bài trên nền tảng (bài có thể đã lên), hoặc kênh **Facebook / Instagram** từng gửi mà kết quả không chắc chắn (lỗi tạm / không rõ) — vì Facebook / Instagram nhận ra bài cũ bằng NỘI DUNG; sửa nội dung có thể dẫn tới đăng trùng. Khi đó chỉ "Đăng lại kênh này" với nội dung cũ, hoặc tạo bài mới.
+   - Bài phải duyệt (bài AI, hoặc Cấu hình "Mọi bài phải duyệt") hoặc người sửa không có quyền đăng → bài **chờ duyệt lại riêng kênh lỗi**. Bị trả lại → bấm **Gửi duyệt lại kênh lỗi** sau khi sửa.
+
+**Hồ sơ thương hiệu** (Mạng xã hội → Hồ sơ thương hiệu — Trưởng phòng Marketing / Giám đốc / Quản trị sửa): giọng văn, **từ cấm**, **câu bắt buộc**, **hashtag bắt buộc**, câu kêu gọi hành động (CTA), tối đa 5 bài mẫu. AI viết theo hồ sơ này; bài soạn tay vi phạm chỉ hiện **cảnh báo** trên trang bài — không bị chặn.
+
+## 16. AI viết bài từ sản phẩm (0.25)
+
+**Mạng xã hội → AI viết bài** (cần quyền soạn bài, dùng trợ lý AI và xem sản phẩm):
+
+1. Tìm và chọn sản phẩm (tối đa 10) — danh sách hiện **giá bán** và **tình trạng tồn** (còn / sắp hết / hết).
+2. Chọn kênh (AI viết nội dung chung + biến thể theo từng nền tảng), chiến dịch (tùy chọn), ghi yêu cầu thêm (ví dụ "nhấn mạnh pin lâu, dịp khai giảng").
+3. Bấm **Viết bài bằng AI** (tới khoảng 1 phút) → mở ra **bài nháp gắn nhãn "AI soạn"**. Đọc kỹ, sửa, thêm ảnh, rồi **Gửi duyệt**.
+
+Điều cần biết:
+
+- AI **chỉ nhận giá bán thật và tình trạng tồn hiện tại** — không bao giờ nhận giá vốn, nhà cung cấp, lợi nhuận. Số lượng tồn chỉ đưa cho AI khi người bấm có quyền xem kho.
+- Cowork **làm sạch** bài AI: bỏ liên kết (thêm liên kết thật bằng tay), bỏ HTML, cắt theo độ dài của nền tảng; bài có **số tiền không khớp giá bán** trong Cowork → cảnh báo để người duyệt kiểm.
+- Máy chủ chưa đặt khóa AI (`ANTHROPIC_API_KEY`) → nút hiện **"AI chưa cấu hình"**; vẫn soạn tay bình thường.
+- **Ngân sách AI** tháng này hiện ngay trên màn hình (token, tiền ước tính, số lượt). Lượt viết sẽ vượt ngân sách bị chặn kèm thông báo; Giám đốc / Quản trị nâng ở **Cấu hình hệ thống → Mạng xã hội** (mục 6). Lượt AI lỗi vẫn tính phần token đã tốn.
+

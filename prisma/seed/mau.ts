@@ -87,6 +87,7 @@ async function main() {
   await seedDichVuMau(tenant.id, idTheoEmail);
   await seedTaiChinhMau(tenant.id, idTheoEmail);
   await seedLuongMau(tenant.id, idTheoEmail);
+  await seedMxhMau(tenant.id, idTheoEmail);
   // Nhân sự (chấm công, việc giao, báo cáo, đánh giá, thực tập, kỳ lương) — tệp riêng, nạp động như các phần trên.
   const { seedNhanSuMau } = await import("./mau-nhan-su");
   await seedNhanSuMau(db, tenant.id, idTheoEmail, bam);
@@ -713,6 +714,39 @@ async function seedLuongMau(tenantId: string, id: Map<string, string>) {
     });
   }
   console.log(`✓ Hồ sơ lương mẫu (DEMO): ${dem} nhân viên`);
+}
+
+/**
+ * Mạng xã hội 0.25.0 (DEMO): hồ sơ thương hiệu, một chiến dịch nội dung, vài bài NHÁP có ngày dự kiến trong tháng này để
+ * Lịch nội dung có gì để xem. Không tạo kênh (cần mật khẩu ứng dụng / OAuth thật). Chạy lại không nhân đôi.
+ */
+async function seedMxhMau(tenantId: string, id: Map<string, string>) {
+  if ((await db.socialCampaign.count({ where: { tenantId } })) > 0) return;
+  const mk = id.get("marketing@demo.test")!;
+  if (!(await db.brandProfile.findFirst({ where: { tenantId } }))) {
+    await db.brandProfile.create({
+      data: {
+        tenantId, voice: "DEMO — thân thiện, rõ ràng; xưng “Công ty Mẫu”, gọi khách là anh/chị; câu ngắn, nêu lợi ích trước, thông số sau.",
+        bannedWords: ["rẻ nhất", "cam kết 100%", "số 1 Việt Nam"], defaultHashtags: ["#CongTyMauDEMO"], mandatoryPhrases: ["Bảo hành chính hãng"],
+        ctaTemplates: ["Nhắn tin để được tư vấn cấu hình phù hợp", "Gọi hotline để đặt lịch khảo sát miễn phí"],
+        samplePosts: ["[DEMO] Laptop văn phòng nhẹ 1,2 kg, pin cả ngày — làm việc ở đâu cũng tiện.\nBảo hành chính hãng 24 tháng.\n#CongTyMauDEMO"],
+        updatedBy: mk,
+      },
+    });
+  }
+  const bayGio = new Date();
+  const thang = new Date(bayGio.getTime() + 7 * 3_600_000).toISOString().slice(0, 7);
+  const cd = await db.socialCampaign.create({ data: { tenantId, name: "Mùa khai giảng DEMO", goal: "DEMO — 30 tin nhắn hỏi giá laptop sinh viên", createdBy: mk } });
+  const bai: [string, string, number, string][] = [
+    ["[DEMO] Laptop sinh viên pin 10 giờ", "Nhẹ, pin bền, đủ mạnh cho học online. Bảo hành chính hãng. #CongTyMauDEMO", 5, "09:00"],
+    ["[DEMO] Combo camera gia đình", "Xem nhà mọi lúc qua điện thoại, lắp đặt trong ngày. Bảo hành chính hãng. #CongTyMauDEMO", 12, "19:30"],
+    ["[DEMO] Mẹo vệ sinh bàn phím", "Ba bước đơn giản giữ bàn phím sạch như mới. #CongTyMauDEMO", 18, "11:00"],
+    ["[DEMO] Máy in văn phòng tiết kiệm mực", "In 2 mặt tự động, chi phí mỗi trang thấp. Bảo hành chính hãng. #CongTyMauDEMO", 25, "08:30"],
+  ];
+  for (const [tieuDe, noiDung, ngay, gio] of bai) {
+    await db.socialPost.create({ data: { tenantId, title: tieuDe, body: noiDung, status: "DRAFT", campaignId: cd.id, plannedAt: new Date(`${thang}-${String(ngay).padStart(2, "0")}T${gio}:00+07:00`), createdBy: mk } });
+  }
+  console.log(`✓ Mạng xã hội mẫu (DEMO): hồ sơ thương hiệu, chiến dịch “Mùa khai giảng DEMO”, ${bai.length} bài nháp trên lịch tháng ${thang}`);
 }
 
 main()
