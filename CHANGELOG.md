@@ -29,7 +29,7 @@ Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-216.
 - “Đã cấu hình” của app Meta không tính trường tùy chọn (Configuration ID).
 
 ### Triển khai
-- Migration `20261123090001_mxh_ket_noi`, `20261123090002_mxh_video_dinh_kem`; chạy lại `prisma/rls.sql`. `APP_URL` phải https công khai. nginx: location tải Drive chờ 300 giây. Xem DEPLOYMENT → “Nâng cấp lên 0.24.0” (gồm giới hạn của khóa đối xứng — QĐ-216a).
+- Migration `20261124090001_mxh_ket_noi`, `20261124090002_mxh_video_dinh_kem`; chạy lại `prisma/rls.sql`. `APP_URL` phải https công khai. nginx: location tải Drive chờ 300 giây. Xem DEPLOYMENT → “Nâng cấp lên 0.24.0” (gồm giới hạn của khóa đối xứng — QĐ-216a).
 
 ### Kiểm thử
 - `npm run thu:mxh-ket-noi` (nối cuối `thu:tich-hop`): OAuth (state sai / hết hạn / dùng lại / khác phiên / redirect lạ), đổi mã, chọn kênh, kết nối lại, đăng từng loại nội dung Facebook / Instagram / YouTube, 4 loại lỗi, làm mới token, NEEDS_REAUTH, hạn mức Instagram + Reels, quota YouTube, upload YouTube bị ngắt rồi tiếp, Picker tải tệp, Data Deletion ký sai / đúng, trang công khai, RLS / IDOR, token không lộ — Graph / Google / YouTube / Drive là máy chủ giả cục bộ. `thu/don-vi/mxh-ket-noi.test.ts` (phần thuần).

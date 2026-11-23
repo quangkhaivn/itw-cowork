@@ -187,7 +187,7 @@ Migration: `20260912100158_nen_mong` (nền móng), `20260919043807_phase1_hoan_
 
 Cột / ràng buộc khác: `attachments_loai_doi_tuong_check` thêm `social_post`. Quyền `mxh.*` (6 mã) cấp cho mọi doanh nghiệp trong cùng migration.
 
-### 0.24.0 — Facebook, Instagram, YouTube, Google Drive (migration `20261123090001_mxh_ket_noi`, `20261123090002_mxh_video_dinh_kem`; BUSINESS_RULES MXH-50 →)
+### 0.24.0 — Facebook, Instagram, YouTube, Google Drive (migration `20261124090001_mxh_ket_noi`, `20261124090002_mxh_video_dinh_kem`; BUSINESS_RULES MXH-50 →)
 
 Ghi chú: chú thích trong hai tệp migration ghi số QĐ cũ “QĐ-203 →” (trước khi đánh lại số để nhường QĐ-203 → QĐ-209 cho bản sửa QA 0.23.0); tương ứng hiện nay là QĐ-210 → QĐ-216 (migration không sửa).
 
