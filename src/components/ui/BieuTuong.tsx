@@ -6,6 +6,11 @@
 const DUONG_VE: Record<string, string> = {
   // 0.23.0 — mạng xã hội
   "mxh-bai": "M3 4h18v16H3zM3 9h18M8 13h8M8 16h5",
+  // 0.25.0 — lịch nội dung, AI viết bài, chiến dịch, hồ sơ thương hiệu
+  "mxh-lich": "M4 5h16v15H4zM4 10h16M9 3v4M15 3v4M8 14h3M13 14h3M8 17h3",
+  "mxh-ai": "M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z",
+  "mxh-chien-dich": "M4 21V4M4 4h12l-2 4 2 4H4",
+  "mxh-thuong-hieu": "M12 3l8 4v5c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V7zM9 12l2 2 4-4",
   "mxh-soan": "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
   "mxh-duyet": "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9",
   "mxh-kenh": "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4",

@@ -46,6 +46,7 @@ export default async function TrangBaiMangXaHoi({ searchParams }: { searchParams
         moTa="Trạng thái thật của từng kênh: chỉ báo “Đã đăng” khi nền tảng trả mã bài VÀ hệ thống đã đọc lại thấy khớp. Kênh lỗi có hướng dẫn và nút đăng lại."
         hanhDong={<div style={{ display: "flex", gap: 8 }}>
           {coQuyen(nd.hoSo, "mxh.create") && <Link className="nut chinh" href="/mang-xa-hoi/soan">Soạn bài</Link>}
+          <Link className="nut" href="/mang-xa-hoi/lich">Lịch nội dung</Link>
           {coQuyen(nd.hoSo, "mxh.export") && <a className="nut" href={DUONG_XUAT_CSV}>Xuất CSV</a>}
         </div>}
       />

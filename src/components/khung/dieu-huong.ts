@@ -80,6 +80,10 @@ export type BieuTuong =
   | "mxh-soan"
   | "mxh-duyet"
   | "mxh-kenh"
+  | "mxh-lich"
+  | "mxh-ai"
+  | "mxh-thuong-hieu"
+  | "mxh-chien-dich"
   | "ket-noi-api";
 
 export interface MucDieuHuong {
@@ -160,6 +164,10 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
     muc: [
       { nhan: "Bài và lịch đăng", href: "/mang-xa-hoi", quyen: "mxh.view", bieuTuong: "mxh-bai", tuKhoa: "mang xa hoi social bai dang lich hen gio wordpress facebook trang thai" },
       { nhan: "Soạn bài", href: "/mang-xa-hoi/soan", quyen: "mxh.create", bieuTuong: "mxh-soan", tuKhoa: "soan bai viet dang bai mang xa hoi social post" },
+      { nhan: "Lịch nội dung", href: "/mang-xa-hoi/lich", quyen: "mxh.view", bieuTuong: "mxh-lich", tuKhoa: "lich noi dung thang tuan keo tha doi lich hen gio calendar" },
+      { nhan: "AI viết bài", href: "/mang-xa-hoi/ai", quyen: "mxh.create", bieuTuong: "mxh-ai", tuKhoa: "ai viet bai tu san pham tro ly gia ban ton kho ngan sach" },
+      { nhan: "Chiến dịch nội dung", href: "/mang-xa-hoi/chien-dich", quyen: "mxh.view", bieuTuong: "mxh-chien-dich", tuKhoa: "chien dich noi dung nhom bai muc tieu campaign" },
+      { nhan: "Hồ sơ thương hiệu", href: "/mang-xa-hoi/thuong-hieu", quyen: "mxh.view", bieuTuong: "mxh-thuong-hieu", tuKhoa: "ho so thuong hieu giong van tu cam hashtag cta bai mau brand" },
       { nhan: "Chờ duyệt", href: "/mang-xa-hoi/cho-duyet", quyen: "mxh.approve", bieuTuong: "mxh-duyet", tuKhoa: "duyet bai mang xa hoi cho toi duyet approve" },
       { nhan: "Kênh", href: "/mang-xa-hoi/kenh", quyen: "mxh.view", bieuTuong: "mxh-kenh", tuKhoa: "kenh ket noi wordpress application password mat khau ung dung" },
     ],
