@@ -53,7 +53,7 @@ export async function giuChoNganSach(nc: NguCanh, d: { tinhNang: string; duTruTo
   if (!kq.duoc) throw new LoiNghiepVu(kq.lyDo, 409, kq.ma, { daDung, han });
   const id = crypto.randomUUID();
   await nc.tx.aiUsageLog.create({
-    data: { id, tenantId: nc.tenantId, userId: nc.hoSo.userId, feature: d.tinhNang, month: thang, status: "dang-goi", tokensReserved: d.duTruToken, costVnd: BigInt(d.duTruVnd), itemCount: d.soMuc, createdAt: bayGio },
+    data: { id, tenantId: nc.tenantId, userId: nc.hoSo.userId, feature: d.tinhNang, month: thang, status: "dang-goi", tokensReserved: d.duTruToken, costVnd: BigInt(d.duTruVnd), itemCount: d.soMuc },
   });
   return id;
 }
