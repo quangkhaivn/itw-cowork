@@ -49,10 +49,17 @@ export interface KhungLich {
   nhan: string;
 }
 
+/**
+ * QA 0.25.0 (QĐ-242): năm xem lịch giới hạn 2000–2100. Năm 0000–0099 bị `Date.UTC` hiểu thành 1900–1999 và năm âm cho
+ * chuỗi ngày dạng "-000001-12" → vòng dựng lưới chạy vô hạn (treo máy chủ, ăn hết RAM) hoặc dựng hàng trăm nghìn ô.
+ */
+export const NAM_LICH = { tu: 2000, den: 2100 } as const;
+const namHopLe = (y: number) => Number.isInteger(y) && y >= NAM_LICH.tu && y <= NAM_LICH.den;
+
 /** Khung tháng "YYYY-MM": từ thứ Hai của tuần chứa ngày 1 tới hết Chủ nhật của tuần chứa ngày cuối. */
 export function khungThang(thang: string): KhungLich | null {
   const m = /^(\d{4})-(\d{2})$/.exec(thang);
-  if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) return null;
+  if (!m || Number(m[2]) < 1 || Number(m[2]) > 12 || !namHopLe(Number(m[1]))) return null;
   const dau = `${thang}-01`;
   const y = Number(m[1]);
   const mo = Number(m[2]);
@@ -68,7 +75,7 @@ export function khungThang(thang: string): KhungLich | null {
 
 /** Khung tuần chứa ngày "YYYY-MM-DD" (thứ Hai → Chủ nhật). */
 export function khungTuan(ngayBatKy: string): KhungLich | null {
-  if (!dauNgayVN(ngayBatKy)) return null;
+  if (!dauNgayVN(ngayBatKy) || !namHopLe(Number(ngayBatKy.slice(0, 4)))) return null;
   const batDau = congNgay(ngayBatKy, -thuTrongTuan(ngayBatKy));
   const ngay = Array.from({ length: 7 }, (_, i) => congNgay(batDau, i));
   const [y, mo, d] = batDau.split("-").map(Number);

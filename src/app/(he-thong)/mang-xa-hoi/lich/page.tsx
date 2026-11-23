@@ -5,7 +5,7 @@ import { taoNguCanh } from "@/lib/api";
 import { coQuyen } from "@/lib/phan-quyen";
 import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { boLocLich, lichNoiDung } from "@/modules/mang-xa-hoi/lich";
-import { NHAN_TRANG_THAI_LICH, ngayVN, type TrangThaiLich } from "@/modules/mang-xa-hoi/lich-thuan";
+import { khungThang, khungTuan, NHAN_TRANG_THAI_LICH, ngayVN, type TrangThaiLich } from "@/modules/mang-xa-hoi/lich-thuan";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +16,9 @@ export default async function TrangLichNoiDung({ searchParams }: { searchParams:
   const nd = await yeuCauQuyen("mxh.view");
   const sp = await searchParams;
   const kieu = layMot(sp.kieu) === "tuan" ? "tuan" : "thang";
-  const thang = /^\d{4}-\d{2}$/.test(layMot(sp.thang)) ? layMot(sp.thang) : undefined;
-  const ngay = /^\d{4}-\d{2}-\d{2}$/.test(layMot(sp.ngay)) ? layMot(sp.ngay) : undefined;
+  // Tháng / ngày sai (năm ngoài 2000–2100, tháng 13…) → về tháng / tuần hiện tại thay vì trang lỗi (QĐ-242).
+  const thang = /^\d{4}-\d{2}$/.test(layMot(sp.thang)) && khungThang(layMot(sp.thang)) ? layMot(sp.thang) : undefined;
+  const ngay = /^\d{4}-\d{2}-\d{2}$/.test(layMot(sp.ngay)) && khungTuan(layMot(sp.ngay)) ? layMot(sp.ngay) : undefined;
   const uuid = (k: string) => (LA_UUID.test(layMot(sp[k])) ? layMot(sp[k]) : undefined);
   const loc = { kenhId: uuid("kenhId"), chienDichId: uuid("chienDichId"), nguoiSoanId: uuid("nguoiSoanId") };
   const bayGio = new Date();

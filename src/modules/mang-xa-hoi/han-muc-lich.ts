@@ -14,8 +14,15 @@ import { vuotHanMucNgay } from "./lich-thuan";
 /** [đầu, cuối) của ngày quota chứa `luc`. */
 export function khungNgayQuota(luc: Date): { tu: Date; den: Date; ngay: string } {
   const den = batDauNgayQuotaSau(luc);
-  let tu = batDauNgayQuotaSau(new Date(luc.getTime() - 86_400_000));
-  if (tu.getTime() > luc.getTime()) tu = batDauNgayQuotaSau(new Date(luc.getTime() - 2 * 86_400_000));
+  // QA 0.25.0 (QĐ-242): ngày quota theo giờ Thái Bình Dương dài 23 / 25 giờ vào hai ngày đổi giờ — lùi đúng 24 giờ có thể rơi
+  // vào HAI ngày trước (ví dụ giờ đầu của ngày ngay sau ngày 23 giờ) → khung thành hai ngày, đếm thừa video. Lùi 48 giờ rồi
+  // tiến từng ranh giới ngày quota tới ranh giới cuối cùng ≤ luc.
+  let tu = batDauNgayQuotaSau(new Date(luc.getTime() - 2 * 86_400_000));
+  for (let i = 0; i < 4; i++) {
+    const tiep = batDauNgayQuotaSau(tu);
+    if (tiep.getTime() > luc.getTime()) break;
+    tu = tiep;
+  }
   return { tu, den, ngay: ngayQuota(luc) };
 }
 

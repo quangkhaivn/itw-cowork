@@ -2,6 +2,7 @@ import { TEN_NEN_TANG, type NenTang } from "../hang-so";
 import { LUAT } from "../luat-nen-tang";
 import type { HoSoThuongHieu } from "../thuong-hieu-thuan";
 import { NHAN_TINH_TRANG_HANG, type SanPhamChoAI } from "./du-lieu-san-pham";
+import { boKyTuVoHinh } from "./vo-hinh";
 
 /**
  * Lời nhắc AI viết bài mạng xã hội (0.25.0, QĐ-238) — thuần.
@@ -62,7 +63,8 @@ export function loiNhacNguoiDung(y: YeuCauViet): string {
     `Viết một bài giới thiệu ${y.sanPham.length > 1 ? "các sản phẩm" : "sản phẩm"} dưới đây: nội dung chung (noiDung) + biến thể cho từng nền tảng trong danh sách nenTang (bienThe, khóa là mã nền tảng; không vượt doDaiToiDa).`,
     "<du_lieu>",
     // JSON — mọi chuỗi đã được thoát; dấu "<" thay bằng < để dữ liệu không đóng được khối.
-    JSON.stringify(duLieu).replace(/</g, "\\u003c"),
+    // QA 0.25.0 (QĐ-241): bỏ ký tự vô hình / thẻ Unicode trong MỌI chuỗi dữ liệu (lệnh giấu trong mô tả, hồ sơ, yêu cầu).
+    JSON.stringify(duLieu, (_k, v: unknown) => (typeof v === "string" ? boKyTuVoHinh(v, " ") : v)).replace(/</g, "\\u003c"),
     "</du_lieu>",
   ].join("\n");
 }
