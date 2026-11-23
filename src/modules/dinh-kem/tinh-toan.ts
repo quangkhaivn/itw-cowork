@@ -47,10 +47,15 @@ export const NHAN_LOAI_DOI_TUONG: Record<string, string> = {
 export interface KieuTep {
   mime: string;
   duoi: string[];
-  /** Vài byte đầu nhận dạng tệp. Rỗng = kiểu văn bản, không nhận dạng được bằng byte. */
-  dauTep: number[][];
+  /** Vài byte đầu nhận dạng tệp (`null` = byte bất kỳ). Rỗng = kiểu văn bản, không nhận dạng được bằng byte. */
+  dauTep: (number | null)[][];
   nhan: string;
+  /** 0.24.0: chỉ nhận cho bài mạng xã hội (video). */
+  chiMxh?: boolean;
 }
+
+/** Dung lượng tối đa của VIDEO bài mạng xã hội lấy từ Google Drive (máy chủ tải — không qua giới hạn tải lên của trình duyệt). */
+export const DUNG_LUONG_VIDEO_DRIVE_TOI_DA = 200 * 1024 * 1024;
 
 export const KIEU_CHO_PHEP: KieuTep[] = [
   { mime: "application/pdf", duoi: ["pdf"], dauTep: [[0x25, 0x50, 0x44, 0x46]], nhan: "PDF" },
@@ -72,6 +77,9 @@ export const KIEU_CHO_PHEP: KieuTep[] = [
   },
   { mime: "text/csv", duoi: ["csv"], dauTep: [], nhan: "CSV" },
   { mime: "text/plain", duoi: ["txt"], dauTep: [], nhan: "Văn bản" },
+  // 0.24.0 (MXH): video của bài — hộp "ftyp" ở byte 4–7 (ISO BMFF). Chỉ loại social_post nhận.
+  { mime: "video/mp4", duoi: ["mp4", "m4v"], dauTep: [[null, null, null, null, 0x66, 0x74, 0x79, 0x70]], nhan: "Video MP4", chiMxh: true },
+  { mime: "video/quicktime", duoi: ["mov"], dauTep: [[null, null, null, null, 0x66, 0x74, 0x79, 0x70], [null, null, null, null, 0x6d, 0x6f, 0x6f, 0x76], [null, null, null, null, 0x77, 0x69, 0x64, 0x65]], nhan: "Video MOV", chiMxh: true },
 ];
 
 export function duoiTep(ten: string): string {
@@ -81,7 +89,7 @@ export function duoiTep(ten: string): string {
 
 function khopDauTep(kieu: KieuTep, byte: Uint8Array): boolean {
   if (kieu.dauTep.length === 0) return true;
-  return kieu.dauTep.some((mau) => mau.every((b, i) => byte[i] === b));
+  return kieu.dauTep.some((mau) => mau.every((b, i) => b === null || byte[i] === b));
 }
 
 export interface KetQuaNhanDang {
@@ -98,14 +106,15 @@ export interface KetQuaNhanDang {
  * Đuôi và nội dung phải khớp nhau: một tệp `.pdf` mà byte đầu không phải PDF thì
  * bị từ chối, vì đó đúng là hình dạng của một tệp đội lốt.
  */
-export function nhanDangTep(tenTep: string, byteDau: Uint8Array): KetQuaNhanDang {
+export function nhanDangTep(tenTep: string, byteDau: Uint8Array, choPhepVideo = false): KetQuaNhanDang {
   const duoi = duoiTep(tenTep);
   if (!duoi) {
     return { hopLe: false, lyDo: "Tệp không có phần đuôi tên nên không biết là kiểu gì.", mime: null, nhan: null };
   }
-  const kieu = KIEU_CHO_PHEP.find((k) => k.duoi.includes(duoi));
+  const dsKieu = KIEU_CHO_PHEP.filter((k) => choPhepVideo || !k.chiMxh);
+  const kieu = dsKieu.find((k) => k.duoi.includes(duoi));
   if (!kieu) {
-    const dsDuoi = [...new Set(KIEU_CHO_PHEP.flatMap((k) => k.duoi))].join(", ");
+    const dsDuoi = [...new Set(dsKieu.flatMap((k) => k.duoi))].join(", ");
     return { hopLe: false, lyDo: `Không nhận tệp .${duoi}. Chỉ nhận: ${dsDuoi}.`, mime: null, nhan: null };
   }
   if (!khopDauTep(kieu, byteDau)) {

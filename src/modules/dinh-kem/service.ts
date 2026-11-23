@@ -93,19 +93,20 @@ export interface YeuCauDinhKem {
  * thật sự là kiểu gì**. Chỉ khi mọi thứ qua mới ghi xuống đĩa, và ghi đĩa xong mới
  * ghi bản ghi — để không bao giờ có bản ghi trỏ tới tệp không tồn tại.
  */
-export async function dinhKemTep(nc: NguCanh, yc: YeuCauDinhKem) {
+export async function dinhKemTep(nc: NguCanh, yc: YeuCauDinhKem, tuyChon: { dungLuongToiDa?: number; nguon?: string } = {}) {
   if (!(await duocSuaChungTu(nc, yc.loai, yc.doiTuongId))) {
     if (!(await duocXemChungTu(nc, yc.loai, yc.doiTuongId))) throw new LoiKhongTimThay("Chứng từ");
     throw new LoiThieuQuyen(`đính kèm vào ${yc.loai}`, { objectType: yc.loai, objectId: yc.doiTuongId });
   }
 
   if (yc.noiDung.byteLength === 0) throw new LoiDinhDang("tep", "Tệp rỗng.");
-  if (yc.noiDung.byteLength > DUNG_LUONG_TOI_DA) {
+  const toiDa = tuyChon.dungLuongToiDa ?? DUNG_LUONG_TOI_DA;
+  if (yc.noiDung.byteLength > toiDa) {
     throw new LoiNghiepVu(
-      `Tệp ${dinhDangDungLuong(yc.noiDung.byteLength)} vượt mức cho phép ${dinhDangDungLuong(DUNG_LUONG_TOI_DA)}.`,
+      `Tệp ${dinhDangDungLuong(yc.noiDung.byteLength)} vượt mức cho phép ${dinhDangDungLuong(toiDa)}.${yc.loai === "social_post" && toiDa === DUNG_LUONG_TOI_DA ? " Video lớn hơn: đặt trên Google Drive rồi bấm “Chọn từ Google Drive”." : ""}`,
       413,
       "tep-qua-lon",
-      { toiDa: DUNG_LUONG_TOI_DA },
+      { toiDa },
     );
   }
 
@@ -117,7 +118,8 @@ export async function dinhKemTep(nc: NguCanh, yc: YeuCauDinhKem) {
   }
 
   const ten = lamSachTenTep(yc.tenTep);
-  const nhanDang = nhanDangTep(ten, yc.noiDung.subarray(0, 16));
+  // 0.24.0: video (MP4 / MOV) chỉ nhận cho bài mạng xã hội.
+  const nhanDang = nhanDangTep(ten, yc.noiDung.subarray(0, 16), yc.loai === "social_post");
   if (!nhanDang.hopLe) throw new LoiNghiepVu(nhanDang.lyDo!, 415, "kieu-tep-khong-nhan");
 
   const bam = maBam(yc.noiDung);
@@ -150,7 +152,7 @@ export async function dinhKemTep(nc: NguCanh, yc: YeuCauDinhKem) {
     action: "tao",
     objectType: "attachment",
     objectId: t.id,
-    after: { tenTep: ten, kieuTep: nhanDang.mime, dungLuong: yc.noiDung.byteLength, gan: `${yc.loai}:${yc.doiTuongId}` },
+    after: { tenTep: ten, kieuTep: nhanDang.mime, dungLuong: yc.noiDung.byteLength, gan: `${yc.loai}:${yc.doiTuongId}`, ...(tuyChon.nguon ? { nguon: tuyChon.nguon } : {}) },
   });
   await nc.suKien({
     eventType: SU_KIEN.ATTACHMENT_ADDED,

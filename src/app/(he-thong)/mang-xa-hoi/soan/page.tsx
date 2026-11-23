@@ -12,8 +12,8 @@ export default async function TrangSoanBai() {
   return (
     <>
       <DauTrang tieuDe="Soạn bài" duongDan={[{ nhan: "Mạng xã hội", href: "/mang-xa-hoi" }]}
-        moTa="Viết nội dung, chọn kênh rồi lưu nháp. Sau đó thêm ảnh (ảnh đầu tiên làm ảnh đại diện WordPress) và Đăng ngay / Hẹn giờ — hoặc Gửi duyệt nếu bạn không có quyền đăng." />
-      <FormSoanBai kenh={kenh.map((k) => ({ id: k.id, ten: k.ten, tenNenTang: k.tenNenTang, trangThai: k.trangThai }))} />
+        moTa="Viết nội dung, chọn kênh rồi lưu nháp. Sau đó thêm ảnh / video (tải lên hoặc chọn từ Google Drive) và Đăng ngay / Hẹn giờ — hoặc Gửi duyệt nếu bạn không có quyền đăng. Cowork kiểm định dạng theo từng nền tảng trước khi xếp lịch." />
+      <FormSoanBai kenh={kenh.map((k) => ({ id: k.id, ten: k.ten, tenNenTang: k.tenNenTang, trangThai: k.trangThai, nenTang: k.nenTang, oauth: k.oauth }))} />
     </>
   );
 }

@@ -290,6 +290,7 @@ export const DIEU_HUONG: NhomDieuHuong[] = [
       { nhan: "Cấu hình hệ thống", href: "/quan-tri/cau-hinh", quyen: "setting.view", bieuTuong: "cau-hinh", tuKhoa: "settings nguong bien loi nhuan" },
       { nhan: "Hồ sơ công ty", href: "/quan-tri/ho-so-cong-ty", quyen: "setting.view", bieuTuong: "ho-so-cong-ty", tuKhoa: "company profile dia chi ma so thue tai khoan nguoi ky ban in" },
       { nhan: "Kết nối nền tảng (API)", href: "/quan-tri/ket-noi-nen-tang", quyen: ["setting.view", "mxh.view", "technical.view"], bieuTuong: "ket-noi-api", tuKhoa: "api meta facebook google youtube zalo app id app secret client id redirect uri oauth" },
+      { nhan: "Trang công khai", href: "/quan-tri/trang-cong-khai", quyen: "setting.view", bieuTuong: "ho-so-cong-ty", tuKhoa: "dieu khoan quyen rieng tu xoa du lieu privacy terms data deletion meta google" },
       { nhan: "Kết nối email", href: "/quan-tri/ket-noi-email", quyen: "integration.view", bieuTuong: "ket-noi-email", tuKhoa: "smtp gmail microsoft 365 sendgrid hop thu gui email" },
       { nhan: "Xác thực 2 lớp", href: "/quan-tri/xac-thuc-2-lop", quyen: "user.view", bieuTuong: "bao-mat", tuKhoa: "2fa totp bao mat authenticator ma xac thuc" },
       { nhan: "Tự động hóa", href: "/quan-tri/tu-dong-hoa", quyen: "setting.view", bieuTuong: "tu-dong-hoa", tuKhoa: "automation quy tac nhac viec lich chay nen job" },

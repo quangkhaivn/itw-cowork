@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import DauTrang from "@/components/ui/DauTrang";
 import KhungDinhKem from "@/components/dinh-kem/KhungDinhKem";
 import FormSoanBai from "@/components/mang-xa-hoi/FormSoanBai";
+import ChonTuDrive from "@/components/mang-xa-hoi/ChonTuDrive";
 import KenhCuaBai from "@/components/mang-xa-hoi/KenhCuaBai";
 import ThaoTacBai from "@/components/mang-xa-hoi/ThaoTacBai";
 import { taoNguCanh } from "@/lib/api";
@@ -53,7 +54,7 @@ export default async function TrangChiTietBai({ params }: { params: Promise<{ id
       <ThaoTacBai id={b.id} quyen={b.quyen} phaiDuyet={b.phaiDuyet} />
 
       {b.quyen.sua ? (
-        <FormSoanBai kenh={d.kenh.map((k) => ({ id: k.id, ten: k.ten, tenNenTang: k.tenNenTang, trangThai: k.trangThai }))} bai={{ id: b.id, tieuDe: b.tieuDe, noiDung: b.noiDung, kenhIds: b.kenh.map((k) => k.kenhId) }} />
+        <FormSoanBai kenh={d.kenh.map((k) => ({ id: k.id, ten: k.ten, tenNenTang: k.tenNenTang, trangThai: k.trangThai, nenTang: k.nenTang, oauth: k.oauth }))} bai={{ id: b.id, tieuDe: b.tieuDe, noiDung: b.noiDung, kenhIds: b.kenh.map((k) => k.kenhId), tuyChon: b.tuyChon }} />
       ) : (
         <section className="the">
           <div className="dau"><h2>Nội dung</h2></div>
@@ -62,11 +63,14 @@ export default async function TrangChiTietBai({ params }: { params: Promise<{ id
       )}
 
       {b.quyen.dinhKem ? (
-        <KhungDinhKem loai="social_post" doiTuongId={b.id} moTa="Ảnh của bài (JPEG, PNG, GIF, WebP). Ảnh đầu tiên làm ảnh đại diện trên WordPress. Ảnh được chụp lại lúc gửi duyệt / đăng." />
+        <>
+          <KhungDinhKem loai="social_post" doiTuongId={b.id} moTa="Ảnh (JPEG, PNG, GIF, WebP) và video (MP4, MOV) của bài — tải thẳng tối đa 20 MB; video lớn hơn (tới 200 MB) đặt trên Google Drive rồi chọn ở dưới. Ảnh đầu tiên làm ảnh đại diện WordPress. Media được chụp lại lúc gửi duyệt / đăng; Cowork kiểm định dạng theo từng nền tảng, không chuyển mã video." />
+          <ChonTuDrive baiId={b.id} />
+        </>
       ) : b.anh.length > 0 && (
         <section className="the">
-          <div className="dau"><h2>Ảnh đã chụp cho bài</h2></div>
-          <ul style={{ padding: "0 32px 16px" }}>{b.anh.map((a) => <li key={a.id}>{a.tenTep} {a.vaiTro === "featured" && <span className="huy-hieu">Ảnh đại diện</span>}</li>)}</ul>
+          <div className="dau"><h2>Ảnh / video đã chụp cho bài</h2></div>
+          <ul style={{ padding: "0 32px 16px" }}>{b.anh.map((a) => <li key={a.id}>{a.tenTep} {a.laVideo && <span className="huy-hieu">Video</span>} {a.vaiTro === "featured" && !a.laVideo && <span className="huy-hieu">Ảnh đại diện</span>}</li>)}</ul>
         </section>
       )}
 

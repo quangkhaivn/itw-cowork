@@ -11,13 +11,13 @@ export default function KenhCuaBai({ kenh, gon = false }: { kenh: BaiRa["kenh"];
         const nhan = NHAN_TRANG_THAI_KENH_BAI[k.trangThai as TrangThaiKenhBai] ?? { nhan: k.trangThai, lop: "" };
         return (
           <div key={k.id}>
-            <strong>{k.tenKenh}</strong> <span className={`huy-hieu ${nhan.lop}`}>{nhan.nhan}</span>
+            <strong>{k.tenKenh}</strong> <span className="phu nho">{k.tenNenTang}{k.nhanKieuNoiDung ? ` · ${k.nhanKieuNoiDung}` : ""}</span> <span className={`huy-hieu ${nhan.lop}`}>{nhan.nhan}</span>
             {k.duongDan && <> · <a href={k.duongDan} target="_blank" rel="noopener noreferrer">Xem bài đã đăng ↗</a></>}
             {k.trangThai === "QUEUED" && k.lanThuToi && <span className="phu nho"> · {k.soLanThu > 0 ? "thử lại" : "đăng"} lúc {dinhDangNgayGio(k.lanThuToi)}</span>}
             {!gon && k.thongBaoLoi && (k.trangThai === "FAILED" || k.trangThai === "VERIFYING" || k.trangThai === "QUEUED") && (
               <div className={`hop-thong-bao ${k.trangThai === "FAILED" ? "loi" : "canh-bao"} nho`} style={{ marginTop: 4 }}>
                 {k.thongBaoLoi}{k.huongDan && <div>{k.huongDan}</div>}
-                {k.kenhCanNhapLai && <div><a href="/mang-xa-hoi/kenh">→ Nhập lại mật khẩu ứng dụng</a></div>}
+                {k.kenhCanNhapLai && <div><a href="/mang-xa-hoi/kenh">→ {k.kenhOAuth ? "Kết nối lại kênh" : "Nhập lại mật khẩu ứng dụng"}</a></div>}
               </div>
             )}
             {gon && k.trangThai === "FAILED" && <span className="loi-truong nho"> {k.thongBaoLoi}</span>}

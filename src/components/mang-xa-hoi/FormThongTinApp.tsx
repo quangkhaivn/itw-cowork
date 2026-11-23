@@ -15,10 +15,12 @@ export interface DongApp {
   biMatCapNhatLuc: string | null;
   kiemTra: { trangThai: string | null; thongBao: string | null; luc: string } | null;
   dangChoKiemTra: boolean;
+  coKhoaPicker?: boolean | null;
+  khoaPickerBonSoCuoi?: string | null;
 }
 
 const TRUONG: Record<DongApp["nhaCungCap"], { ten: string; nhan: string; goiY?: string }[]> = {
-  META: [{ ten: "appId", nhan: "App ID" }, { ten: "graphVersion", nhan: "Phiên bản Graph API", goiY: "Điền sẵn; đổi khi Meta ra bản mới." }],
+  META: [{ ten: "appId", nhan: "App ID" }, { ten: "graphVersion", nhan: "Phiên bản Graph API", goiY: "Điền sẵn; đổi khi Meta ra bản mới (chưa kiểm với API thật)." }, { ten: "configId", nhan: "Configuration ID (Facebook Login for Business)", goiY: "Không bắt buộc — có thì hộp thoại đăng nhập dùng cấu hình này thay danh sách quyền." }],
   GOOGLE: [{ ten: "clientId", nhan: "OAuth Client ID", goiY: "dạng 1234…-xxxx.apps.googleusercontent.com" }],
   ZALO: [{ ten: "appId", nhan: "App ID" }],
 };
@@ -34,12 +36,13 @@ export default function FormThongTinApp({ dong, quanLy }: { dong: DongApp; quanL
   const { goi, dangGui, loi } = useGoiApi();
   const [gt, datGt] = useState<Record<string, string>>({ ...(dong.congKhai ?? {}) });
   const [biMat, datBiMat] = useState("");
+  const [khoaPicker, datKhoaPicker] = useState("");
   const [kq, datKq] = useState<{ trangThai: string | null; thongBao: string } | null>(null);
   const url = `/api/v1/mang-xa-hoi/thong-tin-app/${dong.nhaCungCap.toLowerCase()}`;
-  const than = () => ({ ...gt, biMat: biMat || null });
+  const than = () => ({ ...gt, biMat: biMat || null, ...(dong.nhaCungCap === "GOOGLE" ? { khoaPicker: khoaPicker || null } : {}) });
 
   async function luu() {
-    if (await goi(url, "PUT", than())) { datBiMat(""); datKq(null); router.refresh(); }
+    if (await goi(url, "PUT", than())) { datBiMat(""); datKhoaPicker(""); datKq(null); router.refresh(); }
   }
   async function kiemTra() {
     const r = await goi<{ trangThai: string | null; thongBao: string }>(`${url}/kiem-tra`, "POST", than());
@@ -75,6 +78,14 @@ export default function FormThongTinApp({ dong, quanLy }: { dong: DongApp; quanL
                 placeholder={dong.bonSoCuoi ? `Đã lưu ••••${dong.bonSoCuoi} — để trống để giữ` : "Dán vào đây"} />
               {dong.bonSoCuoi && <span className="phu nho">Đã lưu: ••••{dong.bonSoCuoi} · cập nhật {gio(dong.biMatCapNhatLuc)}</span>}
             </div>
+            {dong.nhaCungCap === "GOOGLE" && (
+              <div className="truong">
+                <label htmlFor="GOOGLE-khoa-picker">Google API key (Picker)</label>
+                <input id="GOOGLE-khoa-picker" type="password" value={khoaPicker} onChange={(e) => datKhoaPicker(e.target.value)} autoComplete="new-password"
+                  placeholder={dong.khoaPickerBonSoCuoi ? `Đã lưu ••••${dong.khoaPickerBonSoCuoi} — để trống để giữ` : "AIza…"} />
+                <span className="phu nho">Để mở hộp “Chọn từ Google Drive”. Giới hạn khóa theo HTTP referrer (địa chỉ Cowork) trên Google Cloud.</span>
+              </div>
+            )}
           </div>
           {kt && <div className={`hop-thong-bao ${kt.trangThai === "ok" ? "tot" : kt.trangThai === "chi-dinh-dang" ? "thong-tin" : kt.trangThai ? "canh-bao" : "thong-tin"}`} role="status">{kt.thongBao}</div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
