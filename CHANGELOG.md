@@ -31,6 +31,16 @@ Phân hệ mới **Mạng xã hội** (BUSINESS_RULES mục 34, QĐ-193 → QĐ-
 - Bộ mới `npm run thu:mang-xa-hoi` (nối cuối `thu:tich-hop`): máy chủ WordPress + Meta Graph GIẢ cục bộ — đăng + đọc lại, 5xx → thử lại, 401 → NEEDS_REAUTH, hết giờ sau khi gửi → đối soát không trùng, 400 → PERMANENT, trigger PUBLISHED, RLS / IDOR, quyền, không tự duyệt, link ký (hết hạn, sửa chữ ký), SSRF, bí mật không lộ, route không import hàm giải mã, hai worker cùng nhận, tự sinh khóa. `thu/don-vi/mang-xa-hoi.test.ts` (38 bài).
 - Sửa lỗi có sẵn DG-43 (QĐ-202): người vào làm Chủ nhật bị tính "thiếu" báo cáo tuần có hạn nộp thứ Bảy — trước ngày vào làm. `thu:qa-danh-gia` hỏng đúng vào Chủ nhật.
 
+### Chính sách sau QA (QĐ-203 → QĐ-209)
+- **Đồng tác giả không được duyệt**: người sửa nội dung / ảnh sau khi bài đã gửi duyệt không duyệt được bài đó (máy chủ + CHECK + trigger CSDL).
+- **Đăng lỗi / cần kết nối lại / cần kiểm tay**: báo người soạn và người duyệt có phạm vi bao người soạn, mỗi người một lần.
+- **Link ảnh ký**: chỉ người có `mxh.update` hoặc luồng đăng bài; thực tập sinh không tạo được.
+- **Duyệt trễ giờ hẹn**: trễ ≤ `mxh.tre_hen_toi_da_phut` (mới, mặc định 60) → đăng ngay; trễ hơn → "Đã duyệt – cần hẹn lại giờ" + báo người soạn.
+- **Ngắt kênh khi đang xác minh**: đối soát công khai; không ra → kênh-bài "Không rõ – cần kiểm tay" (trạng thái mới `NEEDS_CHECK`) kèm link site, không đánh Lỗi.
+- **WordPress nhiều ảnh**: cảnh báo rõ chỉ ảnh đầu tiên được dùng.
+- **Nhiều worker cùng lúc được hỗ trợ** (DEPLOYMENT). Chặn thêm `::/96`; CSV "Hẹn lúc" theo giờ Việt Nam (+07:00); hủy lịch khóa theo thứ tự worker (không deadlock).
+- Migration `20261123090001_qa_mang_xa_hoi` (chỉ thêm). Bài thử: `thu:qa-mang-xa-hoi` mục QA-10.
+
 ### QA 0.23.0 (đối kháng) — lỗi tìm ra và đã sửa
 Bài tái hiện: `npm run thu:qa-mang-xa-hoi` (nối cuối `thu:tich-hop`) và `THU_URL=… npm run thu:qa-mang-xa-hoi-http` (vào bản `next start` đang chạy).
 - **Bí mật lộ qua lỗi của site**: site WordPress (plugin bảo mật / chế độ gỡ lỗi) nhại lại tiêu đề Authorization / mật khẩu ứng dụng trong thông báo lỗi → được lưu vào lỗi kênh-bài, nhật ký gọi nền tảng, thông báo, "kiểm tra lần cuối" của kênh và hiện cho mọi người có `mxh.view` (kể cả thực tập sinh). Connector nay che mọi dạng của bí mật (chuỗi Basic, `user:mật khẩu`, mật khẩu có / không dấu cách) trước khi lưu / trả.

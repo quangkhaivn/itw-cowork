@@ -1006,7 +1006,7 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 | MXH-03 | Kênh WordPress: địa chỉ HTTPS (bỏ `/wp-admin`, `/wp-json` thừa), tên đăng nhập + **mật khẩu ứng dụng** (không phải mật khẩu đăng nhập). Lưu chỉ khi **Kiểm tra kết nối** đạt: đăng nhập được, có quyền đăng bài và tải ảnh | [SV] · [TH] |
 | MXH-04 | Một site nối một lần cho mỗi doanh nghiệp (kênh đã ngắt không tính) | [DB] chỉ mục duy nhất riêng phần |
 | MXH-05 | Mật khẩu ứng dụng niêm phong envelope bằng `SOCIAL_MASTER_KEY` (AAD doanh nghiệp + kênh); không trả qua API, không hiện lại, không vào nhật ký / kiểm toán / sự kiện / thông báo. Thiếu khóa → không lưu được, báo rõ cách khắc phục | [SV] · [DB] CHECK · [TH] |
-| MXH-06 | **Ngắt kênh** (`mxh.delete`): xóa bản niêm phong (hủy data key), hủy lượt đăng chưa chạy của kênh; nhắc người dùng thu hồi mật khẩu ứng dụng trên WordPress | [SV] |
+| MXH-06 | **Ngắt kênh** (`mxh.delete`): xóa bản niêm phong (hủy data key), hủy lượt đăng chưa chạy của kênh; nhắc người dùng thu hồi mật khẩu ứng dụng trên WordPress. Kênh-bài đang **xác minh** khi ngắt: đối soát bằng dữ liệu công khai của nền tảng (không cần mật khẩu); thấy → Đã đăng; không ra → **"Không rõ – cần kiểm tay"** (`NEEDS_CHECK`, không đăng lại, không về nháp), cảnh báo kèm link site, báo người soạn + người duyệt (QĐ-207) | [SV] |
 | MXH-07 | Nền tảng trả 401 / 403 → kênh "Cần nhập lại mật khẩu ứng dụng"; bài không đăng / đăng lại được lên kênh đó tới khi nhập lại (kiểm tra thật rồi niêm phong lại) | [WK] · [SV] |
 | MXH-08 | "Kiểm tra lại" kênh đã lưu: xếp việc cho worker (≤ 15 giây), kết quả hiện trên màn hình | [SV] · [WK] |
 | MXH-09 | Gọi địa chỉ người dùng nhập đi qua lớp chống SSRF (QĐ-196) | [SV] · [TH] |
@@ -1015,14 +1015,14 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 
 | # | Luật | Chặn ở |
 |---|---|---|
-| MXH-10 | Trạng thái bài: Nháp → (Chờ duyệt → Đã duyệt) → Đã hẹn giờ / Đang đăng → Đã đăng / Lỗi một phần / Lỗi; Đã hẹn giờ → Đã hủy → (về) Nháp. Trạng thái thật nằm ở **từng kênh**: Chưa xếp lịch, Chờ đăng, Đang đăng, Đang xác minh, Đã đăng, Lỗi, Đã hủy | [SV] `CHUYEN_BAI` / `CHUYEN_KENH` · [DB] CHECK |
+| MXH-10 | Trạng thái bài: Nháp → (Chờ duyệt → Đã duyệt) → Đã hẹn giờ / Đang đăng → Đã đăng / Lỗi một phần / Lỗi; Đã hẹn giờ → Đã hủy → (về) Nháp. Trạng thái thật nằm ở **từng kênh**: Chưa xếp lịch, Chờ đăng, Đang đăng, Đang xác minh, Đã đăng, Lỗi, Đã hủy. Kênh còn trạng thái **Không rõ – cần kiểm tay** (QĐ-207); bài **Đã duyệt – cần hẹn lại giờ** (QĐ-206) | [SV] `CHUYEN_BAI` / `CHUYEN_KENH` · [DB] CHECK |
 | MXH-11 | Nội dung là **chữ thường** — không nhận HTML / script tự do; khi đăng chuyển sang HTML đã thoát (đoạn, xuống dòng, liên kết) | [SV] · [TH] |
-| MXH-12 | WordPress cần tiêu đề; ảnh đầu tiên là ảnh đại diện (ảnh = tệp đính kèm loại `social_post`: JPEG, PNG, GIF, WebP, ≤ 20 MB, nhận dạng theo nội dung) | [SV] connector `validate` |
+| MXH-12 | WordPress cần tiêu đề; ảnh đầu tiên là ảnh đại diện (ảnh = tệp đính kèm loại `social_post`: JPEG, PNG, GIF, WebP, ≤ 20 MB, nhận dạng theo nội dung). Nhiều ảnh: bước kiểm bài **cảnh báo** "WordPress chỉ dùng ảnh đầu tiên làm ảnh đại diện — N ảnh còn lại sẽ không được đăng" (QĐ-208) | [SV] connector `validate` |
 | MXH-13 | Sửa nội dung / kênh / ảnh chỉ khi Nháp, Đã duyệt, Đã hủy; sửa bài đã duyệt → về Nháp, mất duyệt | [SV] · [TH] |
 | MXH-14 | Ảnh được **chụp** vào bài (`social_post_media`) lúc gửi duyệt / hẹn giờ / đăng — ảnh thêm / gỡ sau đó không lọt vào bài đã duyệt | [SV] |
 | MXH-15 | **Khóa lặp lại**: tạo bài kèm `Idempotency-Key` → gửi lại cùng khóa trả bài cũ, không tạo bài thứ hai (duy nhất theo doanh nghiệp) | [SV] · [DB] · [TH] |
 | MXH-16 | **Đăng ngay** / **Hẹn giờ** cần `mxh.update`; giờ hẹn phải ở tương lai, trong vòng một năm; giờ lưu UTC, nhập / hiển thị giờ Việt Nam (ô nhập luôn hiểu +07:00, không theo múi giờ trình duyệt — QA 0.23.0) | [SV] |
-| MXH-17 | **Hủy lịch** chỉ khi chưa kênh nào bắt đầu đăng | [SV] khóa dòng kênh · [TH] |
+| MXH-17 | **Hủy lịch** chỉ khi chưa kênh nào bắt đầu đăng. Hủy lịch khóa kênh-bài trước rồi mới khóa bài — cùng thứ tự với worker, không deadlock (QĐ-209) | [SV] khóa dòng kênh · [TH] |
 | MXH-18 | **Đăng lại** chỉ các kênh Lỗi (lượt mới), kênh đã đăng không bị đụng; kênh cần nhập lại phải nhập lại trước | [SV] · [TH] |
 | MXH-19 | Xóa bài: chỉ Nháp / Đã hủy, xóa mềm | [SV] |
 | MXH-19a | **Chuyển về nháp** để sửa: bài Đã hủy, hoặc bài Lỗi mà chưa kênh nào có mã bài trên nền tảng. Kênh đã từng gửi giữ loại lỗi và khóa đối soát cũ → lần đăng sau đối soát trước khi gửi. Bài đã lên một phần: tạo bài mới cho kênh lỗi | [SV] · [TH] |
@@ -1031,10 +1031,10 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 
 | # | Luật | Chặn ở |
 |---|---|---|
-| MXH-20 | **Không tự duyệt**: người duyệt khác người soạn và người gửi duyệt | [SV] · [DB] CHECK · [TH] |
+| MXH-20 | **Không tự duyệt**: người duyệt khác người soạn và người gửi duyệt. **Đồng tác giả**: người sửa nội dung / ảnh sau khi bài đã gửi duyệt (khác người soạn) không được duyệt bài đó — trigger ghi `co_author_ids` (chỉ thêm), CHECK `social_posts_dong_tac_gia_check` (QĐ-203) | [SV] · [DB] CHECK · [TH] |
 | MXH-21 | Người duyệt hợp lệ: `mxh.approve` VÀ (cấp trên trong chuỗi quản lý của người soạn — như Công việc QĐ-154 — hoặc Giám đốc / Quản trị hoặc người soạn trong phạm vi duyệt của mình) | [SV] · [TH] |
 | MXH-22 | Bài do AI tạo phải duyệt khi Cấu hình `mxh.ai_phai_duyet` = 1 (mặc định). Thực tập sinh không có quyền đăng → luôn gửi duyệt | [SV] · [TH] |
-| MXH-23 | Gửi duyệt kèm ý định: đăng ngay / đăng vào giờ hẹn / để người có quyền đăng chọn giờ. Duyệt xong chạy tiếp đúng ý (giờ hẹn đã qua lúc duyệt → đăng ngay) | [SV] · [TH] |
+| MXH-23 | Gửi duyệt kèm ý định: đăng ngay / đăng vào giờ hẹn / để người có quyền đăng chọn giờ. Duyệt xong chạy tiếp đúng ý (giờ hẹn đã qua lúc duyệt → đăng ngay). Giờ hẹn đã qua lúc duyệt: trễ ≤ `mxh.tre_hen_toi_da_phut` (mặc định 60) → đăng ngay; trễ hơn → **Đã duyệt – cần hẹn lại giờ**, báo người soạn (QĐ-206) | [SV] · [TH] |
 | MXH-24 | Trả lại phải có lý do (≥ 3 ký tự), bài về Nháp, người soạn được báo | [SV] |
 | MXH-25 | Gửi duyệt báo những người giữ `mxh.approve` (trừ người soạn / người gửi); trang **Chờ duyệt** chỉ hiện bài mình là người duyệt hợp lệ | [SV] · [GD] |
 | MXH-26 | Lịch sử duyệt (`social_post_reviews`) chỉ ghi thêm | [DB] trigger |
@@ -1047,16 +1047,16 @@ Phân hệ đăng bài lên kênh mạng xã hội của doanh nghiệp, đặt 
 | MXH-31 | Đã đăng thì không lùi trạng thái, không đổi mã bài nền tảng | [DB] trigger |
 | MXH-32 | Phân loại lỗi: RETRYABLE (5xx, 429, mất mạng TRƯỚC khi gửi xong) → thử lại 30 s, 1, 2, 4 phút… tới `mxh.so_lan_thu_toi_da`; PERMANENT (4xx khác: sai định dạng, vi phạm) → Lỗi ngay; NEEDS_REAUTH (401 / 403) → Lỗi + kênh cần nhập lại; UNKNOWN (hết giờ / đứt SAU khi đã gửi, 2xx không có mã bài) → **đối soát** | [WK] · [TH] |
 | MXH-33 | Đối soát: chờ `mxh.cho_doi_soat_giay`, tìm bài theo **khóa đối soát** (slug duy nhất theo kênh-bài): thấy → xác minh; không thấy → đăng lại. Mọi lần đăng lại đều đối soát TRƯỚC — không bao giờ sinh bài trùng | [WK] · [TH] |
-| MXH-34 | Hai worker không nhận cùng một kênh-bài (`FOR UPDATE SKIP LOCKED`); kết quả ghi có điều kiện "đúng worker đang giữ". Mốc giữ khóa làm mới khi **bắt đầu** từng việc (QA 0.23.0). Lượt "Đang đăng" quá max(`mxh.phut_ket_dang`, 5 × `mxh.han_goi_giay`) (worker chết) → đối soát, không đăng lại mù | [WK] · [TH] |
+| MXH-34 | Hai worker không nhận cùng một kênh-bài (`FOR UPDATE SKIP LOCKED`); kết quả ghi có điều kiện "đúng worker đang giữ". Mốc giữ khóa làm mới khi **bắt đầu** từng việc (QA 0.23.0). Lượt "Đang đăng" quá max(`mxh.phut_ket_dang`, 5 × `mxh.han_goi_giay`) (worker chết) → đối soát, không đăng lại mù. **Nhiều worker cùng lúc là cấu hình được hỗ trợ** (QĐ-209, DEPLOYMENT) | [WK] · [TH] |
 | MXH-35 | Bài hẹn giờ lệch ≤ 60 giây (vòng worker 15 giây) | [WK] |
 | MXH-36 | Mọi lần gọi nền tảng ghi `social_publish_attempts` (chỉ ghi thêm, không token / mật khẩu); xem ở trang bài → Nhật ký gọi nền tảng. Thông báo / mã lỗi của nền tảng được **che bí mật** nếu nền tảng nhại lại (QA 0.23.0); mã lỗi cắt 100 ký tự | [WK] · [DB] |
-| MXH-37 | Kênh-bài Lỗi → thông báo cho người soạn kèm hướng dẫn theo loại lỗi | [WK] |
+| MXH-37 | Kênh-bài Lỗi → thông báo cho người soạn kèm hướng dẫn theo loại lỗi. Kênh-bài Lỗi / kênh **cần kết nối lại** / cần kiểm tay → báo người soạn VÀ người có `mxh.approve` mà phạm vi bao người soạn, mỗi người một lần (QĐ-204) | [WK] |
 
 ### Ảnh công khai, thông tin app
 
 | # | Luật | Chặn ở |
 |---|---|---|
-| MXH-40 | Link ảnh công khai có ký, hết hạn sau `mxh.han_link_media_phut` (60 phút), trên chính tên miền Cowork; chỉ phục vụ ảnh đang thuộc bài, đúng kiểu tệp, không chuyển hướng; mỗi lần phát ghi kiểm toán | [SV] · [TH] |
+| MXH-40 | Link ảnh công khai có ký, hết hạn sau `mxh.han_link_media_phut` (60 phút), trên chính tên miền Cowork; chỉ phục vụ ảnh đang thuộc bài, đúng kiểu tệp, không chuyển hướng; mỗi lần phát ghi kiểm toán. Chỉ người có `mxh.update` hoặc luồng đăng bài (worker) tạo được link — thực tập sinh không (QĐ-205) | [SV] · [TH] |
 | MXH-41 | **Kết nối nền tảng (API)**: chỉ Giám đốc / Quản trị (`setting.update`) đã bật 2 lớp xem / nhập; người khác chỉ thấy "đã cấu hình / chưa". Bí mật không bao giờ trả lại (4 ký tự cuối); kiểm toán chỉ ghi "đã đổi …" | [SV] · [TH] |
 | MXH-42 | Kiểm tra app: Meta xin app token (đúng / sai App ID + Secret); Google, Zalo chỉ kiểm định dạng — kiểm thật khi nối kênh đầu tiên (0.24) | [SV] · [WK] · [TH] |
 | MXH-43 | Chưa nhập trên màn hình mà máy chủ có biến môi trường (`META_APP_ID`…) → dùng biến môi trường, màn hình ghi "đang dùng giá trị từ máy chủ" | [WK] · [GD] |
