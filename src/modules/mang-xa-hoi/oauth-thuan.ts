@@ -233,7 +233,7 @@ export function dungMultipart(truong: Record<string, string>, tep?: { ten: strin
     phan.push(Buffer.from(`--${ranh}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`, "utf8"));
   }
   if (tep) {
-    const ten = tep.tenTep.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80) || "tep";
+    const ten = tep.tenTep.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80) || "tep";
     phan.push(Buffer.from(`--${ranh}\r\nContent-Disposition: form-data; name="${tep.ten}"; filename="${ten}"\r\nContent-Type: ${tep.mime}\r\n\r\n`, "utf8"));
     phan.push(tep.noiDung);
     phan.push(Buffer.from("\r\n", "utf8"));
