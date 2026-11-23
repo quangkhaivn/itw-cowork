@@ -3,6 +3,7 @@ import { voiTenant } from "@/lib/db";
 import { ghiKiemToan } from "@/lib/kiem-toan";
 import { layIpKhach } from "@/lib/yeu-cau";
 import { docMediaCongKhai, kiemMaMedia } from "@/modules/mang-xa-hoi/media-ky";
+import { doiSangJpeg } from "@/modules/mang-xa-hoi/media/doi-jpeg";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,6 +15,7 @@ function loi(status: number, cau: string) {
 /**
  * Phát ảnh của bài mạng xã hội qua link ký, ngắn hạn (QĐ-198). Không phiên; mã ký mang doanh nghiệp + bài + tệp + hạn.
  * Trả đúng byte, Content-Type đã nhận dạng lúc tải lên, KHÔNG chuyển hướng. Mỗi lần phát ghi kiểm toán.
+ * 0.24.0: mã ký có cờ `jpeg` (Instagram chỉ nhận JPEG) → đổi ảnh sang JPEG ngay lúc phát (sharp); video phát nguyên byte.
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ ma: string }> }) {
   const { ma } = await ctx.params;
@@ -29,6 +31,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ ma: string 
       return t;
     });
     if (!tep) return loi(404, "Không tìm thấy.");
+    if (kq.noiDung.jpeg && tep.mime !== "image/jpeg") {
+      if (!tep.mime.startsWith("image/")) return loi(404, "Không tìm thấy.");
+      const j = await doiSangJpeg(tep.noiDung);
+      if (!j) return loi(415, "Máy chủ không đổi được ảnh sang JPEG.");
+      tep.noiDung = j;
+      tep.mime = "image/jpeg";
+    }
     const conLai = Math.max(0, kq.noiDung.hetHanGiay - Math.floor(Date.now() / 1000));
     return new Response(new Uint8Array(tep.noiDung), {
       status: 200,

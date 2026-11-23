@@ -23,14 +23,25 @@ import { chuanHoaDiaChiSite } from "./tinh-toan";
 const CHON_KENH = {
   id: true, platform: true, name: true, externalId: true, accountName: true, status: true, meta: true,
   lastCheckedAt: true, lastCheckOk: true, lastCheckMessage: true, checkRequestedAt: true, disconnectedAt: true,
-  createdAt: true, credential: { select: { keyVersion: true, updatedAt: true } },
+  createdAt: true, authType: true, oauthProvider: true, credential: { select: { keyVersion: true, updatedAt: true, tokenExpiresAt: true } },
 } as const;
 
 type DongKenh = {
   id: string; platform: string; name: string; externalId: string; accountName: string | null; status: string; meta: unknown;
   lastCheckedAt: Date | null; lastCheckOk: boolean | null; lastCheckMessage: string | null; checkRequestedAt: Date | null;
-  disconnectedAt: Date | null; createdAt: Date; credential: { keyVersion: number; updatedAt: Date } | null;
+  disconnectedAt: Date | null; createdAt: Date; authType: string; oauthProvider: string | null;
+  credential: { keyVersion: number; updatedAt: Date; tokenExpiresAt: Date | null } | null;
 };
+
+/** Đường dẫn công khai của kênh để bấm mở (Page / Instagram / kênh YouTube / site WordPress). */
+function lienKetKenh(k: Pick<DongKenh, "platform" | "externalId" | "meta">): string | null {
+  const m = (k.meta ?? {}) as Record<string, unknown>;
+  if (k.platform === "WORDPRESS") return k.externalId;
+  if (k.platform === "FACEBOOK_PAGE") return typeof m.lienKet === "string" && /^https:\/\//.test(m.lienKet) ? m.lienKet : `https://www.facebook.com/${k.externalId}`;
+  if (k.platform === "INSTAGRAM") return typeof m.username === "string" ? `https://www.instagram.com/${m.username}` : null;
+  if (k.platform === "YOUTUBE") return `https://www.youtube.com/channel/${k.externalId}`;
+  return null;
+}
 
 /** Dữ liệu kênh trả ra ngoài — KHÔNG có bản niêm phong, không có mật khẩu. */
 function kenhRa(k: DongKenh) {
@@ -41,6 +52,10 @@ function kenhRa(k: DongKenh) {
     tenNenTang: TEN_NEN_TANG[k.platform] ?? k.platform,
     ten: k.name,
     diaChi: k.externalId,
+    lienKet: lienKetKenh(k),
+    oauth: k.authType === "oauth",
+    nhaCungCap: k.oauthProvider,
+    tokenHetHan: k.credential?.tokenExpiresAt ?? null,
     tenDangNhap: k.accountName,
     tenHienThi: typeof meta.tenHienThi === "string" ? meta.tenHienThi : null,
     trangThai: k.status,
@@ -166,6 +181,7 @@ export async function doiMatKhauKenh(x: NguCanh | BuocGiaoDich, id: string, d: z
     batBuocQuyen(nc.hoSo, "mxh.update", { objectType: "social_connection", objectId: id });
     const k = await layKenh(nc, id);
     if (k.disconnectedAt) throw new LoiNghiepVu("Kênh đã ngắt — nối lại như kênh mới.", 409, "kenh-da-ngat");
+    if (k.platform !== "WORDPRESS") throw new LoiNghiepVu("Kênh này kết nối bằng OAuth — dùng “Kết nối lại”.", 409, "kenh-oauth");
     return k;
   });
   const tenDangNhap = d.tenDangNhap?.trim() || k.accountName || "";

@@ -1,7 +1,8 @@
 import type { z } from "zod";
 import type { NguCanh } from "@/lib/api";
 import { thanhBuoc, type BuocGiaoDich } from "@/lib/api-nhieu-buoc";
-import { LoiNghiepVu } from "@/lib/loi";
+import { LoiKhongTimThay, LoiNghiepVu } from "@/lib/loi";
+import { giaiMa, maHoa } from "@/lib/ma-hoa";
 import { batBuocQuyen, coMotTrongCacQuyen, coQuyen } from "@/lib/phan-quyen";
 import { SU_KIEN } from "@/lib/su-kien";
 import { aadApp, trangThaiKhoaChu } from "./bao-mat/khoa-chu";
@@ -60,11 +61,13 @@ export function kiemDinhDang(ncc: NhaCungCapApp, cong: Record<string, string | n
   if (ncc === "META") {
     if (cong.appId != null && cong.appId !== "" && !/^\d{6,25}$/.test(cong.appId)) return "App ID của Meta là dãy số (xem ở Meta for Developers → App settings → Basic).";
     if (cong.graphVersion != null && cong.graphVersion !== "" && !/^v\d{1,2}\.\d$/.test(cong.graphVersion)) return "Phiên bản Graph API dạng v24.0.";
+    if (cong.configId != null && cong.configId !== "" && !/^\d{6,25}$/.test(cong.configId)) return "Configuration ID của Facebook Login for Business là dãy số (Facebook Login for Business → Configurations).";
     if (biMat && !/^[0-9a-f]{32}$/i.test(biMat.trim())) return "App Secret của Meta là 32 ký tự hệ 16 (0-9, a-f).";
   }
   if (ncc === "GOOGLE") {
     if (cong.clientId != null && cong.clientId !== "" && !/^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(cong.clientId)) return "Client ID của Google có dạng <số>-<chuỗi>.apps.googleusercontent.com.";
     if (biMat && !/^[A-Za-z0-9_-]{20,100}$/.test(biMat.trim())) return "Client Secret của Google không đúng định dạng (thường bắt đầu bằng GOCSPX-).";
+    if (cong.khoaPicker && !/^[A-Za-z0-9_-]{30,60}$/.test(cong.khoaPicker)) return "Google API key (Picker) không đúng định dạng (thường bắt đầu bằng AIza, 39 ký tự).";
   }
   if (ncc === "ZALO") {
     if (cong.appId != null && cong.appId !== "" && !/^\d{8,25}$/.test(cong.appId)) return "App ID của Zalo là dãy số.";
@@ -74,11 +77,14 @@ export function kiemDinhDang(ncc: NhaCungCapApp, cong: Record<string, string | n
 }
 
 function tenTruong(ncc: NhaCungCapApp) {
-  return ncc === "GOOGLE" ? ["clientId"] : ncc === "META" ? ["appId", "graphVersion"] : ["appId"];
+  return ncc === "GOOGLE" ? ["clientId"] : ncc === "META" ? ["appId", "graphVersion", "configId"] : ["appId"];
 }
 
-/** URL cần dán sang trang của nền tảng, dựng từ APP_URL (hoặc host đang mở). */
-export function urlCanDan(goc: string) {
+/**
+ * URL cần dán sang trang của nền tảng, dựng từ APP_URL (hoặc host đang mở). 0.24.0: thêm trang Điều khoản, Quyền riêng
+ * tư, Xóa dữ liệu (công khai, theo mã doanh nghiệp) và Data Deletion Callback của Meta.
+ */
+export function urlCanDan(goc: string, maDoanhNghiep = "") {
   const g = goc.replace(/\/+$/, "");
   let tenMien = "";
   try {
@@ -94,10 +100,13 @@ export function urlCanDan(goc: string) {
       GOOGLE: `${g}/api/cong-khai/mxh/oauth/google/callback`,
       ZALO: `${g}/api/cong-khai/mxh/oauth/zalo/callback`,
     } as Record<NhaCungCapApp, string>,
-    // Cowork chưa có các trang này — cần trước khi gửi duyệt app (câu hỏi cho Giám đốc).
-    dieuKhoan: null as string | null,
-    quyenRiengTu: null as string | null,
-    xoaDuLieu: null as string | null,
+    dieuKhoan: `${g}/dieu-khoan${maDoanhNghiep ? `?dn=${encodeURIComponent(maDoanhNghiep)}` : ""}`,
+    quyenRiengTu: `${g}/quyen-rieng-tu${maDoanhNghiep ? `?dn=${encodeURIComponent(maDoanhNghiep)}` : ""}`,
+    xoaDuLieu: `${g}/xoa-du-lieu${maDoanhNghiep ? `?dn=${encodeURIComponent(maDoanhNghiep)}` : ""}`,
+    /** Meta → App settings → Advanced → Data Deletion Request URL. */
+    xoaDuLieuCallback: `${g}/api/cong-khai/mxh/meta/xoa-du-lieu/${encodeURIComponent(maDoanhNghiep || "ma-doanh-nghiep")}`,
+    /** Google Picker: HTTP referrer cho API key. */
+    referrerPicker: `${g}/*`,
   };
 }
 
@@ -122,6 +131,8 @@ export async function danhSachThongTinApp(nc: NguCanh) {
       // Chỉ người quản lý thấy phần dưới.
       congKhai: quanLy ? { ...cong, ...(ncc === "META" && !cong.graphVersion ? { graphVersion: GRAPH_VERSION_MAC_DINH } : {}) } : null,
       bonSoCuoi: quanLy ? d?.secretLast4 ?? null : null,
+      coKhoaPicker: ncc === "GOOGLE" ? Boolean(d?.pickerKeyEnc) : null,
+      khoaPickerBonSoCuoi: quanLy && ncc === "GOOGLE" ? d?.pickerKeyLast4 ?? null : null,
       biMatCapNhatLuc: quanLy ? d?.secretUpdatedAt ?? null : null,
       kiemTra: d?.checkedAt ? { trangThai: d.checkStatus, thongBao: d.checkMessage, luc: d.checkedAt } : null,
       dangChoKiemTra: Boolean(d?.checkRequestedAt),
@@ -150,6 +161,15 @@ export async function luuThongTinApp(nc: NguCanh, nccNhap: string, d: z.infer<ty
   }
   if (ncc === "META" && !cong.graphVersion) cong.graphVersion = GRAPH_VERSION_MAC_DINH;
   const biMat = d.biMat?.trim() || null;
+  const khoaPicker = ncc === "GOOGLE" ? d.khoaPicker?.trim() || null : null;
+  if (khoaPicker) {
+    const lp = kiemDinhDang(ncc, { khoaPicker }, null);
+    if (lp) throw new LoiNghiepVu(lp, 400, "sai-dinh-dang");
+  }
+  // Google API key (Picker): khóa phía trình duyệt (giới hạn HTTP referrer) — trình duyệt PHẢI nhận được để mở Google
+  // Picker, nên mã hóa bằng APP_ENC_KEY (ứng dụng web giải được để đưa cho người soạn bài), không dùng envelope chỉ-worker
+  // (QĐ-206). Không bao giờ hiện lại trên màn hình quản trị (chỉ 4 ký tự cuối), không vào kiểm toán.
+  const picker = khoaPicker ? { pickerKeyEnc: maHoa(khoaPicker, aadPicker(nc.tenantId)), pickerKeyLast4: bonKyTuCuoi(khoaPicker) } : {};
   let niem = {};
   if (biMat) {
     const k = trangThaiKhoaChu();
@@ -160,10 +180,11 @@ export async function luuThongTinApp(nc: NguCanh, nccNhap: string, d: z.infer<ty
   const doiCong = JSON.stringify(congCu) !== JSON.stringify(cong);
   await nc.tx.socialAppConfig.upsert({
     where: { tenantId_provider: { tenantId: nc.tenantId, provider: ncc } },
-    create: { tenantId: nc.tenantId, provider: ncc, publicConfig: cong, ...niem, updatedBy: nc.hoSo.userId },
+    create: { tenantId: nc.tenantId, provider: ncc, publicConfig: cong, ...niem, ...picker, updatedBy: nc.hoSo.userId },
     // Đổi thông tin → kết quả kiểm tra cũ không còn đúng.
-    update: { publicConfig: cong, ...niem, updatedBy: nc.hoSo.userId, ...(doiCong || biMat ? { checkStatus: null, checkMessage: null, checkedAt: null } : {}) },
+    update: { publicConfig: cong, ...niem, ...picker, updatedBy: nc.hoSo.userId, ...(doiCong || biMat ? { checkStatus: null, checkMessage: null, checkedAt: null } : {}) },
   });
+  if (khoaPicker) await nc.kiemToan({ action: "doi-bi-mat-app-mxh", objectType: "social_app_config", objectId: null, after: { noiDung: "đã đổi Google API key (Picker)" } });
   if (doiCong) await nc.kiemToan({ action: "luu-thong-tin-app-mxh", objectType: "social_app_config", objectId: null, before: { nenTang: ncc, ...congCu }, after: { nenTang: ncc, ...cong } });
   if (biMat) await nc.kiemToan({ action: "doi-bi-mat-app-mxh", objectType: "social_app_config", objectId: null, after: { noiDung: `đã đổi ${NHAN_BI_MAT[ncc]} ${ncc === "META" ? "Meta" : ncc === "GOOGLE" ? "Google" : "Zalo"}` } });
   await nc.suKien({ eventType: SU_KIEN.SOCIAL_APP_CONFIG_CHANGED, objectType: "social_app_config", objectId: null, payload: { nenTang: ncc, doiBiMat: Boolean(biMat), doiThongTin: doiCong } });
@@ -178,7 +199,7 @@ export async function xoaBiMatApp(nc: NguCanh, nccNhap: string) {
   if (cu) {
     await nc.tx.socialAppConfig.update({
       where: { id: cu.id },
-      data: { ciphertext: null, iv: null, authTag: null, wrappedKey: null, keyVersion: null, secretLast4: null, secretUpdatedAt: new Date(), secretUpdatedBy: nc.hoSo.userId, checkStatus: null, checkMessage: null, checkedAt: null, checkRequestedAt: null, updatedBy: nc.hoSo.userId },
+      data: { ciphertext: null, iv: null, authTag: null, wrappedKey: null, keyVersion: null, secretLast4: null, pickerKeyEnc: null, pickerKeyLast4: null, secretUpdatedAt: new Date(), secretUpdatedBy: nc.hoSo.userId, checkStatus: null, checkMessage: null, checkedAt: null, checkRequestedAt: null, updatedBy: nc.hoSo.userId },
     });
   }
   await nc.kiemToan({ action: "xoa-bi-mat-app-mxh", objectType: "social_app_config", objectId: null, after: { noiDung: `đã xóa ${NHAN_BI_MAT[ncc]} ${TEN_NHA_CUNG_CAP[ncc]}` } });
@@ -276,4 +297,35 @@ export async function kiemTraThongTinApp(x: NguCanh | BuocGiaoDich, nccNhap: str
     await nc.kiemToan({ action: "kiem-tra-app-mxh", objectType: "social_app_config", after: { nenTang: ncc, ketQua: kq.trangThai, banMoi: Boolean(biMat) } });
   });
   return kq;
+}
+
+// ---------------------------------------------------------------------------
+// Google Picker (0.24.0, QĐ-206)
+// ---------------------------------------------------------------------------
+
+export function aadPicker(tenantId: string): string {
+  return `mxh-picker:${tenantId}`;
+}
+
+/**
+ * Cấu hình cho Google Picker trên trình duyệt (người soạn bài: `mxh.create` / `mxh.update`): Client ID (không bí mật),
+ * API key (khóa trình duyệt), App ID = số project (phần số đầu của Client ID — Picker cần để cấp quyền drive.file cho
+ * đúng app). Không có Client Secret.
+ */
+export async function cauHinhPicker(nc: NguCanh) {
+  if (!coMotTrongCacQuyen(nc.hoSo, ["mxh.create", "mxh.update"])) batBuocQuyen(nc.hoSo, "mxh.create");
+  const d = await nc.tx.socialAppConfig.findFirst({ where: { provider: "GOOGLE" } });
+  const cong = (d?.publicConfig ?? {}) as Record<string, string>;
+  const clientId = cong.clientId || process.env.GOOGLE_CLIENT_ID?.trim() || "";
+  if (!clientId) throw new LoiNghiepVu("Chưa nhập Client ID của Google (Quản trị → Kết nối nền tảng (API)).", 409, "chua-cau-hinh-app");
+  if (!d?.pickerKeyEnc) throw new LoiNghiepVu("Chưa nhập Google API key (Picker) ở Quản trị → Kết nối nền tảng (API).", 409, "chua-co-khoa-picker");
+  let apiKey: string;
+  try {
+    apiKey = giaiMa(d.pickerKeyEnc, aadPicker(nc.tenantId));
+  } catch {
+    throw new LoiNghiepVu("Không đọc được Google API key (Picker) — nhập lại ở Quản trị → Kết nối nền tảng (API).", 500, "khoa-picker-hong");
+  }
+  const appId = /^(\d+)-/.exec(clientId)?.[1] ?? "";
+  if (!appId) throw new LoiKhongTimThay("Số project Google");
+  return { clientId, apiKey, appId, scope: "https://www.googleapis.com/auth/drive.file" };
 }

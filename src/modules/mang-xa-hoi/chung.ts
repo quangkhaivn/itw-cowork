@@ -9,6 +9,10 @@ import { tongHopTrangThaiBai } from "./tinh-toan";
 
 export interface CauHinhMxh {
   aiPhaiDuyet: boolean;
+  /** 0.24.0: mọi bài phải duyệt (mặc định tắt). */
+  moiBaiPhaiDuyet: boolean;
+  /** 0.24.0: số video tải lên YouTube tối đa / ngày quota. */
+  youtubeToiDaNgay: number;
   hanLinkMediaPhut: number;
   soLanThuToiDa: number;
   hanGoiMs: number;
@@ -25,7 +29,11 @@ export async function docCauHinhMxh(tx: ClientTenant): Promise<CauHinhMxh> {
   const han = await docCauHinh(tx, "mxh.han_goi_giay");
   const cho = await docCauHinh(tx, "mxh.cho_doi_soat_giay");
   const ket = await docCauHinh(tx, "mxh.phut_ket_dang");
+  const moi = await docCauHinh(tx, "mxh.moi_bai_phai_duyet");
+  const yt = await docCauHinh(tx, "mxh.youtube_upload_toi_da_ngay");
   return {
+    moiBaiPhaiDuyet: moi === 1,
+    youtubeToiDaNgay: yt ?? 100,
     // Chỉ đúng 0 mới tắt (mặc định an toàn: phải duyệt).
     aiPhaiDuyet: ai !== 0,
     hanLinkMediaPhut: link ?? 60,

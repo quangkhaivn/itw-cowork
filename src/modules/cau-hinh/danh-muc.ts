@@ -1407,6 +1407,31 @@ export const DANH_MUC_CAU_HINH: MucCauHinh[] = [
     macDinh: 10,
     dungTuPhase: 8,
   },
+  // 0.24.0 — kết nối Facebook / Instagram / YouTube (QĐ-203 →).
+  {
+    khoa: "mxh.moi_bai_phai_duyet",
+    nhom: "Mạng xã hội",
+    nhan: "Mọi bài phải duyệt trước khi đăng",
+    moTa: "1 = MỌI bài mạng xã hội (người soạn lẫn AI soạn) phải được người có quyền duyệt chấp nhận trước khi hẹn giờ / đăng — kể cả bài của người có quyền đăng. 0 = chỉ bài do AI soạn (theo “Bài do AI tạo phải duyệt”) và bài của thực tập sinh phải duyệt. Mặc định 0.",
+    donVi: "bật / tắt",
+    toiThieu: 0,
+    toiDa: 1,
+    soNguyen: true,
+    macDinh: 0,
+    dungTuPhase: 8,
+  },
+  {
+    khoa: "mxh.youtube_upload_toi_da_ngay",
+    nhom: "Mạng xã hội",
+    nhan: "Số video tải lên YouTube tối đa mỗi ngày",
+    moTa: "Ngưỡng đếm chung cho mọi kênh YouTube của doanh nghiệp (cùng một Google Cloud project — hạn mức API của Google tính theo project). Ngày tính theo giờ Thái Bình Dương như Google (đổi ngày lúc 14–15 giờ chiều giờ Việt Nam). Chạm ngưỡng → video còn lại dời sang ngày sau và người soạn được báo. Mặc định 100 (chưa kiểm với hạn mức thật của project).",
+    donVi: "video / ngày",
+    toiThieu: 1,
+    toiDa: 10000,
+    soNguyen: true,
+    macDinh: 100,
+    dungTuPhase: 8,
+  },
 ];
 
 export function timMuc(khoa: string): MucCauHinh | undefined {

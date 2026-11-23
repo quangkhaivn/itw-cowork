@@ -22,11 +22,19 @@ export const LuocDoDoiMatKhauKenh = z.object({
 
 export const LuocDoSuaKenh = z.object({ ten: chuoi(200).min(1) });
 
+export const LuocDoTuyChonDang = z.object({
+  facebookReels: z.boolean().optional(),
+  lienKet: z.string().trim().max(2000).regex(/^(https?:\/\/\S+)?$/, "Liên kết phải bắt đầu bằng https://").optional().nullable(),
+  youtubeRiengTu: z.enum(["private", "unlisted", "public"]).optional(),
+});
+
 export const LuocDoBai = z.object({
   tieuDe: chuoi(300).optional().nullable(),
   noiDung: z.string().trim().min(1, "Nhập nội dung bài.").max(100_000),
   kenhIds: z.array(z.uuid()).max(20).default([]),
   khoaLapLai: chuoi(100).optional().nullable(),
+  /** 0.24.0: tùy chọn đăng theo nền tảng (Reels, liên kết, quyền riêng tư YouTube). Không gửi = giữ như cũ. */
+  tuyChon: LuocDoTuyChonDang.optional(),
 });
 
 export const LuocDoGuiDuyet = z.object({
@@ -49,7 +57,27 @@ export const LuocDoLocBai = z.object({
 export const LuocDoThongTinApp = z.object({
   appId: chuoi(100).optional().nullable(),
   graphVersion: chuoi(20).optional().nullable(),
+  /** 0.24.0: Meta — mã cấu hình Facebook Login for Business (config_id), không bắt buộc. */
+  configId: chuoi(30).optional().nullable(),
   clientId: chuoi(300).optional().nullable(),
   /** Bí mật mới — trống = giữ bí mật đã lưu. */
   biMat: z.string().max(500).optional().nullable(),
+  /** 0.24.0: Google API key cho Google Picker — trống = giữ khóa đã lưu. */
+  khoaPicker: z.string().trim().max(200).optional().nullable(),
+});
+
+/** 0.24.0 — bắt đầu kết nối OAuth (kết nối mới, hoặc kết nối lại một kênh cần cấp lại quyền). */
+export const LuocDoBatDauOAuth = z.object({ kenhId: z.uuid().optional().nullable() });
+
+export const LuocDoChonKenhOAuth = z.object({ ungVienIds: z.array(z.uuid()).min(1, "Chọn ít nhất một kênh.").max(50) });
+
+/** Tải tệp đã chọn bằng Google Picker. Access token chỉ dùng trong yêu cầu này — không lưu, không ghi nhật ký. */
+export const LuocDoTaiDrive = z.object({
+  accessToken: z.string().min(10).max(4096).regex(/^[A-Za-z0-9._~+/=-]+$/, "Token không hợp lệ."),
+  tepIds: z.array(z.string().regex(/^[A-Za-z0-9_-]{10,200}$/, "Mã tệp Drive không hợp lệ.")).min(1).max(10),
+});
+
+export const LuocDoTrangCongKhai = z.object({
+  tieuDe: chuoi(200).min(1, "Nhập tiêu đề."),
+  noiDung: z.string().max(100_000),
 });

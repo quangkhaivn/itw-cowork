@@ -1,6 +1,9 @@
 import type { PrismaClient } from "../../src/generated/prisma/client";
 import { dangBaiMotVong } from "./dang-bai";
 import { kiemTraAppDaXep, kiemTraKenhDaXep } from "./kiem-tra";
+import { doiMaOAuthDaXep, donDepOAuth } from "./oauth";
+import { lamMoiTokenDenHan } from "./token";
+import { xuLyXoaDuLieu } from "./xoa-du-lieu";
 
 /**
  * Vòng Mạng xã hội của worker (0.23.0): chạy RIÊNG với nhịp 60 giây, mỗi 15 giây — bài hẹn giờ lệch không quá ~15 giây
@@ -16,6 +19,24 @@ export async function vongMangXaHoi(prisma: PrismaClient, workerId: string, bayG
       await kiemTraAppDaXep(t.id, bayGio);
     } catch (e) {
       console.error(`[worker] ${t.code}: mxh kiểm tra kết nối hỏng:`, e instanceof Error ? e.message : e);
+    }
+    // 0.24.0: đổi mã OAuth (người dùng đang chờ màn hình chọn kênh), Data Deletion Callback, làm mới token trước hạn.
+    try {
+      await doiMaOAuthDaXep(t.id, bayGio);
+      await donDepOAuth(t.id, bayGio);
+    } catch (e) {
+      console.error(`[worker] ${t.code}: mxh đổi mã OAuth hỏng:`, e instanceof Error ? e.message : e);
+    }
+    try {
+      await xuLyXoaDuLieu(t.id, bayGio);
+    } catch (e) {
+      console.error(`[worker] ${t.code}: mxh xử lý yêu cầu xóa dữ liệu hỏng:`, e instanceof Error ? e.message : e);
+    }
+    try {
+      const lm = await lamMoiTokenDenHan(t.id, bayGio);
+      if (lm.canKetNoiLai) console.log(`[worker] ${t.code}: mạng xã hội — ${lm.canKetNoiLai} kênh cần kết nối lại.`);
+    } catch (e) {
+      console.error(`[worker] ${t.code}: mxh làm mới token hỏng:`, e instanceof Error ? e.message : e);
     }
     try {
       const kq = await dangBaiMotVong(t.id, workerId, bayGio);

@@ -153,7 +153,19 @@ export type HanhDong =
   | "luu-thong-tin-app-mxh"
   | "doi-bi-mat-app-mxh"
   | "xoa-bi-mat-app-mxh"
-  | "kiem-tra-app-mxh";
+  | "kiem-tra-app-mxh"
+  // 0.24.0 — kết nối OAuth, token, Drive, xóa dữ liệu, trang công khai (QĐ-203 →).
+  | "bat-dau-ket-noi-oauth"
+  | "callback-oauth"
+  | "callback-oauth-tu-choi"
+  | "doi-ma-oauth"
+  | "ket-noi-lai-kenh-mxh"
+  | "lam-moi-token-mxh"
+  | "kenh-can-ket-noi-lai"
+  | "tai-tu-drive"
+  | "xoa-du-lieu-meta"
+  | "sua-trang-cong-khai"
+  | "hoan-dang-quota-mxh";
 
 export interface ThamSoGhiKiemToan {
   actorId?: string | null;

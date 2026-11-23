@@ -23,10 +23,12 @@ export interface NoiDungMa {
   postId: string;
   attachmentId: string;
   hetHanGiay: number;
+  /** 0.24.0: phát bản ĐỔI SANG JPEG (Instagram chỉ nhận JPEG) — nằm trong phần ký, không sửa được. */
+  jpeg?: boolean;
 }
 
 function chuoiKy(n: NoiDungMa): string {
-  return `${n.tenantId}|${n.postId}|${n.attachmentId}|${n.hetHanGiay}`;
+  return `${n.tenantId}|${n.postId}|${n.attachmentId}|${n.hetHanGiay}${n.jpeg ? "|jpeg" : ""}`;
 }
 
 export function kyMaMedia(n: NoiDungMa, khoa?: Buffer): string {
@@ -40,8 +42,8 @@ export function kiemMaMedia(ma: string, bayGio: Date, khoa?: Buffer): KetQuaMa {
   const m = /^([A-Za-z0-9_-]{20,400})\.([A-Za-z0-9_-]{43})$/.exec(ma);
   if (!m) return { ok: false, ly: "sai-dang" };
   const phan = Buffer.from(m[1], "base64url").toString("utf8").split("|");
-  if (phan.length !== 4 || !LA_UUID.test(phan[0]) || !LA_UUID.test(phan[1]) || !LA_UUID.test(phan[2]) || !/^\d{1,12}$/.test(phan[3])) return { ok: false, ly: "sai-dang" };
-  const n: NoiDungMa = { tenantId: phan[0], postId: phan[1], attachmentId: phan[2], hetHanGiay: Number(phan[3]) };
+  if ((phan.length !== 4 && !(phan.length === 5 && phan[4] === "jpeg")) || !LA_UUID.test(phan[0]) || !LA_UUID.test(phan[1]) || !LA_UUID.test(phan[2]) || !/^\d{1,12}$/.test(phan[3])) return { ok: false, ly: "sai-dang" };
+  const n: NoiDungMa = { tenantId: phan[0], postId: phan[1], attachmentId: phan[2], hetHanGiay: Number(phan[3]), ...(phan.length === 5 ? { jpeg: true } : {}) };
   // Ký lại từ nội dung đã đọc: đổi bất kỳ byte nào (kể cả hạn) → chữ ký không khớp.
   if (!bangNhau(hmac("mxh-media", chuoiKy(n), khoa), Buffer.from(m[2], "base64url"))) return { ok: false, ly: "sai-chu-ky" };
   if (n.hetHanGiay * 1000 <= bayGio.getTime()) return { ok: false, ly: "het-han" };

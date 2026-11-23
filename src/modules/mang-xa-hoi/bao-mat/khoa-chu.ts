@@ -79,3 +79,8 @@ export function aadApp(tenantId: string, nhaCungCap: string): string {
 export function aadBoc(aad: string, phienBan: number): string {
   return `boc:v${phienBan}:${aad}`;
 }
+
+/** 0.24.0: AAD của mã `code` OAuth một lần kết nối (chỉ worker mở để đổi lấy token). */
+export function aadOAuth(tenantId: string, requestId: string): string {
+  return `mxh:oauth:${tenantId}:${requestId}`;
+}

@@ -1,4 +1,5 @@
 import type { LoaiLoi, NenTang } from "../hang-so";
+import type { KieuNoiDung, MoiTruongKiem, NoiDungKiem, TuyChonDang } from "../luat-nen-tang";
 
 /**
  * Interface `SocialConnector` (mục 7.1 tài liệu gốc ITW SOCIAL MCP, QĐ-195).
@@ -8,8 +9,8 @@ import type { LoaiLoi, NenTang } from "../hang-so";
  * `social_publish_attempts`). Connector không bao giờ tự quyết "đã đăng": chỉ trả mã bài nền tảng; worker đánh dấu
  * PUBLISHED sau khi `verify` đọc lại khớp (ADR-05).
  *
- * Các phương thức OAuth (`buildAuthUrl`, `handleCallback`, `refreshCredential`, `revoke`) để tùy chọn — WordPress dùng
- * Application Password nên không có; Facebook / Instagram / YouTube / Zalo (0.24) sẽ cài.
+ * 0.24.0: Facebook Page, Instagram, YouTube dùng OAuth. Đổi mã lấy token, làm mới token nằm ở `oauth-meta.ts` /
+ * `oauth-google.ts` (worker gọi — bí mật app chỉ worker mở được); connector chỉ nhận access token đã còn hạn.
  */
 
 export interface KhaNang {
@@ -31,17 +32,30 @@ export interface KenhGoi {
   meta: Record<string, unknown>;
 }
 
-/** Thông tin xác thực đã mở niêm phong (chỉ sống trong bộ nhớ worker / trong một yêu cầu kiểm tra có bản rõ người dùng vừa nhập). */
+/**
+ * Thông tin xác thực đã mở niêm phong (chỉ sống trong bộ nhớ worker / trong một yêu cầu kiểm tra có bản rõ người dùng
+ * vừa nhập). WordPress: tên đăng nhập + mật khẩu ứng dụng. OAuth (0.24): access token (+ refresh token Google, hạn).
+ */
 export interface ThongTinXacThuc {
-  tenDangNhap: string;
-  matKhau: string;
+  tenDangNhap?: string;
+  matKhau?: string;
+  loai?: "meta" | "google";
+  accessToken?: string;
+  refreshToken?: string;
+  /** ISO — hạn access token (Google). */
+  hetHan?: string;
 }
 
 export interface TepMedia {
   attachmentId: string;
   tenTep: string;
   mime: string;
-  noiDung: Buffer;
+  dungLuong: number;
+  rong?: number | null;
+  cao?: number | null;
+  thoiLuongGiay?: number | null;
+  /** Đọc byte khi cần (Instagram kéo từ link ký — không đọc video vào bộ nhớ). */
+  docNoiDung: () => Promise<Buffer>;
 }
 
 export interface NoiDungDang {
@@ -50,12 +64,30 @@ export interface NoiDungDang {
   /** Khóa đối soát (slug) gửi kèm bài. */
   khoaDoiSoat: string;
   media: TepMedia[];
-  /** attachmentId → mã media trên nền tảng đã tải ở lần trước (không tải lại). */
+  /** attachmentId → mã media trên nền tảng đã tải ở lần trước (không tải lại). Khóa bắt đầu "__" = trạng thái dở dang của connector. */
   mediaDaTai: Record<string, string>;
+  /** Kiểu nội dung chốt lúc xếp hàng (0.24). */
+  kieu?: KieuNoiDung | null;
+  tuyChon?: TuyChonDang;
+  /** Mốc bắt đầu lượt đăng đầu tiên — đối soát theo nội dung chỉ xét bài tạo sau mốc này (Facebook / Instagram). */
+  batDauLuot?: Date | null;
+}
+
+/** Thông tin app (không bí mật + bí mật đã mở) — chỉ worker có. */
+export interface ThongTinAppGoi {
+  graphVersion?: string;
+  appSecret?: string;
 }
 
 export interface BoiCanhGoi {
   hanMs: number;
+  app?: ThongTinAppGoi;
+  /** Link ký công khai cho một tệp của bài (Instagram kéo media). `jpeg` = phát bản đổi sang JPEG. */
+  linkMedia?: (attachmentId: string, jpeg: boolean) => string;
+  /** Chờ (bài thử thay bằng hàm không chờ). */
+  ngu?: (ms: number) => Promise<void>;
+  /** Cỡ mỗi đoạn tải YouTube (bội số 256 KiB). */
+  doanYoutube?: number;
 }
 
 /** Một lần gọi nền tảng — ghi vào social_publish_attempts. Không chứa tiêu đề yêu cầu / bí mật. */
@@ -75,6 +107,8 @@ export interface LoiPhanLoai {
   ma: string;
   thongBao: string;
   httpStatus: number | null;
+  /** 0.24: hoãn lượt (không tính lần thử) sau số ms này; -1 = tới đầu ngày quota kế tiếp (YouTube). */
+  hoanMs?: number;
 }
 
 export type KetQuaDang =
@@ -106,13 +140,12 @@ export interface SocialConnector {
   nenTang: NenTang;
   khaNang(): KhaNang;
   kiemTraKetNoi(kenh: KenhGoi, xt: ThongTinXacThuc, bc: BoiCanhGoi): Promise<KetQuaKiemTra>;
-  validate(nd: Pick<NoiDungDang, "tieuDe" | "noiDung"> & { soAnh: number }): ViPham[];
+  validate(nd: NoiDungKiem, mt: MoiTruongKiem): ViPham[];
   publish(kenh: KenhGoi, xt: ThongTinXacThuc, nd: NoiDungDang, bc: BoiCanhGoi): Promise<KetQuaDang>;
-  verify(kenh: KenhGoi, xt: ThongTinXacThuc, externalId: string, nd: Pick<NoiDungDang, "tieuDe" | "khoaDoiSoat">, bc: BoiCanhGoi): Promise<KetQuaXacMinh>;
-  /** Tìm bài theo khóa đối soát — dùng khi kết quả chưa rõ (UNKNOWN) và trước mọi lần đăng lại. */
-  reconcile(kenh: KenhGoi, xt: ThongTinXacThuc, khoaDoiSoat: string, bc: BoiCanhGoi): Promise<KetQuaDoiSoat>;
-  buildAuthUrl?(trangThai: string, redirectUri: string): Promise<string>;
-  handleCallback?(thamSo: Record<string, string>): Promise<unknown[]>;
-  refreshCredential?(xt: ThongTinXacThuc): Promise<ThongTinXacThuc>;
-  revoke?(xt: ThongTinXacThuc): Promise<void>;
+  verify(kenh: KenhGoi, xt: ThongTinXacThuc, externalId: string, nd: Pick<NoiDungDang, "tieuDe" | "khoaDoiSoat"> & Partial<Pick<NoiDungDang, "kieu" | "noiDung">>, bc: BoiCanhGoi): Promise<KetQuaXacMinh>;
+  /**
+   * Tìm bài theo khóa đối soát — dùng khi kết quả chưa rõ (UNKNOWN) và trước mọi lần đăng lại. Nền tảng không có slug
+   * (Facebook / Instagram) so theo nội dung + mốc thời gian; YouTube theo thẻ (tag) chứa khóa đối soát.
+   */
+  reconcile(kenh: KenhGoi, xt: ThongTinXacThuc, khoaDoiSoat: string, bc: BoiCanhGoi, nd?: Partial<NoiDungDang>): Promise<KetQuaDoiSoat>;
 }

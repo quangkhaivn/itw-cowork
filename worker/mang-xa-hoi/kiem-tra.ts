@@ -1,12 +1,13 @@
 import { voiTenant } from "../../src/lib/db";
 import { ghiKiemToan } from "../../src/lib/kiem-toan";
-import { aadApp, aadKenh } from "../../src/modules/mang-xa-hoi/bao-mat/khoa-chu";
+import { aadApp } from "../../src/modules/mang-xa-hoi/bao-mat/khoa-chu";
 import { docCauHinhMxh } from "../../src/modules/mang-xa-hoi/chung";
 import { layConnector } from "../../src/modules/mang-xa-hoi/connectors/danh-muc";
 import type { ThongTinXacThuc } from "../../src/modules/mang-xa-hoi/connectors/kieu";
 import { GRAPH_VERSION_MAC_DINH, type NhaCungCapApp } from "../../src/modules/mang-xa-hoi/hang-so";
 import { BIEN_MOI_TRUONG, kiemDinhDang, kiemTraAppMeta } from "../../src/modules/mang-xa-hoi/nen-tang-app";
 import { moNiemPhong } from "./giai-ma";
+import { moXtKenh } from "./token";
 
 /**
  * Việc "kiểm tra lại" cần mở niêm phong — chỉ chạy ở worker (SEC-06): kênh đã lưu (mật khẩu ứng dụng WordPress) và
@@ -27,14 +28,18 @@ export async function kiemTraKenhDaXep(tenantId: string, bayGio: Date, env: Node
     let meta: Record<string, unknown> | null = null;
     if (c && k.credential) {
       try {
-        const xt = JSON.parse(moNiemPhong(k.credential, aadKenh(tenantId, k.id), env)) as ThongTinXacThuc;
-        const kq = await c.kiemTraKetNoi({ id: k.id, diaChi: k.externalId, tenDangNhap: k.accountName, meta: (k.meta ?? {}) as Record<string, unknown> }, xt, { hanMs: ds.hanMs });
+        // 0.24: kênh OAuth cần thông tin app (appsecret_proof) và token Google còn hạn — đi qua moXtKenh.
+        const mo = await moXtKenh(tenantId, k, k.credential, bayGio, ds.hanMs, env);
+        if (!mo.ok) throw Object.assign(new Error(mo.loi.thongBao), { name: mo.canKetNoiLai ? "CanKetNoiLai" : mo.loi.ma === "khoa-chu" ? "LoiKhoaChuMxh" : "LoiMoXt" });
+        const xt: ThongTinXacThuc = mo.xt;
+        const kq = await c.kiemTraKetNoi({ id: k.id, diaChi: k.externalId, tenDangNhap: k.accountName, meta: (k.meta ?? {}) as Record<string, unknown> }, xt, { hanMs: ds.hanMs, app: mo.app });
         ok = kq.ok;
         thongBao = kq.thongBao;
         canNhapLai = kq.loai === "NEEDS_REAUTH";
         if (kq.ok) meta = { ...((k.meta ?? {}) as object), ...kq.meta };
       } catch (e) {
-        thongBao = e instanceof Error && e.name === "LoiKhoaChuMxh" ? e.message : "Không mở được bí mật của kênh (SOCIAL_MASTER_KEY không khớp lúc lưu?).";
+        canNhapLai = e instanceof Error && e.name === "CanKetNoiLai";
+        thongBao = e instanceof Error && ["LoiKhoaChuMxh", "CanKetNoiLai", "LoiMoXt"].includes(e.name) ? e.message : "Không mở được bí mật của kênh (SOCIAL_MASTER_KEY không khớp lúc lưu?).";
       }
     } else if (!k.credential) thongBao = "Kênh chưa có mật khẩu ứng dụng — nhập lại.";
     await voiTenant(tenantId, async (tx) => {

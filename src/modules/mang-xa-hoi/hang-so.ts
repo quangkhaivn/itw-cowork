@@ -27,7 +27,7 @@ export const TRANG_THAI_KENH = ["ACTIVE", "NEEDS_REAUTH", "ERROR", "DISCONNECTED
 export type TrangThaiKenh = (typeof TRANG_THAI_KENH)[number];
 export const NHAN_TRANG_THAI_KENH: Record<TrangThaiKenh, { nhan: string; lop: string }> = {
   ACTIVE: { nhan: "Đang nối", lop: "tot" },
-  NEEDS_REAUTH: { nhan: "Cần nhập lại mật khẩu ứng dụng", lop: "loi" },
+  NEEDS_REAUTH: { nhan: "Cần cấp lại quyền (nhập lại mật khẩu ứng dụng / Kết nối lại)", lop: "loi" },
   ERROR: { nhan: "Lỗi", lop: "loi" },
   DISCONNECTED: { nhan: "Đã ngắt", lop: "" },
 };
@@ -72,6 +72,10 @@ export const HUONG_DAN_LOI: Record<LoaiLoi, string> = {
   NEEDS_REAUTH: "Tên đăng nhập / mật khẩu ứng dụng không còn hợp lệ (bị thu hồi, đổi quyền). Vào Mạng xã hội → Kênh, nhập lại mật khẩu ứng dụng rồi bấm “Đăng lại”.",
   UNKNOWN: "Đã gửi bài nhưng không nhận được trả lời. Hệ thống đang đối soát (đọc lại trên nền tảng) — không đăng lại mù để tránh trùng bài.",
 };
+
+/** 0.24.0 — hướng dẫn NEEDS_REAUTH cho kênh OAuth (Facebook, Instagram, YouTube). */
+export const HUONG_DAN_LOI_OAUTH =
+  "Quyền Cowork được cấp trên nền tảng đã hết hạn hoặc bị thu hồi (đổi mật khẩu Facebook, gỡ quyền ứng dụng, mất vai trò quản trị Page…). Vào Mạng xã hội → Kênh, bấm “Kết nối lại” ở kênh đó, rồi quay lại bài bấm “Đăng lại”.";
 
 /** Thông tin app nền tảng (màn hình Quản trị → Kết nối nền tảng). */
 export const NHA_CUNG_CAP_APP = ["META", "GOOGLE", "ZALO"] as const;

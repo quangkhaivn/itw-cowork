@@ -95,8 +95,9 @@ describe("Nội dung, địa chỉ", () => {
   });
   it("chỉ hiện 4 ký tự cuối của bí mật", () => assert.equal(bonKyTuCuoi("abcd efgh ijkl"), "ijkl"));
   it("WordPress cần tiêu đề và nội dung", () => {
-    assert.equal(wordpress.validate({ tieuDe: "", noiDung: "x", soAnh: 0 }).length, 1);
-    assert.equal(wordpress.validate({ tieuDe: "A", noiDung: "x", soAnh: 3 }).length, 0);
+    const mt = { appUrlHttps: true, coDoiJpeg: true };
+    assert.equal(wordpress.validate({ tieuDe: "", noiDung: "x", media: [], tuyChon: {} }, mt).length, 1);
+    assert.equal(wordpress.validate({ tieuDe: "A", noiDung: "x", media: [], tuyChon: {} }, mt).length, 0);
   });
 });
 

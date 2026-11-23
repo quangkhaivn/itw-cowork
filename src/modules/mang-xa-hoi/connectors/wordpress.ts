@@ -1,3 +1,4 @@
+import { kiemTheoNenTang } from "../luat-nen-tang";
 import { goiAnToan, LoiGoiMang, type PhanHoiAnToan } from "../mang/goi-an-toan";
 import { cauLoiGon, phanLoaiHttp, vanBanSangHtml } from "../tinh-toan";
 import type {
@@ -33,7 +34,7 @@ function duongApi(kenh: KenhGoi, route: string, truyVan: Record<string, string> 
 }
 
 function tieuDeXacThuc(xt: ThongTinXacThuc): Record<string, string> {
-  return { Authorization: `Basic ${Buffer.from(`${xt.tenDangNhap}:${xt.matKhau}`, "utf8").toString("base64")}` };
+  return { Authorization: `Basic ${Buffer.from(`${xt.tenDangNhap ?? ""}:${xt.matKhau ?? ""}`, "utf8").toString("base64")}` };
 }
 
 function docJson(ph: PhanHoiAnToan): unknown {
@@ -118,13 +119,8 @@ export const wordpress: SocialConnector = {
     return { kieuNoiDung: ["bai-viet", "anh"], media: "push", soAnhToiDa: 1, doDaiTieuDeToiDa: 300, doDaiNoiDungToiDa: 100_000, canTieuDe: true };
   },
 
-  validate(nd): ViPham[] {
-    const v: ViPham[] = [];
-    if (!nd.tieuDe?.trim()) v.push({ truong: "tieuDe", thongBao: "Bài WordPress cần tiêu đề." });
-    if ((nd.tieuDe ?? "").length > 300) v.push({ truong: "tieuDe", thongBao: "Tiêu đề tối đa 300 ký tự." });
-    if (!nd.noiDung.trim()) v.push({ truong: "noiDung", thongBao: "Nội dung trống." });
-    if (nd.noiDung.length > 100_000) v.push({ truong: "noiDung", thongBao: "Nội dung tối đa 100.000 ký tự." });
-    return v;
+  validate(nd, mt): ViPham[] {
+    return kiemTheoNenTang("WORDPRESS", nd, mt).viPham;
   },
 
   async kiemTraKetNoi(kenh: KenhGoi, xt: ThongTinXacThuc, bc: BoiCanhGoi): Promise<KetQuaKiemTra> {
@@ -146,13 +142,14 @@ export const wordpress: SocialConnector = {
     if (thieu.length) {
       return { ok: false, thongBao: `Đăng nhập được nhưng tài khoản thiếu quyền ${thieu.join(", ")}. Dùng tài khoản vai trò Tác giả (Author) hoặc Biên tập viên (Editor).`, loai: "NEEDS_REAUTH", meta };
     }
-    return { ok: true, thongBao: `Kết nối tốt — đăng nhập là “${meta.tenHienThi ?? xt.tenDangNhap}”, đủ quyền đăng bài và tải ảnh.`, loai: null, meta };
+    return { ok: true, thongBao: `Kết nối tốt — đăng nhập là “${meta.tenHienThi ?? xt.tenDangNhap ?? ""}”, đủ quyền đăng bài và tải ảnh.`, loai: null, meta };
   },
 
   async publish(kenh, xt, nd, bc): Promise<KetQuaDang> {
     const nhatKy: BuocGoi[] = [];
     const mediaDaTai = { ...nd.mediaDaTai };
-    const anh = nd.media[0];
+    // Chỉ ảnh đầu tiên làm ảnh đại diện; video của bài không đăng lên WordPress (0.24 — ghi chú lúc kiểm luật nền tảng).
+    const anh = nd.media.find((m) => m.mime.startsWith("image/"));
     let featured: number | undefined;
     if (anh) {
       if (mediaDaTai[anh.attachmentId]) featured = Number(mediaDaTai[anh.attachmentId]);
@@ -161,7 +158,7 @@ export const wordpress: SocialConnector = {
           url: duongApi(kenh, "/wp/v2/media"),
           phuongThuc: "POST",
           tieuDe: { ...tieuDeXacThuc(xt), "Content-Type": anh.mime, "Content-Disposition": `attachment; filename="${tenTepAnToan(anh.tenTep)}"` },
-          than: anh.noiDung,
+          than: await anh.docNoiDung(),
           hanMs: bc.hanMs,
         });
         if (!m.ok) {

@@ -8,8 +8,11 @@ import { napBanDoCapTren } from "@/modules/danh-gia/cap-tren";
 import { nguoiGiuQuyen, taoThongBao } from "@/modules/thong-bao/service";
 import { dieuKienXemBai, docCauHinhMxh } from "./chung";
 import { layConnector } from "./connectors/danh-muc";
-import { HUONG_DAN_LOI, TEN_NEN_TANG, type LoaiLoi, type TrangThaiBai } from "./hang-so";
+import { HUONG_DAN_LOI, HUONG_DAN_LOI_OAUTH, TEN_NEN_TANG, type LoaiLoi, type NenTang, type TrangThaiBai } from "./hang-so";
+import { ANH, docTuyChon, kiemTheoNenTang, LUAT, NHAN_KIEU_NOI_DUNG, VIDEO, type KieuNoiDung } from "./luat-nen-tang";
 import type { LuocDoBai, LuocDoGuiDuyet, LuocDoLocBai } from "./luoc-do";
+import { coThuVienAnh } from "./media/doi-jpeg";
+import { appUrlHttps, docThongSoMediaBai } from "./media/thong-so";
 import { duocChuyenBai, khoaDoiSoat, SUA_DUOC } from "./tinh-toan";
 
 /**
@@ -26,13 +29,16 @@ async function khoaBai(tx: ClientTenant, id: string): Promise<void> {
   await tx.$queryRaw`SELECT id FROM social_posts WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`;
 }
 
+const CHON_KENH_BAI = { id: true, name: true, platform: true, status: true, disconnectedAt: true, externalId: true, authType: true } as const;
+const CHON_TEP_BAI = { id: true, fileName: true, mimeType: true, sizeBytes: true, storedPath: true } as const;
+
 async function layBai(nc: NguCanh, id: string, khoa = false) {
   if (khoa) await khoaBai(nc.tx, id);
   const b = await nc.tx.socialPost.findFirst({
     where: { AND: [{ id, deletedAt: null }, await dieuKienXemBai(nc)] },
     include: {
-      targets: { include: { connection: { select: { id: true, name: true, platform: true, status: true, disconnectedAt: true, externalId: true } } }, orderBy: { createdAt: "asc" } },
-      media: { include: { attachment: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true } } }, orderBy: { position: "asc" } },
+      targets: { include: { connection: { select: CHON_KENH_BAI } }, orderBy: { createdAt: "asc" } },
+      media: { include: { attachment: { select: CHON_TEP_BAI } }, orderBy: { position: "asc" } },
     },
   });
   if (!b) throw new LoiKhongTimThay("Bài");
@@ -57,9 +63,13 @@ function duocSoan(nc: NguCanh, b: { createdBy: string }): boolean {
   return coQuyen(nc.hoSo, "mxh.update") || (coQuyen(nc.hoSo, "mxh.create") && b.createdBy === nc.hoSo.userId);
 }
 
-/** Bài cần duyệt trước khi đăng (SEC-09): bài do AI tạo khi Cấu hình bật. Thực tập sinh không có `mxh.update` nên luôn phải gửi duyệt. */
+/**
+ * Bài cần duyệt trước khi đăng (SEC-09): bài do AI tạo khi Cấu hình `mxh.ai_phai_duyet` bật; 0.24.0 — MỌI bài khi
+ * `mxh.moi_bai_phai_duyet` bật (mục 8c). Thực tập sinh không có `mxh.update` nên luôn phải gửi duyệt.
+ */
 async function canDuyet(nc: NguCanh, b: { createdByType: string }): Promise<boolean> {
-  return b.createdByType === "ai" && (await docCauHinhMxh(nc.tx)).aiPhaiDuyet;
+  const cfg = await docCauHinhMxh(nc.tx);
+  return cfg.moiBaiPhaiDuyet || (b.createdByType === "ai" && cfg.aiPhaiDuyet);
 }
 
 // ---------------------------------------------------------------------------
@@ -81,10 +91,13 @@ function kenhCuaBaiRa(t: Bai["targets"][number]) {
     loaiLoi: loai,
     maLoi: t.errorCode,
     thongBaoLoi: t.errorMessage,
-    huongDan: loai && (t.status === "FAILED" || t.status === "VERIFYING") ? HUONG_DAN_LOI[loai] : null,
+    huongDan: loai && (t.status === "FAILED" || t.status === "VERIFYING") ? (loai === "NEEDS_REAUTH" && t.connection.authType === "oauth" ? HUONG_DAN_LOI_OAUTH : HUONG_DAN_LOI[loai]) : null,
     soLanThu: t.attemptCount,
     lanThuToi: t.nextAttemptAt,
     kenhCanNhapLai: t.connection.status === "NEEDS_REAUTH",
+    kenhOAuth: t.connection.authType === "oauth",
+    kieuNoiDung: t.contentKind,
+    nhanKieuNoiDung: t.contentKind ? NHAN_KIEU_NOI_DUNG[t.contentKind as KieuNoiDung] ?? t.contentKind : null,
   };
 }
 
@@ -106,8 +119,9 @@ function baiRa(b: Bai) {
     phienBan: b.revision,
     taoLuc: b.createdAt,
     capNhatLuc: b.updatedAt,
+    tuyChon: docTuyChon(b.options),
     kenh: b.targets.map(kenhCuaBaiRa),
-    anh: b.media.map((m) => ({ id: m.attachment.id, tenTep: m.attachment.fileName, kieu: m.attachment.mimeType, vaiTro: m.role })),
+    anh: b.media.map((m) => ({ id: m.attachment.id, tenTep: m.attachment.fileName, kieu: m.attachment.mimeType, vaiTro: m.role, laVideo: m.attachment.mimeType.startsWith("video/") })),
   };
 }
 export type BaiRa = ReturnType<typeof baiRa>;
@@ -121,8 +135,8 @@ export async function danhSachBai(nc: NguCanh, loc: z.infer<typeof LuocDoLocBai>
     nc.tx.socialPost.findMany({
       where,
       include: {
-        targets: { include: { connection: { select: { id: true, name: true, platform: true, status: true, disconnectedAt: true, externalId: true } } }, orderBy: { createdAt: "asc" } },
-        media: { include: { attachment: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true } } }, orderBy: { position: "asc" } },
+        targets: { include: { connection: { select: CHON_KENH_BAI } }, orderBy: { createdAt: "asc" } },
+        media: { include: { attachment: { select: CHON_TEP_BAI } }, orderBy: { position: "asc" } },
       },
       orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       skip: (loc.trang - 1) * KICH,
@@ -237,7 +251,7 @@ export async function taoBai(nc: NguCanh, d: z.infer<typeof LuocDoBai>, tacNhan:
   try {
     await nc.tx.$executeRaw`SAVEPOINT tao_bai_mxh`;
     await nc.tx.socialPost.create({
-      data: { id, tenantId: nc.tenantId, title: d.tieuDe?.trim() || null, body: d.noiDung, createdByType: tacNhan, idempotencyKey: khoa, createdBy: nc.hoSo.userId },
+      data: { id, tenantId: nc.tenantId, title: d.tieuDe?.trim() || null, body: d.noiDung, options: (d.tuyChon ?? {}) as object, createdByType: tacNhan, idempotencyKey: khoa, createdBy: nc.hoSo.userId },
     });
     await nc.tx.$executeRaw`RELEASE SAVEPOINT tao_bai_mxh`;
   } catch (e) {
@@ -264,7 +278,7 @@ export async function suaBai(nc: NguCanh, id: string, d: z.infer<typeof LuocDoBa
   const tieuDe = d.tieuDe?.trim() || null;
   await nc.tx.socialPost.update({
     where: { id },
-    data: { title: tieuDe, body: d.noiDung, status: "DRAFT", approvedBy: null, approvedAt: null, revision: { increment: 1 }, updatedBy: nc.hoSo.userId },
+    data: { title: tieuDe, body: d.noiDung, ...(d.tuyChon ? { options: d.tuyChon as object } : {}), status: "DRAFT", approvedBy: null, approvedAt: null, revision: { increment: 1 }, updatedBy: nc.hoSo.userId },
   });
   await datKenh(nc, id, tieuDe, d.kenhIds);
   await nc.kiemToan({ action: "sua", objectType: "social_post", objectId: id, before: { tieuDe: b.title, trangThai: b.status }, after: { tieuDe, trangThai: "DRAFT", soKenh: d.kenhIds.length } });
@@ -287,26 +301,68 @@ export async function xoaBai(nc: NguCanh, id: string) {
 // Kiểm nội dung, chụp ảnh
 // ---------------------------------------------------------------------------
 
-function kiemNoiDung(b: Bai) {
+function nhacKenhCanCapLai(t: { name: string; authType: string }): string {
+  return t.authType === "oauth"
+    ? `Kênh “${t.name}” cần kết nối lại (Mạng xã hội → Kênh → Kết nối lại) — quyền đã hết hạn hoặc bị thu hồi.`
+    : `Kênh “${t.name}” cần nhập lại mật khẩu ứng dụng (Mạng xã hội → Kênh).`;
+}
+
+/**
+ * Kiểm bài theo LUẬT NỀN TẢNG (0.24.0, QĐ-205): đọc thông số ảnh / video trên đĩa, kiểm từng kênh, chốt kiểu nội dung
+ * (Reels, carousel…). Vi phạm → 422 kèm danh sách. Trả kiểu nội dung theo kênh-bài để ghi lúc xếp hàng.
+ */
+async function kiemNoiDung(b: Bai): Promise<Map<string, KieuNoiDung>> {
   if (!b.targets.length) throw new LoiNghiepVu("Chọn ít nhất một kênh.", 422, "chua-chon-kenh");
   const loi: string[] = [];
+  const kieu = new Map<string, KieuNoiDung>();
+  const media = await docThongSoMediaBai(b.media);
+  const mt = { appUrlHttps: appUrlHttps(), coDoiJpeg: await coThuVienAnh() };
+  const tuyChon = docTuyChon(b.options);
   for (const t of b.targets) {
     if (t.connection.disconnectedAt) loi.push(`Kênh “${t.connection.name}” đã ngắt.`);
-    else if (t.connection.status === "NEEDS_REAUTH") loi.push(`Kênh “${t.connection.name}” cần nhập lại mật khẩu ứng dụng (Mạng xã hội → Kênh).`);
+    else if (t.connection.status === "NEEDS_REAUTH") loi.push(nhacKenhCanCapLai(t.connection));
     const c = layConnector(t.connection.platform);
     if (!c) {
       loi.push(`${TEN_NEN_TANG[t.connection.platform]} chưa được hỗ trợ.`);
       continue;
     }
-    for (const v of c.validate({ tieuDe: b.title, noiDung: b.body, soAnh: b.media.length })) loi.push(`${t.connection.name}: ${v.thongBao}`);
+    const kq = kiemTheoNenTang(t.connection.platform as NenTang, { tieuDe: b.title, noiDung: b.body, media, tuyChon }, mt);
+    for (const v of kq.viPham) loi.push(`${t.connection.name}: ${v.thongBao}`);
+    if (kq.kieu) kieu.set(t.id, kq.kieu);
   }
   if (loi.length) throw new LoiNghiepVu(loi.join(" "), 422, "noi-dung-chua-hop-le", { loi });
+  return kieu;
 }
 
-/** Chụp ảnh của bài (tệp đính kèm loại social_post còn hiệu lực, là ảnh) vào social_post_media — thứ đã duyệt là thứ được đăng. */
+/**
+ * Hạn mức Reels Facebook: 30 reel / 24 giờ mỗi Page qua API (chưa kiểm với API thật) — kiểm TRƯỚC khi xếp hàng: Reels đã
+ * đăng trong 24 giờ trước giờ đăng + Reels đang chờ / đang đăng trong ±24 giờ quanh giờ đăng.
+ */
+async function kiemHanMucReels(nc: NguCanh, b: Bai, kieu: Map<string, KieuNoiDung>, luc: Date) {
+  for (const t of b.targets) {
+    if ((kieu.get(t.id) ?? t.contentKind) !== "fb-reels") continue;
+    const tu = new Date(luc.getTime() - 86_400_000);
+    const den = new Date(luc.getTime() + 86_400_000);
+    const dem = await nc.tx.socialPostTarget.count({
+      where: {
+        connectionId: t.connectionId, contentKind: "fb-reels", id: { not: t.id },
+        OR: [
+          { status: "PUBLISHED", publishedAt: { gte: tu, lte: luc } },
+          { status: { in: ["QUEUED", "PUBLISHING", "VERIFYING"] }, OR: [{ nextAttemptAt: null }, { nextAttemptAt: { gte: tu, lte: den } }] },
+        ],
+      },
+    });
+    const toiDa = LUAT.FACEBOOK_PAGE.reelsMoi24Gio;
+    if (dem + 1 > toiDa) {
+      throw new LoiNghiepVu(`Page “${t.connection.name}” đã có ${dem} Reels đăng / chờ đăng trong 24 giờ quanh giờ này — Facebook cho tối đa ${toiDa} Reels / 24 giờ qua API. Hẹn giờ muộn hơn hoặc đăng thành video thường.`, 409, "han-muc-reels", { daCo: dem, toiDa });
+    }
+  }
+}
+
+/** Chụp ảnh / video của bài (tệp đính kèm loại social_post còn hiệu lực) vào social_post_media — thứ đã duyệt là thứ được đăng. */
 async function chupAnh(nc: NguCanh, postId: string) {
   const tep = await nc.tx.attachment.findMany({
-    where: { objectType: "social_post", objectId: postId, deletedAt: null, mimeType: { startsWith: "image/" } },
+    where: { objectType: "social_post", objectId: postId, deletedAt: null, mimeType: { in: [...ANH, ...VIDEO] } },
     select: { id: true },
     orderBy: [{ uploadedAt: "asc" }, { id: "asc" }],
   });
@@ -327,16 +383,22 @@ function docHenLuc(henLuc: string | null | undefined, bayGio: Date): Date {
   return d;
 }
 
-/** Xếp hàng: mọi kênh của bài sang QUEUED tại `luc`. Bài sang SCHEDULED (luc ở tương lai) hoặc PUBLISHING. */
-async function xepHang(nc: NguCanh, b: Bai, luc: Date, bayGio: Date) {
+/**
+ * Xếp hàng: mọi kênh của bài sang QUEUED tại `luc`, ghi kiểu nội dung đã chốt. Bài sang SCHEDULED (luc ở tương lai)
+ * hoặc PUBLISHING. Kiểm hạn mức Reels trước.
+ */
+async function xepHang(nc: NguCanh, b: Bai, luc: Date, bayGio: Date, kieu: Map<string, KieuNoiDung>) {
   const sang: TrangThaiBai = luc.getTime() > bayGio.getTime() ? "SCHEDULED" : "PUBLISHING";
   batBuocChuyen(b, sang, sang === "SCHEDULED" ? "hẹn giờ" : "đăng");
+  await kiemHanMucReels(nc, b, kieu, luc);
   await chupAnh(nc, b.id);
-  await nc.tx.socialPostTarget.updateMany({
-    where: { postId: b.id, status: { in: ["PENDING", "CANCELED"] } },
-    // Giữ errorClass của lượt trước (nếu có): worker đối soát trước khi gửi (QĐ-200).
-    data: { status: "QUEUED", nextAttemptAt: luc, attemptCount: 0, errorMessage: null, lockedBy: null, lockedAt: null },
-  });
+  for (const t of b.targets.filter((x) => x.status === "PENDING" || x.status === "CANCELED")) {
+    await nc.tx.socialPostTarget.update({
+      where: { id: t.id },
+      // Giữ errorClass của lượt trước (nếu có): worker đối soát trước khi gửi (QĐ-200).
+      data: { status: "QUEUED", nextAttemptAt: luc, attemptCount: 0, errorMessage: null, lockedBy: null, lockedAt: null, contentKind: kieu.get(t.id) ?? null },
+    });
+  }
   await nc.tx.socialPost.update({ where: { id: b.id }, data: { status: sang, scheduledAt: luc, updatedBy: nc.hoSo.userId } });
   return sang;
 }
@@ -350,18 +412,21 @@ async function truocKhiDang(nc: NguCanh, id: string) {
   const b = await layBai(nc, id, true);
   if (!["DRAFT", "APPROVED"].includes(b.status)) throw new LoiNghiepVu(`Bài đang “${b.status}” — không đăng / hẹn giờ được.`, 409, "sai-trang-thai");
   if ((await canDuyet(nc, b)) && b.status !== "APPROVED") {
-    throw new LoiNghiepVu("Bài do AI tạo phải được duyệt trước khi đăng (Cấu hình “Bài do AI tạo phải duyệt”). Bấm “Gửi duyệt”.", 409, "can-duyet");
+    const moi = (await docCauHinhMxh(nc.tx)).moiBaiPhaiDuyet;
+    throw new LoiNghiepVu(moi
+      ? "Cấu hình “Mọi bài phải duyệt trước khi đăng” đang bật — bấm “Gửi duyệt”."
+      : "Bài do AI tạo phải được duyệt trước khi đăng (Cấu hình “Bài do AI tạo phải duyệt”). Bấm “Gửi duyệt”.", 409, "can-duyet");
   }
   // Bài đã duyệt mà người khác sửa thì đã về nháp (suaBai) — nên APPROVED ở đây đúng là bản đã duyệt.
   await chupAnh(nc, id);
   const sau = await layBai(nc, id);
-  kiemNoiDung(sau);
-  return sau;
+  const kieu = await kiemNoiDung(sau);
+  return { b: sau, kieu };
 }
 
 export async function dangNgay(nc: NguCanh, id: string, bayGio: Date = new Date()) {
-  const b = await truocKhiDang(nc, id);
-  await xepHang(nc, b, bayGio, bayGio);
+  const { b, kieu } = await truocKhiDang(nc, id);
+  await xepHang(nc, b, bayGio, bayGio, kieu);
   await nc.kiemToan({ action: "dang-ngay-bai-mxh", objectType: "social_post", objectId: id, after: { soKenh: b.targets.length } });
   await nc.suKien({ eventType: SU_KIEN.SOCIAL_POST_SCHEDULED, objectType: "social_post", objectId: id, payload: { cheDo: "ngay", soKenh: b.targets.length } });
   return chiTietBai(nc, id);
@@ -369,8 +434,8 @@ export async function dangNgay(nc: NguCanh, id: string, bayGio: Date = new Date(
 
 export async function henGio(nc: NguCanh, id: string, henLuc: string, bayGio: Date = new Date()) {
   const luc = docHenLuc(henLuc, bayGio);
-  const b = await truocKhiDang(nc, id);
-  await xepHang(nc, b, luc, bayGio);
+  const { b, kieu } = await truocKhiDang(nc, id);
+  await xepHang(nc, b, luc, bayGio, kieu);
   await nc.kiemToan({ action: "hen-gio-bai-mxh", objectType: "social_post", objectId: id, after: { henLuc: luc.toISOString(), soKenh: b.targets.length } });
   await nc.suKien({ eventType: SU_KIEN.SOCIAL_POST_SCHEDULED, objectType: "social_post", objectId: id, payload: { cheDo: "hen-gio", henLuc: luc.toISOString() } });
   return chiTietBai(nc, id);
@@ -403,8 +468,9 @@ export async function dangLai(nc: NguCanh, id: string, bayGio: Date = new Date()
   if (!loi.length) throw new LoiNghiepVu("Không có kênh lỗi để đăng lại.", 409, "khong-co-kenh-loi");
   for (const t of loi) {
     if (t.connection.disconnectedAt) throw new LoiNghiepVu(`Kênh “${t.connection.name}” đã ngắt.`, 409, "kenh-da-ngat");
-    if (t.connection.status === "NEEDS_REAUTH") throw new LoiNghiepVu(`Kênh “${t.connection.name}” cần nhập lại mật khẩu ứng dụng trước (Mạng xã hội → Kênh).`, 409, "kenh-can-nhap-lai");
+    if (t.connection.status === "NEEDS_REAUTH") throw new LoiNghiepVu(nhacKenhCanCapLai(t.connection), 409, "kenh-can-nhap-lai");
   }
+  await kiemHanMucReels(nc, { ...b, targets: loi }, new Map(), bayGio);
   // Giữ errorClass của lượt trước: worker thấy có lỗi cũ thì ĐỐI SOÁT trước khi gửi (không đăng trùng nếu lượt trước đã lên).
   await nc.tx.socialPostTarget.updateMany({
     where: { id: { in: loi.map((t) => t.id) } },
@@ -463,7 +529,7 @@ export async function guiDuyet(nc: NguCanh, id: string, d: z.infer<typeof LuocDo
   if (b.status !== "DRAFT") throw new LoiNghiepVu("Chỉ gửi duyệt bài nháp.", 409, "sai-trang-thai");
   const luc = d.cheDo === "hen-gio" ? docHenLuc(d.henLuc, bayGio) : null;
   await chupAnh(nc, id);
-  kiemNoiDung(await layBai(nc, id));
+  await kiemNoiDung(await layBai(nc, id));
   await nc.tx.socialPost.update({
     where: { id },
     data: { status: "PENDING_APPROVAL", submittedBy: nc.hoSo.userId, submittedAt: bayGio, publishMode: d.cheDo === "khong" ? null : d.cheDo, scheduledAt: luc, reviewNote: null, updatedBy: nc.hoSo.userId },
@@ -499,8 +565,8 @@ export async function danhSachChoDuyet(nc: NguCanh) {
   const ds = await nc.tx.socialPost.findMany({
     where: { status: "PENDING_APPROVAL", deletedAt: null },
     include: {
-      targets: { include: { connection: { select: { id: true, name: true, platform: true, status: true, disconnectedAt: true, externalId: true } } } },
-      media: { include: { attachment: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true } } } },
+      targets: { include: { connection: { select: CHON_KENH_BAI } } },
+      media: { include: { attachment: { select: CHON_TEP_BAI } } },
     },
     orderBy: [{ submittedAt: "asc" }, { id: "asc" }],
     take: 200,
@@ -519,7 +585,7 @@ export async function duyetBai(nc: NguCanh, id: string, ghiChu: string | null = 
   if (b.status !== "PENDING_APPROVAL") throw new LoiNghiepVu("Bài không ở trạng thái chờ duyệt.", 409, "sai-trang-thai");
   const hl = await nguoiDuyetHopLe(nc, b);
   if (!hl.ok) throw new LoiNghiepVu(hl.lyDo, 403, "khong-duoc-duyet");
-  kiemNoiDung(b);
+  const kieu = await kiemNoiDung(b);
   await nc.tx.socialPost.update({ where: { id }, data: { status: "APPROVED", approvedBy: nc.hoSo.userId, approvedAt: bayGio, reviewNote: ghiChu, updatedBy: nc.hoSo.userId } });
   await nc.tx.socialPostReview.create({ data: { tenantId: nc.tenantId, postId: id, action: "duyet", actorId: nc.hoSo.userId, note: ghiChu } });
   // Duyệt xong chạy tiếp đúng ý người gửi: hẹn giờ (giờ còn ở tương lai) hoặc đăng ngay; giờ hẹn đã qua lúc duyệt → đăng ngay.
@@ -527,7 +593,7 @@ export async function duyetBai(nc: NguCanh, id: string, ghiChu: string | null = 
   if (b.publishMode) {
     const sau = await layBai(nc, id);
     const luc = b.publishMode === "hen-gio" && b.scheduledAt && b.scheduledAt.getTime() > bayGio.getTime() ? b.scheduledAt : bayGio;
-    sang = await xepHang(nc, sau, luc, bayGio);
+    sang = await xepHang(nc, sau, luc, bayGio, kieu);
   }
   await taoThongBao(nc.tx, nc.tenantId, {
     nguoiNhanId: b.submittedBy ?? b.createdBy, loai: "mxh-da-duyet", tieuDe: `Bài đã được duyệt: ${b.title ?? b.body.slice(0, 60)}`,
