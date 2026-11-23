@@ -62,11 +62,12 @@ export async function khoaNganSach(nc: NguCanh): Promise<void> {
 
 /**
  * QA 0.25.0 (QĐ-245): có lượt cùng khóa lặp lại ĐANG GỌI mô hình → 409 `ai-dang-viet` (bấm đúp không gọi AI lần hai).
- * Gọi SAU `khoaNganSach` trong cùng giao dịch.
+ * Gọi SAU `khoaNganSach` trong cùng giao dịch. `bayGio` = giờ thật của máy chủ (createdAt của lượt do CSDL ghi).
  */
-export async function chanLuotTrungKhoa(nc: NguCanh, tinhNang: string, khoa: string | null): Promise<void> {
+export async function chanLuotTrungKhoa(nc: NguCanh, tinhNang: string, khoa: string | null, bayGio: Date = new Date()): Promise<void> {
   if (!khoa) return;
-  const dang = await nc.tx.aiUsageLog.findFirst({ where: { feature: tinhNang, idempotencyKey: khoa, status: "dang-goi" }, select: { id: true } });
+  // Lượt "dang-goi" quá 10 phút (hạn gọi mô hình tối đa 300 giây) = máy chủ tắt giữa chừng → không chặn thử lại cùng khóa.
+  const dang = await nc.tx.aiUsageLog.findFirst({ where: { feature: tinhNang, idempotencyKey: khoa, status: "dang-goi", createdAt: { gte: new Date(bayGio.getTime() - 10 * 60_000) } }, select: { id: true } });
   if (dang) throw new LoiNghiepVu("AI đang viết bài cho yêu cầu này (bấm hai lần) — chờ vài giây rồi mở danh sách bài nháp.", 409, "ai-dang-viet");
 }
 

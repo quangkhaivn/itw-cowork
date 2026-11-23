@@ -292,10 +292,18 @@ async function main() {
   dat("Một bài; mã lượt AI của bài là lượt đã gọi", baiKhoa.length === 1 && baiKhoa[0].aiUsageId !== null && (await chu.aiUsageLog.findUniqueOrThrow({ where: { id: baiKhoa[0].aiUsageId! } })).status === "xong");
   const lan3 = await vietBaiAi(buoc(T, mk), yc(khoa), MOC);
   dat("Bấm lại sau khi xong → trả bài cũ, không gọi AI", lan3.id === k1.id && lan3.trung && ai.goi.length === 1);
+  // Máy chủ tắt giữa lúc gọi: lượt "dang-goi" cũ (quá 10 phút) cùng khóa KHÔNG chặn mãi việc thử lại.
+  const khoaTreo = `qa-treo-${DAU}`;
+  await chu.aiUsageLog.create({ data: { tenantId: T, userId: mk, feature: "mxh-viet-bai", month: "2026-11", status: "dang-goi", tokensReserved: 10, idempotencyKey: khoaTreo, createdAt: new Date(Date.now() - 20 * 60_000) } });
+  const lanTreo = await vietBaiAi(buoc(T, mk), yc(khoaTreo), MOC);
+  dat("Lượt treo quá 10 phút cùng khóa không chặn thử lại (bài được tạo)", lanTreo.doAiTao && !lanTreo.trung && ai.goi.length === 2);
 
   // ==================================================================
   console.log("\n— 7. AI: bước ghi bài hỏng sau khi đã gọi AI → lượt AI không treo “đang gọi” (QĐ-236 / QĐ-246) —");
   const cdQa = await voi(T, mk, (nc) => taoChienDich(nc, { ten: `Chiến dịch QA ${DAU} DEMO` }));
+  const cdNfc = await voi(T, mk, (nc) => taoChienDich(nc, { ten: `Khai giảng QA ${DAU}` }));
+  await nemLoi("Tên chiến dịch gõ dấu rời (Unicode tổ hợp) trùng tên đã có → 409 trung-ten (chuẩn hóa NFC)", "nghiep-vu", () => voi(T, mk, (nc) => taoChienDich(nc, { ten: `Khai giảng QA ${DAU}`.normalize("NFD") })), "trung-ten");
+  dat("…tên lưu dạng NFC", cdNfc.ten === cdNfc.ten.normalize("NFC"));
   ai.giuaLuot = async () => { await chu.socialCampaign.update({ where: { id: cdQa.id }, data: { status: "luu-tru" } }); };
   ai.tokenVao = 1500;
   ai.tokenRa = 700;

@@ -52,8 +52,17 @@ export async function chienDichMarketingDeChon(nc: NguCanh) {
   return ds.map((m) => ({ id: m.id, ma: m.code, ten: m.name }));
 }
 
-export async function taoChienDich(nc: NguCanh, d: z.infer<typeof LuocDoChienDich>) {
+/**
+ * QA 0.25.0 (QĐ-248): tên / mục tiêu chuẩn hóa NFC — gõ Unikey kiểu "Unicode tổ hợp" (dấu rời) cho chuỗi trông y hệt nhưng
+ * khác byte → lách được ràng buộc tên duy nhất, ra hai chiến dịch "Khai giảng" trong bộ lọc.
+ */
+function chuanHoaNhap<T extends z.infer<typeof LuocDoChienDich>>(d: T): T {
+  return { ...d, ten: d.ten.normalize("NFC"), mucTieu: d.mucTieu?.normalize("NFC") ?? d.mucTieu };
+}
+
+export async function taoChienDich(nc: NguCanh, nhap: z.infer<typeof LuocDoChienDich>) {
   batBuocQuyen(nc.hoSo, "mxh.update", { objectType: "social_campaign" });
+  const d = chuanHoaNhap(nhap);
   const mk = await kiemChienDichMarketing(nc, d.chienDichMarketingId);
   const id = crypto.randomUUID();
   try {
@@ -71,8 +80,9 @@ export async function taoChienDich(nc: NguCanh, d: z.infer<typeof LuocDoChienDic
   return (await danhSachChienDich(nc, true)).find((c) => c.id === id)!;
 }
 
-export async function suaChienDich(nc: NguCanh, id: string, d: z.infer<typeof LuocDoChienDich>) {
+export async function suaChienDich(nc: NguCanh, id: string, nhap: z.infer<typeof LuocDoChienDich>) {
   batBuocQuyen(nc.hoSo, "mxh.update", { objectType: "social_campaign", objectId: id });
+  const d = chuanHoaNhap(nhap);
   const cu = await nc.tx.socialCampaign.findFirst({ where: { id } });
   if (!cu) throw new LoiKhongTimThay("Chiến dịch");
   const mk = d.chienDichMarketingId === undefined ? cu.marketingCampaignId : d.chienDichMarketingId === cu.marketingCampaignId ? cu.marketingCampaignId : await kiemChienDichMarketing(nc, d.chienDichMarketingId);

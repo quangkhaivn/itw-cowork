@@ -24,6 +24,17 @@ Nền: 0.24.0 (đã phát hành, gồm bản sửa QA QĐ-220 → QĐ-226). QĐ-
 ### Kiểm thử
 - `npm run thu:mxh-lich-ai` (cuối chuỗi `thu:tich-hop`); bài thử đơn vị `mxh-ai-du-lieu.test.ts`, `mxh-lich-ai.test.ts`.
 
+### Sửa sau QA độc lập (QĐ-240 → QĐ-248)
+- **Lịch nội dung treo máy chủ** với tháng năm 0000 (`?thang=0000-01` — vòng dựng lưới lặp vô hạn, ăn hết RAM; bất kỳ ai có `mxh.view`, cả thực tập sinh) hoặc dựng ~694.000 ô ngày (năm 00xx); năm xem lịch nay 2000–2100, sai → 400 / trang về tháng hiện tại. Ngày quota YouTube ngay sau ngày đổi giờ mùa hè Thái Bình Dương bị tính thành hai ngày (chặn nhầm `han-muc-youtube`) (QĐ-242).
+- **AI viết bài — bấm đúp** cùng `Idempotency-Key` khi lượt đầu còn đang gọi mô hình: gọi AI lần hai (tốn ngân sách hai lần), ghi đè mã lượt AI của bài; nay lượt AI ghi khóa lặp lại, lượt trùng đang gọi → 409 `ai-dang-viet` (migration `20261127090001_qa_mxh_lich_ai`) (QĐ-245).
+- **Lượt AI treo "đang gọi" mãi** khi bước tạo bài hỏng sau khi đã gọi AI (chiến dịch vừa lưu trữ, kênh vừa ngắt…): nay ghi "lỗi" kèm số token thật (QĐ-246). Lỗi chưa rõ đã tốn token (hết giờ, đứt mạng, phản hồi hỏng) vẫn tính phần giữ chỗ; nhà cung cấp từ chối rõ (HTTP lỗi) mới hoàn (QĐ-247).
+- **Giá vốn / nhà cung cấp lọt sang AI** qua mô tả / thông số viết lách ("Giá-vốn", "gia_von", "Giá mua vào", nhãn một dòng – số dòng dưới, bảng, số không nhãn): mẫu chữ so sau khi bỏ dấu câu, thêm lớp ĐỐI CHIẾU với giá vốn / giá nhập / tên nhà cung cấp THẬT của sản phẩm; danh sách sản phẩm cho AI cần đúng quyền AI viết bài (trước: ai có `product.view` cũng đọc được tình trạng còn / hết hàng) (QĐ-240).
+- **Đầu ra AI**: bỏ cả liên kết trần (`bit.ly/…`, `zalo.me/…`, tên miền), email, thẻ Unicode giấu chữ, U+2028/2029, gạch mềm; bỏ ký tự vô hình cả ở dữ liệu ĐƯA VÀO lời nhắc; nội dung ép vừa luật nền tảng tính cả hashtag riêng (Instagram 2.200 ký tự / 30 hashtag, YouTube 5.000 BYTE, không "<>") — trước đây bài AI cho Instagram / YouTube qua được bước soạn rồi bị 422 lúc gửi duyệt; cảnh báo giá đọc cả "9,99 triệu", "15tr990", "9.990k", "500 nghìn"; cắt không làm vỡ emoji (QĐ-241).
+- **Lách duyệt bản sửa kênh lỗi**: bản sửa của thực tập sinh bị trả lại / rút → nhân viên có quyền đăng bấm "Đăng lại" là lên; nay kênh đã sửa mà người sửa cuối không có quyền đăng phải duyệt lại (409 `can-duyet`). Sửa kênh lỗi không cần duyệt lại thì bỏ dấu "đã duyệt" cũ (QĐ-243).
+- **Đăng trùng qua "Về nháp"**: bài Facebook / Instagram lỗi mà từng có lần gửi chưa chắc chắn (lỗi tạm / không rõ) không về nháp được nữa (về nháp → sửa nội dung → đối soát theo nội dung không nhận ra bài cũ) (QĐ-244).
+- Tên / mục tiêu chiến dịch chuẩn hóa NFC (gõ Unikey "Unicode tổ hợp" lách tên duy nhất) (QĐ-248).
+- Bài thử: `npm run thu:qa-mxh-lich-ai` (cuối chuỗi `thu:tich-hop`), đơn vị `qa-mxh-lich-ai.test.ts`.
+
 ## 0.24.0 — 23/11/2026 — Mạng xã hội: Facebook, Instagram, YouTube, Google Drive
 
 Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-219. Hướng dẫn từng bước: `docs/HUONG-DAN-MANG-XA-HOI.md`. Mọi lệnh gọi Meta / Google viết theo tài liệu công khai và thử bằng máy chủ GIẢ — **chưa kiểm với API thật** (danh sách điểm cần kiểm trong báo cáo 0.24.0).
