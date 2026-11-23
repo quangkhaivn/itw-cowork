@@ -2,7 +2,7 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.25.0 (chưa phát hành) — Mạng xã hội: lịch nội dung, duyệt, AI viết bài
+## 0.25.0 — 23/11/2026 — Mạng xã hội: lịch nội dung, duyệt, AI viết bài
 
 Nền: 0.24.0 (đã phát hành, gồm bản sửa QA QĐ-220 → QĐ-226). QĐ-230 → QĐ-239. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md` mục 14–16. Migration `20261126090001_mxh_lich_ai`.
 

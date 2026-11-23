@@ -2,7 +2,7 @@
 rem ============================================================================
 rem  CAI TGTH COWORK TU MA NGUON DA TAI VE MAY (khong tai lai ma nguon tu GitHub)
 rem
-rem  Dung khi da tai ma nguon ban 0.24 tu GitHub (Code - Download ZIP) va giai nen.
+rem  Dung khi da tai ma nguon ban 0.25 tu GitHub (Code - Download ZIP) va giai nen.
 rem  Dat tep nay trong thu muc may-ca-nhan cua ma nguon (hoac thu muc goc), roi bam dup.
 rem  Van can mang Internet de tai Node.js, PostgreSQL va goi npm lan dau.
 rem  Cai vao thu muc khac:  CAI-TU-MA-NGUON-DA-TAI.bat -ThuMuc "D:\TGTH-Cowork"
@@ -23,7 +23,7 @@ echo ==================================================================
 echo Ma nguon: %GOC_MA%
 
 rem [1/3] Kiem phien ban trong ma nguon da tai
-powershell -NoProfile -Command "try { $v = (Get-Content -Raw '%GOC_MA%\package.json' | ConvertFrom-Json).version; Write-Host ('Phien ban ma nguon: ' + $v) -ForegroundColor Green; if (-not $v.StartsWith('0.24')) { Write-Host ('Chu y: day la ban ' + $v + ', khong phai 0.24.') -ForegroundColor Yellow } } catch { Write-Host 'Khong doc duoc package.json' -ForegroundColor Red; exit 1 }"
+powershell -NoProfile -Command "try { $v = (Get-Content -Raw '%GOC_MA%\package.json' | ConvertFrom-Json).version; Write-Host ('Phien ban ma nguon: ' + $v) -ForegroundColor Green; if (-not $v.StartsWith('0.25')) { Write-Host ('Chu y: day la ban ' + $v + ', khong phai 0.25.') -ForegroundColor Yellow } } catch { Write-Host 'Khong doc duoc package.json' -ForegroundColor Red; exit 1 }"
 if errorlevel 1 goto khong_thay_ma
 
 rem [2/3] Chon bo cai co ho tro lay ma tu may (-NguonMa)
@@ -33,7 +33,7 @@ if not defined TEP findstr /c:"NguonMa" "%GOC_MA%\may-ca-nhan\cai-nhanh.ps1" >nu
 if defined TEP goto co_bo_cai
 echo Bo cai trong ma nguon nay chua ho tro lay ma tu may - tai ban bo cai moi ^(vai chuc KB^)...
 set "TEP=%TEMP%\cai-tgth-cowork-tu-may.ps1"
-powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 'https://raw.githubusercontent.com/quangkhaivn/itw-cowork/release/0.24/may-ca-nhan/cai-nhanh.ps1' -OutFile '%TEP%' } catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 1 }"
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 'https://raw.githubusercontent.com/quangkhaivn/itw-cowork/release/0.25/may-ca-nhan/cai-nhanh.ps1' -OutFile '%TEP%' } catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 1 }"
 if errorlevel 1 goto loi_mang
 findstr /c:"NguonMa" "%TEP%" >nul || goto loi_mang
 
