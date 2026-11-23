@@ -3,7 +3,7 @@ import { voiTenant, type ClientTenant } from "../../src/lib/db";
 import { ghiKiemToan } from "../../src/lib/kiem-toan";
 import { ghiSuKien, SU_KIEN } from "../../src/lib/su-kien";
 import { docTep, maBam } from "../../src/modules/dinh-kem/kho-tep";
-import { capNhatTrangThaiBai, docCauHinhMxh, type CauHinhMxh } from "../../src/modules/mang-xa-hoi/chung";
+import { baoNguoiSoanVaNguoiDuyet, capNhatTrangThaiBai, docCauHinhMxh, type CauHinhMxh } from "../../src/modules/mang-xa-hoi/chung";
 import { layConnector } from "../../src/modules/mang-xa-hoi/connectors/danh-muc";
 import type { BoiCanhGoi, BuocGoi, KenhGoi, LoiPhanLoai, NoiDungDang, SocialConnector, TepMedia, ThongTinXacThuc } from "../../src/modules/mang-xa-hoi/connectors/kieu";
 import { HUONG_DAN_LOI, HUONG_DAN_LOI_OAUTH } from "../../src/modules/mang-xa-hoi/hang-so";
@@ -39,7 +39,9 @@ export interface ViecNhan {
 export async function nhanViecDang(tenantId: string, workerId: string, bayGio: Date, gioiHan = 5): Promise<ViecNhan[]> {
   return voiTenant(tenantId, async (tx) => {
     const cfg = await docCauHinhMxh(tx);
-    const moc = new Date(bayGio.getTime() - cfg.phutKetDang * 60_000);
+    // QA 0.23.0: một lượt hợp lệ có thể gọi nền tảng 4 lần (đối soát, ảnh, đăng, đọc lại), mỗi lần tới `mxh.han_goi_giay` —
+    // ngưỡng "kẹt" không được ngắn hơn thế, kẻo worker khác đối soát + đăng lại trong lúc lượt này còn đang gửi (bài trùng).
+    const moc = new Date(bayGio.getTime() - Math.max(cfg.phutKetDang * 60_000, 5 * cfg.hanGoiMs));
     // Lượt kẹt: PUBLISHING quá lâu → đối soát ngay; VERIFYING đã nhận mà kẹt → mở lại cho lượt sau.
     await tx.$executeRaw`
       UPDATE social_post_targets SET status = 'VERIFYING', error_class = 'UNKNOWN', error_code = 'ket-dang',
@@ -124,7 +126,9 @@ type KetThucViec =
   | { kieu: "hoan"; sauMs: number; loi: LoiPhanLoai }
   | { kieu: "xac-minh-sau"; externalId: string | null; sauMs: number; loi: LoiPhanLoai }
   | { kieu: "thu-lai"; sauMs: number; loi: LoiPhanLoai }
-  | { kieu: "that-bai"; loi: LoiPhanLoai; canNhapLai: boolean; externalId?: string | null };
+  | { kieu: "that-bai"; loi: LoiPhanLoai; canNhapLai: boolean; externalId?: string | null }
+  /** QA 0.23.0 (QĐ-207): kênh đã ngắt khi đang xác minh, đối soát công khai không ra — "Không rõ – cần kiểm tay". */
+  | { kieu: "can-kiem-tay"; loi: LoiPhanLoai };
 
 export interface KetQuaXuLy {
   targetId: string;
@@ -160,6 +164,18 @@ async function ghiKetQua(tenantId: string, workerId: string, d: DuLieuViec, kt: 
         where: { id: d.target.id },
         data: { ...chung, status: "QUEUED", errorClass: kt.loi.loai, errorCode: kt.loi.ma, errorMessage: kt.loi.thongBao, nextAttemptAt: new Date(bayGio.getTime() + kt.sauMs) },
       });
+    } else if (kt.kieu === "can-kiem-tay") {
+      await tx.socialPostTarget.update({
+        where: { id: d.target.id },
+        data: { ...chung, status: "NEEDS_CHECK", errorClass: "UNKNOWN", errorCode: kt.loi.ma, errorMessage: kt.loi.thongBao, nextAttemptAt: null },
+      });
+      await ghiSuKien(tx, { eventType: SU_KIEN.SOCIAL_TARGET_FAILED, actorType: "system", objectType: "social_post", objectId: d.target.postId, payload: { kenhId: d.kenh.id, loaiLoi: "UNKNOWN", ma: kt.loi.ma } });
+      await baoNguoiSoanVaNguoiDuyet(tx, tenantId, d.post.createdBy, {
+        loai: "mxh-can-kiem-tay", mucDo: "canh-bao",
+        tieuDe: `Không rõ bài đã lên “${d.kenh.name}” chưa — cần kiểm tay: ${d.post.title ?? d.post.body.slice(0, 50)}`,
+        noiDung: kt.loi.thongBao, duongDan: `/mang-xa-hoi/bai/${d.target.postId}`,
+        doiTuong: "social_post", doiTuongId: d.target.postId, khoaChongTrung: `mxh-can-kiem-tay:${d.target.id}`,
+      });
     } else {
       await tx.socialPostTarget.update({
         where: { id: d.target.id },
@@ -170,9 +186,12 @@ async function ghiKetQua(tenantId: string, workerId: string, d: DuLieuViec, kt: 
         await danhDauCanKetNoiLai(tx, tenantId, d.kenh, kt.loi.thongBao, bayGio);
       }
       await ghiSuKien(tx, { eventType: SU_KIEN.SOCIAL_TARGET_FAILED, actorType: "system", objectType: "social_post", objectId: d.target.postId, payload: { kenhId: d.kenh.id, loaiLoi: kt.loi.loai, ma: kt.loi.ma } });
-      await taoThongBao(tx, tenantId, {
-        nguoiNhanId: d.post.createdBy, loai: "mxh-dang-loi", mucDo: "canh-bao",
-        tieuDe: `Đăng lên “${d.kenh.name}” không thành công: ${d.post.title ?? d.post.body.slice(0, 50)}`,
+      // QA 0.23.0 (QĐ-204): báo người soạn + người duyệt có phạm vi bao người soạn (thực tập sinh không tự đăng lại được).
+      await baoNguoiSoanVaNguoiDuyet(tx, tenantId, d.post.createdBy, {
+        loai: kt.canNhapLai ? "mxh-can-ket-noi-lai" : "mxh-dang-loi", mucDo: "canh-bao",
+        tieuDe: kt.canNhapLai
+          ? `Kênh “${d.kenh.name}” cần kết nối lại — bài chưa đăng: ${d.post.title ?? d.post.body.slice(0, 50)}`
+          : `Đăng lên “${d.kenh.name}” không thành công: ${d.post.title ?? d.post.body.slice(0, 50)}`,
         noiDung: `${kt.loi.thongBao} — ${kt.loi.loai === "NEEDS_REAUTH" && d.kenh.authType === "oauth" ? HUONG_DAN_LOI_OAUTH : HUONG_DAN_LOI[kt.loi.loai]}`, duongDan: `/mang-xa-hoi/bai/${d.target.postId}`,
         doiTuong: "social_post", doiTuongId: d.target.postId, khoaChongTrung: `mxh-dang-loi:${d.target.id}:${hien.attemptCount}:${kt.loi.ma}`,
       });
@@ -238,8 +257,29 @@ async function hoanQuotaYoutube(tenantId: string, d: DuLieuViec, bayGio: Date, t
   return { kieu: "hoan", sauMs: Math.max(60_000, toi.getTime() - bayGio.getTime()), loi: { loai: "RETRYABLE", ma: "yt-het-quota-ngay", thongBao: `${thongBao} Dời sang ngày sau.`, httpStatus: loi?.httpStatus ?? null } };
 }
 
+/**
+ * Làm mới mốc giữ khóa giữa các bước dài của connector (tải video theo đoạn, hỏi trạng thái container) — tối đa mỗi 30
+ * giây một lần. Mốc = max(giờ của việc, giờ thật): bài thử với giờ giả không bị lùi mốc.
+ */
+function taoGiuKhoa(tenantId: string, workerId: string, targetId: string, bayGio: Date): () => Promise<void> {
+  let lanCuoi = 0;
+  return async () => {
+    const now = Date.now();
+    if (now - lanCuoi < 30_000) return;
+    lanCuoi = now;
+    const moc = new Date(Math.max(bayGio.getTime(), now));
+    await voiTenant(tenantId, (tx) => tx.$executeRaw`UPDATE social_post_targets SET locked_at = ${moc}
+      WHERE id = ${targetId}::uuid AND locked_by = ${workerId} AND status IN ('PUBLISHING', 'VERIFYING')`);
+  };
+}
+
 /** Xử lý một việc đã nhận. Không bao giờ ném ra ngoài (lỗi bất ngờ → ghi thành lỗi tạm, thử lại có giãn cách). */
 export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNhan, bayGio: Date, env: NodeJS.ProcessEnv = process.env): Promise<KetQuaXuLy> {
+  // QA 0.23.0: làm mới mốc giữ khóa lúc BẮT ĐẦU xử lý (không phải lúc nhận cả lô): việc thứ 5 của lô có thể bắt đầu sau
+  // nhiều phút; giữ mốc lúc nhận thì worker khác coi là "kẹt", đối soát không thấy rồi đăng lại trong lúc lượt này đang gửi.
+  const conGiu = await voiTenant(tenantId, (tx) => tx.$executeRaw`UPDATE social_post_targets SET locked_at = ${bayGio}
+    WHERE id = ${viec.targetId}::uuid AND locked_by = ${workerId} AND status IN ('PUBLISHING', 'VERIFYING')`);
+  if (conGiu === 0) return { targetId: viec.targetId, ketQua: "bo-qua" };
   const d = await voiTenant(tenantId, (tx) => napViec(tx, viec.targetId));
   if (!d || d.target.lockedBy !== workerId) return { targetId: viec.targetId, ketQua: "bo-qua" };
   const nhatKy: BuocGoi[] = [];
@@ -251,7 +291,24 @@ export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNha
 
   const c = layConnector(d.kenh.platform);
   if (!c || !d.nenTangDungDuoc) return xong({ kieu: "that-bai", canNhapLai: false, loi: { loai: "PERMANENT", ma: "nen-tang-tat", thongBao: "Nền tảng chưa được hỗ trợ hoặc đang tắt trên máy chủ.", httpStatus: null } });
-  if (d.kenh.disconnectedAt || !d.niemPhong) return xong({ kieu: "that-bai", canNhapLai: false, loi: { loai: "PERMANENT", ma: "kenh-da-ngat", thongBao: "Kênh đã ngắt.", httpStatus: null } });
+  if (d.kenh.disconnectedAt || !d.niemPhong) {
+    // QA 0.23.0 (QĐ-207): đang xác minh / có dấu hiệu đã gửi mà kênh bị ngắt (bản niêm phong đã hủy) → bài CÓ THỂ đã lên.
+    // Không đánh Lỗi ngay: đối soát bằng dữ liệu công khai; không ra thì "Không rõ – cần kiểm tay" kèm địa chỉ site.
+    if (viec.loai === "xac-minh" || d.target.externalPostId || d.target.errorClass === "UNKNOWN") {
+      try {
+        const v = c.doiSoatCongKhai ? await c.doiSoatCongKhai(d.kenh, d.target.reconcileKey, d.target.externalPostId, { hanMs: d.cfg.hanGoiMs }) : null;
+        if (v) nhatKy.push(...v.nhatKy);
+        if (v?.ok) return xong({ kieu: "da-dang", externalId: v.externalId, url: v.url });
+      } catch (e) {
+        console.error(`[worker] mxh: đối soát công khai kênh-bài ${d.target.id} hỏng: ${cauLoiGon(e, 200)}`);
+      }
+      return xong({ kieu: "can-kiem-tay", loi: { loai: "UNKNOWN", ma: "can-kiem-tay", httpStatus: null,
+        thongBao: d.kenh.platform === "WORDPRESS"
+          ? `Kênh đã ngắt nên không đối soát được bằng tài khoản — bài CÓ THỂ đã lên. Kiểm tay trên site ${d.kenh.diaChi} (đường dẫn bài chứa “${d.target.reconcileKey}”); đừng đăng lại trước khi kiểm.`
+          : `Kênh đã ngắt (token đã hủy) nên không đối soát được — bài CÓ THỂ đã lên. Kiểm tay trên ${d.kenh.name}${d.target.externalPostId ? ` (mã bài / video ${d.target.externalPostId})` : ""} theo nội dung và giờ đăng; đừng đăng lại trước khi kiểm.` } });
+    }
+    return xong({ kieu: "that-bai", canNhapLai: false, loi: { loai: "PERMANENT", ma: "kenh-da-ngat", thongBao: "Kênh đã ngắt.", httpStatus: null } });
+  }
   if (d.kenh.status === "NEEDS_REAUTH") return xong({ kieu: "that-bai", canNhapLai: true, loi: { loai: "NEEDS_REAUTH", ma: "kenh-can-nhap-lai", thongBao: d.kenh.authType === "oauth" ? "Kênh cần kết nối lại." : "Kênh cần nhập lại mật khẩu ứng dụng.", httpStatus: null } });
 
   // Mở bí mật (kênh OAuth: kèm thông tin app; Google: làm mới access token trước hạn).
@@ -271,6 +328,7 @@ export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNha
     // Kỹ thuật: cỡ đoạn tải YouTube (bội số 256 KiB, mặc định 8 MiB). Bài thử: đoạn nhỏ + không chờ giữa các lần hỏi trạng thái.
     ...(Number(env.MXH_YOUTUBE_DOAN_BYTE) > 0 ? { doanYoutube: Number(env.MXH_YOUTUBE_DOAN_BYTE) } : {}),
     ...(laThu && env.MXH_THU_KHONG_CHO === "1" ? { ngu: async () => undefined } : {}),
+    giuKhoa: taoGiuKhoa(tenantId, workerId, d.target.id, bayGio),
     linkMedia: appUrlHttps(env)
       ? (attachmentId, jpeg) => `${goc}/api/cong-khai/mxh/media/${kyMaMedia({ tenantId, postId: d.target.postId, attachmentId, hetHanGiay: Math.floor(bayGio.getTime() / 1000) + d.cfg.hanLinkMediaPhut * 60, ...(jpeg ? { jpeg: true } : {}) })}`
       : undefined,
@@ -345,10 +403,22 @@ export async function xuLyViec(tenantId: string, workerId: string, viec: ViecNha
   }
 }
 
-/** Một vòng cho một doanh nghiệp: nhận việc rồi xử lý lần lượt. */
-export async function dangBaiMotVong(tenantId: string, workerId: string, bayGio: Date, gioiHan = 5, env: NodeJS.ProcessEnv = process.env): Promise<KetQuaXuLy[]> {
+/**
+ * Một vòng cho một doanh nghiệp: nhận việc rồi xử lý lần lượt. `dongHo` (worker thật: giờ hiện tại) cho mốc bắt đầu TỪNG
+ * việc — bài thử không truyền thì mọi việc dùng `bayGio`.
+ */
+export async function dangBaiMotVong(tenantId: string, workerId: string, bayGio: Date, gioiHan = 5, env: NodeJS.ProcessEnv = process.env, dongHo?: () => Date): Promise<KetQuaXuLy[]> {
   const viec = await nhanViecDang(tenantId, workerId, bayGio, gioiHan);
   const kq: KetQuaXuLy[] = [];
-  for (const v of viec) kq.push(await xuLyViec(tenantId, workerId, v, bayGio, env));
+  for (const v of viec) {
+    // QA 0.23.0: một việc hỏng ngoài dự kiến (vd. ghi kết quả lỗi CSDL — `return xong(...)` trong try không bắt được) không
+    // được bỏ dở các việc còn lại của lô. Việc hỏng vẫn đang giữ khóa → quá ngưỡng "kẹt" thì đối soát, không đăng lại mù.
+    try {
+      kq.push(await xuLyViec(tenantId, workerId, v, dongHo ? dongHo() : bayGio, env));
+    } catch (e) {
+      console.error(`[worker] mxh: việc kênh-bài ${v.targetId} hỏng: ${cauLoiGon(e, 200)}`);
+      kq.push({ targetId: v.targetId, ketQua: "bo-qua" });
+    }
+  }
   return kq;
 }

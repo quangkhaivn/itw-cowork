@@ -131,6 +131,7 @@ export const youtube: SocialConnector = {
     let vong = 0;
     while (tu < tong) {
       if (++vong > 10_000) break;
+      await bc.giuKhoa?.();
       const den = Math.min(tu + doan, tong);
       const r = await goiNenTang(nhatKy, den === tong ? "publish" : "media", den === tong, {
         url: phien,

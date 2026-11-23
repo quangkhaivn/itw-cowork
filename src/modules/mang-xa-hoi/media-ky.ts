@@ -54,17 +54,26 @@ function goc(): string {
   return (process.env.APP_URL ?? "").replace(/\/+$/, "");
 }
 
-/** Tạo link công khai cho một ảnh của bài (người có mxh.view trong phạm vi). Hạn theo Cấu hình mxh.han_link_media_phut. */
+/**
+ * Tạo link công khai cho một ảnh của bài. QA 0.23.0 (QĐ-205): chỉ người có `mxh.update` (trong phạm vi xem bài) — thực
+ * tập sinh không tạo được; luồng đăng bài (worker) dùng `taoLinkMediaHeThong`. Hạn theo Cấu hình mxh.han_link_media_phut.
+ */
 export async function taoLinkMedia(nc: NguCanh, postId: string, attachmentId: string, bayGio: Date = new Date()) {
-  batBuocQuyen(nc.hoSo, "mxh.view");
+  batBuocQuyen(nc.hoSo, "mxh.update", { objectType: "social_post", objectId: postId });
   const b = await nc.tx.socialPost.findFirst({ where: { AND: [{ id: postId, deletedAt: null }, await dieuKienXemBai(nc)] }, select: { id: true } });
   if (!b) throw new LoiKhongTimThay("Bài");
-  const m = await nc.tx.socialPostMedia.findFirst({ where: { postId, attachmentId, attachment: { deletedAt: null } }, select: { id: true } });
+  const kq = await taoLinkMediaHeThong(nc.tx, nc.tenantId, postId, attachmentId, bayGio);
+  await nc.kiemToan({ action: "tao-link-media-mxh", objectType: "attachment", objectId: attachmentId, after: { baiId: postId, hetHan: kq.hetHan.toISOString() } });
+  return kq;
+}
+
+/** Link ký cho luồng đăng bài (worker, trong ngữ cảnh doanh nghiệp) — không cần người dùng; ảnh phải đang thuộc bài. */
+export async function taoLinkMediaHeThong(tx: ClientTenant, tenantId: string, postId: string, attachmentId: string, bayGio: Date) {
+  const m = await tx.socialPostMedia.findFirst({ where: { postId, attachmentId, post: { deletedAt: null }, attachment: { deletedAt: null } }, select: { id: true } });
   if (!m) throw new LoiKhongTimThay("Ảnh của bài");
-  const phut = (await docCauHinhMxh(nc.tx)).hanLinkMediaPhut;
+  const phut = (await docCauHinhMxh(tx)).hanLinkMediaPhut;
   const hetHanGiay = Math.floor(bayGio.getTime() / 1000) + phut * 60;
-  const ma = kyMaMedia({ tenantId: nc.tenantId, postId, attachmentId, hetHanGiay });
-  await nc.kiemToan({ action: "tao-link-media-mxh", objectType: "attachment", objectId: attachmentId, after: { baiId: postId, hetHan: new Date(hetHanGiay * 1000).toISOString() } });
+  const ma = kyMaMedia({ tenantId, postId, attachmentId, hetHanGiay });
   return { url: `${goc()}/api/cong-khai/mxh/media/${ma}`, hetHan: new Date(hetHanGiay * 1000) };
 }
 

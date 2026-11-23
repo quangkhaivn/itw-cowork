@@ -1,7 +1,7 @@
 import { goiAnToan, LoiGoiMang } from "../mang/goi-an-toan";
 import { appsecretProof, phanLoaiLoiGoogle, phanLoaiLoiGraph, QUYEN_XIN, type LoiNenTang } from "../oauth-thuan";
 import { cauLoiGon } from "../tinh-toan";
-import { docJson } from "./goi-chung";
+import { boCheYeuCau, docJson } from "./goi-chung";
 import { gocApi } from "./goc-api";
 
 /**
@@ -17,13 +17,16 @@ import { gocApi } from "./goc-api";
 export type KetQuaOAuth<T> = { ok: true; giaTri: T } | ({ ok: false } & LoiNenTang);
 
 async function goiJson(url: string, o: { phuongThuc?: "GET" | "POST"; tieuDe?: Record<string, string>; than?: string; hanMs: number }, phanLoai: (s: number, j: unknown) => LoiNenTang, ten: string): Promise<KetQuaOAuth<unknown>> {
+  // Che client_secret / code / token nếu máy chủ nhại lại trong lỗi (luật QA 0.23.0).
+  const che = boCheYeuCau({ url, tieuDe: o.tieuDe, than: o.than });
   try {
     const ph = await goiAnToan({ url, phuongThuc: o.phuongThuc ?? "GET", tieuDe: o.tieuDe, than: o.than, hanMs: o.hanMs, tranPhanHoi: 2 * 1024 * 1024 });
     const j = docJson(ph);
     if (ph.status >= 200 && ph.status < 300) return { ok: true, giaTri: j };
-    return { ok: false, ...phanLoai(ph.status, j) };
+    const l = phanLoai(ph.status, j);
+    return { ok: false, ...l, ma: che(l.ma).slice(0, 100), thongBao: che(l.thongBao) };
   } catch (e) {
-    return { ok: false, loai: "RETRYABLE", ma: e instanceof LoiGoiMang ? e.loai : "loi-khac", thongBao: `${ten}: ${e instanceof Error ? cauLoiGon(e.message, 200) : "lỗi mạng"}` };
+    return { ok: false, loai: "RETRYABLE", ma: e instanceof LoiGoiMang ? e.loai : "loi-khac", thongBao: che(`${ten}: ${e instanceof Error ? cauLoiGon(e.message, 200) : "lỗi mạng"}`) };
   }
 }
 

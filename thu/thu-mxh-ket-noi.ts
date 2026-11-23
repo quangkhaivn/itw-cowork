@@ -204,6 +204,8 @@ async function graph(req: IncomingMessage, res: ServerResponse, url: URL, duong:
       if (cheDo === "500") return json(res, 500, { error: { message: "An unexpected error has occurred.", code: 2, is_transient: true } });
       if (cheDo === "100") return loiGraph(res, 400, 100, "Invalid parameter: message");
       if (cheDo === "190") return loiGraph(res, 400, 190, "Error validating access token: Session has expired.");
+      // Proxy / cổng gỡ lỗi NHẠI LẠI token + appsecret_proof trong thông báo lỗi (luật che bí mật QA 0.23.0).
+      if (cheDo === "nhai") return loiGraph(res, 400, 100, `Invalid parameter (debug: Authorization=OAuth ${tok}; appsecret_proof=${q.get("appsecret_proof")}; token-url=${encodeURIComponent(tok)})`);
       const b: BaiFb = { id: `${ma}_${id()}`, page: ma, message: String(form.message ?? ""), link: form.link ?? null, attached: Object.entries(form).filter(([k]) => k.startsWith("attached_media")).map(([, v]) => JSON.parse(String(v)).media_fbid), created: gioNenTang() };
       gia.bai.set(b.id, b);
       if (cheDo === "treo") { gia.treo.push(res); return; }
@@ -675,6 +677,14 @@ async function main() {
   t = await target(p7.id, kFb.id);
   dat("PERMANENT (400, code 100) → FAILED ngay, có thông báo của Meta", t.status === "FAILED" && t.errorClass === "PERMANENT" && t.attemptCount === 1 && /Invalid parameter/.test(t.errorMessage ?? ""));
 
+  const p7b = await tao("Lỗi nhại token DEMO", "Bài gặp lỗi nhại token DEMO", [kFb.id]);
+  gia.hangFeed.push("nhai");
+  await voi(tId, mk, (nc) => dangNgay(nc, p7b.id, sau(350)));
+  await vong(350);
+  t = await target(p7b.id, kFb.id);
+  const nk7b = JSON.stringify(await chu.socialPublishAttempt.findMany({ where: { targetId: t.id } }));
+  dat("Lỗi nền tảng nhại lại token / appsecret_proof → che (***) trong kênh-bài và nhật ký gọi (luật QA 0.23)", t.status === "FAILED" && (t.errorMessage ?? "").includes("***") && !(t.errorMessage ?? "").includes(TOK.pageA) && !nk7b.includes(TOK.pageA) && !nk7b.includes(createHmac("sha256", APP_SECRET).update(TOK.pageA).digest("hex")), t.errorMessage ?? "");
+
   const p8 = await tao("Treo DEMO", "Bài hết giờ sau khi gửi DEMO", [kFb.id]);
   gia.hangFeed.push("treo");
   const feedTruoc = gia.soFeed;
@@ -930,8 +940,14 @@ async function main() {
   await nemLoi("Doanh nghiệp khác gắn kênh YouTube của T vào bài", "nghiep-vu", () => voi(T2, mkT2, (nc) => taoBai(nc, { tieuDe: "x", noiDung: "x", kenhIds: [kYt.id] })), "khong-tim-thay");
   dat("Vai ứng dụng không ngữ cảnh: 0 dòng OAuth / kênh chờ chọn / yêu cầu xóa / quota", ((await prisma.$queryRaw<{ n: number }[]>`SELECT ((SELECT count(*) FROM social_oauth_requests) + (SELECT count(*) FROM social_oauth_candidates) + (SELECT count(*) FROM social_data_deletion_requests) + (SELECT count(*) FROM social_quota_usages) + (SELECT count(*) FROM legal_pages))::int AS n`)[0].n) === 0);
   dat("Ngữ cảnh T2: không thấy dữ liệu OAuth của T", await voiTenant(T2, async (tx) => (await tx.socialOauthRequest.count()) === 0 && (await tx.socialQuotaUsage.count()) === 0));
+  // Kênh-bài đang xác minh thì kênh bị ngắt (token bị hủy) → không đánh Lỗi, "Không rõ – cần kiểm tay" (NEEDS_CHECK).
+  const yx = await chu.socialPost.create({ data: { tenantId: tId, title: "Video đang xác minh DEMO", body: "x", status: "PUBLISHING", createdBy: mk } });
+  const tx0 = await chu.socialPostTarget.create({ data: { tenantId: tId, postId: yx.id, connectionId: kYt.id, status: "VERIFYING", contentKind: "yt-video", reconcileKey: `yx-${DAU}`, externalPostId: "vidDangXacMinh1", errorClass: "UNKNOWN", nextAttemptAt: sau(60_000), attemptCount: 1 } });
   await ngatKenh_(tId, gd, kYt.id);
   dat("Ngắt kênh YouTube → bản niêm phong bị xóa", (await chu.socialCredential.count({ where: { connectionId: kYt.id } })) === 0);
+  await dangBaiMotVong(tId, "w-kn", sau(60_000));
+  const tx1 = await chu.socialPostTarget.findUniqueOrThrow({ where: { id: tx0.id } });
+  dat("Đang xác minh mà kênh bị ngắt → NEEDS_CHECK “Không rõ – cần kiểm tay” (không Lỗi, không đăng lại)", tx1.status === "NEEDS_CHECK" && /kiểm tay/i.test(tx1.errorMessage ?? "") && (tx1.errorMessage ?? "").includes("vidDangXacMinh1"), `${tx1.status} ${tx1.errorMessage}`);
   await donDepOAuth(tId, sau(100_000));
   dat("Dọn: kênh chờ chọn quá hạn bị xóa", (await chu.socialOauthCandidate.count({ where: { tenantId: tId } })) === 0);
 

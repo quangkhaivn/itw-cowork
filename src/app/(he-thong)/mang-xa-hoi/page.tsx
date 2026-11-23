@@ -8,7 +8,7 @@ import { dinhDangNgayGio } from "@/lib/dinh-dang";
 import { coQuyen } from "@/lib/phan-quyen";
 import { docDuLieu, layMot, yeuCauQuyen, type ThamSoTrang } from "@/lib/trang";
 import { danhSachBai, lichBai } from "@/modules/mang-xa-hoi/bai";
-import { NHAN_TRANG_THAI_BAI, TRANG_THAI_BAI, type TrangThaiBai } from "@/modules/mang-xa-hoi/hang-so";
+import { NHAN_DA_DUYET_CAN_HEN_LAI, NHAN_TRANG_THAI_BAI, TRANG_THAI_BAI, type TrangThaiBai } from "@/modules/mang-xa-hoi/hang-so";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +59,7 @@ export default async function TrangBaiMangXaHoi({ searchParams }: { searchParams
                 <strong>{ngay}</strong>
                 <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
                   {ds.map((b) => {
-                    const n = NHAN_TRANG_THAI_BAI[b.trangThai as TrangThaiBai] ?? { nhan: b.trangThai, lop: "" };
+                    const n = ("canHenLai" in b && b.canHenLai ? NHAN_DA_DUYET_CAN_HEN_LAI : null) ?? NHAN_TRANG_THAI_BAI[b.trangThai as TrangThaiBai] ?? { nhan: b.trangThai, lop: "" };
                     return <li key={b.id}>{b.henLuc && new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }).format(b.henLuc)} — <Link href={`/mang-xa-hoi/bai/${b.id}`}>{b.tieuDe}</Link> <span className={`huy-hieu ${n.lop}`}>{n.nhan}</span></li>;
                   })}
                 </ul>
@@ -81,7 +81,7 @@ export default async function TrangBaiMangXaHoi({ searchParams }: { searchParams
           <div className="cuon-ngang"><table className="bang">
             <thead><tr><th>Bài</th><th>Trạng thái</th><th>Hẹn lúc</th><th>Kênh</th><th>Người soạn</th><th /></tr></thead>
             <tbody>{d.ds.dong.map((b) => {
-              const n = NHAN_TRANG_THAI_BAI[b.trangThai as TrangThaiBai] ?? { nhan: b.trangThai, lop: "" };
+              const n = ("canHenLai" in b && b.canHenLai ? NHAN_DA_DUYET_CAN_HEN_LAI : null) ?? NHAN_TRANG_THAI_BAI[b.trangThai as TrangThaiBai] ?? { nhan: b.trangThai, lop: "" };
               return (
                 <tr key={b.id}>
                   <td><Link href={`/mang-xa-hoi/bai/${b.id}`}>{b.tieuDe ?? b.noiDung.slice(0, 80)}</Link>{b.doAiTao && <span className="huy-hieu thong-tin"> AI soạn</span>}</td>

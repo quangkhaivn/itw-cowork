@@ -4,13 +4,13 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 ## 0.24.0 (chưa phát hành) — Mạng xã hội: Facebook, Instagram, YouTube, Google Drive
 
-Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-216. Hướng dẫn từng bước: `docs/HUONG-DAN-MANG-XA-HOI.md`. Mọi lệnh gọi Meta / Google viết theo tài liệu công khai và thử bằng máy chủ GIẢ — **chưa kiểm với API thật** (danh sách điểm cần kiểm trong báo cáo 0.24.0).
+Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-219. Hướng dẫn từng bước: `docs/HUONG-DAN-MANG-XA-HOI.md`. Mọi lệnh gọi Meta / Google viết theo tài liệu công khai và thử bằng máy chủ GIẢ — **chưa kiểm với API thật** (danh sách điểm cần kiểm trong báo cáo 0.24.0).
 
 ### Thêm
 - **Kết nối kênh bằng OAuth**: nút “Kết nối Facebook Page / Instagram”, “Kết nối kênh YouTube” ở Mạng xã hội → Kênh → **màn hình đồng ý của Cowork** (nền tảng, từng quyền xin + lý do) → đăng nhập nền tảng → **chọn nhiều Page / tài khoản Instagram / kênh YouTube** trong một lần. “Kết nối lại” cho kênh hết quyền (giữ nguyên kênh, lịch sử).
 - **Facebook Page**: chữ + liên kết, một ảnh, nhiều ảnh, video (tải theo phần), **Reels** (tùy chọn “Đăng thành Reels”); hạn mức 30 Reels / 24 giờ kiểm trước khi xếp lịch.
 - **Instagram** (tài khoản chuyên nghiệp gắn Page): ảnh, **carousel** 2–10 ảnh, **Reels**; ảnh PNG / WebP / GIF tự đổi sang JPEG; đọc hạn mức đăng / 24 giờ trước khi đăng; media đưa sang bằng link ký trên tên miền Cowork.
-- **YouTube**: tải resumable (đứt mạng tải tiếp từ chỗ dừng), chọn quyền riêng tư (Riêng tư / Không công khai / Công khai), đếm **quota** toàn doanh nghiệp (Cấu hình `mxh.youtube_upload_toi_da_ngay`, mặc định 100 / ngày) — hết thì dời sang ngày sau và báo; ghi chú Shorts.
+- **YouTube**: tải resumable (đứt mạng tải tiếp từ chỗ dừng), chọn quyền riêng tư (Riêng tư / Không công khai / Công khai), đếm **quota** toàn doanh nghiệp (Cấu hình `mxh.youtube_upload_toi_da_ngay`, mặc định 6 / ngày — khớp hạn mức 10.000 đơn vị của Google, QĐ-218) — hết thì dời sang ngày sau và báo; ghi chú Shorts.
 - **Google Drive làm kho media**: nút **Chọn từ Google Drive** (Google Picker, quyền `drive.file` — chỉ tệp bạn chọn), máy chủ tải ảnh / video (≤ 200 MB) vào bài; tệp trên Drive vẫn riêng tư.
 - **Video** cho bài mạng xã hội (MP4 / MOV); **kiểm định dạng theo từng nền tảng** trước khi gửi duyệt / xếp lịch (kích thước, tỉ lệ, thời lượng, mã hóa) — không chuyển mã, báo rõ lý do + cách sửa; trang bài hiện kiểu nội dung từng kênh (Reels, Carousel…).
 - **Trang công khai** `/dieu-khoan`, `/quyen-rieng-tu`, `/xoa-du-lieu` (bản mẫu tiếng Việt ghi “cần luật sư rà”, sửa ở **Quản trị → Trang công khai**) + **Data Deletion Callback** của Meta (mã xác nhận, trang tra trạng thái).
@@ -23,10 +23,12 @@ Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-216.
 - Drive: kiểm token Picker thuộc đúng OAuth client (chống token của ứng dụng khác), không lưu token, không đổi quyền chia sẻ; không xin `drive.readonly`.
 - Data Deletion: kiểm khuôn + giới hạn tốc độ ở route, chữ ký kiểm bằng App Secret ở worker (sai → không xóa gì).
 - Token / code / secret không xuất hiện trong API, log, kiểm toán, sự kiện, thông báo, nhật ký gọi nền tảng (bài thử kiểm).
+- Luật QA 0.23.0 áp cho cả connector mới: lỗi do Meta / Google / proxy trả về được **che** token, `appsecret_proof`, `client_secret`, `code`, URI phiên tải lên (`boCheYeuCau`); kênh bị ngắt khi kênh-bài đang xác minh → **“Không rõ – cần kiểm tay”** (`NEEDS_CHECK`, Facebook / Instagram / YouTube không có đối soát công khai); **mốc giữ khóa theo từng việc** + làm mới mốc giữa các bước dài (từng đoạn video, từng lần hỏi container); thông báo lỗi gửi người soạn + người duyệt.
 
 ### Sửa
 - Proxy Next 16 đệm thân yêu cầu tối đa 10 MB theo mặc định → tệp đính kèm 10–20 MB bị cắt; nâng `proxyClientMaxBodySize` lên 25 MB (khớp nginx).
 - “Đã cấu hình” của app Meta không tính trường tùy chọn (Configuration ID).
+- Bài thử V8 của `thu:qa-mo-dan` hỏng ngắt quãng khi máy tải nặng: tiêu chí cũ (“không lần nào cả hai cùng thành công”) sai — đặt lịch mặc định xong rồi mới khóa là thứ tự hợp lệ (QĐ-187). Mã `datLichMacDinh` (khóa chia sẻ dòng bảng công) đã đúng; bài nay dựng tất định thế xen kẽ nguy hiểm (giao dịch khóa giữ dòng chưa commit → đặt lịch phải chờ rồi bị 409) và đã kiểm: bỏ khóa chia sẻ thì bài hỏng 5/5.
 
 ### Triển khai
 - Migration `20261124090001_mxh_ket_noi`, `20261124090002_mxh_video_dinh_kem`; chạy lại `prisma/rls.sql`. `APP_URL` phải https công khai. nginx: location tải Drive chờ 300 giây. Xem DEPLOYMENT → “Nâng cấp lên 0.24.0” (gồm giới hạn của khóa đối xứng — QĐ-216a).
@@ -34,7 +36,7 @@ Nền: 0.23.0. BUSINESS_RULES mục 34 (MXH-50 → MXH-69), QĐ-210 → QĐ-216.
 ### Kiểm thử
 - `npm run thu:mxh-ket-noi` (nối cuối `thu:tich-hop`): OAuth (state sai / hết hạn / dùng lại / khác phiên / redirect lạ), đổi mã, chọn kênh, kết nối lại, đăng từng loại nội dung Facebook / Instagram / YouTube, 4 loại lỗi, làm mới token, NEEDS_REAUTH, hạn mức Instagram + Reels, quota YouTube, upload YouTube bị ngắt rồi tiếp, Picker tải tệp, Data Deletion ký sai / đúng, trang công khai, RLS / IDOR, token không lộ — Graph / Google / YouTube / Drive là máy chủ giả cục bộ. `thu/don-vi/mxh-ket-noi.test.ts` (phần thuần).
 
-## 0.23.0 (chưa phát hành) — Mạng xã hội: nền tảng + WordPress
+## 0.23.0 — 23/11/2026 — Mạng xã hội: nền tảng + WordPress
 
 Phân hệ mới **Mạng xã hội** (BUSINESS_RULES mục 34, QĐ-193 → QĐ-202), theo thiết kế ITW SOCIAL MCP đã duyệt nhưng đặt trong Cowork. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md`.
 
@@ -62,6 +64,27 @@ Phân hệ mới **Mạng xã hội** (BUSINESS_RULES mục 34, QĐ-193 → QĐ-
 ### Kiểm thử
 - Bộ mới `npm run thu:mang-xa-hoi` (nối cuối `thu:tich-hop`): máy chủ WordPress + Meta Graph GIẢ cục bộ — đăng + đọc lại, 5xx → thử lại, 401 → NEEDS_REAUTH, hết giờ sau khi gửi → đối soát không trùng, 400 → PERMANENT, trigger PUBLISHED, RLS / IDOR, quyền, không tự duyệt, link ký (hết hạn, sửa chữ ký), SSRF, bí mật không lộ, route không import hàm giải mã, hai worker cùng nhận, tự sinh khóa. `thu/don-vi/mang-xa-hoi.test.ts` (38 bài).
 - Sửa lỗi có sẵn DG-43 (QĐ-202): người vào làm Chủ nhật bị tính "thiếu" báo cáo tuần có hạn nộp thứ Bảy — trước ngày vào làm. `thu:qa-danh-gia` hỏng đúng vào Chủ nhật.
+
+### Chính sách sau QA (QĐ-203 → QĐ-209)
+- **Đồng tác giả không được duyệt**: người sửa nội dung / ảnh sau khi bài đã gửi duyệt không duyệt được bài đó (máy chủ + CHECK + trigger CSDL).
+- **Đăng lỗi / cần kết nối lại / cần kiểm tay**: báo người soạn và người duyệt có phạm vi bao người soạn, mỗi người một lần.
+- **Link ảnh ký**: chỉ người có `mxh.update` hoặc luồng đăng bài; thực tập sinh không tạo được.
+- **Duyệt trễ giờ hẹn**: trễ ≤ `mxh.tre_hen_toi_da_phut` (mới, mặc định 60) → đăng ngay; trễ hơn → "Đã duyệt – cần hẹn lại giờ" + báo người soạn.
+- **Ngắt kênh khi đang xác minh**: đối soát công khai; không ra → kênh-bài "Không rõ – cần kiểm tay" (trạng thái mới `NEEDS_CHECK`) kèm link site, không đánh Lỗi.
+- **WordPress nhiều ảnh**: cảnh báo rõ chỉ ảnh đầu tiên được dùng.
+- **Nhiều worker cùng lúc được hỗ trợ** (DEPLOYMENT). Chặn thêm `::/96`; CSV "Hẹn lúc" theo giờ Việt Nam (+07:00); hủy lịch khóa theo thứ tự worker (không deadlock).
+- Migration `20261123090001_qa_mang_xa_hoi` (chỉ thêm). Bài thử: `thu:qa-mang-xa-hoi` mục QA-10.
+
+### QA 0.23.0 (đối kháng) — lỗi tìm ra và đã sửa
+Bài tái hiện: `npm run thu:qa-mang-xa-hoi` (nối cuối `thu:tich-hop`) và `THU_URL=… npm run thu:qa-mang-xa-hoi-http` (vào bản `next start` đang chạy).
+- **Bí mật lộ qua lỗi của site**: site WordPress (plugin bảo mật / chế độ gỡ lỗi) nhại lại tiêu đề Authorization / mật khẩu ứng dụng trong thông báo lỗi → được lưu vào lỗi kênh-bài, nhật ký gọi nền tảng, thông báo, "kiểm tra lần cuối" của kênh và hiện cho mọi người có `mxh.view` (kể cả thực tập sinh). Connector nay che mọi dạng của bí mật (chuỗi Basic, `user:mật khẩu`, mật khẩu có / không dấu cách) trước khi lưu / trả.
+- **Đăng trùng khi chạy hai worker**: mốc giữ khóa là lúc NHẬN cả lô (và một mốc cho cả vòng mọi doanh nghiệp) — việc thứ 5 của lô bắt đầu sau vài phút đã bị worker kia coi là "kẹt", đối soát không thấy rồi đăng lại trong lúc worker đầu còn đang tải ảnh / gửi → 2 bài trên WordPress. Nay: làm mới mốc khi BẮT ĐẦU từng việc, đồng hồ lấy mới cho từng doanh nghiệp / từng việc; ngưỡng "kẹt" ≥ 5 × `mxh.han_goi_giay` (đặt "kẹt sau 2 phút" với hạn gọi 120 giây không còn cắt ngang lượt hợp lệ); hạn giờ một lần gọi tính cho cả chuỗi chuyển hướng cùng máy (trước: mỗi bước một hạn).
+- **Bài đã lên mà báo Lỗi**: tài khoản Tác giả (vai trò khuyến nghị) không có `unfiltered_html` → WordPress lọc kses tiêu đề ("A & B" lưu thành "A &amp; B") → đọc lại "không khớp tiêu đề" → FAILED, thông báo lỗi, người dùng dễ tạo bài mới → trùng. Nay so tiêu đề sau khi bỏ thẻ + giải mã ký tự HTML; tiêu đề khác thật vẫn bị chặn.
+- **Mã lỗi site dài > 100 ký tự** (cột `error_code`) làm ghi kết quả hỏng → kênh-bài kẹt "Đang đăng", sau 10 phút đối soát rồi đăng lại → hỏng lại, lặp vô hạn; lỗi đó còn bỏ dở các việc còn lại của lô. Nay cắt mã 100 ký tự; một việc hỏng ngoài dự kiến không bỏ dở cả lô.
+- **Xoay khóa làm mất bí mật**: `mxh:boc-lai-khoa` đọc dòng không khóa — người dùng nhập lại mật khẩu ứng dụng / App Secret giữa lúc đọc và lúc ghi thì bản mã mới bị ghép với data key cũ đã bọc lại → không mở được nữa. Nay khóa dòng (`FOR UPDATE`) trước khi đọc; tách `bocLaiMotDoanhNghiep`.
+- **Xuất CSV bài** không chống chèn công thức (CSV-01): tiêu đề `=HYPERLINK(…)` chạy khi mở bằng Excel. Nay qua `taoCsv`.
+- **Hẹn giờ theo múi giờ trình duyệt** thay vì giờ Việt Nam (MXH-16): máy đặt múi giờ UTC / đi công tác hẹn lệch vài giờ. Ô datetime-local nay luôn hiểu là +07:00 (`gioVietNamSangIso`).
+- **Tự sinh `SOCIAL_MASTER_KEY`**: `.env` có `SOCIAL_MASTER_KEY=""` (hoặc `''`, chỉ dấu cách) bị coi là "đã có khóa" → không sinh, app báo thiếu khóa. Bộ cài Windows còn đọc `.env` theo bảng mã ANSI (PowerShell 5.1) rồi ghi lại UTF-8 → hỏng chữ có dấu trong `.env`. Sửa cả `scripts/sinh-social-master-key.sh`, `cai-nhanh.ps1`, `cai-dat.ps1` (PowerShell: đọc mã, chưa chạy được trên máy thử).
 
 ## 0.22.1 — 09/11/2026 — Hướng dẫn kết nối máy chấm công
 

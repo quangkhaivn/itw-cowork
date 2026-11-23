@@ -52,6 +52,44 @@ export function loiTuMangChung(e: unknown, laGhi: boolean, ten: string): LoiPhan
   return { loai: laGhi ? "UNKNOWN" : "RETRYABLE", ma: "loi-khac", thongBao: `${ten}: ${cauLoiGon(e, 200)}`, httpStatus: null };
 }
 
+const THAM_SO_BI_MAT = ["access_token", "appsecret_proof", "client_secret", "code", "fb_exchange_token", "refresh_token", "upload_id", "token"];
+
+/**
+ * Che bí mật trong lỗi do nền tảng / proxy trả về (theo luật QA 0.23.0 — áp cho mọi connector): máy chủ (proxy, cổng
+ * gỡ lỗi) có thể NHẠI LẠI tiêu đề Authorization, token trong URL, URI phiên tải lên. Thông báo lỗi được lưu vào kênh-bài,
+ * nhật ký gọi, thông báo và hiện cho người chỉ có `mxh.view` → che mọi dạng (nguyên văn, mã hóa URL) trước khi lưu / trả.
+ */
+export function boCheYeuCau(yc: Pick<YeuCauAnToan, "url" | "tieuDe" | "than">): (s: string) => string {
+  const ds = new Set<string>();
+  const auth = yc.tieuDe?.Authorization ?? "";
+  const m = /^(?:Bearer|OAuth|Basic)\s+(.+)$/.exec(auth);
+  if (m) {
+    ds.add(m[1]);
+    if (auth.startsWith("Basic ")) {
+      const ro = Buffer.from(m[1], "base64").toString("utf8");
+      ds.add(ro);
+      ds.add(ro.split(":").slice(1).join(":"));
+    }
+  }
+  const them = (q: URLSearchParams) => {
+    for (const k of THAM_SO_BI_MAT) {
+      const v = q.get(k);
+      if (v) ds.add(v);
+    }
+  };
+  try {
+    const u = new URL(yc.url);
+    them(u.searchParams);
+    if (u.searchParams.get("upload_id")) ds.add(yc.url);
+  } catch {
+    /* URL sai — goiAnToan tự báo */
+  }
+  if (typeof yc.than === "string" && !yc.than.trimStart().startsWith("{")) them(new URLSearchParams(yc.than));
+  const danhSach = [...ds].filter((x) => x.length >= 6).flatMap((x) => [x, encodeURIComponent(x)]).sort((a, b) => b.length - a.length);
+  if (!danhSach.length) return (s) => s;
+  return (s) => danhSach.reduce((kq, b) => kq.split(b).join("***"), s);
+}
+
 export type KetQuaGoi = { ok: true; ph: PhanHoiAnToan; j: unknown } | ({ ok: false; ph: PhanHoiAnToan | null; j: unknown } & LoiPhanLoai);
 
 export async function goiNenTang(
@@ -65,19 +103,25 @@ export async function goiNenTang(
   them: number[] = [],
 ): Promise<KetQuaGoi> {
   const batDau = new Date();
+  const che = boCheYeuCau(yc);
+  const trich = (j: unknown) => {
+    const t = trichDoanAnToan(j);
+    return t ? (JSON.parse(che(JSON.stringify(t))) as Record<string, unknown>) : null;
+  };
   try {
     const ph = await goiAnToan(yc);
     const j = docJson(ph);
     if ((ph.status >= 200 && ph.status < 300) || them.includes(ph.status)) {
-      nhatKy.push({ kieu, ketQua: "success", loaiLoi: null, httpStatus: ph.status, thongBao: null, trichDoan: trichDoanAnToan(j), batDau, ketThuc: new Date() });
+      nhatKy.push({ kieu, ketQua: "success", loaiLoi: null, httpStatus: ph.status, thongBao: null, trichDoan: trich(j), batDau, ketThuc: new Date() });
       return { ok: true, ph, j };
     }
     const pl = phanLoai(ph.status, j);
-    const loi: LoiPhanLoai = { loai: pl.loai, ma: pl.ma, thongBao: pl.thongBao, httpStatus: ph.status, ...(pl.hoanMs !== undefined ? { hoanMs: pl.hoanMs } : {}) };
-    nhatKy.push({ kieu, ketQua: KQ[loi.loai], loaiLoi: loi.loai, httpStatus: ph.status, thongBao: loi.thongBao, trichDoan: trichDoanAnToan(j), batDau, ketThuc: new Date() });
+    const loi: LoiPhanLoai = { loai: pl.loai, ma: che(pl.ma).slice(0, 100), thongBao: che(pl.thongBao), httpStatus: ph.status, ...(pl.hoanMs !== undefined ? { hoanMs: pl.hoanMs } : {}) };
+    nhatKy.push({ kieu, ketQua: KQ[loi.loai], loaiLoi: loi.loai, httpStatus: ph.status, thongBao: loi.thongBao, trichDoan: trich(j), batDau, ketThuc: new Date() });
     return { ok: false, ph, j, ...loi };
   } catch (e) {
-    const loi = loiTuMangChung(e, laGhi, ten);
+    const goc = loiTuMangChung(e, laGhi, ten);
+    const loi = { ...goc, thongBao: che(goc.thongBao) };
     nhatKy.push({ kieu, ketQua: KQ[loi.loai], loaiLoi: loi.loai, httpStatus: null, thongBao: loi.thongBao, trichDoan: null, batDau, ketThuc: new Date() });
     return { ok: false, ph: null, j: undefined, ...loi };
   }

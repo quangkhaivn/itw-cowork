@@ -56,6 +56,7 @@ type TrangThaiContainer = "FINISHED" | "IN_PROGRESS" | "ERROR" | "EXPIRED" | "PU
 async function hoiContainer(nhatKy: BuocGoi[], xt: ThongTinXacThuc, bc: BoiCanhGoi, id: string, soLan = SO_LAN_HOI): Promise<{ tt: TrangThaiContainer; loi?: Extract<KetQuaGoi, { ok: false }>; chiTiet?: string }> {
   const ngu = bc.ngu ?? nguMacDinh;
   for (let i = 0; i < soLan; i++) {
+    await bc.giuKhoa?.();
     const r = await graph(nhatKy, "media", false, xt, bc, { duong: id, query: { fields: "status_code,status" } });
     if (!r.ok) return { tt: "KHAC", loi: r };
     const j = (r.j ?? {}) as { status_code?: unknown; status?: unknown };

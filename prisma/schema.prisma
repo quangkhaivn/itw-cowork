@@ -5219,6 +5219,10 @@ model SocialPost {
   /// 0.24.0: tùy chọn đăng { facebookReels, lienKet, youtubeRiengTu }.
   options          Json      @default("{}")
   revision         Int       @default(1)
+  /// QA 0.23.0 (QĐ-203): người sửa nội dung sau khi bài đã gửi duyệt (khác người soạn) — không được duyệt bài. Chỉ thêm (trigger).
+  coAuthorIds      String[]  @default([]) @map("co_author_ids") @db.Uuid
+  /// QA 0.23.0 (QĐ-206): duyệt khi giờ hẹn đã trễ quá `mxh.tre_hen_toi_da_phut` → "Đã duyệt – cần hẹn lại giờ".
+  needsReschedule  Boolean   @default(false) @map("needs_reschedule")
   createdBy        String    @map("created_by") @db.Uuid
   updatedBy        String?   @map("updated_by") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -5284,7 +5288,7 @@ model SocialPostTarget {
   tenantId       String    @map("tenant_id") @db.Uuid
   postId         String    @map("post_id") @db.Uuid
   connectionId   String    @map("connection_id") @db.Uuid
-  /// PENDING | QUEUED | PUBLISHING | VERIFYING | PUBLISHED | FAILED | SKIPPED | CANCELED
+  /// PENDING | QUEUED | PUBLISHING | VERIFYING | PUBLISHED | FAILED | SKIPPED | CANCELED | NEEDS_CHECK (không rõ – cần kiểm tay, QĐ-207)
   status         String    @default("PENDING") @db.VarChar(20)
   externalPostId String?   @map("external_post_id") @db.VarChar(200)
   externalUrl    String?   @map("external_url") @db.Text

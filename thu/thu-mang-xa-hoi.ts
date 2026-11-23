@@ -351,7 +351,8 @@ async function main() {
   const k2 = await chu.socialConnection.findUniqueOrThrow({ where: { id: kenh2.id } });
   dat("401 → kênh-bài FAILED NEEDS_REAUTH, không thử lại", x.status === "FAILED" && x.errorClass === "NEEDS_REAUTH" && x.attemptCount === 1);
   dat("…kênh chuyển NEEDS_REAUTH", k2.status === "NEEDS_REAUTH");
-  dat("…người soạn nhận thông báo kèm hướng dẫn", (await chu.notification.count({ where: { tenantId: T, userId: mk, type: "mxh-dang-loi" } })) >= 1);
+  // QA 0.23.0 (QĐ-204): lỗi do kênh cần nhập lại có loại thông báo riêng "mxh-can-ket-noi-lai".
+  dat("…người soạn nhận thông báo kèm hướng dẫn", (await chu.notification.count({ where: { tenantId: T, userId: mk, type: { in: ["mxh-dang-loi", "mxh-can-ket-noi-lai"] } } })) >= 1);
   dat("…bài FAILED", (await voi(T, mk, (nc) => chiTietBai(nc, b3.id))).trangThai === "FAILED");
   await nemLoi("Đăng lại khi kênh chưa nhập lại → 409", "nghiep-vu", () => voi(T, mk, (nc) => dangLai(nc, b3.id, sau(210))), "kenh-can-nhap-lai");
   wp.nguoi.set("tacgia2", MK_UNG_DUNG_2);
@@ -693,7 +694,7 @@ async function main() {
   dat("trien-khai.sh gọi script sinh khóa trước khi nạp .env", /sinh-social-master-key\.sh[\s\S]*source \.env/.test(readFileSync(path.join(GOC, "trien-khai.sh"), "utf8")));
   for (const ps of ["may-ca-nhan/cai-nhanh.ps1", "may-ca-nhan/cai-dat.ps1"]) {
     const s = readFileSync(path.join(GOC, ps), "utf8");
-    dat(`${ps}: tạo .env mới có SOCIAL_MASTER_KEY; .env cũ thiếu thì thêm, không đè`, /SOCIAL_MASTER_KEY=\$\(/.test(s) && /-not \(Select-String -Path \$TepEnv -Pattern '\^SOCIAL_MASTER_KEY=\.\+'/.test(s));
+    dat(`${ps}: tạo .env mới có SOCIAL_MASTER_KEY; .env cũ thiếu thì thêm, không đè`, /SOCIAL_MASTER_KEY=\$\(/.test(s) && /-not \(Select-String -Path \$TepEnv [^)]*-Pattern '\^SOCIAL_MASTER_KEY=/.test(s));
   }
   dat("Sao lưu .env mã hóa nguyên tệp (gồm SOCIAL_MASTER_KEY); thử phục hồi kiểm khóa", readFileSync(path.join(GOC, "scripts/sao-luu.sh"), "utf8").includes("SOCIAL_MASTER_KEY") && readFileSync(path.join(GOC, "scripts/thu-phuc-hoi.sh"), "utf8").includes("SOCIAL_MASTER_KEY"));
   dat("docker-compose: worker có khóa và đọc được thư mục tệp đính kèm", /worker:[\s\S]*SOCIAL_MASTER_KEY[\s\S]*dinh-kem:ro/.test(readFileSync(path.join(GOC, "docker-compose.yml"), "utf8")));

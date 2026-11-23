@@ -31,11 +31,13 @@ export const CHUYEN_KENH: Record<TrangThaiKenhBai, readonly TrangThaiKenhBai[]> 
   PENDING: ["QUEUED", "CANCELED", "SKIPPED"],
   QUEUED: ["PUBLISHING", "CANCELED", "PENDING"],
   PUBLISHING: ["VERIFYING", "PUBLISHED", "QUEUED", "FAILED"],
-  VERIFYING: ["PUBLISHED", "QUEUED", "FAILED", "VERIFYING"],
+  VERIFYING: ["PUBLISHED", "QUEUED", "FAILED", "VERIFYING", "NEEDS_CHECK"],
   PUBLISHED: [],
   FAILED: ["QUEUED", "PENDING"],
   SKIPPED: [],
   CANCELED: ["PENDING"],
+  // QA 0.23.0 (QĐ-207): đích cuối — người kiểm tay trên site; không đăng lại (có thể đã lên).
+  NEEDS_CHECK: [],
 };
 
 export function duocChuyenKenh(tu: TrangThaiKenhBai, sang: TrangThaiKenhBai): boolean {
@@ -59,7 +61,8 @@ export function tongHopTrangThaiBai(hienTai: TrangThaiBai, kenh: readonly TrangT
     return "PUBLISHING";
   }
   const da = kenh.filter((k) => k === "PUBLISHED").length;
-  const loi = kenh.filter((k) => k === "FAILED").length;
+  // NEEDS_CHECK (không rõ – cần kiểm tay) tính như chưa thành công ở cấp bài; màn hình kênh hiện cảnh báo riêng.
+  const loi = kenh.filter((k) => k === "FAILED" || k === "NEEDS_CHECK").length;
   if (da > 0 && loi === 0) return "PUBLISHED";
   if (da > 0 && loi > 0) return "PARTIALLY_FAILED";
   if (loi > 0) return "FAILED";
@@ -185,6 +188,19 @@ export function chuanHoaDiaChiSite(nhap: string, choPhepLocalhost = false): DiaC
   let duong = u.pathname.replace(/\/+$/, "");
   duong = duong.replace(/\/(wp-admin|wp-json|wp-login\.php)(\/.*)?$/i, "");
   return { hopLe: true, url: `${u.protocol}//${u.host}${duong}` };
+}
+
+/**
+ * Giá trị ô `datetime-local` ("yyyy-mm-ddTHH:mm[:ss]") hiểu là GIỜ VIỆT NAM (+07:00, không có giờ mùa hè) → ISO UTC.
+ * QA 0.23.0 (MXH-16): trước đây dùng múi giờ của trình duyệt — máy đặt múi giờ khác (UTC, đi công tác) hẹn lệch vài giờ.
+ * Chuỗi đã có múi giờ thì đọc nguyên. Sai dạng → null.
+ */
+export function gioVietNamSangIso(v: string): string | null {
+  const s = v.trim();
+  if (!s) return null;
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(:\d{2}(?:\.\d{1,3})?)?$/.exec(s);
+  const d = m ? new Date(`${m[1]}T${m[2]}${m[3] ?? ":00"}+07:00`) : /(Z|[+-]\d{2}:\d{2})$/.test(s) ? new Date(s) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
 }
 
 /** 4 ký tự cuối để hiện thay cho bí mật (không bao giờ hiện cả chuỗi). */

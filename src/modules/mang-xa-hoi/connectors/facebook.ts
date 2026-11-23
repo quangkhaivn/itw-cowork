@@ -96,6 +96,7 @@ async function taiVideo(kenh: KenhGoi, xt: ThongTinXacThuc, nd: NoiDungDang, bc:
   let vong = 0;
   while (tu < den && tu < noiDung.length) {
     if (++vong > 2000) break;
+    await bc.giuKhoa?.();
     const mp = dungMultipart({ upload_phase: "transfer", upload_session_id: phien, start_offset: String(tu) }, { ten: "video_file_chunk", tenTep: vd.tenTep, mime: "application/octet-stream", noiDung: noiDung.subarray(tu, Math.min(den, noiDung.length)) });
     const t = await graph(nhatKy, "media", false, xt, bc, { goc, duong: `${kenh.diaChi}/videos`, multipart: mp });
     if (!t.ok) {

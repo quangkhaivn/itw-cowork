@@ -5,7 +5,6 @@ import { LoiKhongTimThay, LoiNghiepVu, LoiDinhDang } from "../src/lib/loi";
 import { seedLichMacDinh, seedNenMong } from "../prisma/seed/index";
 import { apCongTay, cacNgayTrongThang, thuTrongTuan } from "../src/modules/cham-cong/tinh-toan";
 import { anhXaPin, cheSoSeri, danhSachMayLa, danhSachPinChuaKhop, huyDangKyMay, nhapCsvAnhXaPin, taoMay, xuLyAdms } from "../src/modules/cham-cong/may-cham-cong";
-import { khoaBangCong } from "../src/modules/cham-cong/bang-cong";
 import { datLichMacDinh } from "../src/modules/nhan-su/service";
 import { lichCuaNhieuNguoi } from "../src/modules/cham-cong/chung";
 import { datCongTay } from "../src/modules/cham-cong/cong-tay";
@@ -442,17 +441,33 @@ async function main() {
   try { await voi(TA, hrA, (nc) => datLichMacDinh(nc, lichA2.id, "2026-13-45")); } catch (e) { loi7 = e instanceof LoiNghiepVu || e instanceof LoiDinhDang ? "nghiep-vu" : String((e as Error).message).slice(0, 80); }
   dat("…tháng 13 → lỗi nghiệp vụ / định dạng (không phải lỗi CSDL → 500)", loi7 === "nghiep-vu", loi7);
 
-  // V8: đặt lịch mặc định ‖ khóa bảng công cùng tháng → không được cả hai cùng thành công (hồi tố vào tháng đã khóa).
-  let caHaiThanhCong = 0;
+  // V8: đặt lịch mặc định ‖ khóa bảng công cùng tháng → lịch mặc định KHÔNG được lọt vào tháng mà lần khóa đã ghi xong
+  // trước khi nó kiểm (hồi tố). Bản cũ của bài này chạy hai lời gọi song song rồi đòi "không lần nào cả hai cùng thành
+  // công" — sai tiêu chí: đặt lịch xong (tháng chưa khóa, QĐ-187 cho phép) RỒI mới khóa là thứ tự hợp lệ, nên bài hỏng
+  // ngắt quãng khi máy tải nặng (thứ tự đổi). Nay dựng ĐÚNG thế xen kẽ nguy hiểm một cách tất định: giao dịch khóa giữ
+  // dòng bảng công (FOR UPDATE) + đã đổi trạng thái nhưng CHƯA commit; đặt lịch chạy và phải CHỜ (khóa chia sẻ); commit
+  // khóa → đặt lịch phải thấy "đã khóa" (409), không lọt. Thứ tự ngược (đặt lịch trước) là hợp lệ, không kiểm ở đây.
+  let lot = 0;
   for (const thang of [1, 2, 3, 4, 5]) {
     const bc = await chu.timesheet.create({ data: { tenantId: TA, year: 2027, month: thang, generatedAt: BAY2, generatedBy: hrA, feedbackDeadline: new Date("2026-01-01T00:00:00Z") } });
-    const r = await Promise.allSettled([
-      voi(TA, hrA, (nc) => khoaBangCong(nc, bc.id)),
-      voi(TA, hrA, (nc) => datLichMacDinh(nc, lichA2.id, `2027-${String(thang).padStart(2, "0")}-10`)),
-    ]);
-    if (r.every((x) => x.status === "fulfilled")) caHaiThanhCong++;
+    let datLich: Promise<unknown> | null = null;
+    await chu.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM timesheets WHERE id = ${bc.id}::uuid FOR UPDATE`;
+      await tx.timesheet.update({ where: { id: bc.id }, data: { status: "da-khoa", lockedAt: BAY2, lockedBy: hrA } });
+      datLich = voi(TA, hrA, (nc) => datLichMacDinh(nc, lichA2.id, `2027-${String(thang).padStart(2, "0")}-10`));
+      (datLich as Promise<unknown>).catch(() => undefined);
+      // Chờ tới khi lần đặt lịch đang ĐỢI khóa dòng (không dựa vào đồng hồ: hỏi pg_locks — khóa chưa được cấp; tối đa ~3 giây).
+      for (let i = 0; i < 60; i++) {
+        const cho = await chu.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_locks WHERE NOT granted`;
+        if (cho[0].n > 0) break;
+        await new Promise((ok) => setTimeout(ok, 50));
+      }
+    }, { timeout: 20_000 });
+    const kq = await Promise.allSettled([datLich!]);
+    const r = kq[0];
+    if (!(r.status === "rejected" && r.reason instanceof LoiNghiepVu && r.reason.ma === "thang-da-khoa")) { lot++; console.log("V8 chi tiết:", r.status === "rejected" ? String((r.reason as Error).message).slice(-300) : "thành công"); }
   }
-  dat("V8: đặt lịch mặc định ‖ khóa bảng công cùng tháng (5 lần) → không lần nào cả hai cùng thành công", caHaiThanhCong === 0, `${caHaiThanhCong}/5 lần lịch mặc định lọt vào tháng vừa khóa`);
+  dat("V8: khóa bảng công đang ghi ‖ đặt lịch mặc định cùng tháng (5 lần) → đặt lịch chờ rồi bị từ chối “tháng đã khóa”, không lọt", lot === 0, `${lot}/5 lần lịch mặc định lọt vào tháng vừa khóa`);
 
   // V9: chuyển qua lại giữa các nguồn công (QĐ-183): nháp → tay → (bỏ tay) nháp → bảng khóa (lấy lại công).
   const ktA = await nguoi("ke-toan-a", "finance", { t: TA, hai: true });

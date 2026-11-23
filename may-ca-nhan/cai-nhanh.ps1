@@ -5,7 +5,7 @@
 #   node\     Node.js 22 bản chạy ngay (không cài vào Windows)
 #   pgsql\    PostgreSQL 16 bản gọn (gói @embedded-postgres trên npm)
 #   pgdata\   dữ liệu thử (DEMO) — giữ nguyên qua các lần cập nhật
-#   app\      mã nguồn TGTH Cowork nhánh release/0.22 + .env
+#   app\      mã nguồn TGTH Cowork nhánh release/0.23 + .env
 # rồi tạo CHAY.bat / DUNG.bat / CAP-NHAT.bat ngay trong thư mục đó.
 #
 # Chạy lại tệp này bất cứ lúc nào để cập nhật mã mới nhất: dữ liệu và .env được giữ.
@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'   # thanh tiến trình của Invoke-WebRequest làm tải chậm gấp nhiều lần trên PowerShell 5.1
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-$NHANH = 'release/0.22'
+$NHANH = 'release/0.23'
 $NODE_PHIEN_BAN = '22.22.0'
 $PG_GOI = '16.14.0-beta.17'
 $CONG_PG = 55432
@@ -185,8 +185,10 @@ ANTHROPIC_API_KEY=
   Write-Host 'Đã tạo .env với mật khẩu và khoá ngẫu nhiên.'
 } else { Write-Host '.env đã có — giữ nguyên.' }
 # 0.23.0 (QĐ-201): .env cũ chưa có SOCIAL_MASTER_KEY thì thêm khóa ngẫu nhiên; KHÔNG BAO GIỜ đè khóa đã có.
-if (-not (Select-String -Path $TepEnv -Pattern '^SOCIAL_MASTER_KEY=.+' -Quiet)) {
-  $cu = (Get-Content $TepEnv | Where-Object { $_ -notmatch '^SOCIAL_MASTER_KEY=\s*$' }) -join "`n"
+# QA 0.23.0: giá trị rỗng / chỉ cặp nháy ("") là CHƯA có khóa; đọc .env bằng UTF-8 (Windows PowerShell 5.1 mặc định đọc
+# theo bảng mã ANSI → ghi lại làm hỏng mọi chữ có dấu trong .env).
+if (-not (Select-String -Path $TepEnv -Encoding UTF8 -CaseSensitive -Pattern '^SOCIAL_MASTER_KEY=["'']?[A-Za-z0-9+/]' -Quiet)) {
+  $cu = (Get-Content -Encoding UTF8 $TepEnv | Where-Object { $_ -notmatch '^SOCIAL_MASTER_KEY=\s*(""|'''')?\s*$' }) -join "`n"
   GhiUtf8 $TepEnv ($cu.TrimEnd() + "`n# 0.23.0 — khóa chủ mã hóa bí mật mạng xã hội (tự sinh). Sao lưu cùng .env.`nSOCIAL_MASTER_KEY=$(NgauNhienB64 32)`n") $false
   Write-Host 'Đã thêm SOCIAL_MASTER_KEY vào .env (khóa mới, ngẫu nhiên).'
 }

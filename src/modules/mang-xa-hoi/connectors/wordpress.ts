@@ -79,6 +79,21 @@ function loiTuMang(e: unknown, laGhi: boolean): LoiPhanLoai {
   return { loai: laGhi ? "UNKNOWN" : "RETRYABLE", ma: "loi-khac", thongBao: cauLoiGon(e, 200), httpStatus: null };
 }
 
+/**
+ * QA 0.23.0: site (plugin bảo mật, chế độ gỡ lỗi, proxy) có thể NHẠI LẠI tiêu đề Authorization / mật khẩu ứng dụng trong
+ * thông báo lỗi. Thông báo được lưu vào kênh-bài, nhật ký gọi, thông báo và hiện cho người chỉ có `mxh.view` (cả thực
+ * tập sinh) → che mọi dạng của bí mật trước khi lưu / trả.
+ */
+function boChe(yc: { tieuDe?: Record<string, string> }): (s: string) => string {
+  const auth = yc.tieuDe?.Authorization ?? "";
+  if (!auth.startsWith("Basic ")) return (s) => s;
+  const b64 = auth.slice(6);
+  const ro = Buffer.from(b64, "base64").toString("utf8");
+  const mk = ro.split(":").slice(1).join(":");
+  const ds = [...new Set([b64, ro, mk, mk.replace(/\s+/g, ""), encodeURIComponent(mk)])].filter((x) => x.length >= 6).sort((a, b) => b.length - a.length);
+  return (s) => ds.reduce((kq, b) => kq.split(b).join("***"), s);
+}
+
 const KET_QUA_THEO_LOAI = { RETRYABLE: "retryable", PERMANENT: "permanent", NEEDS_REAUTH: "needs_reauth", UNKNOWN: "unknown" } as const;
 
 async function goi(
@@ -88,22 +103,51 @@ async function goi(
   yc: Parameters<typeof goiAnToan>[0],
 ): Promise<{ ok: true; ph: PhanHoiAnToan; j: unknown } | ({ ok: false; ph: PhanHoiAnToan | null; j: unknown } & LoiPhanLoai)> {
   const batDau = new Date();
+  const che = boChe(yc);
+  const trich = (j: unknown) => {
+    const t = trichDoan(j);
+    return t ? (JSON.parse(che(JSON.stringify(t))) as Record<string, unknown>) : null;
+  };
   try {
     const ph = await goiAnToan(yc);
     const j = docJson(ph);
     if (ph.status >= 200 && ph.status < 300) {
-      nhatKy.push({ kieu, ketQua: "success", loaiLoi: null, httpStatus: ph.status, thongBao: null, trichDoan: trichDoan(j), batDau, ketThuc: new Date() });
+      nhatKy.push({ kieu, ketQua: "success", loaiLoi: null, httpStatus: ph.status, thongBao: null, trichDoan: trich(j), batDau, ketThuc: new Date() });
       return { ok: true, ph, j };
     }
     const pl = phanLoaiHttp(ph.status);
-    const loi: LoiPhanLoai = { loai: pl.loai, ma: (j as { code?: string } | undefined)?.code ?? pl.ma, thongBao: thongBaoWp(ph, j), httpStatus: ph.status };
-    nhatKy.push({ kieu, ketQua: KET_QUA_THEO_LOAI[loi.loai], loaiLoi: loi.loai, httpStatus: ph.status, thongBao: loi.thongBao, trichDoan: trichDoan(j), batDau, ketThuc: new Date() });
+    // Mã lỗi do site đặt: che bí mật + cắt cho vừa cột error_code (100).
+    const maSite = (j as { code?: unknown } | undefined)?.code;
+    const loi: LoiPhanLoai = { loai: pl.loai, ma: typeof maSite === "string" && maSite ? che(maSite).slice(0, 100) : pl.ma, thongBao: che(thongBaoWp(ph, j)), httpStatus: ph.status };
+    nhatKy.push({ kieu, ketQua: KET_QUA_THEO_LOAI[loi.loai], loaiLoi: loi.loai, httpStatus: ph.status, thongBao: loi.thongBao, trichDoan: trich(j), batDau, ketThuc: new Date() });
     return { ok: false, ph, j, ...loi };
   } catch (e) {
-    const loi = loiTuMang(e, laGhi);
+    const loiGoc = loiTuMang(e, laGhi);
+    const loi = { ...loiGoc, thongBao: che(loiGoc.thongBao) };
     nhatKy.push({ kieu, ketQua: KET_QUA_THEO_LOAI[loi.loai], loaiLoi: loi.loai, httpStatus: null, thongBao: loi.thongBao, trichDoan: null, batDau, ketThuc: new Date() });
     return { ok: false, ph: null, j: undefined, ...loi };
   }
+}
+
+const THUC_THE: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+
+/**
+ * Tiêu đề để so khi đọc lại: bỏ thẻ HTML, giải mã thực thể (`&amp;`, `&#8211;`, `&#x27;`…), gộp khoảng trắng. WordPress lọc
+ * kses tiêu đề của người không có `unfiltered_html` nên bản lưu có thể khác bản gửi mà vẫn là cùng một tiêu đề.
+ */
+export function chuanHoaTieuDeWp(s: string): string {
+  return s
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, t: string) => {
+      if (t[0] === "#") {
+        const n = t[1] === "x" || t[1] === "X" ? Number.parseInt(t.slice(2), 16) : Number(t.slice(1));
+        return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m;
+      }
+      return THUC_THE[t.toLowerCase()] ?? m;
+    })
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Tên tệp an toàn cho tiêu đề Content-Disposition. */
@@ -117,6 +161,12 @@ export const wordpress: SocialConnector = {
 
   khaNang() {
     return { kieuNoiDung: ["bai-viet", "anh"], media: "push", soAnhToiDa: 1, doDaiTieuDeToiDa: 300, doDaiNoiDungToiDa: 100_000, canTieuDe: true };
+  },
+
+  canhBao(nd): string[] {
+    return nd.soAnh > 1
+      ? [`WordPress chỉ dùng ảnh đầu tiên làm ảnh đại diện — ${nd.soAnh - 1} ảnh còn lại sẽ KHÔNG được đăng lên kênh này.`]
+      : [];
   },
 
   validate(nd, mt): ViPham[] {
@@ -211,13 +261,33 @@ export const wordpress: SocialConnector = {
     if (String(b.id) !== externalId) sai.push("mã bài");
     if (b.status !== "publish") sai.push(`trạng thái (${String(b.status)})`);
     if (typeof b.slug !== "string" || !b.slug.startsWith(nd.khoaDoiSoat)) sai.push("đường dẫn (slug)");
-    if (nd.tieuDe && typeof b.title?.raw === "string" && b.title.raw !== nd.tieuDe) sai.push("tiêu đề");
+    // QA 0.23.0: tài khoản không có quyền unfiltered_html (Tác giả — vai trò khuyến nghị) bị WordPress lọc kses tiêu đề
+    // ("A & B" lưu thành "A &amp; B", thẻ lạ bị gỡ) → so sau khi chuẩn hóa, không so nguyên văn (bài đã lên mà báo Lỗi).
+    if (nd.tieuDe && typeof b.title?.raw === "string" && chuanHoaTieuDeWp(b.title.raw) !== chuanHoaTieuDeWp(nd.tieuDe)) sai.push("tiêu đề");
     if (typeof b.link !== "string" || !/^https?:\/\//.test(b.link)) sai.push("permalink");
     if (sai.length) {
       nhatKy[nhatKy.length - 1] = { ...nhatKy[nhatKy.length - 1], ketQua: "permanent", loaiLoi: "PERMANENT", thongBao: `Đọc lại không khớp: ${sai.join(", ")}.` };
       return { ok: false, khongThay: false, nhatKy, loai: b.status === "future" || b.status === "pending" || b.status === "draft" ? "RETRYABLE" : "PERMANENT", ma: "doc-lai-khong-khop", thongBao: `Đọc lại bài trên WordPress không khớp: ${sai.join(", ")}.`, httpStatus: r.ph.status };
     }
     return { ok: true, externalId, url: b.link as string, nhatKy };
+  },
+
+  async doiSoatCongKhai(kenh, khoaDoiSoat, externalId, bc): Promise<KetQuaXacMinh> {
+    // Không tiêu đề Authorization: REST API công khai của WordPress chỉ trả bài đã công khai (context=view).
+    const nhatKy: BuocGoi[] = [];
+    const khop = (b: { id?: unknown; status?: unknown; slug?: unknown; link?: unknown } | undefined) =>
+      !!b && typeof b.id === "number" && b.status === "publish" && typeof b.slug === "string" && b.slug.startsWith(khoaDoiSoat) && typeof b.link === "string" && /^https?:\/\//.test(b.link);
+    if (externalId && /^\d+$/.test(externalId)) {
+      const r = await goi(nhatKy, "reconcile", false, { url: duongApi(kenh, `/wp/v2/posts/${externalId}`), hanMs: bc.hanMs });
+      const b = r.ok ? (r.j as { id?: unknown; status?: unknown; slug?: unknown; link?: unknown }) : undefined;
+      if (khop(b)) return { ok: true, externalId: String(b!.id), url: b!.link as string, nhatKy };
+    }
+    const r = await goi(nhatKy, "reconcile", false, { url: duongApi(kenh, "/wp/v2/posts", { slug: khoaDoiSoat, _fields: "id,slug,status,link" }), hanMs: bc.hanMs });
+    if (r.ok && Array.isArray(r.j)) {
+      const b = (r.j as { id?: unknown; status?: unknown; slug?: unknown; link?: unknown }[]).find((x) => khop({ status: "publish", ...x }));
+      if (b) return { ok: true, externalId: String(b.id), url: b.link as string, nhatKy };
+    }
+    return { ok: false, khongThay: false, nhatKy, loai: "UNKNOWN", ma: "can-kiem-tay", thongBao: "Không đối soát được khi không còn mật khẩu ứng dụng.", httpStatus: r.ok ? r.ph.status : r.httpStatus };
   },
 
   async reconcile(kenh, xt, khoaDoiSoat, bc): Promise<KetQuaDoiSoat> {

@@ -11,9 +11,11 @@ import { xuLyXoaDuLieu } from "./xoa-du-lieu";
  */
 export const NHIP_MXH_MS = 15_000;
 
-export async function vongMangXaHoi(prisma: PrismaClient, workerId: string, bayGio: Date = new Date()): Promise<void> {
+export async function vongMangXaHoi(prisma: PrismaClient, workerId: string, dongHo: () => Date = () => new Date()): Promise<void> {
   const dn = await prisma.tenant.findMany({ where: { status: "hoat-dong" }, select: { id: true, code: true } });
   for (const t of dn) {
+    // QA 0.23.0: giờ lấy mới cho từng doanh nghiệp / từng việc — một vòng gọi nền tảng có thể kéo dài nhiều phút.
+    const bayGio = dongHo();
     try {
       await kiemTraKenhDaXep(t.id, bayGio);
       await kiemTraAppDaXep(t.id, bayGio);
@@ -39,7 +41,7 @@ export async function vongMangXaHoi(prisma: PrismaClient, workerId: string, bayG
       console.error(`[worker] ${t.code}: mxh làm mới token hỏng:`, e instanceof Error ? e.message : e);
     }
     try {
-      const kq = await dangBaiMotVong(t.id, workerId, bayGio);
+      const kq = await dangBaiMotVong(t.id, workerId, dongHo(), 5, process.env, dongHo);
       if (kq.length) {
         const dem = (k: string) => kq.filter((x) => x.ketQua === k).length;
         console.log(`[worker] ${t.code}: mạng xã hội — đã đăng ${dem("da-dang")}, chờ xác minh ${dem("xac-minh-sau")}, thử lại ${dem("thu-lai")}, lỗi ${dem("that-bai")}.`);

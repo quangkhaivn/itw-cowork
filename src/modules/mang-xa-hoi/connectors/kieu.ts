@@ -88,6 +88,11 @@ export interface BoiCanhGoi {
   ngu?: (ms: number) => Promise<void>;
   /** Cỡ mỗi đoạn tải YouTube (bội số 256 KiB). */
   doanYoutube?: number;
+  /**
+   * Làm mới mốc giữ khóa của việc đang chạy (luật QA 0.23.0 "mốc giữ khóa theo từng việc"): connector gọi giữa các bước
+   * dài (từng đoạn video, từng lần hỏi trạng thái container) để worker khác không coi lượt là "kẹt" rồi đăng lại.
+   */
+  giuKhoa?: () => Promise<void>;
 }
 
 /** Một lần gọi nền tảng — ghi vào social_publish_attempts. Không chứa tiêu đề yêu cầu / bí mật. */
@@ -141,6 +146,14 @@ export interface SocialConnector {
   khaNang(): KhaNang;
   kiemTraKetNoi(kenh: KenhGoi, xt: ThongTinXacThuc, bc: BoiCanhGoi): Promise<KetQuaKiemTra>;
   validate(nd: NoiDungKiem, mt: MoiTruongKiem): ViPham[];
+  /** Cảnh báo KHÔNG chặn của bước kiểm bài (QA 0.23.0, QĐ-208) — ví dụ ảnh thừa không được đăng. */
+  canhBao?(nd: { soAnh: number }): string[];
+  /**
+   * Đối soát KHÔNG dùng bí mật (QA 0.23.0, QĐ-207): kênh đã ngắt (bản niêm phong đã hủy) mà kênh-bài còn đang xác minh.
+   * Chỉ đọc dữ liệu công khai của nền tảng. Thấy bài đã công khai, đúng khóa đối soát → kết quả đã xác minh; không thấy /
+   * không đọc được → `ok: false` (không kết luận được — cần kiểm tay).
+   */
+  doiSoatCongKhai?(kenh: KenhGoi, khoaDoiSoat: string, externalId: string | null, bc: BoiCanhGoi): Promise<KetQuaXacMinh>;
   publish(kenh: KenhGoi, xt: ThongTinXacThuc, nd: NoiDungDang, bc: BoiCanhGoi): Promise<KetQuaDang>;
   verify(kenh: KenhGoi, xt: ThongTinXacThuc, externalId: string, nd: Pick<NoiDungDang, "tieuDe" | "khoaDoiSoat"> & Partial<Pick<NoiDungDang, "kieu" | "noiDung">>, bc: BoiCanhGoi): Promise<KetQuaXacMinh>;
   /**

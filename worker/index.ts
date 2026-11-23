@@ -167,7 +167,7 @@ async function vongMxh() {
   if (!k.coKhoa) console.warn(`[worker] Mạng xã hội: ${k.loi} — chưa đăng bài được tới khi đặt khóa.`);
   while (dangChay) {
     try {
-      await vongMangXaHoi(prisma, workerId, new Date());
+      await vongMangXaHoi(prisma, workerId);
     } catch (loi) {
       console.error("[worker] vòng mạng xã hội hỏng:", loi instanceof Error ? loi.message : loi);
     }

@@ -96,7 +96,7 @@ Nền tảng yêu cầu trang **Điều khoản**, **Quyền riêng tư**, **Xó
 |---|---|---|
 | Bài do AI tạo phải duyệt | 1 | 0 = không bắt buộc (không khuyến nghị) |
 | Mọi bài phải duyệt trước khi đăng | 0 | 1 = cả bài người soạn cũng phải duyệt (0.24) |
-| Số video tải lên YouTube tối đa mỗi ngày | 100 | Đếm chung mọi kênh YouTube; ngày đổi lúc 14–15 giờ chiều giờ Việt Nam (nửa đêm giờ Mỹ Thái Bình Dương). Chạm ngưỡng → dời sang ngày sau và báo (0.24) |
+| Số video tải lên YouTube tối đa mỗi ngày | 6 | Đếm chung mọi kênh YouTube; ngày đổi lúc 14–15 giờ chiều giờ Việt Nam (nửa đêm giờ Mỹ Thái Bình Dương). Chạm ngưỡng → dời sang ngày sau và báo (0.24) |
 | Hạn link ảnh / video công khai | 60 phút | Link ký để nền tảng kéo ảnh (Instagram — 0.24) |
 | Số lần thử đăng tối đa mỗi kênh | 5 | Với lỗi tạm thời |
 | Hạn một lần gọi nền tảng | 30 giây | Quá hạn sau khi đã gửi → đối soát |
@@ -187,3 +187,13 @@ Soạn bài như mục 3, chọn kênh. Cowork tự chọn cách đăng theo n�
 - Ba trang `/dieu-khoan`, `/quyen-rieng-tu`, `/xoa-du-lieu` mở được không cần đăng nhập (đường dẫn đầy đủ có `?dn=<mã doanh nghiệp>` — lấy ở màn hình Kết nối nền tảng). Meta / Google bắt buộc có khi tạo app.
 - Nội dung mặc định là **BẢN MẪU — cần luật sư rà**. Giám đốc / Quản trị sửa ở **Quản trị → Trang công khai** (chữ thường: dòng `## ` là tiêu đề mục, dòng `- ` là gạch đầu dòng).
 - Khi một người gỡ ứng dụng trên Facebook, Meta tự gửi **yêu cầu xóa dữ liệu** tới Cowork: Cowork kiểm chữ ký, xóa quyền (token) mọi Page / Instagram người đó đã cấp, kênh chuyển "Đã ngắt", lượt đăng chưa chạy bị hủy, Marketing nhận thông báo. Người đó nhận một **mã xác nhận** và tra trạng thái ở trang Xóa dữ liệu.
+
+## 13. Xin Google tăng hạn mức YouTube (khi cần đăng hơn 6 video / ngày)
+
+Mặc định mỗi Google Cloud project có **10.000 đơn vị / ngày**; mỗi lần tải video tốn khoảng **1.600 đơn vị** → khoảng 6 video / ngày (Cowork đặt mặc định 6; các lệnh đọc lại / đối soát tốn thêm vài đơn vị).
+
+1. **console.cloud.google.com** → chọn project `TGTH Cowork` → **IAM & Admin → Quotas & System Limits** → lọc *YouTube Data API v3* → xem mức đang dùng.
+2. Mở biểu mẫu **YouTube API Services — Audit and Quota Extension Form** (tìm “YouTube API quota extension form” trên trang hỗ trợ của Google) → điền tên công ty, mô tả: “Phần mềm nội bộ đăng video của công ty lên kênh YouTube của chính công ty”, số video dự kiến / ngày, đường dẫn trang Quyền riêng tư / Điều khoản (mục 12), ảnh chụp màn hình đăng bài. Google có thể yêu cầu kiểm tra tuân thủ (audit) trước khi duyệt; thời gian duyệt vài ngày tới vài tuần.
+3. Được duyệt → **Quản trị → Cấu hình hệ thống → Mạng xã hội → Số video tải lên YouTube tối đa mỗi ngày**: nâng đúng bằng (mức được cấp ÷ 1.600), làm tròn xuống.
+
+(Con số 1.600 đơn vị / lần tải là theo tài liệu công khai của Google — chưa kiểm với API thật.)
