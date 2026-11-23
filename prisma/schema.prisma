@@ -213,6 +213,8 @@ model Tenant {
   socialQuotaUsages      SocialQuotaUsage[]
   socialDeletionRequests SocialDataDeletionRequest[]
   legalPages             LegalPage[]
+  socialCampaigns        SocialCampaign[]
+  aiUsageLogs            AiUsageLog[]
 
   @@map("tenants")
 }
@@ -3106,6 +3108,8 @@ model MarketingCampaign {
   webhookSources MarketingWebhookSource[]
   captures       LeadCapture[]
   landingPages   LandingPage[]
+  /// 0.25.0: chiến dịch nội dung mạng xã hội liên kết (tùy chọn).
+  socialCampaigns SocialCampaign[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, utmCampaign])
@@ -5223,6 +5227,14 @@ model SocialPost {
   coAuthorIds      String[]  @default([]) @map("co_author_ids") @db.Uuid
   /// QA 0.23.0 (QĐ-206): duyệt khi giờ hẹn đã trễ quá `mxh.tre_hen_toi_da_phut` → "Đã duyệt – cần hẹn lại giờ".
   needsReschedule  Boolean   @default(false) @map("needs_reschedule")
+  /// 0.25.0: chiến dịch nội dung (nhóm bài).
+  campaignId       String?   @map("campaign_id") @db.Uuid
+  /// 0.25.0: ngày giờ DỰ KIẾN trên lịch nội dung cho bài chưa hẹn giờ (nháp, chờ duyệt, đã duyệt). Không xếp lịch đăng.
+  plannedAt        DateTime? @map("planned_at") @db.Timestamptz(6)
+  /// 0.25.0 (QĐ-234): "kenh-loi" = bài đã lên một phần đang chờ duyệt lại RIÊNG các kênh lỗi đã sửa. Chỉ khi PENDING_APPROVAL.
+  reviewScope      String?   @map("review_scope") @db.VarChar(20)
+  /// 0.25.0: lượt AI tạo bài (bài do AI tạo).
+  aiUsageId        String?   @map("ai_usage_id") @db.Uuid
   createdBy        String    @map("created_by") @db.Uuid
   updatedBy        String?   @map("updated_by") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -5231,6 +5243,8 @@ model SocialPost {
   deletedBy        String?   @map("deleted_by") @db.Uuid
 
   tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign SocialCampaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  aiUsage  AiUsageLog?         @relation(fields: [aiUsageId], references: [id], onDelete: Restrict)
   variants SocialPostVariant[]
   media    SocialPostMedia[]
   targets  SocialPostTarget[]
@@ -5239,6 +5253,8 @@ model SocialPost {
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, status, scheduledAt])
   @@index([tenantId, createdBy])
+  @@index([tenantId, campaignId])
+  @@index([tenantId, plannedAt])
   @@map("social_posts")
 }
 
@@ -5309,6 +5325,19 @@ model SocialPostTarget {
   /// 0.24.0: kiểu nội dung chốt lúc xếp hàng (wp-bai, fb-chu, fb-anh, fb-nhieu-anh, fb-video, fb-reels, ig-anh, ig-carousel,
   /// ig-reels, yt-video) — đếm hạn mức Reels, chọn cách đăng.
   contentKind    String?   @map("content_kind") @db.VarChar(20)
+  /// 0.25.0 (QĐ-233): nội dung riêng của kênh — null = dùng nội dung chung của bài. Trigger chặn sửa khi kênh đã vào lượt đăng.
+  titleOverride  String?   @map("title_override") @db.VarChar(300)
+  bodyOverride   String?   @map("body_override") @db.Text
+  /// Hashtag riêng của kênh (thêm cuối nội dung khi đăng), tối đa 30.
+  hashtags       String[]  @default([])
+  /// Tập con ảnh / video (mã tệp đính kèm) — chỉ dùng khi `mediaSubset` = true (rỗng = kênh này không kèm ảnh / video).
+  mediaIds       String[]  @default([]) @map("media_ids") @db.Uuid
+  /// false = kênh dùng mọi ảnh / video của bài.
+  mediaSubset    Boolean   @default(false) @map("media_subset")
+  /// 0.25.0 (QĐ-234): kênh lỗi đã sửa, chờ duyệt lại / đăng lại riêng.
+  retryRequested Boolean   @default(false) @map("retry_requested")
+  overrideUpdatedBy String?  @map("override_updated_by") @db.Uuid
+  overrideUpdatedAt DateTime? @map("override_updated_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -5495,6 +5524,9 @@ model BrandProfile {
   bannedWords     String[] @default([]) @map("banned_words")
   defaultHashtags String[] @default([]) @map("default_hashtags")
   ctaTemplates    Json     @default("[]") @map("cta_templates")
+  /// 0.25.0: câu bắt buộc có trong bài (cảnh báo nếu thiếu), bài mẫu (đưa vào lời nhắc AI).
+  mandatoryPhrases String[] @default([]) @map("mandatory_phrases")
+  samplePosts      String[] @default([]) @map("sample_posts")
   updatedBy       String?  @map("updated_by") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -5502,4 +5534,60 @@ model BrandProfile {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("brand_profiles")
+}
+
+/// 0.25.0 — Chiến dịch nội dung mạng xã hội: nhóm bài theo chiến dịch (tên, thời gian, mục tiêu), liên kết tùy chọn tới
+/// chiến dịch Marketing (QĐ-232).
+model SocialCampaign {
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  name                String    @db.VarChar(200)
+  startsOn            DateTime? @map("starts_on") @db.Date
+  endsOn              DateTime? @map("ends_on") @db.Date
+  goal                String?   @db.Text
+  marketingCampaignId String?   @map("marketing_campaign_id") @db.Uuid
+  /// hoat-dong | luu-tru
+  status              String    @default("hoat-dong") @db.VarChar(20)
+  createdBy           String    @map("created_by") @db.Uuid
+  updatedBy           String?   @map("updated_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  marketingCampaign MarketingCampaign? @relation(fields: [marketingCampaignId], references: [id], onDelete: SetNull)
+  posts             SocialPost[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, status])
+  @@map("social_campaigns")
+}
+
+/// 0.25.0 — Lượt dùng AI (ngân sách AI theo tháng, QĐ-236). Giữ chỗ ước tính lúc bắt đầu (dang-goi), ghi số thật lúc xong.
+/// Không xóa; chỉ dòng "dang-goi" được ghi kết quả một lần (trigger).
+model AiUsageLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// mxh-viet-bai
+  feature        String    @db.VarChar(30)
+  /// Tháng theo giờ Việt Nam "YYYY-MM".
+  month          String    @db.VarChar(7)
+  /// dang-goi | xong | loi
+  status         String    @default("dang-goi") @db.VarChar(20)
+  tokensReserved Int       @default(0) @map("tokens_reserved")
+  tokensIn       Int?      @map("tokens_in")
+  tokensOut      Int?      @map("tokens_out")
+  costVnd        BigInt    @default(0) @map("cost_vnd")
+  provider       String?   @db.VarChar(30)
+  model          String?   @db.VarChar(100)
+  itemCount      Int       @default(0) @map("item_count")
+  errorCode      String?   @map("error_code") @db.VarChar(100)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt     DateTime? @map("finished_at") @db.Timestamptz(6)
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  posts  SocialPost[]
+
+  @@index([tenantId, month])
+  @@map("ai_usage_logs")
 }
