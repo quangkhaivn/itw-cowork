@@ -2,7 +2,7 @@
 
 Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
-## 0.23.0 (chưa phát hành) — Mạng xã hội: nền tảng + WordPress
+## 0.23.0 — 23/11/2026 — Mạng xã hội: nền tảng + WordPress
 
 Phân hệ mới **Mạng xã hội** (BUSINESS_RULES mục 34, QĐ-193 → QĐ-202), theo thiết kế ITW SOCIAL MCP đã duyệt nhưng đặt trong Cowork. Hướng dẫn: `docs/HUONG-DAN-MANG-XA-HOI.md`.
 
