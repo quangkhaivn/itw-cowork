@@ -14,6 +14,8 @@ Mã nguồn đã tải từ GitHub (nhánh `release/0.25` → **Code → Downloa
 - **Máy đã có Node.js 22 và Docker Desktop** (nhanh nhất): mở Docker Desktop, đợi *Engine running*, rồi trong thư mục `may-ca-nhan` của mã nguồn bấm đúp **`CAI-DAT.bat`**. Cài ngay trong thư mục mã nguồn đó (không tải lại mã, không tải Node.js / PostgreSQL); CSDL chạy trong Docker. Xong thì mở bằng **`CHAY.bat`**, hoặc **`CHAY-MANG-NOI-BO.bat`** khi cần nối máy chấm công vân tay (cửa sổ hiện IP để nhập vào máy). Tắt bằng `DUNG.bat`.
 - **Máy chưa có Node.js / Docker**: bấm đúp **`CAI-TU-MA-NGUON-DA-TAI.bat`** — chép mã từ thư mục này vào `L:\TGTH-Cowork` (hoặc thư mục người dùng), tự tải Node.js + PostgreSQL bản gọn.
 
+**Đã cài bản cũ (0.17 → 0.24) bằng Docker, muốn lên 0.25:** đặt **`CAP-NHAT-LEN-0.25.bat`** vào thư mục mã nguồn cũ (hoặc để đâu cũng được — tệp sẽ hỏi chọn thư mục), mở Docker Desktop rồi bấm đúp. Tệp tự tắt bản đang chạy, sao lưu `.env` thành `.env.truoc-0.25`, tải mã 0.25 chép đè (giữ `.env` và dữ liệu thử), chạy cài đặt rồi mở phần mềm.
+
 Chưa tải mã nguồn: dùng **`CAI-TGTH-COWORK-0.25.bat`** (tự tải bản 0.25 mới nhất, báo phiên bản trước khi cài).
 
 ## 1. Cài 3 phần mềm (một lần)

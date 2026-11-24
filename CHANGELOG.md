@@ -6,6 +6,7 @@ Theo phiên bản ứng dụng. Ngày theo giờ Việt Nam.
 
 - Lịch nội dung: ô bài trong lịch tháng hiển thị thành khối (giờ / tiêu đề / trạng thái xuống dòng), không còn bị bóp thành nhiều cột hẹp.
 - AI viết bài: thông báo "AI chưa cấu hình" không còn lặp chữ.
+- Bộ chạy thử Windows: thêm `may-ca-nhan/CAP-NHAT-LEN-0.25.bat` — cập nhật bản cài Docker cũ lên 0.25 bằng một lần bấm đúp (tắt bản đang chạy, sao lưu và giữ `.env`, tải mã chép đè, cài lại, mở phần mềm).
 
 ## 0.25.0 — 23/11/2026 — Mạng xã hội: lịch nội dung, duyệt, AI viết bài
 
